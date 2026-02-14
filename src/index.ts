@@ -44,10 +44,14 @@ export function createRouter(config: RouterConfig): ServiceRouter {
       ? (process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000')
       : 'http://localhost:3000';
 
-  // Fire plugin init
+  // Plugin init: non-fatal, but properly handle async rejections.
+  // RouterPlugin.init may return void or Promise<void>.
   if (config.plugin?.init) {
     try {
-      config.plugin.init({ origin: baseUrl });
+      const result = config.plugin.init({ origin: baseUrl });
+      if (result && typeof (result as Promise<void>).catch === 'function') {
+        (result as Promise<void>).catch(() => {});
+      }
     } catch {
       // Plugin init failure is non-fatal
     }
@@ -145,6 +149,7 @@ export type {
   QuotaInfo,
   QuotaLevel,
   OveragePolicy,
+  X402Server,
 } from './types.js';
 
 export { consolePlugin } from './plugin.js';
