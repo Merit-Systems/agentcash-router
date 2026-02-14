@@ -10,7 +10,7 @@ export async function verifySIWX(
     parseSIWxHeader,
     validateSIWxMessage,
     verifySIWxSignature,
-  } = require('@x402/extensions/sign-in-with-x');
+  } = await import('@x402/extensions/sign-in-with-x');
 
   const header = request.headers.get('SIGN-IN-WITH-X');
   if (!header) return { valid: false, wallet: null };
@@ -34,7 +34,7 @@ export async function verifySIWX(
   return { valid: true, wallet: verified.address as string };
 }
 
-export function buildSIWXExtension() {
-  const { declareSIWxExtension } = require('@x402/extensions/sign-in-with-x');
+export async function buildSIWXExtension(): Promise<unknown> {
+  const { declareSIWxExtension } = await import('@x402/extensions/sign-in-with-x');
   return declareSIWxExtension();
 }

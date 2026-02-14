@@ -3,17 +3,22 @@ import type { RouterConfig } from './types.js';
 // Re-export the server type for internal use
 export type X402Server = Awaited<ReturnType<typeof createX402Server>>['server'];
 
-export function createX402Server(config: RouterConfig) {
-  // Dynamic imports to avoid issues when peer deps are not installed
-  const { x402ResourceServer, HTTPFacilitatorClient } = require('@x402/core/server');
-  const { registerExactEvmScheme } = require('@x402/evm/exact/server');
-  const { bazaarResourceServerExtension } = require('@x402/extensions/bazaar');
-  const { siwxResourceServerExtension } = require('@x402/extensions/sign-in-with-x');
-  const { facilitator: defaultFacilitator } = require('@coinbase/x402');
+export async function createX402Server(config: RouterConfig) {
+  // Dynamic ESM imports: peer deps are loaded lazily so the router can
+  // boot without them installed. await import() is bundler-safe (unlike
+  // require() which Turbopack's __require polyfill silently breaks).
+  const { x402ResourceServer, HTTPFacilitatorClient } = await import('@x402/core/server');
+  const { registerExactEvmScheme } = await import('@x402/evm/exact/server');
+  const { bazaarResourceServerExtension } = await import('@x402/extensions/bazaar');
+  const { siwxResourceServerExtension } = await import('@x402/extensions/sign-in-with-x');
+  const { facilitator: defaultFacilitator } = await import('@coinbase/x402');
 
   const facilitatorUrl = config.facilitatorUrl ?? defaultFacilitator;
   const client = new HTTPFacilitatorClient(facilitatorUrl);
-  const server = new x402ResourceServer(client);
+  // Cast to Record<string, Function> — we call server methods dynamically
+  // (buildPaymentRequirementsFromOptions, verifyPayment, etc.) since the
+  // x402 SDK types aren't re-exported from this package.
+  const server = new x402ResourceServer(client) as unknown as Record<string, Function>;
 
   registerExactEvmScheme(server);
   server.registerExtension(bazaarResourceServerExtension);

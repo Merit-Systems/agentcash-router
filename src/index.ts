@@ -63,20 +63,22 @@ export function createRouter(config: RouterConfig): ServiceRouter {
     mppConfig: config.mpp,
   };
 
-  // x402 server init — errors stored in deps.x402InitError for clear
-  // request-time messaging (e.g. "CDP_API_KEY_ID not set" instead of
-  // a generic "server not initialized")
-  try {
-    const { createX402Server } = require('./server.js');
-    const result = createX402Server(config);
-    deps.x402Server = result.server;
-    deps.initPromise = result.initPromise.catch((err: unknown) => {
+  // x402 server init — fully async to avoid dynamic require() which breaks
+  // Turbopack's __require polyfill. Errors stored in deps.x402InitError for
+  // clear request-time messaging (e.g. "CDP_API_KEY_ID not set" instead of
+  // a generic "server not initialized"). Every request handler awaits
+  // deps.initPromise before touching deps.x402Server.
+  deps.initPromise = (async () => {
+    try {
+      const { createX402Server } = await import('./server.js');
+      const result = await createX402Server(config);
+      deps.x402Server = result.server;
+      await result.initPromise;
+    } catch (err: unknown) {
       deps.x402Server = null;
       deps.x402InitError = err instanceof Error ? err.message : String(err);
-    });
-  } catch {
-    // x402 peer deps not installed — routes requiring x402 will fail at request time
-  }
+    }
+  })();
 
   const pricesKeys = config.prices ? Object.keys(config.prices) : undefined;
 

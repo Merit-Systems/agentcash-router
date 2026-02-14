@@ -3,7 +3,7 @@ import type { RouteEntry } from '../types.js';
 // All x402 library interactions go through these thin wrappers.
 // The router never reimplements protocol logic.
 
-export function buildX402Challenge(
+export async function buildX402Challenge(
   server: Record<string, Function>,
   routeEntry: RouteEntry,
   request: Request,
@@ -12,7 +12,7 @@ export function buildX402Challenge(
   network: string,
   extensions?: Record<string, unknown>,
 ) {
-  const { encodePaymentRequiredHeader } = require('@x402/core/http');
+  const { encodePaymentRequiredHeader } = await import('@x402/core/http');
 
   const options = {
     scheme: 'exact' as const,
@@ -49,7 +49,7 @@ export async function verifyX402Payment(
   payeeAddress: string,
   network: string,
 ) {
-  const { decodePaymentSignatureHeader } = require('@x402/core/http');
+  const { decodePaymentSignatureHeader } = await import('@x402/core/http');
 
   const paymentHeader =
     request.headers.get('PAYMENT-SIGNATURE') ?? request.headers.get('X-PAYMENT');
@@ -87,7 +87,7 @@ export async function settleX402Payment(
   payload: unknown,
   requirements: unknown,
 ) {
-  const { encodePaymentResponseHeader } = require('@x402/core/http');
+  const { encodePaymentResponseHeader } = await import('@x402/core/http');
 
   const result = await server.settlePayment(payload, requirements);
   const encoded = encodePaymentResponseHeader(result);

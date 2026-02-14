@@ -9,14 +9,14 @@ let Credential: Record<string, Function>;
 let Receipt: Record<string, Function>;
 let tempo: Record<string, Function>;
 
-function ensureMpay() {
+async function ensureMpay() {
   if (mpayLoaded) return;
   try {
-    const mpay = require('mpay');
+    const mpay = await import('mpay');
     Challenge = mpay.Challenge;
     Credential = mpay.Credential;
     Receipt = mpay.Receipt;
-    const mpayServer = require('mpay/server');
+    const mpayServer = await import('mpay/server');
     tempo = mpayServer.tempo;
     mpayLoaded = true;
   } catch {
@@ -24,13 +24,13 @@ function ensureMpay() {
   }
 }
 
-export function buildMPPChallenge(
+export async function buildMPPChallenge(
   routeEntry: RouteEntry,
   request: Request,
   mppConfig: { secretKey: string; currency: string; recipient?: string },
   price: string,
 ) {
-  ensureMpay();
+  await ensureMpay();
 
   const intent = {
     amount: price,
@@ -53,7 +53,7 @@ export async function verifyMPPCredential(
   mppConfig: { secretKey: string; currency: string; recipient?: string },
   price: string,
 ) {
-  ensureMpay();
+  await ensureMpay();
 
   const credential = Credential.fromRequest(request);
   if (!credential) return null;
@@ -81,8 +81,8 @@ export async function verifyMPPCredential(
   };
 }
 
-export function buildMPPReceipt(reference: string) {
-  ensureMpay();
+export async function buildMPPReceipt(reference: string) {
+  await ensureMpay();
 
   const receipt = Receipt.from({
     method: 'tempo',

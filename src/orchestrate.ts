@@ -171,7 +171,7 @@ export function createRequestHandler(
 
         let siwxSchema: unknown;
         try {
-          siwxSchema = buildSIWXExtension();
+          siwxSchema = await buildSIWXExtension();
         } catch {}
 
         const paymentRequired = {
@@ -193,7 +193,7 @@ export function createRequestHandler(
 
         let encoded: string | undefined;
         try {
-          const { encodePaymentRequiredHeader } = require('@x402/core/http');
+          const { encodePaymentRequiredHeader } = await import('@x402/core/http');
           encoded = encodePaymentRequiredHeader(paymentRequired);
         } catch {}
 
@@ -222,7 +222,7 @@ export function createRequestHandler(
 
     // ---- No payment header → 402 challenge (no body reading) ----
     if (!protocol || protocol === 'siwx') {
-      return build402(request, routeEntry, deps, meta, pluginCtx);
+      return await build402(request, routeEntry, deps, meta, pluginCtx);
     }
 
     // ---- Payment present: parse body + resolve price ----
@@ -261,7 +261,7 @@ export function createRequestHandler(
         deps.payeeAddress,
         deps.network,
       );
-      if (!verify?.valid) return build402(request, routeEntry, deps, meta, pluginCtx);
+      if (!verify?.valid) return await build402(request, routeEntry, deps, meta, pluginCtx);
 
       pluginCtx.setVerifiedWallet(verify.payer);
       firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
@@ -309,10 +309,10 @@ export function createRequestHandler(
 
     // ---- MPP ----
     if (protocol === 'mpp') {
-      if (!deps.mppConfig) return build402(request, routeEntry, deps, meta, pluginCtx);
+      if (!deps.mppConfig) return await build402(request, routeEntry, deps, meta, pluginCtx);
 
       const verify = await verifyMPPCredential(request, routeEntry, deps.mppConfig, price);
-      if (!verify?.valid) return build402(request, routeEntry, deps, meta, pluginCtx);
+      if (!verify?.valid) return await build402(request, routeEntry, deps, meta, pluginCtx);
 
       const wallet = verify.payer!;
       pluginCtx.setVerifiedWallet(wallet);
@@ -334,7 +334,7 @@ export function createRequestHandler(
 
       if (response.status < 400) {
         try {
-          response.headers.set('Payment-Receipt', buildMPPReceipt(crypto.randomUUID()));
+          response.headers.set('Payment-Receipt', await buildMPPReceipt(crypto.randomUUID()));
         } catch {}
       }
 
@@ -342,7 +342,7 @@ export function createRequestHandler(
       return response;
     }
 
-    return build402(request, routeEntry, deps, meta, pluginCtx);
+    return await build402(request, routeEntry, deps, meta, pluginCtx);
   };
 }
 
@@ -402,13 +402,13 @@ function parseQuery(request: NextRequest, routeEntry: RouteEntry): unknown {
 // 402 challenge
 // ---------------------------------------------------------------------------
 
-function build402(
+async function build402(
   request: NextRequest,
   routeEntry: RouteEntry,
   deps: OrchestrateDeps,
   meta: RequestMeta,
   pluginCtx: PluginContext,
-): NextResponse {
+): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 402 });
 
   let challengePrice: string;
@@ -427,8 +427,8 @@ function build402(
   // Bazaar extensions from schemas
   let extensions: Record<string, unknown> | undefined;
   try {
-    const { z } = require('zod');
-    const { declareDiscoveryExtension } = require('@x402/extensions/bazaar');
+    const { z } = await import('zod');
+    const { declareDiscoveryExtension } = await import('@x402/extensions/bazaar');
     const inputSchema = routeEntry.bodySchema
       ? z.toJSONSchema(routeEntry.bodySchema, { target: 'draft-2020-12' })
       : routeEntry.querySchema
@@ -449,7 +449,7 @@ function build402(
 
   if (routeEntry.protocols.includes('x402') && deps.x402Server) {
     try {
-      const { encoded } = buildX402Challenge(
+      const { encoded } = await buildX402Challenge(
         deps.x402Server,
         routeEntry,
         request,
@@ -466,7 +466,7 @@ function build402(
     try {
       response.headers.set(
         'WWW-Authenticate',
-        buildMPPChallenge(routeEntry, request, deps.mppConfig, challengePrice),
+        await buildMPPChallenge(routeEntry, request, deps.mppConfig, challengePrice),
       );
     } catch {}
   }
