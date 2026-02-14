@@ -70,6 +70,6 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/merit-systems/agentcash-router"
+    "url": "git+https://github.com/merit-systems/agentcash-router.git"
   }
 }
