@@ -43,7 +43,7 @@ export class RouteBuilder<
   /** @internal */ _outputSchema: ZodType | undefined;
   /** @internal */ _description: string | undefined;
   /** @internal */ _path: string | undefined;
-  /** @internal */ _method: 'GET' | 'POST' = 'POST';
+  /** @internal */ _method: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH' = 'POST';
   /** @internal */ _apiKeyResolver: ((key: string) => unknown | Promise<unknown>) | undefined;
   /** @internal */ _providerName: string | undefined;
   /** @internal */ _providerConfig: ProviderConfig | undefined;
@@ -121,6 +121,10 @@ export class RouteBuilder<
   siwx(): HasAuth extends true ? never : RouteBuilder<TBody, TQuery, True, False, HasBody> {
     const next = this.fork() as RouteBuilder<TBody, TQuery, True, False, HasBody>;
     next._authMode = 'siwx';
+    // SIWX routes set protocols to [] because they're not payment
+    // protocol routes — they use the 402 challenge mechanism for
+    // identity proof, not for payment. Discovery uses authMode,
+    // not protocols, to determine visibility.
     next._protocols = [];
     return next as never;
   }
@@ -185,6 +189,12 @@ export class RouteBuilder<
   path(p: string): this {
     const next = this.fork();
     next._path = p;
+    return next;
+  }
+
+  method(m: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH'): this {
+    const next = this.fork();
+    next._method = m;
     return next;
   }
 

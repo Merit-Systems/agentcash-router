@@ -1,0 +1,49 @@
+# CLAUDE.md — @agentcash/router
+
+Protocol-agnostic route framework for Next.js App Router APIs with x402 payment, MPP payment, SIWX identity auth, and API key auth. Used by stablestudio, enrichx402, x402email, agentfacilitator, agentupload.
+
+## Guiding Principles
+
+1. **Route definition is 3-6 lines.** Everything else is derived.
+2. **Single source of truth.** Route registry drives discovery, OpenAPI, pricing, Bazaar schemas.
+3. **Auth and pricing are orthogonal and composable.** `.paid()`, `.siwx()`, `.apiKey()`, `.unprotected()`.
+4. **Observability is pluggable via RouterPlugin.** Zero boilerplate.
+5. **The package owns the x402 server lifecycle.** Init, verify, settle.
+6. **Convention over configuration.** Sane defaults for Base, USDC, exact scheme.
+7. **Compose, don't reimplement.** Zero payment/auth protocol logic — delegates to `@x402/*` and `@coinbase/x402`.
+
+## Architecture
+
+**Orchestrate pipeline:** auth check -> body parse -> price resolve -> payment verify -> handler invoke -> settle -> finalize
+
+- `src/orchestrate.ts` — Full request lifecycle orchestration
+- `src/builder.ts` — Fluent RouteBuilder API
+- `src/handler.ts` — Safe handler invocation with error mapping
+- `src/types.ts` — Core types (RouteEntry, HandlerContext, HttpError)
+- `src/registry.ts` — Route registry (Map-backed, duplicate detection)
+- `src/pricing.ts` — Price resolution (static, tiered, dynamic)
+- `src/plugin.ts` — Plugin hook system
+- `src/server.ts` — x402 server initialization
+- `src/auth/` — Auth modules (siwx.ts, api-key.ts, nonce.ts)
+- `src/protocols/` — Protocol handlers (x402.ts, mpp.ts, detect.ts)
+- `src/discovery/` — Auto-generated endpoints (well-known.ts, openapi.ts)
+
+## Critical Rules
+
+- **Error handling:** Respect `.status` on any thrown error, not just `HttpError`. The `Object.assign(new Error(), { status })` pattern is universal in Node.js.
+- **SIWX challenge:** Must return a proper x402v2 challenge with `PAYMENT-REQUIRED` header and JSON body containing `extensions['sign-in-with-x']` with `domain`, `uri`, `version`, `chainId`, `type`, `nonce`, `issuedAt`.
+- **Discovery:** `authMode !== 'unprotected'` determines well-known visibility, not the protocol list. SIWX routes return 402 challenges and must be discoverable.
+- **OpenAPI:** Merge paths for multi-method endpoints (GET + DELETE on same path). Never overwrite.
+
+## Version Stability
+
+The public API is **not stable**. Downstream consumers should pin exact versions (`"@agentcash/router": "0.2.0"`, not `"^0.2.0"`). Breaking changes will happen as we build out multi-protocol support and discover patterns across services. Semver will be respected once we hit 1.0.
+
+## Build & Test
+
+```bash
+pnpm build      # tsup
+pnpm test       # vitest
+pnpm typecheck  # tsc --noEmit
+pnpm check      # format + lint + typecheck + build + test
+```

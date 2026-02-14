@@ -145,12 +145,63 @@ export function createRequestHandler(
     const protocol = detectProtocol(request);
 
     // ---- SIWX ----
+    // SIWX runs before body parsing: the wallet address is needed for
+    // handler context, and there's no price to resolve. This avoids
+    // unnecessary body buffering for unauthenticated requests.
     if (routeEntry.authMode === 'siwx') {
       if (!request.headers.get('SIGN-IN-WITH-X')) {
-        const response = new NextResponse(null, { status: 402 });
+        // Uniform 402 challenge format: SIWX routes return the same x402v2
+        // challenge structure as paid routes, with PAYMENT-REQUIRED header
+        // and JSON body. MCP clients parse one response format regardless
+        // of auth mode. SIWX info goes in extensions['sign-in-with-x'].
+        // accepts: [] signals "no payment needed, just prove identity."
+        const url = new URL(request.url);
+        const nonce = crypto.randomUUID();
+        const siwxInfo = {
+          domain: url.hostname,
+          uri: request.url,
+          version: '1',
+          chainId: deps.network,
+          type: 'eip191',
+          nonce,
+          issuedAt: new Date().toISOString(),
+          expirationTime: new Date(Date.now() + 300_000).toISOString(),
+          statement: 'Sign in to verify your wallet identity',
+        };
+
+        let siwxSchema: unknown;
         try {
-          if (buildSIWXExtension()) response.headers.set('X-SIWX-REQUIRED', 'true');
+          siwxSchema = buildSIWXExtension();
         } catch {}
+
+        const paymentRequired = {
+          x402Version: 2,
+          error: 'SIWX authentication required',
+          resource: {
+            url: request.url,
+            description: routeEntry.description ?? 'SIWX-protected endpoint',
+            mimeType: 'application/json',
+          },
+          accepts: [],
+          extensions: {
+            'sign-in-with-x': {
+              info: siwxInfo,
+              ...(siwxSchema ? { schema: siwxSchema } : {}),
+            },
+          },
+        };
+
+        let encoded: string | undefined;
+        try {
+          const { encodePaymentRequiredHeader } = require('@x402/core/http');
+          encoded = encodePaymentRequiredHeader(paymentRequired);
+        } catch {}
+
+        const response = new NextResponse(JSON.stringify(paymentRequired), {
+          status: 402,
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (encoded) response.headers.set('PAYMENT-REQUIRED', encoded);
         firePluginResponse(deps, pluginCtx, meta, response);
         return response;
       }

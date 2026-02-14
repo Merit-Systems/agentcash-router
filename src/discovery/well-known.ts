@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import type { RouteRegistry } from '../registry.js';
 
 export interface WellKnownOptions {
+  description?: string;
   instructions?: string | (() => string | Promise<string>);
   ownershipProofs?: string[];
 }
@@ -22,14 +23,17 @@ export function createWellKnownHandler(
       validated = true;
     }
 
-    // Build x402 resources
-    const x402Resources: string[] = [];
-    const mppResources: string[] = [];
+    // Discovery completeness: any route returning a 402 challenge needs
+    // to be discoverable. Filter by authMode !== 'unprotected' rather
+    // than checking specific protocols. MCP tools discover first, then
+    // adapt to the specific auth mode at probe time.
+    const x402Set = new Set<string>();
+    const mppSet = new Set<string>();
 
     for (const [key, entry] of registry.entries()) {
       const url = `${baseUrl}/api/${entry.path ?? key}`;
-      if (entry.protocols.includes('x402')) x402Resources.push(url);
-      if (entry.protocols.includes('mpp')) mppResources.push(url);
+      if (entry.authMode !== 'unprotected') x402Set.add(url);
+      if (entry.protocols.includes('mpp')) mppSet.add(url);
     }
 
     // Resolve instructions
@@ -42,11 +46,16 @@ export function createWellKnownHandler(
 
     const body: Record<string, unknown> = {
       version: 1,
-      resources: x402Resources,
+      resources: Array.from(x402Set),
     };
 
+    const mppResources = Array.from(mppSet);
     if (mppResources.length > 0) {
       body.mppResources = mppResources;
+    }
+
+    if (options.description) {
+      body.description = options.description;
     }
 
     if (options.ownershipProofs) {
@@ -57,6 +66,12 @@ export function createWellKnownHandler(
       body.instructions = instructions;
     }
 
-    return NextResponse.json(body);
+    return NextResponse.json(body, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      },
+    });
   };
 }

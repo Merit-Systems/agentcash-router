@@ -37,6 +37,10 @@ Every paid API route in a Merit Systems service shared the same ~80-150 lines of
 
 10. **Fakes over mocks in tests.** The test suite uses `FakeX402Server` (a behavioral fake that accepts known payer/payee/amount tuples) instead of vi.mock stubs. This tests real verification logic, not mock wiring.
 
+### Version Stability
+
+The public API is **not stable**. Downstream consumers should pin exact versions (`"@agentcash/router": "0.2.0"`, not `"^0.2.0"`). Breaking changes will happen as we build out multi-protocol support and discover patterns across services. Semver will be respected once we hit 1.0.
+
 ### Non-goals (deliberately rejected)
 
 - **No middleware chain.** Express-style middleware (`use()`) was considered and rejected. The builder's fixed lifecycle (auth → parse → validate → price → verify → handler → settle) covers all routes. Custom logic goes in the handler or plugin.
