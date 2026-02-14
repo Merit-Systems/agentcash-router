@@ -90,8 +90,12 @@ describe('.well-known/x402', () => {
 
   it('deduplicates URLs from routes sharing the same path', async () => {
     const reg = new RouteRegistry();
-    reg.register(makeEntry({ key: 'jobs/status', path: 'x402/jobs/{jobId}', authMode: 'siwx', protocols: [] }));
-    reg.register(makeEntry({ key: 'jobs/delete', path: 'x402/jobs/{jobId}', authMode: 'siwx', protocols: [] }));
+    reg.register(
+      makeEntry({ key: 'jobs/status', path: 'x402/jobs/{jobId}', authMode: 'siwx', protocols: [] }),
+    );
+    reg.register(
+      makeEntry({ key: 'jobs/delete', path: 'x402/jobs/{jobId}', authMode: 'siwx', protocols: [] }),
+    );
 
     const handler = createWellKnownHandler(reg, 'https://example.com', undefined);
     const res = await handler(dummyRequest);

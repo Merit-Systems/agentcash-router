@@ -6,11 +6,8 @@ export async function verifySIWX(
   _routeEntry: RouteEntry,
   nonceStore: NonceStore,
 ): Promise<{ valid: true; wallet: string } | { valid: false; wallet: null }> {
-  const {
-    parseSIWxHeader,
-    validateSIWxMessage,
-    verifySIWxSignature,
-  } = await import('@x402/extensions/sign-in-with-x');
+  const { parseSIWxHeader, validateSIWxMessage, verifySIWxSignature } =
+    await import('@x402/extensions/sign-in-with-x');
 
   const header = request.headers.get('SIGN-IN-WITH-X');
   if (!header) return { valid: false, wallet: null };
