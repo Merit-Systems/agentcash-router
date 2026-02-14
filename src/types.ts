@@ -31,6 +31,43 @@ export interface AlertEvent {
 export type AlertFn = (level: AlertLevel, message: string, meta?: Record<string, unknown>) => void;
 
 // ---------------------------------------------------------------------------
+// x402 server interface
+// ---------------------------------------------------------------------------
+
+// Narrow typed interface for the x402ResourceServer. We don't re-export
+// the SDK's own types (they change across versions), but we DO enforce:
+// - Correct method names (catches init vs initialize)
+// - Async vs sync (forces await on Promise-returning methods)
+// - Array vs single arg (catches "not iterable" footgun)
+// Opaque data (PaymentRequirements, PaymentPayload) stays as `unknown`
+// since we never inspect it — we just pass it between SDK methods.
+
+export interface X402Server {
+  initialize(): Promise<void>;
+
+  buildPaymentRequirementsFromOptions(
+    options: Array<{ scheme: string; network: string; price: string; payTo: string }>,
+    context: { request: Request },
+  ): Promise<unknown[]>;
+
+  createPaymentRequiredResponse(
+    requirements: unknown[],
+    resource: { url: string; method: string; description?: string },
+    error: string | null,
+    extensions?: Record<string, unknown>,
+  ): Promise<unknown>;
+
+  findMatchingRequirements(requirements: unknown[], payload: unknown): unknown;
+
+  verifyPayment(
+    payload: unknown,
+    requirements: unknown,
+  ): Promise<{ isValid: boolean; payer?: string }>;
+
+  settlePayment(payload: unknown, requirements: unknown): Promise<unknown>;
+}
+
+// ---------------------------------------------------------------------------
 // Protocol / Auth
 // ---------------------------------------------------------------------------
 

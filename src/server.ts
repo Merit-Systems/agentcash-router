@@ -1,7 +1,4 @@
-import type { RouterConfig } from './types.js';
-
-// Re-export the server type for internal use
-export type X402Server = Awaited<ReturnType<typeof createX402Server>>['server'];
+import type { RouterConfig, X402Server } from './types.js';
 
 export async function createX402Server(config: RouterConfig) {
   // Dynamic ESM imports: peer deps are loaded lazily so the router can
@@ -13,33 +10,31 @@ export async function createX402Server(config: RouterConfig) {
   const { siwxResourceServerExtension } = await import('@x402/extensions/sign-in-with-x');
   const { facilitator: defaultFacilitator } = await import('@coinbase/x402');
 
-  // facilitatorUrl may be string (from config) or FacilitatorConfig (from
-  // @coinbase/x402 default). Cast to satisfy HTTPFacilitatorClient constructor.
-  const facilitatorUrl = config.facilitatorUrl ?? defaultFacilitator;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- facilitator accepts string URL or FacilitatorConfig
-  const client = new HTTPFacilitatorClient(facilitatorUrl as any);
+  // HTTPFacilitatorClient expects { url?: string, createAuthHeaders?: ... }.
+  // Normalize string URLs into the config object shape; pass objects through.
+  const raw = config.facilitatorUrl ?? defaultFacilitator;
+  const facilitatorConfig = typeof raw === 'string' ? { url: raw } : raw;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- FacilitatorConfig not re-exported from @x402/core
+  const client = new HTTPFacilitatorClient(facilitatorConfig as any);
   const server = new x402ResourceServer(client);
 
   registerExactEvmScheme(server);
   server.registerExtension(bazaarResourceServerExtension);
   server.registerExtension(siwxResourceServerExtension);
 
-  const initPromise = retryInit(server as unknown as { init(): Promise<void> });
+  const initPromise = retryInit(server as unknown as X402Server);
 
-  // Cast to Record<string, Function> — callers invoke server methods
-  // dynamically (buildPaymentRequirementsFromOptions, verifyPayment, etc.)
-  // since the x402 SDK types aren't re-exported from this package.
-  return { server: server as unknown as Record<string, Function>, initPromise };
+  return { server: server as unknown as X402Server, initPromise };
 }
 
 async function retryInit(
-  server: { init(): Promise<void> },
+  server: Pick<X402Server, 'initialize'>,
   maxAttempts = 3,
   backoff = [1000, 2000, 4000],
 ): Promise<void> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      await server.init();
+      await server.initialize();
       return;
     } catch (err: unknown) {
       const is429 =

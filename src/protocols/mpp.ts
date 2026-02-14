@@ -34,13 +34,15 @@ export async function buildMPPChallenge(
 ) {
   await ensureMpay();
 
-  const intent = {
+  // tempo.charge() returns a MethodIntent — Challenge.fromIntent requires
+  // a MethodIntent, not a plain { amount, currency, recipient } object.
+  const methodIntent = tempo.charge({
     amount: price,
     currency: mppConfig.currency,
     recipient: mppConfig.recipient ?? '',
-  };
+  });
 
-  const challenge = Challenge.fromIntent(intent, {
+  const challenge = Challenge.fromIntent(methodIntent, {
     secretKey: mppConfig.secretKey,
     realm: new URL(request.url).origin,
     request,
@@ -60,8 +62,9 @@ export async function verifyMPPCredential(
   const credential = Credential.fromRequest(request);
   if (!credential) return null;
 
-  // Verify challenge HMAC (stateless)
-  const isValid = Challenge.verify(credential, { secretKey: mppConfig.secretKey });
+  // Verify challenge HMAC (stateless). Challenge.verify expects a Challenge
+  // object (accesses .id for HMAC check), not the full Credential wrapper.
+  const isValid = Challenge.verify(credential.challenge, { secretKey: mppConfig.secretKey });
   if (!isValid) {
     return { valid: false as const, payer: null };
   }
@@ -90,7 +93,7 @@ export async function buildMPPReceipt(reference: string) {
     method: 'tempo',
     status: 'success',
     reference,
-    timestamp: Date.now(),
+    timestamp: new Date().toISOString(),
   });
 
   return Receipt.serialize(receipt) as string;

@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import type { RouteEntry, HandlerContext, QuotaLevel, ProviderQuotaEvent } from './types.js';
+import type {
+  RouteEntry,
+  HandlerContext,
+  QuotaLevel,
+  ProviderQuotaEvent,
+  X402Server,
+} from './types.js';
 import type { RouterPlugin, PluginContext, RequestMeta } from './plugin.js';
 import { createDefaultContext, firePluginHook } from './plugin.js';
 import type { NonceStore } from './auth/nonce.js';
@@ -14,7 +20,7 @@ import { verifySIWX, buildSIWXExtension } from './auth/siwx.js';
 import { verifyApiKey } from './auth/api-key.js';
 
 export interface OrchestrateDeps {
-  x402Server: Record<string, Function> | null;
+  x402Server: X402Server | null;
   initPromise: Promise<void>;
   x402InitError?: string;
   plugin?: RouterPlugin;
@@ -172,7 +178,9 @@ export function createRequestHandler(
         let siwxSchema: unknown;
         try {
           siwxSchema = await buildSIWXExtension();
-        } catch {}
+        } catch {
+          // SIWX schema is optional enrichment — challenge works without it
+        }
 
         const paymentRequired = {
           x402Version: 2,
@@ -195,7 +203,15 @@ export function createRequestHandler(
         try {
           const { encodePaymentRequiredHeader } = await import('@x402/core/http');
           encoded = encodePaymentRequiredHeader(paymentRequired);
-        } catch {}
+        } catch (err) {
+          // Header encoding failure: JSON body still carries the challenge,
+          // but MCP tools that parse PAYMENT-REQUIRED header will miss it.
+          firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+            level: 'warn' as const,
+            message: `SIWX challenge header encoding failed: ${err instanceof Error ? err.message : String(err)}`,
+            route: routeEntry.key,
+          });
+        }
 
         const response = new NextResponse(JSON.stringify(paymentRequired), {
           status: 402,
@@ -335,7 +351,9 @@ export function createRequestHandler(
       if (response.status < 400) {
         try {
           response.headers.set('Payment-Receipt', await buildMPPReceipt(crypto.randomUUID()));
-        } catch {}
+        } catch {
+          // MPP receipt is best-effort — handler already succeeded
+        }
       }
 
       finalize(response, rawResult, meta, pluginCtx);
@@ -445,7 +463,9 @@ async function build402(
       if (outputSchema) config.output = { schema: outputSchema, example: {} };
       extensions = declareDiscoveryExtension(config);
     }
-  } catch {}
+  } catch {
+    // Bazaar extensions are optional enrichment for 402 challenges
+  }
 
   if (routeEntry.protocols.includes('x402') && deps.x402Server) {
     try {
@@ -459,7 +479,15 @@ async function build402(
         extensions,
       );
       response.headers.set('PAYMENT-REQUIRED', encoded);
-    } catch {}
+    } catch (err) {
+      // x402 challenge failure is critical: clients get a bare 402 with no
+      // payment info and can't pay. Surface through plugin so operators see it.
+      firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+        level: 'critical' as const,
+        message: `x402 challenge build failed: ${err instanceof Error ? err.message : String(err)}`,
+        route: routeEntry.key,
+      });
+    }
   }
 
   if (routeEntry.protocols.includes('mpp') && deps.mppConfig) {
@@ -468,7 +496,13 @@ async function build402(
         'WWW-Authenticate',
         await buildMPPChallenge(routeEntry, request, deps.mppConfig, challengePrice),
       );
-    } catch {}
+    } catch (err) {
+      firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+        level: 'critical' as const,
+        message: `MPP challenge build failed: ${err instanceof Error ? err.message : String(err)}`,
+        route: routeEntry.key,
+      });
+    }
   }
 
   firePluginResponse(deps, pluginCtx, meta, response);
