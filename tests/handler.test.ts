@@ -1,0 +1,54 @@
+import { describe, it, expect } from 'vitest';
+import { NextResponse } from 'next/server';
+import { safeCallHandler } from '../src/handler.js';
+import { HttpError } from '../src/types.js';
+
+describe('safeCallHandler', () => {
+  it('plain object → NextResponse.json(result)', async () => {
+    const handler = async () => ({ data: 'hello' });
+    const res = await safeCallHandler(handler as never, {});
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ data: 'hello' });
+  });
+
+  it('NextResponse passthrough unchanged', async () => {
+    const original = NextResponse.json({ custom: true }, { status: 201 });
+    const handler = async () => original;
+    const res = await safeCallHandler(handler as never, {});
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body).toEqual({ custom: true });
+  });
+
+  it('thrown Error → 500 with error message', async () => {
+    const handler = async () => {
+      throw new Error('something broke');
+    };
+    const res = await safeCallHandler(handler as never, {});
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toBe('something broke');
+    expect(body.success).toBe(false);
+  });
+
+  it('thrown HttpError(504) → 504 with message', async () => {
+    const handler = async () => {
+      throw new HttpError('Gateway timeout', 504);
+    };
+    const res = await safeCallHandler(handler as never, {});
+    expect(res.status).toBe(504);
+    const body = await res.json();
+    expect(body.error).toBe('Gateway timeout');
+  });
+
+  it('thrown non-Error → 500 with Internal error', async () => {
+    const handler = async () => {
+      throw 'string error';
+    };
+    const res = await safeCallHandler(handler as never, {});
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toBe('Internal error');
+  });
+});

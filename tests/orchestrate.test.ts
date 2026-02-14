@@ -1,0 +1,454 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
+import { z } from 'zod';
+import { createRequestHandler, type OrchestrateDeps } from '../src/orchestrate.js';
+import { MemoryNonceStore } from '../src/auth/nonce.js';
+import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
+import { withX402Payment } from './fakes/request.js';
+import type { RouteEntry, HandlerContext } from '../src/types.js';
+
+// ---------------------------------------------------------------------------
+// Mock the protocol modules to use our fakes
+// ---------------------------------------------------------------------------
+
+// Mock x402 protocol to use FakeX402Server directly
+vi.mock('../src/protocols/x402.js', () => ({
+  buildX402Challenge: (
+    server: FakeX402Server,
+    routeEntry: RouteEntry,
+    request: Request,
+    price: string,
+    payeeAddress: string,
+    network: string,
+    extensions?: Record<string, unknown>,
+  ) => {
+    const requirements = server.buildPaymentRequirementsFromOptions(
+      { price, payTo: payeeAddress, scheme: 'exact', network },
+      { request },
+    );
+    const paymentRequired = server.createPaymentRequiredResponse(
+      requirements,
+      {},
+      null,
+      extensions,
+    );
+    return {
+      encoded: Buffer.from(JSON.stringify(paymentRequired)).toString('base64'),
+      requirements,
+    };
+  },
+
+  verifyX402Payment: async (
+    server: FakeX402Server,
+    request: Request,
+    _routeEntry: RouteEntry,
+    price: string,
+    _payeeAddress: string,
+    _network: string,
+  ) => {
+    const paymentHeader =
+      request.headers.get('PAYMENT-SIGNATURE') ?? request.headers.get('X-PAYMENT');
+    if (!paymentHeader) return null;
+
+    let payload: { payer: string; amount: string };
+    try {
+      payload = JSON.parse(Buffer.from(paymentHeader, 'base64').toString());
+    } catch {
+      return { valid: false, payload: null, requirements: null, payer: null };
+    }
+
+    const verify = await server.verifyPayment(payload, null);
+    if (!verify.isValid) {
+      return { valid: false, payload: null, requirements: null, payer: null };
+    }
+
+    return {
+      valid: true,
+      payer: verify.payer as string,
+      payload,
+      requirements: {},
+    };
+  },
+
+  settleX402Payment: async (server: FakeX402Server, payload: unknown, requirements: unknown) => {
+    const result = await server.settlePayment(payload, requirements);
+    return { encoded: 'SETTLE_' + result.transaction, result };
+  },
+}));
+
+// Mock SIWX to bypass real @x402/extensions
+vi.mock('../src/auth/siwx.js', () => ({
+  verifySIWX: async (request: Request, _routeEntry: RouteEntry, nonceStore: MemoryNonceStore) => {
+    const header = request.headers.get('SIGN-IN-WITH-X');
+    if (!header) return { valid: false, wallet: null };
+
+    let payload: { wallet: string; nonce: string; expired?: boolean };
+    try {
+      payload = JSON.parse(Buffer.from(header, 'base64').toString());
+    } catch {
+      return { valid: false, wallet: null };
+    }
+
+    if (payload.expired) return { valid: false, wallet: null };
+
+    const nonceOk = await nonceStore.check(payload.nonce);
+    if (!nonceOk) return { valid: false, wallet: null };
+
+    return { valid: true, wallet: payload.wallet };
+  },
+  buildSIWXExtension: () => ({}),
+}));
+
+// Mock Bazaar extensions to avoid require('@x402/extensions/bazaar')
+vi.mock('zod', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    // Keep actual zod but add toJSONSchema stub if needed
+  };
+});
+
+// ---------------------------------------------------------------------------
+// Test helpers
+// ---------------------------------------------------------------------------
+
+const bodySchema = z.object({ query: z.string() });
+
+function makeEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
+  return {
+    key: 'test/route',
+    authMode: 'paid',
+    pricing: '0.02',
+    protocols: ['x402'],
+    method: 'POST',
+    ...overrides,
+  };
+}
+
+function makeDeps(overrides: Partial<OrchestrateDeps> = {}): OrchestrateDeps {
+  const server = new FakeX402Server();
+  return {
+    x402Server: server as unknown as Record<string, Function>,
+    initPromise: Promise.resolve(),
+    nonceStore: new MemoryNonceStore(),
+    payeeAddress: KNOWN_PAYEE,
+    network: 'eip155:8453',
+    ...overrides,
+  };
+}
+
+function makeProbeRequest(url = 'http://localhost:3000/api/test'): NextRequest {
+  return new NextRequest(url, { method: 'POST' });
+}
+
+function makePaymentRequest(body?: unknown, payer = KNOWN_PAYER): NextRequest {
+  return withX402Payment({ payer, body });
+}
+
+function makeSIWXRequest(
+  wallet = '0xSIWX_WALLET',
+  nonce = 'test-nonce',
+  expired = false,
+): NextRequest {
+  const payload = Buffer.from(JSON.stringify({ wallet, nonce, expired })).toString('base64');
+  return new NextRequest('http://localhost:3000/api/test', {
+    method: 'GET',
+    headers: { 'SIGN-IN-WITH-X': payload },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe('probe request (no auth header)', () => {
+  it('returns 402 without reading body', async () => {
+    const entry = makeEntry({ bodySchema });
+    const handler = createRequestHandler(entry, async () => ({ data: 'hello' }), makeDeps());
+    const res = await handler(makeProbeRequest());
+    expect(res.status).toBe(402);
+  });
+
+  it('returns 402 with PAYMENT-REQUIRED header for x402 routes', async () => {
+    const entry = makeEntry();
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(makeProbeRequest());
+    expect(res.status).toBe(402);
+    expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
+  });
+
+  it('does not run Zod validation on probe', async () => {
+    const zodSpy = vi.fn();
+    const entry = makeEntry({
+      bodySchema: {
+        safeParse: zodSpy,
+      } as unknown as z.ZodType,
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    await handler(makeProbeRequest());
+    expect(zodSpy).not.toHaveBeenCalled();
+  });
+
+  it('uses maxPrice for dynamic pricing in 402 challenge', async () => {
+    const entry = makeEntry({
+      pricing: (body: unknown) => '0.05',
+      maxPrice: '1.00',
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(makeProbeRequest());
+    expect(res.status).toBe(402);
+    // The challenge should be built (no error from missing maxPrice)
+    expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
+  });
+});
+
+describe('x402 paid route', () => {
+  it('returns 200 with settlement header on valid payment', async () => {
+    const entry = makeEntry({ bodySchema });
+    const deps = makeDeps();
+    const handler = createRequestHandler(
+      entry,
+      async ({ body }) => ({ result: (body as { query: string }).query }),
+      deps,
+    );
+    const res = await handler(makePaymentRequest({ query: 'test' }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('PAYMENT-RESPONSE')).toBeTruthy();
+    const body = await res.json();
+    expect(body.result).toBe('test');
+  });
+
+  it('returns 402 on invalid payment (bad payer)', async () => {
+    const entry = makeEntry({ bodySchema });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(makePaymentRequest({ query: 'test' }, 'BAD_PAYER'));
+    expect(res.status).toBe(402);
+  });
+
+  it('skips settlement when handler returns error status', async () => {
+    const entry = makeEntry({ bodySchema });
+    const deps = makeDeps();
+    const server = deps.x402Server as unknown as FakeX402Server;
+    const handler = createRequestHandler(
+      entry,
+      async () => {
+        const { NextResponse } = await import('next/server');
+        return NextResponse.json({ error: 'bad request' }, { status: 400 });
+      },
+      deps,
+    );
+    const res = await handler(makePaymentRequest({ query: 'test' }));
+    expect(res.status).toBe(400);
+    expect(res.headers.get('PAYMENT-RESPONSE')).toBeNull();
+    expect(server.settledPayments).toHaveLength(0);
+  });
+
+  it('skips settlement when handler throws', async () => {
+    const entry = makeEntry({ bodySchema });
+    const deps = makeDeps();
+    const server = deps.x402Server as unknown as FakeX402Server;
+    const handler = createRequestHandler(
+      entry,
+      async () => {
+        throw new Error('Handler boom');
+      },
+      deps,
+    );
+    const res = await handler(makePaymentRequest({ query: 'test' }));
+    expect(res.status).toBe(500);
+    expect(res.headers.get('PAYMENT-RESPONSE')).toBeNull();
+    expect(server.settledPayments).toHaveLength(0);
+  });
+
+  it('sets wallet on handler context from verified payer', async () => {
+    const entry = makeEntry({ bodySchema });
+    let capturedWallet: string | null = null;
+    const handler = createRequestHandler(
+      entry,
+      async (ctx) => {
+        capturedWallet = ctx.wallet;
+        return { ok: true };
+      },
+      makeDeps(),
+    );
+    await handler(makePaymentRequest({ query: 'test' }));
+    expect(capturedWallet).toBe(KNOWN_PAYER);
+  });
+
+  it('returns 400 on Zod validation failure', async () => {
+    const entry = makeEntry({ bodySchema });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    // Body with wrong type for 'query'
+    const res = await handler(makePaymentRequest({ query: 123 }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+  });
+});
+
+describe('SIWX route', () => {
+  it('returns 402 challenge when no SIWX header', async () => {
+    const entry = makeEntry({ authMode: 'siwx', protocols: [] });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const req = new NextRequest('http://localhost:3000/api/test', { method: 'GET' });
+    const res = await handler(req);
+    expect(res.status).toBe(402);
+  });
+
+  it('returns 200 with wallet from verified signature', async () => {
+    const entry = makeEntry({ authMode: 'siwx', protocols: [] });
+    let capturedWallet: string | null = null;
+    const handler = createRequestHandler(
+      entry,
+      async (ctx) => {
+        capturedWallet = ctx.wallet;
+        return { status: 'ok' };
+      },
+      makeDeps(),
+    );
+    const res = await handler(makeSIWXRequest('0xMyWallet', 'nonce-1'));
+    expect(res.status).toBe(200);
+    expect(capturedWallet).toBe('0xMyWallet');
+  });
+
+  it('rejects replayed nonce', async () => {
+    const deps = makeDeps();
+    const entry = makeEntry({ authMode: 'siwx', protocols: [] });
+    const handler = createRequestHandler(entry, async () => ({ ok: true }), deps);
+
+    // First request succeeds
+    const res1 = await handler(makeSIWXRequest('0xWallet', 'same-nonce'));
+    expect(res1.status).toBe(200);
+
+    // Replay with same nonce fails
+    const res2 = await handler(makeSIWXRequest('0xWallet', 'same-nonce'));
+    expect(res2.status).toBe(402);
+  });
+
+  it('rejects expired SIWX message', async () => {
+    const entry = makeEntry({ authMode: 'siwx', protocols: [] });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(makeSIWXRequest('0xWallet', 'nonce-1', true));
+    expect(res.status).toBe(402);
+  });
+});
+
+describe('unprotected route', () => {
+  it('returns 200 with no auth required', async () => {
+    const entry = makeEntry({ authMode: 'unprotected', protocols: [] });
+    const handler = createRequestHandler(entry, async () => ({ status: 'ok' }), makeDeps());
+    const req = new NextRequest('http://localhost:3000/api/test', { method: 'GET' });
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.status).toBe('ok');
+  });
+
+  it('wallet is null on handler context', async () => {
+    const entry = makeEntry({ authMode: 'unprotected', protocols: [] });
+    let capturedWallet: string | null | undefined;
+    const handler = createRequestHandler(
+      entry,
+      async (ctx) => {
+        capturedWallet = ctx.wallet;
+        return {};
+      },
+      makeDeps(),
+    );
+    const req = new NextRequest('http://localhost:3000/api/test', { method: 'GET' });
+    await handler(req);
+    expect(capturedWallet).toBeNull();
+  });
+});
+
+describe('API key + paid route', () => {
+  const apiKeyResolver = (key: string) => (key === 'valid-key' ? { id: 'account-1' } : null);
+
+  it('rejects missing API key before checking payment', async () => {
+    const entry = makeEntry({
+      authMode: 'apiKey',
+      apiKeyResolver,
+      pricing: '0.01',
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const req = new NextRequest('http://localhost:3000/api/test', { method: 'POST' });
+    const res = await handler(req);
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects invalid API key', async () => {
+    const entry = makeEntry({
+      authMode: 'apiKey',
+      apiKeyResolver,
+      pricing: '0.01',
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const req = new NextRequest('http://localhost:3000/api/test', {
+      method: 'POST',
+      headers: { 'X-API-Key': 'bad-key' },
+    });
+    const res = await handler(req);
+    expect(res.status).toBe(401);
+  });
+
+  it('accepts falsy-but-non-null account from resolver', async () => {
+    const falsyResolver = (key: string) => (key === 'valid-key' ? 0 : null); // returns 0 (falsy but valid)
+    const entry = makeEntry({
+      authMode: 'apiKey',
+      apiKeyResolver: falsyResolver,
+      pricing: undefined, // apiKey-only, no payment required
+      protocols: [],
+    });
+    let capturedAccount: unknown;
+    const handler = createRequestHandler(
+      entry,
+      async (ctx) => {
+        capturedAccount = ctx.account;
+        return { ok: true };
+      },
+      makeDeps(),
+    );
+    const req = new NextRequest('http://localhost:3000/api/test', {
+      method: 'POST',
+      headers: { 'X-API-Key': 'valid-key' },
+    });
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(capturedAccount).toBe(0);
+  });
+
+  it('processes payment after valid API key', async () => {
+    const entry = makeEntry({
+      authMode: 'apiKey',
+      apiKeyResolver,
+      pricing: '0.01',
+      bodySchema,
+    });
+    const deps = makeDeps();
+    let capturedAccount: unknown;
+    const handler = createRequestHandler(
+      entry,
+      async (ctx) => {
+        capturedAccount = ctx.account;
+        return { ok: true };
+      },
+      deps,
+    );
+
+    // Valid key + valid payment
+    const payload = Buffer.from(JSON.stringify({ payer: KNOWN_PAYER, amount: '0.01' })).toString(
+      'base64',
+    );
+    const req = new NextRequest('http://localhost:3000/api/test', {
+      method: 'POST',
+      headers: {
+        'X-API-Key': 'valid-key',
+        'PAYMENT-SIGNATURE': payload,
+      },
+      body: JSON.stringify({ query: 'test' }),
+    });
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(capturedAccount).toEqual({ id: 'account-1' });
+  });
+});
