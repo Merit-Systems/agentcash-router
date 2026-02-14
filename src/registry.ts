@@ -3,10 +3,10 @@ import type { RouteEntry } from './types.js';
 export class RouteRegistry {
   private routes = new Map<string, RouteEntry>();
 
+  // Silently overwrites on duplicate key. Next.js module loading order is
+  // non-deterministic during build — discovery stubs and real handlers may
+  // register the same route key in either order. Last writer wins.
   register(entry: RouteEntry): void {
-    if (this.routes.has(entry.key)) {
-      throw new Error(`route '${entry.key}': already registered (duplicate route key)`);
-    }
     this.routes.set(entry.key, entry);
   }
 

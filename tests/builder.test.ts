@@ -79,13 +79,14 @@ describe('registration-time safety', () => {
     expect(() => builder.paid((body: unknown) => '0.01')).toThrow('maxPrice');
   });
 
-  it('duplicate route key throws at registration', () => {
+  it('duplicate route key overwrites silently', () => {
     const reg = new RouteRegistry();
     const b1 = new RouteBuilder('dup/key', reg, makeDeps());
-    b1.unprotected().handler(async () => ({}));
+    b1.description('first').unprotected().handler(async () => ({}));
 
     const b2 = new RouteBuilder('dup/key', reg, makeDeps());
-    expect(() => b2.unprotected().handler(async () => ({}))).toThrow('already registered');
+    b2.description('second').unprotected().handler(async () => ({}));
+    expect(reg.get('dup/key')!.description).toBe('second');
   });
 
   it('empty tier key throws at registration', () => {

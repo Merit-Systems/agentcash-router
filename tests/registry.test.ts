@@ -34,10 +34,13 @@ describe('route registration', () => {
     expect(stored.protocols).toEqual(['x402', 'mpp']);
   });
 
-  it('duplicate route key throws at registration', () => {
+  it('duplicate route key overwrites silently', () => {
     const reg = new RouteRegistry();
-    reg.register(makeEntry());
-    expect(() => reg.register(makeEntry())).toThrow('already registered');
+    const first = makeEntry({ description: 'first' });
+    const second = makeEntry({ description: 'second' });
+    reg.register(first);
+    reg.register(second);
+    expect(reg.get('test/route')!.description).toBe('second');
   });
 
   it('has returns true for registered routes', () => {
