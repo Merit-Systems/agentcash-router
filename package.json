@@ -1,6 +1,6 @@
 {
   "name": "@agentcash/router",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Unified route builder for Next.js App Router APIs with x402, MPP, SIWX, and API key auth",
   "type": "module",
   "exports": {

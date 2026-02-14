@@ -118,7 +118,7 @@ export interface RouteEntry {
   outputSchema?: ZodType;
   description?: string;
   path?: string;
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH';
   maxPrice?: string;
   apiKeyResolver?: (key: string) => unknown | Promise<unknown>;
   providerName?: string;

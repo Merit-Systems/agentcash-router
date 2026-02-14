@@ -42,6 +42,24 @@ describe('safeCallHandler', () => {
     expect(body.error).toBe('Gateway timeout');
   });
 
+  it('thrown Error with .status property → uses that status', async () => {
+    const handler = async () => {
+      throw Object.assign(new Error('Not found'), { status: 404 });
+    };
+    const res = await safeCallHandler(handler as never, {});
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe('Not found');
+  });
+
+  it('thrown Error with .status = 400 → 400', async () => {
+    const handler = async () => {
+      throw Object.assign(new Error('Bad request'), { status: 400 });
+    };
+    const res = await safeCallHandler(handler as never, {});
+    expect(res.status).toBe(400);
+  });
+
   it('thrown non-Error → 500 with Internal error', async () => {
     const handler = async () => {
       throw 'string error';

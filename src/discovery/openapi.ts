@@ -40,9 +40,10 @@ export function createOpenAPIHandler(
       const tag = deriveTag(key);
       tagSet.add(tag);
 
-      paths[apiPath] = {
-        [method]: buildOperation(key, entry, tag),
-      };
+      // Merge, don't overwrite: multiple HTTP methods on the same path
+      // are standard REST (GET + DELETE on /jobs/{id}). Each method gets
+      // its own operation under the shared path key.
+      paths[apiPath] = { ...paths[apiPath], [method]: buildOperation(key, entry, tag) };
     }
 
     cached = createDocument({

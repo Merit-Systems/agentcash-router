@@ -33,7 +33,7 @@ describe('.well-known/x402', () => {
     expect(body.resources).toContain('https://example.com/api/lookup');
   });
 
-  it('excludes SIWX-only and unprotected routes', async () => {
+  it('includes SIWX routes and excludes unprotected routes', async () => {
     const reg = new RouteRegistry();
     reg.register(makeEntry({ key: 'paid-route', protocols: ['x402'] }));
     reg.register(makeEntry({ key: 'siwx-route', authMode: 'siwx', protocols: [] }));
@@ -43,8 +43,9 @@ describe('.well-known/x402', () => {
     const res = await handler(dummyRequest);
     const body = await res.json();
 
-    expect(body.resources).toHaveLength(1);
-    expect(body.resources[0]).toContain('paid-route');
+    expect(body.resources).toHaveLength(2);
+    expect(body.resources).toContain('https://example.com/api/paid-route');
+    expect(body.resources).toContain('https://example.com/api/siwx-route');
   });
 
   it('includes instructions when provided', async () => {
@@ -85,6 +86,46 @@ describe('.well-known/x402', () => {
     expect(body.resources).toHaveLength(2);
     expect(body.mppResources).toHaveLength(1);
     expect(body.mppResources[0]).toContain('dual');
+  });
+
+  it('deduplicates URLs from routes sharing the same path', async () => {
+    const reg = new RouteRegistry();
+    reg.register(
+      makeEntry({ key: 'jobs/status', path: 'x402/jobs/{jobId}', authMode: 'siwx', protocols: [] }),
+    );
+    reg.register(
+      makeEntry({ key: 'jobs/delete', path: 'x402/jobs/{jobId}', authMode: 'siwx', protocols: [] }),
+    );
+
+    const handler = createWellKnownHandler(reg, 'https://example.com', undefined);
+    const res = await handler(dummyRequest);
+    const body = await res.json();
+
+    expect(body.resources).toHaveLength(1);
+    expect(body.resources[0]).toBe('https://example.com/api/x402/jobs/{jobId}');
+  });
+
+  it('includes description when provided', async () => {
+    const reg = new RouteRegistry();
+    reg.register(makeEntry({ key: 'a' }));
+
+    const handler = createWellKnownHandler(reg, 'https://example.com', undefined, {
+      description: 'Test service',
+    });
+    const res = await handler(dummyRequest);
+    const body = await res.json();
+
+    expect(body.description).toBe('Test service');
+  });
+
+  it('sets CORS headers', async () => {
+    const reg = new RouteRegistry();
+    reg.register(makeEntry({ key: 'a' }));
+
+    const handler = createWellKnownHandler(reg, 'https://example.com', undefined);
+    const res = await handler(dummyRequest);
+
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
   });
 
   it('no mppResources when no routes declare mpp', async () => {

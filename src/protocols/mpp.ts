@@ -4,19 +4,21 @@ import type { RouteEntry } from '../types.js';
 // mpay is an optional peer dep — lazily loaded.
 
 let mpayLoaded = false;
-let Challenge: Record<string, Function>;
-let Credential: Record<string, Function>;
-let Receipt: Record<string, Function>;
-let tempo: Record<string, Function>;
+/* eslint-disable @typescript-eslint/no-explicit-any -- mpay module vars are used dynamically */
+let Challenge: any;
+let Credential: any;
+let Receipt: any;
+let tempo: any;
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
-function ensureMpay() {
+async function ensureMpay() {
   if (mpayLoaded) return;
   try {
-    const mpay = require('mpay');
+    const mpay = await import('mpay');
     Challenge = mpay.Challenge;
     Credential = mpay.Credential;
     Receipt = mpay.Receipt;
-    const mpayServer = require('mpay/server');
+    const mpayServer = await import('mpay/server');
     tempo = mpayServer.tempo;
     mpayLoaded = true;
   } catch {
@@ -24,13 +26,13 @@ function ensureMpay() {
   }
 }
 
-export function buildMPPChallenge(
+export async function buildMPPChallenge(
   routeEntry: RouteEntry,
   request: Request,
   mppConfig: { secretKey: string; currency: string; recipient?: string },
   price: string,
 ) {
-  ensureMpay();
+  await ensureMpay();
 
   const intent = {
     amount: price,
@@ -53,7 +55,7 @@ export async function verifyMPPCredential(
   mppConfig: { secretKey: string; currency: string; recipient?: string },
   price: string,
 ) {
-  ensureMpay();
+  await ensureMpay();
 
   const credential = Credential.fromRequest(request);
   if (!credential) return null;
@@ -81,8 +83,8 @@ export async function verifyMPPCredential(
   };
 }
 
-export function buildMPPReceipt(reference: string) {
-  ensureMpay();
+export async function buildMPPReceipt(reference: string) {
+  await ensureMpay();
 
   const receipt = Receipt.from({
     method: 'tempo',
