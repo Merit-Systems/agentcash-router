@@ -4,10 +4,12 @@ import type { RouteEntry } from '../types.js';
 // mpay is an optional peer dep — lazily loaded.
 
 let mpayLoaded = false;
-let Challenge: Record<string, Function>;
-let Credential: Record<string, Function>;
-let Receipt: Record<string, Function>;
-let tempo: Record<string, Function>;
+/* eslint-disable @typescript-eslint/no-explicit-any -- mpay module vars are used dynamically */
+let Challenge: any;
+let Credential: any;
+let Receipt: any;
+let tempo: any;
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 async function ensureMpay() {
   if (mpayLoaded) return;

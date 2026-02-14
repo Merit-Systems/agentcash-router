@@ -13,20 +13,23 @@ export async function createX402Server(config: RouterConfig) {
   const { siwxResourceServerExtension } = await import('@x402/extensions/sign-in-with-x');
   const { facilitator: defaultFacilitator } = await import('@coinbase/x402');
 
+  // facilitatorUrl may be string (from config) or FacilitatorConfig (from
+  // @coinbase/x402 default). Cast to satisfy HTTPFacilitatorClient constructor.
   const facilitatorUrl = config.facilitatorUrl ?? defaultFacilitator;
-  const client = new HTTPFacilitatorClient(facilitatorUrl);
-  // Cast to Record<string, Function> — we call server methods dynamically
-  // (buildPaymentRequirementsFromOptions, verifyPayment, etc.) since the
-  // x402 SDK types aren't re-exported from this package.
-  const server = new x402ResourceServer(client) as unknown as Record<string, Function>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- facilitator accepts string URL or FacilitatorConfig
+  const client = new HTTPFacilitatorClient(facilitatorUrl as any);
+  const server = new x402ResourceServer(client);
 
   registerExactEvmScheme(server);
   server.registerExtension(bazaarResourceServerExtension);
   server.registerExtension(siwxResourceServerExtension);
 
-  const initPromise = retryInit(server);
+  const initPromise = retryInit(server as unknown as { init(): Promise<void> });
 
-  return { server, initPromise };
+  // Cast to Record<string, Function> — callers invoke server methods
+  // dynamically (buildPaymentRequirementsFromOptions, verifyPayment, etc.)
+  // since the x402 SDK types aren't re-exported from this package.
+  return { server: server as unknown as Record<string, Function>, initPromise };
 }
 
 async function retryInit(

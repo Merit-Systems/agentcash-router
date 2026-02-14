@@ -19,12 +19,12 @@ export async function verifySIWX(
     checkNonce: (nonce: string) => nonceStore.check(nonce),
   });
 
-  if (!validation.isValid) {
+  if (!validation.valid) {
     return { valid: false, wallet: null };
   }
 
   const verified = await verifySIWxSignature(payload);
-  if (!verified?.isValid) {
+  if (!verified?.valid) {
     return { valid: false, wallet: null };
   }
 
