@@ -29,7 +29,7 @@ Every paid API route in a Merit Systems service shared the same ~80-150 lines of
 
 6. **The plugin interface is the observability boundary.** All Merit-specific telemetry (ClickHouse, Discord alerts, usage tracking) lives in a private `RouterPlugin` implementation. The router itself is fully open-source with zero Merit-specific code. The plugin hooks are fire-and-forget — they never delay the response.
 
-7. **Self-registering routes + validated barrel (Approach B).** Routes self-register via `.handler()` at import time. A barrel file imports all route modules. Discovery endpoints (`.wellKnown()`, `.openapi()`) validate that the barrel is complete by comparing registered routes against the `prices` map.
+7. **Self-registering routes + validated barrel (Approach B).** Routes self-register via `.handler()` at import time. A barrel file imports all route modules. Discovery endpoints (`.wellKnown()`, `.openapi()`) validate that the barrel is complete by comparing registered routes against the `prices` map. For routes in separate handler files (e.g., Next.js `route.ts` files), use **discovery stubs** — lightweight registrations that provide metadata for discovery without the real handler. Guard stubs with `registry.has()` to avoid unnecessary overwrites.
 
 8. **Both x402 and MPP ship from day one.** Dual-protocol support is not an afterthought. Routes declare `protocols: ['x402', 'mpp']` and the orchestration layer routes to the correct handler based on the request header.
 
@@ -341,9 +341,10 @@ The type system (generic parameters `HasAuth`, `NeedsBody`, `HasBody`) prevents 
 These throw immediately when the route is defined (not at request time):
 
 - Dynamic pricing without `maxPrice`
-- Duplicate route key
 - Empty tier key in tiered pricing
 - `maxPrice` that isn't a positive decimal
+
+**Duplicate route keys** do NOT throw — the registry silently overwrites with a dev-only `console.warn`. This is intentional: Next.js `next build` loads modules non-deterministically, so discovery stubs and real handlers may register the same key in either order. Last writer wins. Prior art: ElysiaJS uses the identical pattern.
 
 ## Central Pricing Map
 
@@ -391,7 +392,7 @@ Barrel validation catches mismatches: keys in `prices` but not registered → er
 
 | Issue | Cause | Fix |
 |-------|-------|-----|
-| `route 'X': already registered` | Duplicate route key | Each key must be unique across the service |
+| `route 'X' registered twice` warning | Discovery stub + real handler both register same key | Expected during `next build` — last writer wins. Use `registry.has()` guards on stubs to suppress. |
 | `dynamic pricing requires maxPrice` | `.paid(fn)` without `maxPrice` | Add `{ maxPrice: '...' }` to paid options |
 | `x402 server not initialized` | Missing peer deps | Install `@x402/core @x402/evm @x402/extensions @coinbase/x402` |
 | 402 on every request | No payment header | Client must send `PAYMENT-SIGNATURE` (x402) or `Authorization: Payment` (MPP) |

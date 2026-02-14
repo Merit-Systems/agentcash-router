@@ -20,7 +20,7 @@ Protocol-agnostic route framework for Next.js App Router APIs with x402 payment,
 - `src/builder.ts` — Fluent RouteBuilder API
 - `src/handler.ts` — Safe handler invocation with error mapping
 - `src/types.ts` — Core types (RouteEntry, HandlerContext, HttpError)
-- `src/registry.ts` — Route registry (Map-backed, duplicate detection)
+- `src/registry.ts` — Route registry (Map-backed, silent overwrite on duplicate keys)
 - `src/pricing.ts` — Price resolution (static, tiered, dynamic)
 - `src/plugin.ts` — Plugin hook system
 - `src/server.ts` — x402 server initialization
@@ -34,6 +34,7 @@ Protocol-agnostic route framework for Next.js App Router APIs with x402 payment,
 - **SIWX challenge:** Must return a proper x402v2 challenge with `PAYMENT-REQUIRED` header and JSON body containing `extensions['sign-in-with-x']` with `domain`, `uri`, `version`, `chainId`, `type`, `nonce`, `issuedAt`.
 - **Discovery:** `authMode !== 'unprotected'` determines well-known visibility, not the protocol list. SIWX routes return 402 challenges and must be discoverable.
 - **OpenAPI:** Merge paths for multi-method endpoints (GET + DELETE on same path). Never overwrite.
+- **Duplicate route keys:** Registry silently overwrites (last-write-wins) with a dev-only `console.warn`. This is intentional — Next.js module loading order is non-deterministic during `next build`, so discovery stubs and real handlers may register the same key in either order. Prior art: ElysiaJS uses the identical pattern. See stablestudio `.claude/13_route-registry-dedup.md` for full research.
 
 ## Version Stability
 
