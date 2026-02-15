@@ -84,3 +84,9 @@ pnpm test       # vitest
 pnpm typecheck  # tsc --noEmit
 pnpm check      # format + lint + typecheck + build + test
 ```
+
+## Development Record
+
+The `.claude/` directory contains design docs, decision records, and bug analyses that document the reasoning behind the router's architecture. See `.claude/INDEX.md` for a table of contents.
+
+**Convention:** Every doc has a `Status` header. When you resolve work described in a doc, update its Status to `Resolved in vX.Y.Z` and update INDEX.md.

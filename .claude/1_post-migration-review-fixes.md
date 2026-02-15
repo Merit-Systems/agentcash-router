@@ -1,6 +1,7 @@
 # Decision Record: Post-Migration Review Fixes
 
 **Date:** 2026-02-14
+**Status:** Resolved in v0.2.0
 **Scope:** @agentcash/router v0.2.0
 
 After porting stablestudio to `@agentcash/router` + `@agentcash/telemetry`, a Carmack-level review found critical bugs and cleanup items. This record covers the router-side fixes.
