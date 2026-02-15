@@ -141,11 +141,28 @@ The fluent builder ensures compile-time safety:
 
 ### Pricing Modes
 
-**Static**: `router.route('search').paid('0.02')`
+**Static** - Fixed price for all requests:
+```typescript
+router.route('search').paid('0.02')
+```
 
-**Dynamic**: `router.route('gen').paid((body) => calculateCost(body), { maxPrice: '5.00' }).body(schema)`
+**Dynamic** - Calculate price based on request body:
+```typescript
+router.route('gen')
+  .paid((body) => calculateCost(body.imageSize, body.quality))
+  .body(imageGenSchema)
+  .handler(async ({ body }) => generate(body));
+```
 
-**Tiered**:
+**Dynamic with safety net** - Cap at maxPrice if calculation exceeds, fallback to maxPrice on errors:
+```typescript
+router.route('compute')
+  .paid((body) => calculateExpensiveOperation(body), { maxPrice: '10.00' })
+  .body(computeSchema)
+  .handler(async ({ body }) => compute(body));
+```
+
+**Tiered** - Price based on a specific field value:
 ```typescript
 router.route('upload').paid({
   field: 'tier',
@@ -153,7 +170,38 @@ router.route('upload').paid({
     '10mb': { price: '0.02', label: '10 MB' },
     '100mb': { price: '0.20', label: '100 MB' },
   },
-}).body(schema)
+}).body(uploadSchema)
+```
+
+#### maxPrice Semantics (v0.3.1+)
+
+`maxPrice` is **optional** for dynamic pricing and acts as a safety net:
+
+1. **Capping**: If `calculateCost(body)` returns `"15.00"` but `maxPrice: "10.00"`, the client is charged `$10.00` (capped) and a warning alert fires.
+
+2. **Fallback**: If `calculateCost(body)` throws an error and `maxPrice` is set, the route falls back to `maxPrice` (degraded mode) and an alert fires. Without `maxPrice`, the route returns 500.
+
+3. **Trust mode**: No `maxPrice` means full trust in your pricing function (no cap, no fallback).
+
+**Best practices:**
+- ✅ Always set `maxPrice` for production routes (safety net)
+- ✅ Use `maxPrice` for routes with external dependencies (pricing APIs)
+- ✅ Monitor alerts for capping events (indicates pricing bug)
+- ⚠️ Skip `maxPrice` only for well-tested, unbounded pricing (e.g., per-GB storage)
+
+**Example with safety net:**
+```typescript
+router.route('ai-gen')
+  .paid(async (body) => {
+    // External pricing API (can fail)
+    const res = await fetch('https://pricing.example.com/calculate', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    return res.json().price;
+  }, { maxPrice: '5.00' })  // Fallback if API is down
+  .body(genSchema)
+  .handler(async ({ body }) => generate(body));
 ```
 
 ### Dual Protocol (x402 + MPP)
