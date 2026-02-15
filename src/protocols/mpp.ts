@@ -34,18 +34,24 @@ export async function buildMPPChallenge(
 ) {
   await ensureMpay();
 
-  // tempo.charge() returns a MethodIntent — Challenge.fromIntent requires
-  // a MethodIntent, not a plain { amount, currency, recipient } object.
+  // Create a MethodIntent to define payment requirements (tempo.charge for one-time payments).
+  // This sets up the schema and defaults (decimals, expires) for the payment method.
   const methodIntent = tempo.charge({
-    amount: price,
     currency: mppConfig.currency,
     recipient: mppConfig.recipient ?? '',
   });
 
+  // Build challenge using payment request data (NOT the HTTP Request object).
+  // The 'request' field here is the payment data that will be sent to the client.
   const challenge = Challenge.fromIntent(methodIntent, {
     secretKey: mppConfig.secretKey,
     realm: new URL(request.url).origin,
-    request,
+    request: {
+      amount: price,
+      currency: mppConfig.currency,
+      recipient: mppConfig.recipient ?? '',
+      // decimals and expires are auto-populated by tempo.charge defaults
+    },
   });
 
   return Challenge.serialize(challenge) as string;
