@@ -104,6 +104,45 @@ Response out
 | `src/discovery/well-known.ts` | `.well-known/x402` generation |
 | `src/discovery/openapi.ts` | OpenAPI 3.1 spec generation |
 
+## Environment Setup
+
+**CRITICAL:** The router uses the default facilitator from `@coinbase/x402`, which requires CDP API keys at runtime:
+
+```bash
+CDP_API_KEY_ID=your-key-id
+CDP_API_KEY_SECRET=your-key-secret
+```
+
+**For Next.js apps with env validation (T3 stack, `@t3-oss/env-nextjs`):** These must be declared in your env schema. Next.js does not expose undeclared env vars to `process.env`.
+
+Without these keys, x402 server initialization fails:
+- Error: `"Failed to fetch supported kinds from facilitator: TypeError: fetch failed"`
+- Or: `"Facilitator getSupported failed (401): Unauthorized"`
+- Symptom: All paid routes return empty 402 responses (no `PAYMENT-REQUIRED` header)
+
+**Example env schema (T3):**
+
+```typescript
+// src/env.js
+import { createEnv } from "@t3-oss/env-nextjs";
+import { z } from "zod";
+
+export const env = createEnv({
+  server: {
+    CDP_API_KEY_ID: z.string(),
+    CDP_API_KEY_SECRET: z.string(),
+    // ... other vars
+  },
+  runtimeEnv: {
+    CDP_API_KEY_ID: process.env.CDP_API_KEY_ID,
+    CDP_API_KEY_SECRET: process.env.CDP_API_KEY_SECRET,
+    // ... other vars
+  },
+});
+```
+
+**Why this matters:** The default facilitator reads `process.env.CDP_API_KEY_ID` and `process.env.CDP_API_KEY_SECRET` when creating auth headers for the CDP facilitator API. If they're not in `process.env`, authentication fails silently — the facilitator sends requests without `Authorization` headers, and CDP returns 401.
+
 ## Creating Routes
 
 ### Step 1: Router setup (once per service)

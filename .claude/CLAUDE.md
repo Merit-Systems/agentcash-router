@@ -36,6 +36,41 @@ Protocol-agnostic route framework for Next.js App Router APIs with x402 payment,
 - **OpenAPI:** Merge paths for multi-method endpoints (GET + DELETE on same path). Never overwrite.
 - **Duplicate route keys:** Registry silently overwrites (last-write-wins) with a dev-only `console.warn`. This is intentional — Next.js module loading order is non-deterministic during `next build`, so discovery stubs and real handlers may register the same key in either order. Prior art: ElysiaJS uses the identical pattern. See stablestudio `.claude/13_route-registry-dedup.md` for full research.
 
+## Environment Variables
+
+The router uses the default facilitator from `@coinbase/x402`, which requires CDP API keys in `process.env`:
+
+- `CDP_API_KEY_ID` — Coinbase Developer Platform API key ID
+- `CDP_API_KEY_SECRET` — CDP API key secret
+
+**Critical for Next.js apps with env validation (T3 stack, `@t3-oss/env-nextjs`):** These variables must be explicitly declared in your env schema. Next.js does not automatically expose all env vars to `process.env` — undeclared vars are invisible at runtime.
+
+Without these keys, the default facilitator cannot authenticate with CDP:
+- x402 server `initialize()` fails with "Failed to fetch supported kinds from facilitator: TypeError: fetch failed" or "Facilitator getSupported failed (401): Unauthorized"
+- All payment routes return empty 402 responses (no `PAYMENT-REQUIRED` header, no body)
+
+**Example env schema (T3/`@t3-oss/env-nextjs`):**
+
+```typescript
+import { createEnv } from "@t3-oss/env-nextjs";
+import { z } from "zod";
+
+export const env = createEnv({
+  server: {
+    CDP_API_KEY_ID: z.string(),
+    CDP_API_KEY_SECRET: z.string(),
+    // ... other vars
+  },
+  runtimeEnv: {
+    CDP_API_KEY_ID: process.env.CDP_API_KEY_ID,
+    CDP_API_KEY_SECRET: process.env.CDP_API_KEY_SECRET,
+    // ... other vars
+  },
+});
+```
+
+**Alternative:** Pass a custom facilitator config to `createRouter()` if you want to use a different facilitator URL or auth mechanism. But for most apps, the default CDP facilitator is correct.
+
 ## Version Stability
 
 The public API is **not stable**. Downstream consumers should pin exact versions (`"@agentcash/router": "0.2.0"`, not `"^0.2.0"`). Breaking changes will happen as we build out multi-protocol support and discover patterns across services. Semver will be respected once we hit 1.0.

@@ -18,6 +18,36 @@ pnpm add next zod @x402/core @x402/evm @x402/extensions @coinbase/x402 zod-opena
 pnpm add mpay
 ```
 
+## Environment Setup
+
+The router uses the default facilitator from `@coinbase/x402` for x402 payments, which requires CDP API keys:
+
+```bash
+CDP_API_KEY_ID=your-key-id
+CDP_API_KEY_SECRET=your-key-secret
+```
+
+**For Next.js apps with env validation** (T3 stack, `@t3-oss/env-nextjs`): Add these to your env schema — Next.js doesn't expose undeclared env vars to `process.env`.
+
+```typescript
+// src/env.js
+import { createEnv } from "@t3-oss/env-nextjs";
+import { z } from "zod";
+
+export const env = createEnv({
+  server: {
+    CDP_API_KEY_ID: z.string(),
+    CDP_API_KEY_SECRET: z.string(),
+  },
+  runtimeEnv: {
+    CDP_API_KEY_ID: process.env.CDP_API_KEY_ID,
+    CDP_API_KEY_SECRET: process.env.CDP_API_KEY_SECRET,
+  },
+});
+```
+
+Without these keys, x402 routes will fail to initialize (empty 402 responses, no payment header).
+
 ## Quick Start
 
 ### 1. Create the router (once per service)
