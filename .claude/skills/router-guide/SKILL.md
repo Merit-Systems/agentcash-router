@@ -23,7 +23,7 @@ Every paid API route in a Merit Systems service shared the same ~80-150 lines of
 
 3. **Auth modes are mutually exclusive per route, except `apiKey` + `paid`.** A route is either paid, SIWX-authenticated, API-key-gated, or unprotected. The one exception: `.apiKey()` can compose with `.paid()` because some routes need both identity (API key) and payment (x402/MPP). This is enforced at the type level.
 
-4. **Body is only buffered when `.body()` is chained.** If a route doesn't declare a body schema, the request stream is untouched. This matters for routes that proxy multipart uploads or streams. The 402 probe path (no payment header) never reads the body regardless.
+4. **Body is only buffered when `.body()` is chained.** If a route doesn't declare a body schema, the request stream is untouched. This matters for routes that proxy multipart uploads or streams. For dynamic pricing, the body IS parsed before the 402 challenge (via `request.clone()`) so the pricing function can calculate an accurate price.
 
 5. **Settlement is gated on `response.status < 400`.** If the handler throws or returns an error response, no settlement occurs. The payer's funds are not captured. This is a fundamental safety guarantee.
 
@@ -31,7 +31,7 @@ Every paid API route in a Merit Systems service shared the same ~80-150 lines of
 
 7. **Self-registering routes + validated barrel (Approach B).** Routes self-register via `.handler()` at import time. A barrel file imports all route modules. Discovery endpoints (`.wellKnown()`, `.openapi()`) validate that the barrel is complete by comparing registered routes against the `prices` map. For routes in separate handler files (e.g., Next.js `route.ts` files), use **discovery stubs** — lightweight registrations that provide metadata for discovery without the real handler. Guard stubs with `registry.has()` to avoid unnecessary overwrites.
 
-8. **Both x402 and MPP ship from day one.** Dual-protocol support is not an afterthought. Routes declare `protocols: ['x402', 'mpp']` and the orchestration layer routes to the correct handler based on the request header.
+8. **Both x402 and MPP ship from day one.** Dual-protocol support is not an afterthought. Routes declare `protocols: ['x402', 'mpp']` and the orchestration layer routes to the correct handler based on the request header. MPP uses low-level `mpay` primitives (`Challenge`, `Credential`, `tempo.charge`) — not the high-level `Mpay.create()` wrapper — because the router owns orchestration.
 
 9. **`zod-openapi` for OpenAPI 3.1.** Zod schemas are the single source of truth for request/response types. OpenAPI docs are auto-generated from them. No manual spec maintenance.
 
@@ -70,13 +70,17 @@ Request in
   → if unprotected: skip to handler
   → if apiKey route: verify API key → 401 if invalid
   → detectProtocol(request) from headers
-  → if no auth header: 402 challenge (NO body reading)
+  → if no payment header + dynamic pricing + body schema:
+      early body parse via request.clone() for accurate 402 price
+  → if SIWX: challenge or verify → handleAuth
+  → if no auth header: build 402 challenge
+      (x402: PAYMENT-REQUIRED header, MPP: WWW-Authenticate header)
   → bufferBody + validateBody (only if .body() chained)
   → resolvePrice (static / dynamic / tiered)
   → protocol verify (x402 or MPP)
   → plugin.onPaymentVerified()
   → handler(ctx) → result
-  → if status < 400: settle payment
+  → if status < 400: settle payment (x402) or receipt (MPP)
   → if provider configured: fireProviderQuota()
   → plugin.onResponse()
 Response out
@@ -97,7 +101,8 @@ Response out
 | `src/registry.ts` | `RouteRegistry` with barrel validation |
 | `src/protocols/detect.ts` | Header-based protocol detection |
 | `src/protocols/x402.ts` | x402 challenge/verify/settle wrappers |
-| `src/protocols/mpp.ts` | MPP challenge/verify/receipt wrappers |
+| `src/protocols/mpp.ts` | MPP challenge/verify/receipt wrappers (uses mpay low-level primitives) |
+| `src/server.ts` | x402 server initialization with retry |
 | `src/auth/siwx.ts` | SIWX verification |
 | `src/auth/api-key.ts` | API key verification |
 | `src/auth/nonce.ts` | `NonceStore` interface + `MemoryNonceStore` |
@@ -143,6 +148,19 @@ export const env = createEnv({
 
 **Why this matters:** The default facilitator reads `process.env.CDP_API_KEY_ID` and `process.env.CDP_API_KEY_SECRET` when creating auth headers for the CDP facilitator API. If they're not in `process.env`, authentication fails silently — the facilitator sends requests without `Authorization` headers, and CDP returns 401.
 
+### MPP environment
+
+For MPP (Micropayment Protocol via Tempo blockchain), you need:
+
+```bash
+MPP_SECRET_KEY=your-hmac-secret       # HMAC key for challenge binding
+TEMPO_RPC_URL=https://user:pass@rpc.mainnet.tempo.xyz  # Authenticated Tempo RPC
+```
+
+**Tempo RPC requires authentication.** The default `rpc.tempo.xyz` returns 401. Get credentials from the Tempo team. The `rpcUrl` can be set in config or via `TEMPO_RPC_URL` env var (config takes precedence).
+
+**Peer dependencies for MPP:** `mpay` is an optional peer dep. When installed, it brings `viem` as a transitive dependency. Both are required for MPP support.
+
 ## Creating Routes
 
 ### Step 1: Router setup (once per service)
@@ -154,13 +172,21 @@ import { createRouter } from '@agentcash/router';
 export const router = createRouter({
   payeeAddress: process.env.X402_PAYEE_ADDRESS!,
   // Optional:
-  network: 'eip155:8453',          // default
-  plugin: myPlugin,                 // observability
-  prices: { 'search': '0.02' },    // central pricing map
-  mpp: { secretKey, currency },     // MPP support
-  siwx: { nonceStore },            // custom nonce store
+  network: 'eip155:8453',            // default
+  protocols: ['x402', 'mpp'],        // protocols for auto-priced routes (default: ['x402'])
+  plugin: myPlugin,                   // observability
+  prices: { 'search': '0.02' },      // central pricing map
+  mpp: {                              // MPP support (requires mpay peer dep)
+    secretKey: process.env.MPP_SECRET_KEY!,
+    currency: '0x20c0000000000000000000000000000000000000', // PathUSD on Tempo
+    recipient: process.env.X402_PAYEE_ADDRESS!,
+    rpcUrl: process.env.TEMPO_RPC_URL,  // falls back to TEMPO_RPC_URL env var
+  },
+  siwx: { nonceStore },              // custom nonce store
 });
 ```
+
+**Router-level `protocols`:** Sets default protocols for routes using the `prices` map (auto-priced routes). Routes using `.paid()` directly can override with `{ protocols: [...] }`.
 
 ### Step 2: Define route files
 
@@ -197,14 +223,19 @@ The barrel ensures all routes are registered before discovery endpoints generate
 router.route('search').paid('0.01').body(schema).handler(fn);
 ```
 
-### Paid (dynamic pricing) — requires maxPrice
+### Paid (dynamic pricing)
 ```typescript
 router.route('gen')
   .paid((body) => calculateCost(body), { maxPrice: '5.00' })
   .body(schema)
   .handler(fn);
 ```
-`maxPrice` is required because the 402 probe (no body) needs a price for the challenge header.
+**How it works:** When a request arrives without a payment header, the router clones the request (`request.clone()`), parses the body early, and calls the pricing function to calculate an accurate price for the 402 challenge. This means clients see the real price, not a ceiling.
+
+`maxPrice` is **optional** and acts as a safety net:
+- **Cap:** If the pricing function returns a value above `maxPrice`, the price is capped and a warning is fired via the plugin.
+- **Fallback:** If the pricing function throws, `maxPrice` is used as a degraded-mode fallback. Without `maxPrice`, the route returns 500.
+- If omitted and the pricing function succeeds, the exact calculated price is used.
 
 ### Paid (tiered) — requires body
 ```typescript
@@ -340,15 +371,24 @@ for (const entry of router.monitors()) {
 
 ```typescript
 // app/.well-known/x402/route.ts
+import '@/lib/routes/barrel';  // barrel import FIRST to register all routes
 import { router } from '@/lib/routes';
-import '@/lib/routes/barrel';
 export const GET = router.wellKnown();
 
 // app/openapi.json/route.ts
-import { router } from '@/lib/routes';
 import '@/lib/routes/barrel';
+import { router } from '@/lib/routes';
 export const GET = router.openapi({ title: 'My API', version: '1.0.0' });
 ```
+
+**Barrel import must come first.** Without it, Next.js lazy-loads route modules, so discovery endpoints hit before routes register → `route 'X' in prices map but not registered` error.
+
+**`.well-known/x402` output** includes `mppResources` alongside `resources` when MPP routes exist:
+```json
+{ "version": 1, "resources": ["..."], "mppResources": ["..."] }
+```
+
+**OpenAPI spec** includes `x-payment-info` with `price` and `protocols` per operation.
 
 ## Plugin (Observability)
 
@@ -375,11 +415,26 @@ The type system (generic parameters `HasAuth`, `NeedsBody`, `HasBody`) prevents 
 - `.siwx()` is mutually exclusive with `.paid()`
 - `.apiKey()` CAN compose with `.paid()`
 
+## MPP Internals (Critical Pitfalls)
+
+The router uses mpay's **low-level primitives**, not the high-level `Mpay.create()` API. This matters because mpay's internals have subtle conventions:
+
+1. **NextRequest vs Request.** `Credential.fromRequest()` breaks with Next.js `NextRequest` due to subtle header handling differences. The router converts via `toStandardRequest()` — creating a new standard `Request` with the same URL, method, headers, and body.
+
+2. **`Challenge.fromIntent()` takes payment data, not an HTTP Request.** The `request` field in `fromIntent()` is the payment request object (`{ amount, currency, recipient, decimals }`), NOT the HTTP Request. Passing the wrong object causes silent challenge generation failures.
+
+3. **`tempo.charge().verify()` returns a receipt, not `{ valid, payer }`.** On success it returns `{ method, status, reference, timestamp }`. On failure it throws. Check `receipt.status === 'success'`, not `receipt.valid`.
+
+4. **`getClient` must be synchronous.** mpay's `Client.getResolver()` checks `if (getClient) return getClient` — it does NOT await. An async `getClient` will silently fall through to the default RPC URL.
+
+5. **Tempo RPC requires authentication.** The default `rpc.tempo.xyz` returns 401. Always provide `rpcUrl` or set `TEMPO_RPC_URL` env var with authenticated credentials.
+
+6. **viem is loaded eagerly in `ensureMpay()`.** Since `getClient` must be synchronous, viem's `createClient` and `http` are loaded once when mpay initializes, not per-call. viem is a transitive dep of mpay and is always available when mpay is installed.
+
 ## Registration-Time Validation
 
 These throw immediately when the route is defined (not at request time):
 
-- Dynamic pricing without `maxPrice`
 - Empty tier key in tiered pricing
 - `maxPrice` that isn't a positive decimal
 
@@ -390,12 +445,16 @@ These throw immediately when the route is defined (not at request time):
 ```typescript
 const router = createRouter({
   payeeAddress: '...',
+  protocols: ['x402', 'mpp'],                    // default protocols for all auto-priced routes
   prices: { 'search': '0.02', 'lookup': '0.05' },
+  mpp: { secretKey, currency, recipient, rpcUrl },
 });
 
-// .paid() is auto-applied:
+// .paid() is auto-applied with router-level protocols:
 export const POST = router.route('search').body(schema).handler(fn);
 ```
+
+Routes using `prices` inherit the router-level `protocols` config. Routes using `.paid()` directly can override per-route with `{ protocols: [...] }`.
 
 Barrel validation catches mismatches: keys in `prices` but not registered → error.
 
@@ -432,12 +491,17 @@ Barrel validation catches mismatches: keys in `prices` but not registered → er
 | Issue | Cause | Fix |
 |-------|-------|-----|
 | `route 'X' registered twice` warning | Discovery stub + real handler both register same key | Expected during `next build` — last writer wins. Use `registry.has()` guards on stubs to suppress. |
-| `dynamic pricing requires maxPrice` | `.paid(fn)` without `maxPrice` | Add `{ maxPrice: '...' }` to paid options |
 | `x402 server not initialized` | Missing peer deps | Install `@x402/core @x402/evm @x402/extensions @coinbase/x402` |
 | 402 on every request | No payment header | Client must send `PAYMENT-SIGNATURE` (x402) or `Authorization: Payment` (MPP) |
 | Body undefined in handler | No `.body()` chained | Add `.body(schema)` to the chain |
 | Route not in discovery docs | Missing barrel import | Import the route file in your barrel |
 | Settlement not happening | Handler returned status >= 400 | Settlement is gated on success responses |
+| MPP 401 `unauthorized: authentication required` | Using default unauthenticated Tempo RPC | Set `TEMPO_RPC_URL` env var or `mpp.rpcUrl` config with authenticated URL |
+| MPP `Credential.fromRequest()` returns undefined | NextRequest header handling incompatibility | Router handles this via `toStandardRequest()` — if you see this, the router dist is stale |
+| MPP verify returns `status: 'success'` but route returns 402 | Code checking `.valid` instead of `.status` | Verify returns a receipt `{ status, reference }`, not `{ valid, payer }` |
+| MPP using wrong RPC URL after rebuild | Next.js webpack cache or stale pnpm link | Delete `.next/`, run `pnpm install` in the app to pick up new router dist |
+| `route 'X' in prices map but not registered` | Discovery endpoint hit before route module loaded | Add barrel import to discovery route files |
+| `mpay package is required` | mpay not installed | `pnpm add mpay` — it's an optional peer dep |
 
 ## Maintaining This Skill
 
