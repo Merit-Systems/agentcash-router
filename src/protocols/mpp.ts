@@ -1,40 +1,37 @@
+import { Challenge, Credential, Receipt } from 'mpay';
+import type { Credential as CredentialType, Challenge as ChallengeType } from 'mpay';
+import { tempo } from 'mpay/server';
+import { createClient, http } from 'viem';
+import { tempo as tempoChain } from 'viem/chains';
 import type { RouteEntry } from '../types.js';
 
-// MPP (Micropayment Protocol) wrappers using mpay primitives.
-// mpay is an optional peer dep — lazily loaded.
+/** Tempo charge credential payload — discriminated union on `type`. */
+type TempoChargePayload =
+  | { hash: string; type: 'hash' }
+  | { signature: string; type: 'transaction' };
 
-let mpayLoaded = false;
-/* eslint-disable @typescript-eslint/no-explicit-any -- mpay module vars are used dynamically */
-let Challenge: any;
-let Credential: any;
-let Receipt: any;
-let tempo: any;
-let viemCreateClient: any;
-let viemHttp: any;
-let tempoChain: any;
-/* eslint-enable @typescript-eslint/no-explicit-any */
+/**
+ * Tempo charge request shape (output of the charge request schema after Zod transform).
+ * The `OutputRequestType` utility in mpay merges methodDetails into the base,
+ * making all fields required (some as `string | undefined`).
+ * `recipient` becomes required `string` (not `string | undefined`) because
+ * the method schema's `requires` tuple includes it.
+ */
+type TempoChargeRequest = {
+  amount: string;
+  currency: string;
+  decimals: number;
+  expires: string;
+  description: string | undefined;
+  externalId: string | undefined;
+  recipient: string;
+};
 
-async function ensureMpay() {
-  if (mpayLoaded) return;
-  try {
-    const mpay = await import('mpay');
-    Challenge = mpay.Challenge;
-    Credential = mpay.Credential;
-    Receipt = mpay.Receipt;
-    const mpayServer = await import('mpay/server');
-    tempo = mpayServer.tempo;
-    // viem is a transitive dep of mpay — always available when mpay is installed.
-    // Loaded eagerly so getClient can be synchronous (mpay requires sync getClient).
-    const viem = await import('viem');
-    viemCreateClient = viem.createClient;
-    viemHttp = viem.http;
-    const viemChains = await import('viem/chains');
-    tempoChain = viemChains.tempo;
-    mpayLoaded = true;
-  } catch {
-    throw new Error('mpay package is required for MPP protocol support. Install it: pnpm add mpay');
-  }
-}
+/** Fully-typed credential for tempo charge method. */
+type TempoChargeCredential = CredentialType.Credential<
+  TempoChargePayload,
+  ChallengeType.Challenge<TempoChargeRequest, 'charge', 'tempo'>
+>;
 
 /**
  * Builds getClient option for tempo.charge() when an RPC URL is available.
@@ -45,7 +42,7 @@ function buildGetClient(rpcUrl?: string): Record<string, unknown> {
   const url = rpcUrl ?? process.env.TEMPO_RPC_URL;
   if (!url) return {};
   return {
-    getClient: () => viemCreateClient({ chain: tempoChain, transport: viemHttp(url) }),
+    getClient: () => createClient({ chain: tempoChain, transport: http(url) }),
   };
 }
 
@@ -70,22 +67,26 @@ function toStandardRequest(request: Request): Request {
   });
 }
 
+/** Default decimals for USDC/stablecoin payments on Tempo. */
+const DEFAULT_DECIMALS = 6;
+
 export async function buildMPPChallenge(
   routeEntry: RouteEntry,
   request: Request,
   mppConfig: { secretKey: string; currency: string; recipient?: string; rpcUrl?: string },
   price: string,
 ) {
-  await ensureMpay();
-
   // Convert NextRequest to standard Request for mpay compatibility
   const standardRequest = toStandardRequest(request);
+
+  const currency = mppConfig.currency as `0x${string}`;
+  const recipient = (mppConfig.recipient ?? '') as `0x${string}`;
 
   // Create a MethodIntent to define payment requirements (tempo.charge for one-time payments).
   // This sets up the schema and defaults (decimals, expires) for the payment method.
   const methodIntent = tempo.charge({
-    currency: mppConfig.currency,
-    recipient: mppConfig.recipient ?? '',
+    currency,
+    recipient,
   });
 
   // Build challenge using payment request data (NOT the HTTP Request object).
@@ -95,9 +96,9 @@ export async function buildMPPChallenge(
     realm: new URL(standardRequest.url).origin,
     request: {
       amount: price,
-      currency: mppConfig.currency,
-      recipient: mppConfig.recipient ?? '',
-      // decimals and expires are auto-populated by tempo.charge defaults
+      currency,
+      recipient,
+      decimals: DEFAULT_DECIMALS,
     },
   });
 
@@ -110,10 +111,11 @@ export async function verifyMPPCredential(
   mppConfig: { secretKey: string; currency: string; recipient?: string; rpcUrl?: string },
   price: string,
 ) {
-  await ensureMpay();
-
   // Convert NextRequest to standard Request for mpay compatibility
   const standardRequest = toStandardRequest(request);
+
+  const currency = mppConfig.currency as `0x${string}`;
+  const recipient = (mppConfig.recipient ?? '') as `0x${string}`;
 
   try {
     const authHeader = standardRequest.headers.get('Authorization');
@@ -122,16 +124,12 @@ export async function verifyMPPCredential(
       return null;
     }
 
-    // Extract credential using mpay's standard method
-    let credential;
-    try {
-      credential = Credential.fromRequest(standardRequest);
-    } catch (fromRequestError) {
-      console.error('[MPP] Failed to extract credential:', fromRequestError instanceof Error ? fromRequestError.message : String(fromRequestError));
-      return null;
-    }
+    // Credential.fromRequest deserializes from the opaque Authorization header, so it can't
+    // infer the challenge schema. We assert the full tempo charge credential type at this
+    // deserialization boundary — the HMAC + on-chain verify below confirm it's actually valid.
+    const credential = Credential.fromRequest(standardRequest) as TempoChargeCredential;
 
-    if (!credential || !credential.challenge) {
+    if (!credential?.challenge) {
       console.error('[MPP] Invalid credential structure');
       return null;
     }
@@ -149,26 +147,33 @@ export async function verifyMPPCredential(
     // expects { credential, request } — matching the high-level Mpay.create() convention.
     // The request() transform resolves chainId/feePayer before verify() checks on-chain.
     const methodIntent = tempo.charge({
-      currency: mppConfig.currency,
-      recipient: mppConfig.recipient ?? '',
+      currency,
+      recipient,
       ...buildGetClient(mppConfig.rpcUrl),
     });
 
-    const paymentRequest = { amount: price, currency: mppConfig.currency, recipient: mppConfig.recipient ?? '' };
+    const paymentRequest = {
+      amount: price,
+      currency,
+      recipient,
+      decimals: DEFAULT_DECIMALS,
+    };
     const resolvedRequest = methodIntent.request
       ? await methodIntent.request({ credential, request: paymentRequest })
       : paymentRequest;
 
     // verify() returns a receipt { method, status, reference } on success, throws on failure.
-    const receipt = await methodIntent.verify({ credential, request: resolvedRequest });
+    const receipt = await methodIntent.verify({
+      credential,
+      request: resolvedRequest,
+    });
     if (!receipt || receipt.status !== 'success') {
       console.error('[MPP] Tempo verification failed:', receipt);
       return { valid: false as const, payer: null };
     }
 
-    // Payer address: extract from credential's challenge request or payload.
-    // The credential embeds the sender who signed the payment transaction.
-    const payer = credential.payload?.from ?? credential.challenge?.request?.from ?? receipt.reference ?? '';
+    // Payer address lives in the receipt reference (tx hash).
+    const payer = receipt.reference ?? '';
 
     return {
       valid: true as const,
@@ -185,9 +190,7 @@ export async function verifyMPPCredential(
   }
 }
 
-export async function buildMPPReceipt(reference: string) {
-  await ensureMpay();
-
+export function buildMPPReceipt(reference: string) {
   const receipt = Receipt.from({
     method: 'tempo',
     status: 'success',

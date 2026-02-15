@@ -1,3 +1,4 @@
+import type { PaymentRequirements, SettleResponse } from '@x402/core/types';
 import type { RouteEntry, X402Server } from '../types.js';
 
 // All x402 library interactions go through these thin wrappers.
@@ -36,11 +37,7 @@ export async function buildX402Challenge(
     null,
     extensions,
   );
-  // SDK boundary: data produced by createPaymentRequiredResponse is consumed
-  // by encodePaymentRequiredHeader. Our interface uses `unknown` to avoid
-  // coupling to specific @x402/core versions — the cast is safe.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const encoded = encodePaymentRequiredHeader(paymentRequired as any);
+  const encoded = encodePaymentRequiredHeader(paymentRequired);
 
   return { encoded, requirements };
 }
@@ -89,13 +86,12 @@ export async function verifyX402Payment(
 export async function settleX402Payment(
   server: X402Server,
   payload: unknown,
-  requirements: unknown,
+  requirements: PaymentRequirements,
 ) {
   const { encodePaymentResponseHeader } = await import('@x402/core/http');
 
   const result = await server.settlePayment(payload, requirements);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SDK boundary: settlePayment result → encodePaymentResponseHeader
-  const encoded = encodePaymentResponseHeader(result as any);
+  const encoded = encodePaymentResponseHeader(result);
 
-  return { encoded, result: result as { transaction?: string } };
+  return { encoded, result: result as SettleResponse & { transaction?: string } };
 }

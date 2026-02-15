@@ -34,13 +34,9 @@ export type AlertFn = (level: AlertLevel, message: string, meta?: Record<string,
 // x402 server interface
 // ---------------------------------------------------------------------------
 
-// Narrow typed interface for the x402ResourceServer. We don't re-export
-// the SDK's own types (they change across versions), but we DO enforce:
-// - Correct method names (catches init vs initialize)
-// - Async vs sync (forces await on Promise-returning methods)
-// - Array vs single arg (catches "not iterable" footgun)
-// Opaque data (PaymentRequirements, PaymentPayload) stays as `unknown`
-// since we never inspect it — we just pass it between SDK methods.
+// Typed interface for x402ResourceServer using @x402/core's own types.
+// Enforces correct method names, async signatures, and array vs single arg.
+import type { PaymentRequired, PaymentRequirements, SettleResponse } from '@x402/core/types';
 
 export interface X402Server {
   initialize(): Promise<void>;
@@ -48,23 +44,26 @@ export interface X402Server {
   buildPaymentRequirementsFromOptions(
     options: Array<{ scheme: string; network: string; price: string; payTo: string }>,
     context: { request: Request },
-  ): Promise<unknown[]>;
+  ): Promise<PaymentRequirements[]>;
 
   createPaymentRequiredResponse(
-    requirements: unknown[],
+    requirements: PaymentRequirements[],
     resource: { url: string; method: string; description?: string },
     error: string | null,
     extensions?: Record<string, unknown>,
-  ): Promise<unknown>;
+  ): Promise<PaymentRequired>;
 
-  findMatchingRequirements(requirements: unknown[], payload: unknown): unknown;
+  findMatchingRequirements(
+    requirements: PaymentRequirements[],
+    payload: unknown,
+  ): PaymentRequirements;
 
   verifyPayment(
     payload: unknown,
-    requirements: unknown,
+    requirements: PaymentRequirements,
   ): Promise<{ isValid: boolean; payer?: string }>;
 
-  settlePayment(payload: unknown, requirements: unknown): Promise<unknown>;
+  settlePayment(payload: unknown, requirements: PaymentRequirements): Promise<SettleResponse>;
 }
 
 // ---------------------------------------------------------------------------

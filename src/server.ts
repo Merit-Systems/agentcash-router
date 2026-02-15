@@ -1,3 +1,4 @@
+import type { FacilitatorConfig } from '@x402/core/http';
 import type { RouterConfig, X402Server } from './types.js';
 
 export async function createX402Server(config: RouterConfig) {
@@ -10,12 +11,10 @@ export async function createX402Server(config: RouterConfig) {
   const { siwxResourceServerExtension } = await import('@x402/extensions/sign-in-with-x');
   const { facilitator: defaultFacilitator } = await import('@coinbase/x402');
 
-  // HTTPFacilitatorClient expects { url?: string, createAuthHeaders?: ... }.
   // Normalize string URLs into the config object shape; pass objects through.
   const raw = config.facilitatorUrl ?? defaultFacilitator;
-  const facilitatorConfig = typeof raw === 'string' ? { url: raw } : raw;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- FacilitatorConfig not re-exported from @x402/core
-  const client = new HTTPFacilitatorClient(facilitatorConfig as any);
+  const facilitatorConfig: FacilitatorConfig = typeof raw === 'string' ? { url: raw } : raw;
+  const client = new HTTPFacilitatorClient(facilitatorConfig);
   const server = new x402ResourceServer(client);
 
   registerExactEvmScheme(server);
