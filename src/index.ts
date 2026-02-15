@@ -44,6 +44,28 @@ export function createRouter(config: RouterConfig): ServiceRouter {
       ? (process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000')
       : 'http://localhost:3000';
 
+  // Validate protocols configuration
+  if (config.protocols) {
+    if (config.protocols.length === 0) {
+      throw new Error(
+        "RouterConfig.protocols cannot be empty. Omit the field to use default ['x402'] or specify protocols explicitly."
+      );
+    }
+
+    if (config.protocols.includes('mpp') && !config.mpp) {
+      throw new Error(
+        'RouterConfig.protocols includes "mpp" but RouterConfig.mpp is not configured. ' +
+        'Add mpp: { secretKey, currency, recipient } to your router config.'
+      );
+    }
+
+    if (config.protocols.includes('x402') && !config.payeeAddress) {
+      throw new Error(
+        'RouterConfig.protocols includes "x402" but RouterConfig.payeeAddress is not configured.'
+      );
+    }
+  }
+
   // Plugin init: non-fatal, but properly handle async rejections.
   // RouterPlugin.init may return void or Promise<void>.
   if (config.plugin?.init) {
@@ -92,7 +114,8 @@ export function createRouter(config: RouterConfig): ServiceRouter {
 
       // Auto-apply pricing from prices map
       if (config.prices && key in config.prices) {
-        return builder.paid(config.prices[key]) as unknown as RouteBuilder;
+        const options = config.protocols ? { protocols: config.protocols } : undefined;
+        return builder.paid(config.prices[key], options) as unknown as RouteBuilder;
       }
 
       return builder;

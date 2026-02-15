@@ -178,4 +178,18 @@ export interface RouterConfig {
     currency: string;
     recipient?: string;
   };
+  /**
+   * Payment protocols to accept on auto-priced routes (those using the `prices` config).
+   *
+   * @default ['x402']
+   *
+   * @example
+   * // Accept both x402 and MPP payments
+   * createRouter({
+   *   protocols: ['x402', 'mpp'],
+   *   mpp: { secretKey, currency, recipient },
+   *   prices: { 'exa/search': '0.01' }
+   * })
+   */
+  protocols?: ProtocolType[];
 }
