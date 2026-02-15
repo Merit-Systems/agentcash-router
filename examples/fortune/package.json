@@ -1,0 +1,27 @@
+{
+  "name": "agentcash-router-fortune-example",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Minimal example app for testing @agentcash/router with MPP and x402",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@agentcash/router": "file:../..",
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "mpay": "^0.2.4",
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "viem": "^2.46.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.0.6",
+    "@types/react-dom": "^19.0.2",
+    "typescript": "^5.7.3"
+  }
+}
