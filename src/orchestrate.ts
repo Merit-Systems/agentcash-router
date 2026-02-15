@@ -132,7 +132,7 @@ export function createRequestHandler(
     }
 
     // ---- API key (runs before payment) ----
-    let account: unknown = undefined;
+    let account: unknown;
     if (routeEntry.authMode === 'apiKey' || routeEntry.apiKeyResolver) {
       if (!routeEntry.apiKeyResolver) {
         return fail(401, 'API key resolver not configured', meta, pluginCtx);
@@ -149,6 +149,29 @@ export function createRequestHandler(
     }
 
     const protocol = detectProtocol(request);
+
+    // ---- Early body parsing for dynamic pricing ----
+    // If no payment header and dynamic pricing exists, clone request and parse body early
+    // so pricing function can calculate accurate price for 402 challenge.
+    let earlyBodyData: unknown;
+
+    if (!protocol && typeof routeEntry.pricing === 'function' && routeEntry.bodySchema) {
+      // CRITICAL: Clone BEFORE consuming body (stream can only be read once)
+      // Direct cast: clone() returns Request but the runtime object is still NextRequest
+      // with all properties intact. TypeScript doesn't track this through clone().
+      const requestForPricing = request.clone() as NextRequest;
+
+      // Parse clone for pricing calculation
+      const earlyBodyResult = await parseBody(requestForPricing, routeEntry);
+
+      // Early validation failure - return 400, don't charge them!
+      if (!earlyBodyResult.ok) {
+        firePluginResponse(deps, pluginCtx, meta, earlyBodyResult.response);
+        return earlyBodyResult.response;
+      }
+
+      earlyBodyData = earlyBodyResult.data;
+    }
 
     // ---- SIWX ----
     // SIWX runs before body parsing: the wallet address is needed for
@@ -236,9 +259,9 @@ export function createRequestHandler(
       return handleAuth(siwx.wallet, undefined);
     }
 
-    // ---- No payment header → 402 challenge (no body reading) ----
+    // ---- No payment header → 402 challenge ----
     if (!protocol || protocol === 'siwx') {
-      return await build402(request, routeEntry, deps, meta, pluginCtx);
+      return await build402(request, routeEntry, deps, meta, pluginCtx, earlyBodyData);
     }
 
     // ---- Payment present: parse body + resolve price ----
@@ -417,6 +440,68 @@ function parseQuery(request: NextRequest, routeEntry: RouteEntry): unknown {
 }
 
 // ---------------------------------------------------------------------------
+// Dynamic pricing resolution
+// ---------------------------------------------------------------------------
+
+/** Resolve dynamic pricing with maxPrice safety net and fallback handling. */
+async function resolveDynamicPrice(
+  bodyData: unknown,
+  routeEntry: RouteEntry,
+  deps: OrchestrateDeps,
+  pluginCtx: PluginContext,
+  meta: RequestMeta,
+): Promise<{ price: string } | { error: NextResponse }> {
+  try {
+    let price = await resolvePrice(routeEntry.pricing!, bodyData);
+
+    // Validate against maxPrice ceiling if set
+    if (routeEntry.maxPrice) {
+      const calculated = parseFloat(price);
+      const max = parseFloat(routeEntry.maxPrice);
+
+      if (calculated > max) {
+        // Cap at maxPrice and fire warning
+        firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+          level: 'warn' as const,
+          message: `Price ${price} exceeds maxPrice ${routeEntry.maxPrice}, capping`,
+          route: routeEntry.key,
+          meta: { calculated: price, maxPrice: routeEntry.maxPrice, body: bodyData },
+        });
+        price = routeEntry.maxPrice;
+      }
+    }
+
+    return { price };
+  } catch (err: unknown) {
+    // Pricing function failed
+    firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+      level: 'error' as const,
+      message: `Pricing function failed: ${err instanceof Error ? err.message : String(err)}`,
+      route: routeEntry.key,
+      meta: { error: err instanceof Error ? err.stack : String(err), body: bodyData },
+    });
+
+    if (routeEntry.maxPrice) {
+      // Fall back to maxPrice (degraded mode)
+      firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+        level: 'warn' as const,
+        message: `Using maxPrice ${routeEntry.maxPrice} as fallback after pricing error`,
+        route: routeEntry.key,
+      });
+      return { price: routeEntry.maxPrice };
+    } else {
+      // No fallback available - fail fast
+      const errorResponse = NextResponse.json(
+        { success: false, error: 'Price calculation failed' },
+        { status: 500 },
+      );
+      firePluginResponse(deps, pluginCtx, meta, errorResponse);
+      return { error: errorResponse };
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 402 challenge
 // ---------------------------------------------------------------------------
 
@@ -426,19 +511,32 @@ async function build402(
   deps: OrchestrateDeps,
   meta: RequestMeta,
   pluginCtx: PluginContext,
+  bodyData?: unknown,
 ): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 402 });
 
   let challengePrice: string;
-  if (routeEntry.maxPrice) {
+
+  // Dynamic pricing with body data (early parsing happened)
+  if (bodyData !== undefined && typeof routeEntry.pricing === 'function') {
+    const result = await resolveDynamicPrice(bodyData, routeEntry, deps, pluginCtx, meta);
+    if ('error' in result) return result.error;
+    challengePrice = result.price;
+  }
+  // Static pricing (unchanged)
+  else if (routeEntry.maxPrice) {
     challengePrice = routeEntry.maxPrice;
-  } else if (routeEntry.pricing) {
+  }
+  // Tiered pricing (unchanged)
+  else if (routeEntry.pricing) {
     try {
       challengePrice = resolveMaxPrice(routeEntry.pricing);
     } catch {
       challengePrice = '0';
     }
-  } else {
+  }
+  // No pricing configured
+  else {
     challengePrice = '0';
   }
 

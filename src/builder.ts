@@ -69,7 +69,7 @@ export class RouteBuilder<
   paid(pricing: string, options?: PaidOptions): RouteBuilder<TBody, TQuery, True, False, HasBody>;
   paid<TBodyIn>(
     pricing: (body: TBodyIn) => string | Promise<string>,
-    options?: PaidOptions & { maxPrice: string },
+    options?: PaidOptions & { maxPrice?: string },
   ): RouteBuilder<TBody, TQuery, True, True, HasBody>;
   paid(
     pricing: {
@@ -90,9 +90,6 @@ export class RouteBuilder<
     if (options?.maxPrice) next._maxPrice = options.maxPrice;
 
     // Registration-time validation
-    if (typeof pricing === 'function' && !options?.maxPrice) {
-      throw new Error(`route '${this._key}': dynamic pricing requires maxPrice option`);
-    }
     if (typeof pricing === 'object' && 'tiers' in pricing) {
       for (const [tierKey, tierConfig] of Object.entries(pricing.tiers)) {
         if (!tierKey) {

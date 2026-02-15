@@ -74,9 +74,10 @@ describe('fluent chain', () => {
 });
 
 describe('registration-time safety', () => {
-  it('dynamic pricing without maxPrice throws at registration', () => {
+  it('dynamic pricing without maxPrice is allowed (trust mode)', () => {
     const { builder } = makeBuilder();
-    expect(() => builder.paid((body: unknown) => '0.01')).toThrow('maxPrice');
+    // maxPrice is now optional for dynamic pricing (v0.3.1+)
+    expect(() => builder.paid((body: unknown) => '0.01')).not.toThrow();
   });
 
   it('duplicate route key overwrites silently', () => {

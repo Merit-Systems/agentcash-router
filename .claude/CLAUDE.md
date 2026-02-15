@@ -35,6 +35,7 @@ Protocol-agnostic route framework for Next.js App Router APIs with x402 payment,
 - **Discovery:** `authMode !== 'unprotected'` determines well-known visibility, not the protocol list. SIWX routes return 402 challenges and must be discoverable.
 - **OpenAPI:** Merge paths for multi-method endpoints (GET + DELETE on same path). Never overwrite.
 - **Duplicate route keys:** Registry silently overwrites (last-write-wins) with a dev-only `console.warn`. This is intentional — Next.js module loading order is non-deterministic during `next build`, so discovery stubs and real handlers may register the same key in either order. Prior art: ElysiaJS uses the identical pattern. See stablestudio `.claude/13_route-registry-dedup.md` for full research.
+- **Dynamic pricing (v0.3.1+):** Early body parsing with `request.clone()` enables accurate dynamic pricing. `maxPrice` is optional and acts as a safety net (cap + fallback). Body is parsed before 402 challenge generation when pricing function exists. See `.claude/15_router-dynamic-pricing-solution.md` for full design and derisking.
 
 ## Environment Variables
 
