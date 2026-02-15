@@ -101,7 +101,10 @@ describe('RouterConfig.protocols', () => {
         protocols: ['x402'],
       });
 
-      router.route('manual').paid('0.05', { protocols: ['mpp'] }).handler(async () => ({}));
+      router
+        .route('manual')
+        .paid('0.05', { protocols: ['mpp'] })
+        .handler(async () => ({}));
 
       const entry = router.registry.get('manual');
       expect(entry).toBeDefined();
@@ -117,7 +120,10 @@ describe('RouterConfig.protocols', () => {
       });
 
       router.route('auto/route').handler(async () => ({}));
-      router.route('manual/route').paid('0.02', { protocols: ['x402'] }).handler(async () => ({}));
+      router
+        .route('manual/route')
+        .paid('0.02', { protocols: ['x402'] })
+        .handler(async () => ({}));
 
       const autoEntry = router.registry.get('auto/route');
       const manualEntry = router.registry.get('manual/route');

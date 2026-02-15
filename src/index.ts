@@ -48,20 +48,20 @@ export function createRouter(config: RouterConfig): ServiceRouter {
   if (config.protocols) {
     if (config.protocols.length === 0) {
       throw new Error(
-        "RouterConfig.protocols cannot be empty. Omit the field to use default ['x402'] or specify protocols explicitly."
+        "RouterConfig.protocols cannot be empty. Omit the field to use default ['x402'] or specify protocols explicitly.",
       );
     }
 
     if (config.protocols.includes('mpp') && !config.mpp) {
       throw new Error(
         'RouterConfig.protocols includes "mpp" but RouterConfig.mpp is not configured. ' +
-        'Add mpp: { secretKey, currency, recipient } to your router config.'
+          'Add mpp: { secretKey, currency, recipient } to your router config.',
       );
     }
 
     if (config.protocols.includes('x402') && !config.payeeAddress) {
       throw new Error(
-        'RouterConfig.protocols includes "x402" but RouterConfig.payeeAddress is not configured.'
+        'RouterConfig.protocols includes "x402" but RouterConfig.payeeAddress is not configured.',
       );
     }
   }

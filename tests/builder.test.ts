@@ -82,10 +82,14 @@ describe('registration-time safety', () => {
   it('duplicate route key overwrites silently', () => {
     const reg = new RouteRegistry();
     const b1 = new RouteBuilder('dup/key', reg, makeDeps());
-    b1.description('first').unprotected().handler(async () => ({}));
+    b1.description('first')
+      .unprotected()
+      .handler(async () => ({}));
 
     const b2 = new RouteBuilder('dup/key', reg, makeDeps());
-    b2.description('second').unprotected().handler(async () => ({}));
+    b2.description('second')
+      .unprotected()
+      .handler(async () => ({}));
     expect(reg.get('dup/key')!.description).toBe('second');
   });
 
