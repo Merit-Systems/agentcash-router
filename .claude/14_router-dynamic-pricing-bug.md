@@ -1,7 +1,7 @@
 # Router Dynamic Pricing Bug
 
 **Date:** 2026-02-15
-**Status:** Discovered during MCP testing
+**Status:** Resolved in v0.3.1 — see `15_router-dynamic-pricing-solution.md`
 **Context:** PR #66 (unsupervised-goblin branch), @agentcash/router@0.2.2
 **Severity:** Critical - All paid routes charging $10.00 instead of dynamic prices
 
