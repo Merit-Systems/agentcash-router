@@ -177,6 +177,8 @@ export interface RouterConfig {
     secretKey: string;
     currency: string;
     recipient?: string;
+    /** Tempo RPC URL for on-chain verification. Falls back to TEMPO_RPC_URL env var. */
+    rpcUrl?: string;
   };
   /**
    * Payment protocols to accept on auto-priced routes (those using the `prices` config).

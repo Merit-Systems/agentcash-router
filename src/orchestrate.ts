@@ -27,7 +27,7 @@ export interface OrchestrateDeps {
   nonceStore: NonceStore;
   payeeAddress: string;
   network: string;
-  mppConfig?: { secretKey: string; currency: string; recipient?: string };
+  mppConfig?: { secretKey: string; currency: string; recipient?: string; rpcUrl?: string };
 }
 
 export function createRequestHandler(
@@ -513,7 +513,12 @@ async function build402(
   pluginCtx: PluginContext,
   bodyData?: unknown,
 ): Promise<NextResponse> {
-  const response = new NextResponse(null, { status: 402 });
+  const response = new NextResponse(null, {
+    status: 402,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
 
   let challengePrice: string;
 
