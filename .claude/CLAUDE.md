@@ -46,6 +46,16 @@ The router uses the default facilitator from `@coinbase/x402`, which requires CD
 
 **Critical for Next.js apps with env validation (T3 stack, `@t3-oss/env-nextjs`):** These variables must be explicitly declared in your env schema. Next.js does not automatically expose all env vars to `process.env` — undeclared vars are invisible at runtime.
 
+### MPP (Tempo) Environment Variables
+
+MPP payment verification requires an **authenticated** Tempo RPC endpoint. The public `https://rpc.tempo.xyz/` returns `401 Unauthorized`.
+
+- `TEMPO_RPC_URL` — Authenticated Tempo RPC URL (e.g. `https://user:pass@rpc.mainnet.tempo.xyz`)
+
+Alternatively, pass `rpcUrl` in the `mpp` config object to `createRouter()`. Without either, MPP on-chain verification fails with "unauthorized: authentication required".
+
+### CDP Environment Variables
+
 Without these keys, the default facilitator cannot authenticate with CDP:
 - x402 server `initialize()` fails with "Failed to fetch supported kinds from facilitator: TypeError: fetch failed" or "Facilitator getSupported failed (401): Unauthorized"
 - All payment routes return empty 402 responses (no `PAYMENT-REQUIRED` header, no body)
