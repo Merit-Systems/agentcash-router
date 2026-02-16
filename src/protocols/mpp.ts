@@ -50,6 +50,11 @@ function buildGetClient(rpcUrl?: string): Record<string, unknown> {
  * Converts NextRequest to standard Web API Request.
  * NextRequest extends Request but has subtle header handling differences
  * that break mpay's Credential.fromRequest(). This ensures compatibility.
+ *
+ * NOTE: Body is intentionally omitted. By the time verifyMPPCredential() is
+ * called, orchestrate.ts has already consumed the body stream via parseBody().
+ * MPP verification only needs headers (Authorization), so this is safe.
+ * See tests/mpp-body-bug.test.ts for the full explanation.
  */
 function toStandardRequest(request: Request): Request {
   // If already standard Request, return as-is
@@ -57,13 +62,13 @@ function toStandardRequest(request: Request): Request {
     return request;
   }
 
-  // Create new standard Request with same properties
+  // Create new standard Request with headers only.
+  // Body is not included because:
+  // 1. MPP only reads the Authorization header
+  // 2. The body stream is already consumed by parseBody() in orchestrate.ts
   return new Request(request.url, {
     method: request.method,
     headers: request.headers,
-    body: request.body,
-    // @ts-expect-error - Request.duplex is required for streaming bodies but not in types yet
-    duplex: 'half',
   });
 }
 

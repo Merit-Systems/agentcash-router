@@ -20,6 +20,7 @@ Design docs, decision records, and bug analyses for `@agentcash/router`. These d
 
 | File | Version | Description |
 |------|---------|-------------|
+| `fix-mpp.md` | v0.4.1 | MPP support: NextRequest→Request conversion, challenge generation, body stream consumption bug. Final fix removes body from `toStandardRequest()` since MPP only needs Authorization header. |
 | `15_router-dynamic-pricing-solution.md` | v0.3.1 | Full derisking for early body parsing fix. Covers `request.clone()` behavior, settlement patterns, maxPrice semantics, error handling. The research on Vercel limits and clone edge cases is durable reference. |
 | `14_router-dynamic-pricing-bug.md` | v0.3.1 | P0 bug: all paid routes charged maxPrice instead of dynamic price. Root cause analysis of the body-parsing-after-402 architectural issue. |
 | `1_post-migration-review-fixes.md` | v0.2.0 | Post-migration review. 6 fixes including error `.status` fallback, SIWX challenge format, well-known visibility. Key decisions now enshrined in CLAUDE.md Critical Rules. |
