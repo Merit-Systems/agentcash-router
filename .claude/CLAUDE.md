@@ -100,3 +100,33 @@ pnpm check      # format + lint + typecheck + build + test
 The `.claude/` directory contains design docs, decision records, and bug analyses that document the reasoning behind the router's architecture. See `.claude/INDEX.md` for a table of contents.
 
 **Convention:** Every doc has a `Status` header. When you resolve work described in a doc, update its Status to `Resolved in vX.Y.Z` and update INDEX.md.
+
+## Releasing
+
+**Release flow:** PR with version bump → merge → create GitHub Release → auto-publish to npm
+
+### When doing work that should be released:
+
+1. **Update `CHANGELOG.md`** — Add entry under new version heading with changes
+2. **Bump version** in `package.json`
+3. **Create PR** with both changes
+4. **Merge PR to main**
+
+### To publish (human step):
+
+1. Go to [GitHub Releases](https://github.com/Merit-Systems/agentcash-router/releases)
+2. Click **Draft a new release**
+3. Create tag: `v0.X.Y` (must match package.json version)
+4. Title: `v0.X.Y`
+5. Description: Copy from CHANGELOG.md or click "Generate release notes"
+6. Click **Publish release**
+
+The `publish.yml` workflow will:
+- Run full test suite (`pnpm check`)
+- Verify package.json version matches tag
+- Publish to npm with `--access public`
+
+### Troubleshooting
+
+- **Version mismatch error**: package.json version must exactly match the release tag (without `v` prefix)
+- **Publish fails**: Check `NPM_TOKEN` secret is set and has write access to `@agentcash` scope
