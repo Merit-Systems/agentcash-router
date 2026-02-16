@@ -13,6 +13,16 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./testing": {
+      "import": {
+        "types": "./dist/testing/index.d.ts",
+        "default": "./dist/testing/index.js"
+      },
+      "require": {
+        "types": "./dist/testing/index.d.cts",
+        "default": "./dist/testing/index.cjs"
+      }
     }
   },
   "main": "./dist/index.cjs",
@@ -42,7 +52,13 @@
     "mpay": "^0.2.4",
     "next": ">=15.0.0",
     "zod": "^4.0.0",
+    "viem": "^2.0.0",
     "zod-openapi": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "viem": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@coinbase/x402": "^2.1.0",

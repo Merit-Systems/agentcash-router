@@ -193,4 +193,59 @@ export interface RouterConfig {
    * })
    */
   protocols?: ProtocolType[];
+  treasury?: TreasuryConfig;
+  outbound?: OutboundConfig;
+  accounting?: AccountingConfig;
+}
+
+// ---------------------------------------------------------------------------
+// Treasury
+// ---------------------------------------------------------------------------
+
+export interface TreasuryConfig {
+  operationalKey: string;
+  treasuryAddress: string;
+  buffer?: number;
+  sweepThreshold?: number;
+  rpcUrl?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Outbound
+// ---------------------------------------------------------------------------
+
+export interface OutboundConfig {
+  walletKey: string;
+  lowBalanceThreshold?: number;
+  alertUrl?: string;
+  rpcUrl?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Accounting
+// ---------------------------------------------------------------------------
+
+export interface AccountingCostEntry {
+  upstream: string;
+  costPerCall: number;
+}
+
+export interface AccountingConfig {
+  costs: Record<string, AccountingCostEntry>;
+  onFlush?: (snapshot: AccountingSnapshot) => Promise<void>;
+}
+
+export interface RouteAccounting {
+  calls: number;
+  revenue: number;
+  cost: number;
+  margin: number;
+  upstream: string;
+}
+
+export interface AccountingSnapshot {
+  revenue: number;
+  cost: number;
+  margin: number;
+  byRoute: Record<string, RouteAccounting>;
 }

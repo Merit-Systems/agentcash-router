@@ -452,6 +452,100 @@ router.route('health')
 - The plugin hook is non-blocking — it never delays the response to the caller
 - Missing thresholds are fine — without `warn`/`critical`, level is always `healthy`
 
+## Treasury Management
+
+Sweep excess USDC from your operational wallet to a treasury address:
+
+```typescript
+import { TreasuryManager, createTreasurySweepHandler } from '@agentcash/router';
+
+const treasury = new TreasuryManager({
+  operationalKey: process.env.OPERATIONAL_PRIVATE_KEY!,
+  treasuryAddress: '0x...',
+  buffer: 10,        // Keep $10 in operational wallet
+  sweepThreshold: 20, // Sweep when balance exceeds $20
+});
+
+// Next.js cron route (protected by CRON_SECRET)
+export const GET = createTreasurySweepHandler(treasury);
+```
+
+## Outbound Payments
+
+Make paid requests to other x402 services with automatic payment handling:
+
+```typescript
+import { OutboundClient, createBalanceCheckHandler } from '@agentcash/router';
+
+const outbound = new OutboundClient({
+  walletKey: process.env.OUTBOUND_PRIVATE_KEY!,
+  lowBalanceThreshold: 0.25,
+  alertUrl: 'https://hooks.example.com/alert',
+});
+
+// Pay for an x402-protected API call
+const response = await outbound.pay('https://api.example.com/search', {
+  method: 'POST',
+  body: { query: 'test' },
+});
+
+// Balance check cron route
+export const GET = createBalanceCheckHandler(outbound);
+```
+
+## Accounting
+
+Track per-route revenue vs cost-of-revenue:
+
+```typescript
+import { AccountingTracker, createAccountingHandler } from '@agentcash/router';
+
+const accounting = new AccountingTracker({
+  costs: {
+    search: { upstream: 'exa', costPerCall: 0.01 },
+    enrich: { upstream: 'enrichx', costPerCall: 0.03 },
+  },
+});
+
+// Record after each paid request
+accounting.record('search', 0.05);
+
+// Get snapshot
+const snapshot = accounting.snapshot();
+// { revenue: 0.05, cost: 0.01, margin: 0.04, byRoute: { ... } }
+
+// Cron route for accounting data
+export const GET = createAccountingHandler(accounting);
+```
+
+## Testing
+
+The `@agentcash/router/testing` subpath provides constraint checkers for integration tests:
+
+```typescript
+import { createRouterTests } from '@agentcash/router/testing';
+
+const suite = createRouterTests(router, {
+  baseUrl: 'http://localhost:3000',
+  constraints: {
+    allRoutesReturn402: true,
+    sweepInvariant: true,
+    walletBalanceAbove: 1.0,
+  },
+  treasuryBuffer: 10,
+  treasurySweepThreshold: 20,
+  balanceFn: () => treasury.balance(),
+});
+
+// Use with vitest
+const { describeName, tests } = suite.asVitest();
+describe(describeName, () => {
+  for (const t of tests) {
+    it(t.name, t.fn);
+  }
+});
+```
+
 ## License
 
 MIT

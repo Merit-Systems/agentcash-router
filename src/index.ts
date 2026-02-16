@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import type { NextResponse } from 'next/server';
-import type { RouterConfig } from './types.js';
+import type { RouterConfig, AccountingSnapshot } from './types.js';
 import type { OrchestrateDeps } from './orchestrate.js';
 import type { WellKnownOptions } from './discovery/well-known.js';
 import type { OpenAPIOptions } from './discovery/openapi.js';
@@ -9,10 +9,25 @@ import { RouteBuilder } from './builder.js';
 import { MemoryNonceStore } from './auth/nonce.js';
 import { createWellKnownHandler } from './discovery/well-known.js';
 import { createOpenAPIHandler } from './discovery/openapi.js';
+import { TreasuryManager, createTreasurySweepHandler } from './treasury.js';
+import { OutboundClient, createBalanceCheckHandler } from './outbound.js';
+import { AccountingTracker, createAccountingHandler } from './accounting.js';
 
 // ---------------------------------------------------------------------------
 // ServiceRouter
 // ---------------------------------------------------------------------------
+
+export interface TreasuryHandle {
+  manager: TreasuryManager;
+  sweep: () => Promise<{ swept: number; balance: number }>;
+  balance: () => Promise<number>;
+}
+
+export interface OutboundHandle {
+  client: OutboundClient;
+  pay: OutboundClient['pay'];
+  balance: () => Promise<number>;
+}
 
 export interface MonitorEntry {
   provider: string;
@@ -29,6 +44,9 @@ export interface ServiceRouter {
   openapi(options: OpenAPIOptions): (request: NextRequest) => Promise<NextResponse>;
   monitors(): MonitorEntry[];
   registry: RouteRegistry;
+  treasury?: TreasuryHandle;
+  outbound?: OutboundHandle;
+  accounting(): AccountingSnapshot;
 }
 
 // ---------------------------------------------------------------------------
@@ -108,6 +126,32 @@ export function createRouter(config: RouterConfig): ServiceRouter {
 
   const pricesKeys = config.prices ? Object.keys(config.prices) : undefined;
 
+  const treasuryHandle: TreasuryHandle | undefined = config.treasury
+    ? (() => {
+        const mgr = new TreasuryManager(config.treasury);
+        return {
+          manager: mgr,
+          sweep: () => mgr.sweep(),
+          balance: () => mgr.balance(),
+        };
+      })()
+    : undefined;
+
+  const outboundHandle: OutboundHandle | undefined = config.outbound
+    ? (() => {
+        const client = new OutboundClient(config.outbound);
+        return {
+          client,
+          pay: client.pay.bind(client),
+          balance: () => client.balance(),
+        };
+      })()
+    : undefined;
+
+  const accountingTracker = config.accounting
+    ? new AccountingTracker(config.accounting)
+    : new AccountingTracker({ costs: {} });
+
   return {
     route(key: string): RouteBuilder {
       const builder = new RouteBuilder(key, registry, deps);
@@ -147,6 +191,10 @@ export function createRouter(config: RouterConfig): ServiceRouter {
     },
 
     registry,
+
+    treasury: treasuryHandle,
+    outbound: outboundHandle,
+    accounting: () => accountingTracker.snapshot(),
   };
 }
 
@@ -190,3 +238,16 @@ export type { NonceStore } from './auth/nonce.js';
 export { MemoryNonceStore } from './auth/nonce.js';
 export { RouteBuilder } from './builder.js';
 export { RouteRegistry } from './registry.js';
+
+export { TreasuryManager, createTreasurySweepHandler } from './treasury.js';
+export { OutboundClient, createBalanceCheckHandler } from './outbound.js';
+export { AccountingTracker, createAccountingHandler } from './accounting.js';
+
+export type {
+  TreasuryConfig,
+  OutboundConfig,
+  AccountingConfig,
+  AccountingCostEntry,
+  AccountingSnapshot,
+  RouteAccounting,
+} from './types.js';
