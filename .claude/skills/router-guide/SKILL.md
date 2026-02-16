@@ -31,7 +31,7 @@ Every paid API route in a Merit Systems service shared the same ~80-150 lines of
 
 7. **Self-registering routes + validated barrel (Approach B).** Routes self-register via `.handler()` at import time. A barrel file imports all route modules. Discovery endpoints (`.wellKnown()`, `.openapi()`) validate that the barrel is complete by comparing registered routes against the `prices` map. For routes in separate handler files (e.g., Next.js `route.ts` files), use **discovery stubs** — lightweight registrations that provide metadata for discovery without the real handler. Guard stubs with `registry.has()` to avoid unnecessary overwrites.
 
-8. **Both x402 and MPP ship from day one.** Dual-protocol support is not an afterthought. Routes declare `protocols: ['x402', 'mpp']` and the orchestration layer routes to the correct handler based on the request header. MPP uses low-level `mpay` primitives (`Challenge`, `Credential`, `tempo.charge`) — not the high-level `Mpay.create()` wrapper — because the router owns orchestration.
+8. **Both x402 and MPP ship from day one.** Dual-protocol support is not an afterthought. Routes declare `protocols: ['x402', 'mpp']` and the orchestration layer routes to the correct handler based on the request header. MPP uses low-level `mppx` primitives (`Challenge`, `Credential`, `tempo.charge`) — not the high-level `Mppx.create()` wrapper — because the router owns orchestration.
 
 9. **`zod-openapi` for OpenAPI 3.1.** Zod schemas are the single source of truth for request/response types. OpenAPI docs are auto-generated from them. No manual spec maintenance.
 
@@ -101,7 +101,7 @@ Response out
 | `src/registry.ts` | `RouteRegistry` with barrel validation |
 | `src/protocols/detect.ts` | Header-based protocol detection |
 | `src/protocols/x402.ts` | x402 challenge/verify/settle wrappers |
-| `src/protocols/mpp.ts` | MPP challenge/verify/receipt wrappers (uses mpay low-level primitives) |
+| `src/protocols/mpp.ts` | MPP challenge/verify/receipt wrappers (uses mppx low-level primitives) |
 | `src/server.ts` | x402 server initialization with retry |
 | `src/auth/siwx.ts` | SIWX verification |
 | `src/auth/api-key.ts` | API key verification |
@@ -159,7 +159,7 @@ TEMPO_RPC_URL=https://user:pass@rpc.mainnet.tempo.xyz  # Authenticated Tempo RPC
 
 **Tempo RPC requires authentication.** The default `rpc.tempo.xyz` returns 401. Get credentials from the Tempo team. The `rpcUrl` can be set in config or via `TEMPO_RPC_URL` env var (config takes precedence).
 
-**Peer dependencies for MPP:** `mpay` is an optional peer dep. When installed, it brings `viem` as a transitive dependency. Both are required for MPP support.
+**Peer dependencies for MPP:** `mppx` is an optional peer dep. It has `viem` as a peer dependency. Both are required for MPP support.
 
 ## Creating Routes
 
@@ -176,7 +176,7 @@ export const router = createRouter({
   protocols: ['x402', 'mpp'],        // protocols for auto-priced routes (default: ['x402'])
   plugin: myPlugin,                   // observability
   prices: { 'search': '0.02' },      // central pricing map
-  mpp: {                              // MPP support (requires mpay peer dep)
+  mpp: {                              // MPP support (requires mppx peer dep)
     secretKey: process.env.MPP_SECRET_KEY!,
     currency: '0x20c0000000000000000000000000000000000000', // PathUSD on Tempo
     recipient: process.env.X402_PAYEE_ADDRESS!,
@@ -417,7 +417,7 @@ The type system (generic parameters `HasAuth`, `NeedsBody`, `HasBody`) prevents 
 
 ## MPP Internals (Critical Pitfalls)
 
-The router uses mpay's **low-level primitives**, not the high-level `Mpay.create()` API. This matters because mpay's internals have subtle conventions:
+The router uses mppx's **low-level primitives**, not the high-level `Mppx.create()` API. This matters because mppx's internals have subtle conventions:
 
 1. **NextRequest vs Request.** `Credential.fromRequest()` breaks with Next.js `NextRequest` due to subtle header handling differences. The router converts via `toStandardRequest()` — creating a new standard `Request` with the same URL, method, headers, and body.
 
@@ -425,11 +425,11 @@ The router uses mpay's **low-level primitives**, not the high-level `Mpay.create
 
 3. **`tempo.charge().verify()` returns a receipt, not `{ valid, payer }`.** On success it returns `{ method, status, reference, timestamp }`. On failure it throws. Check `receipt.status === 'success'`, not `receipt.valid`.
 
-4. **`getClient` must be synchronous.** mpay's `Client.getResolver()` checks `if (getClient) return getClient` — it does NOT await. An async `getClient` will silently fall through to the default RPC URL.
+4. **`tempo.charge()` constructor takes operational config only.** In mppx, `currency` and `recipient` are NOT passed to `tempo.charge()`. They are passed in the `request` object to `Challenge.fromIntent()` and `verify()`. Only `getClient`, `decimals`, `feePayer`, `testnet`, etc. go in the constructor.
 
 5. **Tempo RPC requires authentication.** The default `rpc.tempo.xyz` returns 401. Always provide `rpcUrl` or set `TEMPO_RPC_URL` env var with authenticated credentials.
 
-6. **viem is loaded eagerly in `ensureMpay()`.** Since `getClient` must be synchronous, viem's `createClient` and `http` are loaded once when mpay initializes, not per-call. viem is a transitive dep of mpay and is always available when mpay is installed.
+6. **viem is a peer dep of mppx.** The router uses viem directly for `createClient` and `http` in `buildGetClient()`. viem is always available when mppx is installed as a peer dep.
 
 ## Registration-Time Validation
 
@@ -501,7 +501,7 @@ Barrel validation catches mismatches: keys in `prices` but not registered → er
 | MPP verify returns `status: 'success'` but route returns 402 | Code checking `.valid` instead of `.status` | Verify returns a receipt `{ status, reference }`, not `{ valid, payer }` |
 | MPP using wrong RPC URL after rebuild | Next.js webpack cache or stale pnpm link | Delete `.next/`, run `pnpm install` in the app to pick up new router dist |
 | `route 'X' in prices map but not registered` | Discovery endpoint hit before route module loaded | Add barrel import to discovery route files |
-| `mpay package is required` | mpay not installed | `pnpm add mpay` — it's an optional peer dep |
+| `mppx package is required` | mppx not installed | `pnpm add mppx` — it's an optional peer dep |
 
 ## Maintaining This Skill
 
