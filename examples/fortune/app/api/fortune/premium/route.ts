@@ -6,7 +6,8 @@ const PremiumSchema = z.object({
 });
 
 // Simulate category-based rate limits (resets on server restart)
-const categoryUsage = new Map<string, number>();
+// 'health' is pre-exhausted for testing validate rejection
+const categoryUsage = new Map<string, number>([['health', 3]]);
 const CATEGORY_LIMIT = 3;
 
 const premiumFortunes: Record<string, string[]> = {
@@ -34,12 +35,15 @@ const premiumFortunes: Record<string, string[]> = {
  * the 402 challenge is shown. Invalid requests are rejected with appropriate
  * error codes, not charged.
  *
- * Test with:
+ * Test validate pass (returns 402 with price):
  *   curl -X POST http://localhost:3000/api/fortune/premium \
  *     -H "Content-Type: application/json" \
  *     -d '{"category": "love"}'
  *
- * After 3 requests to the same category, returns 429 before showing price.
+ * Test validate fail (returns 429 before price - 'health' is pre-exhausted):
+ *   curl -X POST http://localhost:3000/api/fortune/premium \
+ *     -H "Content-Type: application/json" \
+ *     -d '{"category": "health"}'
  */
 export const POST = router
   .route('fortune/premium')
