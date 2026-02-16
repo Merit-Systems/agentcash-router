@@ -243,7 +243,7 @@ export function createRequestHandler(
         // of auth mode. SIWX info goes in extensions['sign-in-with-x'].
         // accepts: [] signals "no payment needed, just prove identity."
         const url = new URL(request.url);
-        const nonce = crypto.randomUUID();
+        const nonce = crypto.randomUUID().replace(/-/g, '');
         const siwxInfo = {
           domain: url.hostname,
           uri: request.url,
