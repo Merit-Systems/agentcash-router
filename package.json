@@ -50,6 +50,7 @@
     }
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.8",
     "@coinbase/x402": "^2.1.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.0.0",
