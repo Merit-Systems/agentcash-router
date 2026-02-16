@@ -90,12 +90,12 @@ For checks that need DB lookups or external APIs before showing a price. Runs af
 router
   .route('domain/register')
   .paid(calculatePrice, { maxPrice: '10.00' })
+  .body(RegisterSchema)  // .body() before .validate() for type inference
   .validate(async (body) => {
     if (await isDomainTaken(body.domain)) {
       throw Object.assign(new Error('Domain already taken'), { status: 409 });
     }
   })
-  .body(RegisterSchema)
   .handler(async ({ body, wallet }) => {
     return registerDomain(body.domain, wallet);
   });
@@ -104,13 +104,13 @@ router
 router
   .route('api/expensive')
   .paid('1.00')
+  .body(RequestSchema)
   .validate(async (body) => {
     const usage = await getUserUsage(body.userId);
     if (usage >= DAILY_LIMIT) {
       throw Object.assign(new Error('Daily limit reached'), { status: 429 });
     }
   })
-  .body(RequestSchema)
   .handler(async ({ body }) => { ... });
 ```
 
@@ -186,6 +186,43 @@ pnpm test       # vitest
 pnpm typecheck  # tsc --noEmit
 pnpm check      # format + lint + typecheck + build + test
 ```
+
+## Releasing
+
+**Release flow:** PR with version bump → merge → create GitHub Release → auto-publish to npm
+
+### When doing work that should be released:
+
+1. **Update `CHANGELOG.md`** — Add entry under new version heading with changes
+2. **Bump version in `package.json`** — Match the changelog version
+3. **Commit both** — e.g., `chore: bump to v0.6.0`
+4. **Merge PR to main**
+
+### To publish (human step):
+
+1. Go to [GitHub Releases](https://github.com/Merit-Systems/agentcash-router/releases)
+2. Click **Draft a new release**
+3. Create tag: `v0.6.0` (must match package.json version)
+4. Title: `v0.6.0`
+5. Description: Copy from CHANGELOG.md or click "Generate release notes"
+6. Click **Publish release**
+
+The `publish.yml` workflow will:
+- Run full test suite (`pnpm check`)
+- Verify package.json version matches tag
+- Publish to npm with `--access public`
+
+### Version format
+
+- **Patch** (`0.5.1`): Bug fixes, docs, internal changes
+- **Minor** (`0.6.0`): New features, non-breaking additions
+- **Major** (`1.0.0`): Breaking changes (holding until API stabilizes)
+
+### Troubleshooting
+
+- **Version mismatch error**: package.json version must exactly match the release tag (without `v` prefix)
+- **Publish fails**: Check `NPM_TOKEN` secret is set and has write access to `@agentcash` scope
+- **Tests fail**: Fix in a new PR, then re-create the release
 
 ## Development Record
 

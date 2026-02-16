@@ -48,6 +48,7 @@ const premiumFortunes: Record<string, string[]> = {
 export const POST = router
   .route('fortune/premium')
   .paid('0.005')
+  .body(PremiumSchema)
   .validate(async (body) => {
     const count = categoryUsage.get(body.category) ?? 0;
     if (count >= CATEGORY_LIMIT) {
@@ -57,7 +58,6 @@ export const POST = router
       );
     }
   })
-  .body(PremiumSchema)
   .description('Premium fortune with category selection (rate limited per category)')
   .handler(async ({ body }) => {
     // Increment usage
