@@ -28,6 +28,57 @@ Protocol-agnostic route framework for Next.js App Router APIs with x402 payment,
 - `src/protocols/` — Protocol handlers (x402.ts, mpp.ts, detect.ts)
 - `src/discovery/` — Auto-generated endpoints (well-known.ts, openapi.ts)
 
+## Auth Modes
+
+Four auth modes, mutually exclusive (except `.apiKey()` composes with `.paid()`):
+
+### `.paid(pricing)` — Payment required
+```typescript
+.paid('0.01')                    // Static price
+.paid((body) => calcPrice(body)) // Dynamic pricing
+.paid({ field: 'tier', tiers: { basic: { price: '0.01' } } }) // Tiered
+```
+
+### `.siwx()` — Wallet identity required (no payment)
+```typescript
+.siwx().handler(async ({ wallet }) => { /* wallet is verified */ })
+```
+
+### `.apiKey(resolver)` — API key / Bearer token auth
+For admin routes, cron jobs, internal services. Checks `X-API-Key` header OR `Authorization: Bearer <token>`.
+
+```typescript
+// Admin route with API key
+export const GET = router
+  .route('admin/users')
+  .apiKey(async (key) => {
+    const admin = await db.admin.findByKey(key);
+    return admin ?? null; // null = 401, truthy = ctx.account
+  })
+  .handler(async ({ account }) => {
+    // account is whatever resolver returned
+    return db.user.findMany();
+  });
+
+// Cron job with static secret
+export const POST = router
+  .route('cron/cleanup')
+  .apiKey((key) => key === process.env.CRON_SECRET ? { cron: true } : null)
+  .handler(async () => { /* ... */ });
+```
+
+**Headers accepted:** `X-API-Key: <key>` or `Authorization: Bearer <key>`
+
+**Composing with payment:** `.apiKey()` can layer on `.paid()` — auth runs first, payment second:
+```typescript
+.apiKey(resolver).paid('0.01') // Must pass API key AND pay
+```
+
+### `.unprotected()` — No auth
+```typescript
+.unprotected().handler(async () => { /* public endpoint */ })
+```
+
 ## Critical Rules
 
 - **Error handling:** Respect `.status` on any thrown error, not just `HttpError`. The `Object.assign(new Error(), { status })` pattern is universal in Node.js.

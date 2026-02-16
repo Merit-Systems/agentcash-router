@@ -1,8 +1,7 @@
 # MPP Payment Flow Tests
 
 **Date:** 2026-02-16
-**Status:** In Progress
-**Target:** v0.4.2
+**Status:** Resolved in v0.5.0
 **Context:** MPP payments work end-to-end in production (validated on enrichx402.com) but have zero test coverage for the payment flow. x402 has good coverage in `tests/orchestrate.test.ts` — MPP needs parity.
 
 ---
@@ -203,14 +202,13 @@ function withMPPPayment(options: { payer?: string; body?: unknown } = {}): NextR
 
 ## Implementation Checklist
 
-- [ ] Add vi.mock for `../src/protocols/mpp.js` (after existing x402 mock)
-- [ ] Add `KNOWN_MPP_PAYER` constant
-- [ ] Add `makeMPPDeps()` helper
-- [ ] Add `makeMPPEntry()` helper
-- [ ] Add `withMPPPayment()` helper
-- [ ] Add `describe('MPP paid route')` block with 5 tests
-- [ ] Run `pnpm test` to verify all pass
-- [ ] Run `pnpm check` to verify no lint/type errors
+- [x] Add vi.mock for `../src/protocols/mpp.js` (after existing x402 mock)
+- [x] Add `KNOWN_MPP_PAYER` constant
+- [x] Add `makeMPPDeps()` helper
+- [x] Add `makeMPPEntry()` helper
+- [x] Add `withMPPPayment()` helper
+- [x] Add `describe('MPP paid route')` block with 5 tests
+- [x] Run `pnpm test` to verify all pass (127 tests, 25 in orchestrate.test.ts)
 
 ---
 

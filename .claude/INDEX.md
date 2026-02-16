@@ -24,6 +24,7 @@ Design docs, decision records, and bug analyses for `@agentcash/router`. These d
 
 | File | Version | Description |
 |------|---------|-------------|
+| `17_mpp-payment-flow-tests.md` | v0.5.0 | MPP payment flow test plan. 5 tests mirroring x402 coverage: probe challenge, valid credential, invalid credential, handler error, wallet context. Mock at protocol module boundary. |
 | `router-v0.5-execution-plan.md` | v0.5.0 | 7-phase DevX improvements from StableStudio migration: wallet normalization (lowercase), SIWX error codes, expiry constant, Redis nonce store, SIWX client export, `onAuthVerified` hook, `.paid().siwx()` guard. |
 | `fix-mpp.md` | v0.4.1 | MPP support: NextRequest→Request conversion, challenge generation, body stream consumption bug. Final fix removes body from `toStandardRequest()` since MPP only needs Authorization header. |
 | `15_router-dynamic-pricing-solution.md` | v0.3.1 | Full derisking for early body parsing fix. Covers `request.clone()` behavior, settlement patterns, maxPrice semantics, error handling. The research on Vercel limits and clone edge cases is durable reference. |

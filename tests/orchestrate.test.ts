@@ -115,6 +115,30 @@ vi.mock('zod', async (importOriginal) => {
   };
 });
 
+// Mock MPP protocol to use simple fake credential verification
+const KNOWN_MPP_PAYER = '0xMPP_PAYER_1234567890';
+
+vi.mock('../src/protocols/mpp.js', () => ({
+  buildMPPChallenge: async () => 'MOCK_MPP_CHALLENGE',
+
+  verifyMPPCredential: async (request: Request) => {
+    const auth = request.headers.get('Authorization');
+    if (!auth?.startsWith('Payment ')) return null;
+
+    try {
+      const payload = JSON.parse(Buffer.from(auth.slice(8), 'base64').toString());
+      if (payload.payer === KNOWN_MPP_PAYER) {
+        return { valid: true, payer: payload.payer, txHash: '0xMOCK_TX' };
+      }
+      return { valid: false, payer: null };
+    } catch {
+      return null;
+    }
+  },
+
+  buildMPPReceipt: () => 'MOCK_MPP_RECEIPT',
+}));
+
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
@@ -161,6 +185,46 @@ function makeSIWXRequest(
   return new NextRequest('http://localhost:3000/api/test', {
     method: 'GET',
     headers: { 'SIGN-IN-WITH-X': payload },
+  });
+}
+
+// MPP-specific helpers
+function makeMPPDeps(overrides: Partial<OrchestrateDeps> = {}): OrchestrateDeps {
+  return {
+    x402Server: null,
+    initPromise: Promise.resolve(),
+    nonceStore: new MemoryNonceStore(),
+    payeeAddress: KNOWN_PAYEE,
+    network: 'tempo:42431',
+    mppConfig: {
+      secretKey: 'test-secret',
+      currency: '0xUSDC',
+      recipient: '0xRECIPIENT',
+    },
+    ...overrides,
+  };
+}
+
+function makeMPPEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
+  return {
+    key: 'test/mpp-route',
+    authMode: 'paid',
+    pricing: '0.02',
+    protocols: ['mpp'],
+    method: 'POST',
+    ...overrides,
+  };
+}
+
+function withMPPPayment(options: { payer?: string; body?: unknown } = {}): NextRequest {
+  const credential = Buffer.from(
+    JSON.stringify({ payer: options.payer ?? KNOWN_MPP_PAYER }),
+  ).toString('base64');
+
+  return new NextRequest('http://localhost:3000/api/test', {
+    method: 'POST',
+    headers: { Authorization: `Payment ${credential}` },
+    ...(options.body && { body: JSON.stringify(options.body) }),
   });
 }
 
@@ -291,6 +355,67 @@ describe('x402 paid route', () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.success).toBe(false);
+  });
+});
+
+describe('MPP paid route', () => {
+  it('returns 402 with WWW-Authenticate header on probe', async () => {
+    const entry = makeMPPEntry();
+    const handler = createRequestHandler(entry, async () => ({}), makeMPPDeps());
+    const res = await handler(makeProbeRequest());
+    expect(res.status).toBe(402);
+    expect(res.headers.get('WWW-Authenticate')).toBeTruthy();
+  });
+
+  it('returns 200 with Payment-Receipt header on valid credential', async () => {
+    const entry = makeMPPEntry({ bodySchema });
+    const handler = createRequestHandler(
+      entry,
+      async ({ body }) => ({ result: (body as { query: string }).query }),
+      makeMPPDeps(),
+    );
+    const res = await handler(withMPPPayment({ body: { query: 'test' } }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Payment-Receipt')).toBeTruthy();
+    const body = await res.json();
+    expect(body.result).toBe('test');
+  });
+
+  it('returns 402 on invalid credential (bad payer)', async () => {
+    const entry = makeMPPEntry({ bodySchema });
+    const handler = createRequestHandler(entry, async () => ({}), makeMPPDeps());
+    const res = await handler(withMPPPayment({ payer: 'BAD_PAYER', body: { query: 'test' } }));
+    expect(res.status).toBe(402);
+  });
+
+  it('skips receipt when handler throws', async () => {
+    const entry = makeMPPEntry({ bodySchema });
+    const handler = createRequestHandler(
+      entry,
+      async () => {
+        throw new Error('Handler boom');
+      },
+      makeMPPDeps(),
+    );
+    const res = await handler(withMPPPayment({ body: { query: 'test' } }));
+    expect(res.status).toBe(500);
+    expect(res.headers.get('Payment-Receipt')).toBeNull();
+  });
+
+  it('sets wallet on handler context from verified payer', async () => {
+    const entry = makeMPPEntry({ bodySchema });
+    let capturedWallet: string | null = null;
+    const handler = createRequestHandler(
+      entry,
+      async (ctx) => {
+        capturedWallet = ctx.wallet;
+        return { ok: true };
+      },
+      makeMPPDeps(),
+    );
+    await handler(withMPPPayment({ body: { query: 'test' } }));
+    // ctx.wallet is always lowercase (v0.5+)
+    expect(capturedWallet).toBe(KNOWN_MPP_PAYER.toLowerCase());
   });
 });
 
