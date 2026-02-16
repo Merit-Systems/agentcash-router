@@ -339,6 +339,7 @@ export function createRequestHandler(
             message: `Settlement failed: ${err instanceof Error ? err.message : String(err)}`,
             route: routeEntry.key,
           });
+          return fail(500, 'Settlement failed', meta, pluginCtx);
         }
       }
 
