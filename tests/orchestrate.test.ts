@@ -586,3 +586,181 @@ describe('API key + paid route', () => {
     expect(capturedAccount).toEqual({ id: 'account-1' });
   });
 });
+
+describe('validate()', () => {
+  it('rejects with custom status before 402 challenge when validate throws', async () => {
+    const entry = makeEntry({
+      bodySchema,
+      validateFn: () => {
+        throw Object.assign(new Error('Resource taken'), { status: 409 });
+      },
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    // Probe request (no payment)
+    const req = new NextRequest('http://localhost:3000/api/test', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'test' }),
+    });
+    const res = await handler(req);
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toBe('Resource taken');
+  });
+
+  it('defaults to 400 when validate throws error without status', async () => {
+    const entry = makeEntry({
+      bodySchema,
+      validateFn: () => {
+        throw new Error('Invalid input');
+      },
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const req = new NextRequest('http://localhost:3000/api/test', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'test' }),
+    });
+    const res = await handler(req);
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 402 challenge when validate passes (no payment)', async () => {
+    let validateCalled = false;
+    const entry = makeEntry({
+      bodySchema,
+      validateFn: () => {
+        validateCalled = true;
+      },
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const req = new NextRequest('http://localhost:3000/api/test', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'test' }),
+    });
+    const res = await handler(req);
+    expect(validateCalled).toBe(true);
+    expect(res.status).toBe(402);
+    expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
+  });
+
+  it('runs handler when validate passes + payment valid', async () => {
+    let handlerCalled = false;
+    const entry = makeEntry({
+      bodySchema,
+      validateFn: () => {
+        // passes
+      },
+    });
+    const handler = createRequestHandler(
+      entry,
+      async () => {
+        handlerCalled = true;
+        return { ok: true };
+      },
+      makeDeps(),
+    );
+    const res = await handler(makePaymentRequest({ query: 'test' }));
+    expect(res.status).toBe(200);
+    expect(handlerCalled).toBe(true);
+  });
+
+  it('rejects with error when payment present but validate fails (no settlement)', async () => {
+    const deps = makeDeps();
+    const server = deps.x402Server as unknown as FakeX402Server;
+    let handlerCalled = false;
+    const entry = makeEntry({
+      bodySchema,
+      validateFn: () => {
+        throw Object.assign(new Error('Resource unavailable'), { status: 410 });
+      },
+    });
+    const handler = createRequestHandler(
+      entry,
+      async () => {
+        handlerCalled = true;
+        return { ok: true };
+      },
+      deps,
+    );
+    // Payment header present but validate should reject before verification
+    const res = await handler(makePaymentRequest({ query: 'test' }));
+    expect(res.status).toBe(410);
+    expect(handlerCalled).toBe(false);
+    expect(server.settledPayments).toHaveLength(0);
+  });
+
+  it('supports async validate function', async () => {
+    const entry = makeEntry({
+      bodySchema,
+      validateFn: async () => {
+        await new Promise((r) => setTimeout(r, 10));
+        throw Object.assign(new Error('Async rejection'), { status: 429 });
+      },
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const req = new NextRequest('http://localhost:3000/api/test', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'test' }),
+    });
+    const res = await handler(req);
+    expect(res.status).toBe(429);
+  });
+
+  it('works with SIWX auth mode', async () => {
+    const entry = makeEntry({
+      authMode: 'siwx',
+      protocols: [],
+      bodySchema,
+      validateFn: () => {
+        throw Object.assign(new Error('Forbidden'), { status: 403 });
+      },
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    // No SIWX header - should validate before challenge
+    const req = new NextRequest('http://localhost:3000/api/test', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'test' }),
+    });
+    const res = await handler(req);
+    expect(res.status).toBe(403);
+  });
+
+  it('works with apiKey auth mode (no pricing)', async () => {
+    const entry = makeEntry({
+      authMode: 'apiKey',
+      apiKeyResolver: (key) => (key === 'valid' ? { id: '1' } : null),
+      protocols: [],
+      pricing: undefined,
+      bodySchema,
+      validateFn: () => {
+        throw Object.assign(new Error('Rate limited'), { status: 429 });
+      },
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const req = new NextRequest('http://localhost:3000/api/test', {
+      method: 'POST',
+      headers: { 'X-API-Key': 'valid' },
+      body: JSON.stringify({ query: 'test' }),
+    });
+    const res = await handler(req);
+    expect(res.status).toBe(429);
+  });
+
+  it('works with unprotected auth mode', async () => {
+    const entry = makeEntry({
+      authMode: 'unprotected',
+      protocols: [],
+      pricing: undefined,
+      bodySchema,
+      validateFn: () => {
+        throw Object.assign(new Error('Bad request'), { status: 400 });
+      },
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const req = new NextRequest('http://localhost:3000/api/test', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'test' }),
+    });
+    const res = await handler(req);
+    expect(res.status).toBe(400);
+  });
+});

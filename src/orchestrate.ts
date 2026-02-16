@@ -107,13 +107,25 @@ export function createRequestHandler(
       (firePluginHook(deps.plugin, 'onRequest', meta) as PluginContext | undefined) ??
       createDefaultContext(meta);
 
-    /** Shared non-payment tail: parse body → invoke handler → finalize. */
+    /** Shared non-payment tail: parse body → validate → invoke handler → finalize. */
     async function handleAuth(wallet: string | null, account: unknown): Promise<NextResponse> {
       const body = await parseBody(request, routeEntry);
       if (!body.ok) {
         firePluginResponse(deps, pluginCtx, meta, body.response);
         return body.response;
       }
+
+      // Run pre-handler validation if configured
+      if (routeEntry.validateFn) {
+        try {
+          await routeEntry.validateFn(body.data);
+        } catch (err: unknown) {
+          const status = (err as { status?: number }).status ?? 400;
+          const message = err instanceof Error ? err.message : 'Validation failed';
+          return fail(status, message, meta, pluginCtx);
+        }
+      }
+
       const { response, rawResult } = await invoke(
         request,
         meta,
@@ -158,18 +170,23 @@ export function createRequestHandler(
 
     const protocol = detectProtocol(request);
 
-    // ---- Early body parsing for dynamic pricing ----
-    // If no payment header and dynamic pricing exists, clone request and parse body early
-    // so pricing function can calculate accurate price for 402 challenge.
+    // ---- Early body parsing for dynamic pricing or validation ----
+    // If no payment header and (dynamic pricing OR validateFn) exists, clone request
+    // and parse body early so we can calculate accurate price and/or reject invalid
+    // requests before showing the 402 challenge.
     let earlyBodyData: unknown;
+    const needsEarlyParse =
+      !protocol &&
+      routeEntry.bodySchema &&
+      (typeof routeEntry.pricing === 'function' || routeEntry.validateFn);
 
-    if (!protocol && typeof routeEntry.pricing === 'function' && routeEntry.bodySchema) {
+    if (needsEarlyParse) {
       // CRITICAL: Clone BEFORE consuming body (stream can only be read once)
       // Direct cast: clone() returns Request but the runtime object is still NextRequest
       // with all properties intact. TypeScript doesn't track this through clone().
       const requestForPricing = request.clone() as NextRequest;
 
-      // Parse clone for pricing calculation
+      // Parse clone for pricing/validation
       const earlyBodyResult = await parseBody(requestForPricing, routeEntry);
 
       // Early validation failure - return 400, don't charge them!
@@ -179,6 +196,17 @@ export function createRequestHandler(
       }
 
       earlyBodyData = earlyBodyResult.data;
+
+      // Run pre-payment validation if configured
+      if (routeEntry.validateFn) {
+        try {
+          await routeEntry.validateFn(earlyBodyData);
+        } catch (err: unknown) {
+          const status = (err as { status?: number }).status ?? 400;
+          const message = err instanceof Error ? err.message : 'Validation failed';
+          return fail(status, message, meta, pluginCtx);
+        }
+      }
     }
 
     // ---- SIWX ----
@@ -186,6 +214,28 @@ export function createRequestHandler(
     // handler context, and there's no price to resolve. This avoids
     // unnecessary body buffering for unauthenticated requests.
     if (routeEntry.authMode === 'siwx') {
+      // Early body parsing + validation for SIWX routes with validateFn
+      // Reject invalid requests before showing the SIWX challenge
+      if (
+        routeEntry.validateFn &&
+        routeEntry.bodySchema &&
+        !request.headers.get('SIGN-IN-WITH-X')
+      ) {
+        const requestForValidation = request.clone() as NextRequest;
+        const earlyBodyResult = await parseBody(requestForValidation, routeEntry);
+        if (!earlyBodyResult.ok) {
+          firePluginResponse(deps, pluginCtx, meta, earlyBodyResult.response);
+          return earlyBodyResult.response;
+        }
+        try {
+          await routeEntry.validateFn(earlyBodyResult.data);
+        } catch (err: unknown) {
+          const status = (err as { status?: number }).status ?? 400;
+          const message = err instanceof Error ? err.message : 'Validation failed';
+          return fail(status, message, meta, pluginCtx);
+        }
+      }
+
       if (!request.headers.get('SIGN-IN-WITH-X')) {
         // Uniform 402 challenge format: SIWX routes return the same x402v2
         // challenge structure as paid routes, with PAYMENT-REQUIRED header
@@ -280,11 +330,22 @@ export function createRequestHandler(
       return await build402(request, routeEntry, deps, meta, pluginCtx, earlyBodyData);
     }
 
-    // ---- Payment present: parse body + resolve price ----
+    // ---- Payment present: parse body + validate + resolve price ----
     const body = await parseBody(request, routeEntry);
     if (!body.ok) {
       firePluginResponse(deps, pluginCtx, meta, body.response);
       return body.response;
+    }
+
+    // Run validation before price resolution (reject invalid requests before charging)
+    if (routeEntry.validateFn) {
+      try {
+        await routeEntry.validateFn(body.data);
+      } catch (err: unknown) {
+        const status = (err as { status?: number }).status ?? 400;
+        const message = err instanceof Error ? err.message : 'Validation failed';
+        return fail(status, message, meta, pluginCtx);
+      }
     }
 
     let price: string;

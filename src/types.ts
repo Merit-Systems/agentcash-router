@@ -159,6 +159,7 @@ export interface RouteEntry {
   apiKeyResolver?: (key: string) => unknown | Promise<unknown>;
   providerName?: string;
   providerConfig?: ProviderConfig;
+  validateFn?: (body: unknown) => void | Promise<void>;
 }
 
 // ---------------------------------------------------------------------------

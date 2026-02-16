@@ -79,6 +79,47 @@ export const POST = router
 .unprotected().handler(async () => { /* public endpoint */ })
 ```
 
+## Pre-Payment Validation
+
+### `.validate(fn)` — Async business validation before 402 challenge
+
+For checks that need DB lookups or external APIs before showing a price. Runs after body parsing, before the 402 challenge. Requires `.body()`.
+
+```typescript
+// Domain registration with availability check
+router
+  .route('domain/register')
+  .paid(calculatePrice, { maxPrice: '10.00' })
+  .validate(async (body) => {
+    if (await isDomainTaken(body.domain)) {
+      throw Object.assign(new Error('Domain already taken'), { status: 409 });
+    }
+  })
+  .body(RegisterSchema)
+  .handler(async ({ body, wallet }) => {
+    return registerDomain(body.domain, wallet);
+  });
+
+// Rate limiting before payment
+router
+  .route('api/expensive')
+  .paid('1.00')
+  .validate(async (body) => {
+    const usage = await getUserUsage(body.userId);
+    if (usage >= DAILY_LIMIT) {
+      throw Object.assign(new Error('Daily limit reached'), { status: 429 });
+    }
+  })
+  .body(RequestSchema)
+  .handler(async ({ body }) => { ... });
+```
+
+**Pipeline order:** `body parse → validate → 402 challenge → payment → handler`
+
+**Error handling:** Respects `.status` on thrown errors (default: 400). Use `Object.assign(new Error('msg'), { status: 409 })` for custom codes.
+
+**Works with all auth modes:** paid, siwx, apiKey, unprotected.
+
 ## Critical Rules
 
 - **Error handling:** Respect `.status` on any thrown error, not just `HttpError`. The `Object.assign(new Error(), { status })` pattern is universal in Node.js.
