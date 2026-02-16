@@ -223,19 +223,19 @@ export class RouteBuilder<
    * challenge is shown. Use this for async business logic like "is this resource
    * available?" or "has this user hit their rate limit?".
    *
-   * Requires `.body()` — validate receives the typed, parsed body.
+   * Requires `.body()` — call `.body()` before `.validate()` for type inference.
    *
    * @example
    * ```typescript
    * router
    *   .route('domain/register')
    *   .paid(calculatePrice)
+   *   .body(RegisterSchema)  // .body() first for type inference
    *   .validate(async (body) => {
    *     if (await isDomainTaken(body.domain)) {
    *       throw Object.assign(new Error('Domain taken'), { status: 409 });
    *     }
    *   })
-   *   .body(RegisterSchema)
    *   .handler(async ({ body }) => { ... });
    * ```
    */
