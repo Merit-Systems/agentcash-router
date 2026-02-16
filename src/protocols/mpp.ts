@@ -168,7 +168,8 @@ export async function verifyMPPCredential(
       return { valid: false as const, payer: null };
     }
 
-    // Payer address lives in the receipt reference (tx hash).
+    // receipt.reference is a tx hash, not a wallet address. The orchestration
+    // pipeline uses the `payer` field generically — for MPP this is the tx ref.
     const payer = receipt.reference ?? '';
 
     return {
