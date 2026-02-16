@@ -15,7 +15,7 @@ import { safeCallHandler } from './handler.js';
 import { bufferBody, validateBody } from './body.js';
 import { resolvePrice, resolveMaxPrice } from './pricing.js';
 import { buildX402Challenge, verifyX402Payment, settleX402Payment } from './protocols/x402.js';
-import { buildMPPChallenge, verifyMPPCredential, buildMPPReceipt } from './protocols/mpp.js';
+import { buildMPPChallenge, verifyMPPCredential, type MppxInstance } from './protocols/mpp.js';
 import { verifySIWX, buildSIWXExtension } from './auth/siwx.js';
 import { verifyApiKey } from './auth/api-key.js';
 
@@ -28,6 +28,7 @@ export interface OrchestrateDeps {
   payeeAddress: string;
   network: string;
   mppConfig?: { secretKey: string; currency: string; recipient?: string; rpcUrl?: string };
+  mppx?: MppxInstance | null;
 }
 
 export function createRequestHandler(
@@ -348,16 +349,15 @@ export function createRequestHandler(
 
     // ---- MPP ----
     if (protocol === 'mpp') {
-      if (!deps.mppConfig) return await build402(request, routeEntry, deps, meta, pluginCtx);
+      if (!deps.mppx || !deps.mppConfig)
+        return await build402(request, routeEntry, deps, meta, pluginCtx);
 
-      const verify = await verifyMPPCredential(request, routeEntry, deps.mppConfig, price);
+      const verify = await verifyMPPCredential(deps.mppx, request, deps.mppConfig, price);
       if (!verify?.valid) return await build402(request, routeEntry, deps, meta, pluginCtx);
 
-      const wallet = verify.payer!;
-      pluginCtx.setVerifiedWallet(wallet);
       firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
         protocol: 'mpp',
-        payer: wallet,
+        payer: '',
         amount: price,
         network: 'tempo:42431',
       });
@@ -366,14 +366,18 @@ export function createRequestHandler(
         request,
         meta,
         pluginCtx,
-        wallet,
+        null,
         account,
         body.data,
       );
 
       if (response.status < 400) {
         try {
-          response.headers.set('Payment-Receipt', await buildMPPReceipt(crypto.randomUUID()));
+          // Extract receipt header from mppx's withReceipt wrapper
+          // (same pattern as mppx's own toNodeListener)
+          const receiptResponse = verify.withReceipt(new Response());
+          const receiptHeader = receiptResponse.headers.get('Payment-Receipt');
+          if (receiptHeader) response.headers.set('Payment-Receipt', receiptHeader);
         } catch {
           // MPP receipt is best-effort — handler already succeeded
         }
@@ -593,11 +597,11 @@ async function build402(
     }
   }
 
-  if (routeEntry.protocols.includes('mpp') && deps.mppConfig) {
+  if (routeEntry.protocols.includes('mpp') && deps.mppx && deps.mppConfig) {
     try {
       response.headers.set(
         'WWW-Authenticate',
-        await buildMPPChallenge(routeEntry, request, deps.mppConfig, challengePrice),
+        await buildMPPChallenge(deps.mppx, request, deps.mppConfig, challengePrice),
       );
     } catch (err) {
       firePluginHook(deps.plugin, 'onAlert', pluginCtx, {

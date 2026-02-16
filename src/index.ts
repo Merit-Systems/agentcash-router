@@ -9,6 +9,7 @@ import { RouteBuilder } from './builder.js';
 import { MemoryNonceStore } from './auth/nonce.js';
 import { createWellKnownHandler } from './discovery/well-known.js';
 import { createOpenAPIHandler } from './discovery/openapi.js';
+import { createMppxInstance } from './protocols/mpp.js';
 
 // ---------------------------------------------------------------------------
 // ServiceRouter
@@ -79,6 +80,8 @@ export function createRouter(config: RouterConfig): ServiceRouter {
     }
   }
 
+  const mppx = config.mpp ? createMppxInstance(config.mpp) : null;
+
   const deps: OrchestrateDeps = {
     x402Server: null,
     initPromise: Promise.resolve(),
@@ -87,6 +90,7 @@ export function createRouter(config: RouterConfig): ServiceRouter {
     payeeAddress: config.payeeAddress,
     network,
     mppConfig: config.mpp,
+    mppx,
   };
 
   // x402 server init — fully async to avoid dynamic require() which breaks

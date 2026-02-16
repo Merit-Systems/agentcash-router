@@ -1,3 +1,5 @@
+import { Credential } from 'mppx';
+
 export type DetectedProtocol = 'x402' | 'mpp' | 'siwx';
 
 export function detectProtocol(request: Request): DetectedProtocol | null {
@@ -6,9 +8,10 @@ export function detectProtocol(request: Request): DetectedProtocol | null {
     return 'x402';
   }
 
-  // MPP: Authorization header with Payment credential
+  // MPP: Authorization header with Payment credential (RFC 9110 compliant,
+  // handles multi-scheme headers like "Bearer x, Payment y")
   const auth = request.headers.get('Authorization');
-  if (auth && auth.startsWith('Payment ')) {
+  if (auth && Credential.extractPaymentScheme(auth)) {
     return 'mpp';
   }
 
