@@ -103,30 +103,20 @@ The `.claude/` directory contains design docs, decision records, and bug analyse
 
 ## Releasing
 
-**Release flow:** PR with version bump → merge → create GitHub Release → auto-publish to npm
+This repo uses [changesets](https://github.com/changesets/changesets) for versioning and npm publishing.
 
 ### When doing work that should be released:
 
-1. **Update `CHANGELOG.md`** — Add entry under new version heading with changes
-2. **Bump version** in `package.json`
-3. **Create PR** with both changes
-4. **Merge PR to main**
+1. **Create a changeset** — Run `pnpm changeset` and describe the changes (patch/minor/major)
+2. **Include the changeset file** in your PR (committed to `.changeset/`)
+3. **Merge PR to main**
 
-### To publish (human step):
+### What happens automatically:
 
-1. Go to [GitHub Releases](https://github.com/Merit-Systems/agentcash-router/releases)
-2. Click **Draft a new release**
-3. Create tag: `v0.X.Y` (must match package.json version)
-4. Title: `v0.X.Y`
-5. Description: Copy from CHANGELOG.md or click "Generate release notes"
-6. Click **Publish release**
-
-The `publish.yml` workflow will:
-- Run full test suite (`pnpm check`)
-- Verify package.json version matches tag
-- Publish to npm with `--access public`
+1. When PRs with changesets merge to `main`, the `changesets/action` creates a **"chore: version packages"** PR that bumps `package.json` version and updates `CHANGELOG.md`
+2. When that version PR is merged, the action **publishes to npm** automatically
 
 ### Troubleshooting
 
-- **Version mismatch error**: package.json version must exactly match the release tag (without `v` prefix)
 - **Publish fails**: Check `NPM_TOKEN` secret is set and has write access to `@agentcash` scope
+- **No version PR created**: Ensure your PR included a `.changeset/*.md` file
