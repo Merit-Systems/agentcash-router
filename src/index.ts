@@ -180,13 +180,16 @@ export type {
   RouterPlugin,
   PluginContext,
   RequestMeta,
+  AuthEvent,
   PaymentEvent,
   SettlementEvent,
   ResponseMeta,
   ErrorEvent,
 } from './plugin.js';
 
-export type { NonceStore } from './auth/nonce.js';
-export { MemoryNonceStore } from './auth/nonce.js';
+export type { NonceStore, RedisNonceStoreOptions } from './auth/nonce.js';
+export { MemoryNonceStore, createRedisNonceStore, SIWX_CHALLENGE_EXPIRY_MS } from './auth/nonce.js';
+export type { SiwxErrorCode } from './auth/siwx.js';
+export { SIWX_ERROR_MESSAGES } from './auth/siwx.js';
 export { RouteBuilder } from './builder.js';
 export { RouteRegistry } from './registry.js';

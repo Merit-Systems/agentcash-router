@@ -83,6 +83,15 @@ export class RouteBuilder<
     pricing: PricingConfig,
     options?: PaidOptions,
   ): RouteBuilder<TBody, TQuery, True, boolean, HasBody> {
+    // Runtime guard: prevent combining .paid() with .siwx()
+    if (this._authMode === 'siwx') {
+      throw new Error(
+        `route '${this._key}': Cannot combine .paid() and .siwx() on the same route. ` +
+          'Paid routes get wallet identity from the payment proof. ' +
+          'Use separate routes if you need both payment and SIWX auth.',
+      );
+    }
+
     const next = this.fork() as RouteBuilder<TBody, TQuery, True, boolean, HasBody>;
     next._authMode = 'paid';
     next._pricing = pricing;
@@ -116,6 +125,15 @@ export class RouteBuilder<
   }
 
   siwx(): HasAuth extends true ? never : RouteBuilder<TBody, TQuery, True, False, HasBody> {
+    // Runtime guard: prevent combining .siwx() with .paid()
+    if (this._authMode === 'paid') {
+      throw new Error(
+        `route '${this._key}': Cannot combine .paid() and .siwx() on the same route. ` +
+          'Paid routes get wallet identity from the payment proof. ' +
+          'Use separate routes if you need both payment and SIWX auth.',
+      );
+    }
+
     const next = this.fork() as RouteBuilder<TBody, TQuery, True, False, HasBody>;
     next._authMode = 'siwx';
     // SIWX routes set protocols to [] because they're not payment

@@ -80,23 +80,30 @@ vi.mock('../src/protocols/x402.js', () => ({
 vi.mock('../src/auth/siwx.js', () => ({
   verifySIWX: async (request: Request, _routeEntry: RouteEntry, nonceStore: MemoryNonceStore) => {
     const header = request.headers.get('SIGN-IN-WITH-X');
-    if (!header) return { valid: false, wallet: null };
+    if (!header) return { valid: false, wallet: null, code: 'siwx_missing_header' };
 
     let payload: { wallet: string; nonce: string; expired?: boolean };
     try {
       payload = JSON.parse(Buffer.from(header, 'base64').toString());
     } catch {
-      return { valid: false, wallet: null };
+      return { valid: false, wallet: null, code: 'siwx_malformed' };
     }
 
-    if (payload.expired) return { valid: false, wallet: null };
+    if (payload.expired) return { valid: false, wallet: null, code: 'siwx_expired' };
 
     const nonceOk = await nonceStore.check(payload.nonce);
-    if (!nonceOk) return { valid: false, wallet: null };
+    if (!nonceOk) return { valid: false, wallet: null, code: 'siwx_nonce_used' };
 
     return { valid: true, wallet: payload.wallet };
   },
   buildSIWXExtension: () => ({}),
+  SIWX_ERROR_MESSAGES: {
+    siwx_missing_header: 'Missing SIGN-IN-WITH-X header',
+    siwx_malformed: 'Malformed SIWX payload',
+    siwx_expired: 'SIWX message expired — request a new challenge',
+    siwx_nonce_used: 'Nonce already used — request a new challenge',
+    siwx_invalid_signature: 'Invalid signature — wallet mismatch or corrupted proof',
+  },
 }));
 
 // Mock Bazaar extensions to avoid require('@x402/extensions/bazaar')
@@ -272,7 +279,8 @@ describe('x402 paid route', () => {
       makeDeps(),
     );
     await handler(makePaymentRequest({ query: 'test' }));
-    expect(capturedWallet).toBe(KNOWN_PAYER);
+    // ctx.wallet is always lowercase (v0.5+)
+    expect(capturedWallet).toBe(KNOWN_PAYER.toLowerCase());
   });
 
   it('returns 400 on Zod validation failure', async () => {
@@ -308,7 +316,8 @@ describe('SIWX route', () => {
     );
     const res = await handler(makeSIWXRequest('0xMyWallet', 'nonce-1'));
     expect(res.status).toBe(200);
-    expect(capturedWallet).toBe('0xMyWallet');
+    // ctx.wallet is always lowercase (v0.5+)
+    expect(capturedWallet).toBe('0xmywallet');
   });
 
   it('rejects replayed nonce', async () => {

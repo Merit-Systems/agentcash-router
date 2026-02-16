@@ -10,6 +10,10 @@ Design docs, decision records, and bug analyses for `@agentcash/router`. These d
 | `route-registration-options.md` | Three approaches to route registration (manifest, self-register + barrel, central defs). Documents why Approach B was chosen. |
 | `agent-discovery-final.md` | How agentcash MCP clients discover and invoke paid endpoints (Phases 0-3). Context for why OpenAPI/discovery generation matters. |
 
+## In Progress
+
+*No active work*
+
 ## Research (protocol reference)
 
 | File | Description |
@@ -20,6 +24,7 @@ Design docs, decision records, and bug analyses for `@agentcash/router`. These d
 
 | File | Version | Description |
 |------|---------|-------------|
+| `router-v0.5-execution-plan.md` | v0.5.0 | 7-phase DevX improvements from StableStudio migration: wallet normalization (lowercase), SIWX error codes, expiry constant, Redis nonce store, SIWX client export, `onAuthVerified` hook, `.paid().siwx()` guard. |
 | `fix-mpp.md` | v0.4.1 | MPP support: NextRequest→Request conversion, challenge generation, body stream consumption bug. Final fix removes body from `toStandardRequest()` since MPP only needs Authorization header. |
 | `15_router-dynamic-pricing-solution.md` | v0.3.1 | Full derisking for early body parsing fix. Covers `request.clone()` behavior, settlement patterns, maxPrice semantics, error handling. The research on Vercel limits and clone edge cases is durable reference. |
 | `14_router-dynamic-pricing-bug.md` | v0.3.1 | P0 bug: all paid routes charged maxPrice instead of dynamic price. Root cause analysis of the body-parsing-after-402 architectural issue. |

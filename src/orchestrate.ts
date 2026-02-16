@@ -9,14 +9,14 @@ import type {
 } from './types.js';
 import type { RouterPlugin, PluginContext, RequestMeta } from './plugin.js';
 import { createDefaultContext, firePluginHook } from './plugin.js';
-import type { NonceStore } from './auth/nonce.js';
+import { SIWX_CHALLENGE_EXPIRY_MS, type NonceStore } from './auth/nonce.js';
 import { detectProtocol } from './protocols/detect.js';
 import { safeCallHandler } from './handler.js';
 import { bufferBody, validateBody } from './body.js';
 import { resolvePrice, resolveMaxPrice } from './pricing.js';
 import { buildX402Challenge, verifyX402Payment, settleX402Payment } from './protocols/x402.js';
 import { buildMPPChallenge, verifyMPPCredential, buildMPPReceipt } from './protocols/mpp.js';
-import { verifySIWX, buildSIWXExtension } from './auth/siwx.js';
+import { verifySIWX, buildSIWXExtension, SIWX_ERROR_MESSAGES } from './auth/siwx.js';
 import { verifyApiKey } from './auth/api-key.js';
 
 export interface OrchestrateDeps {
@@ -143,6 +143,14 @@ export function createRequestHandler(
       }
       account = keyResult.account;
 
+      // Fire auth hook for API key verification
+      firePluginHook(deps.plugin, 'onAuthVerified', pluginCtx, {
+        authMode: 'apiKey',
+        wallet: null,
+        route: routeEntry.key,
+        account,
+      });
+
       if (routeEntry.authMode === 'apiKey' && !routeEntry.pricing) {
         return handleAuth(null, account);
       }
@@ -194,7 +202,7 @@ export function createRequestHandler(
           type: 'eip191',
           nonce,
           issuedAt: new Date().toISOString(),
-          expirationTime: new Date(Date.now() + 300_000).toISOString(),
+          expirationTime: new Date(Date.now() + SIWX_CHALLENGE_EXPIRY_MS).toISOString(),
           statement: 'Sign in to verify your wallet identity',
         };
 
@@ -247,16 +255,24 @@ export function createRequestHandler(
 
       const siwx = await verifySIWX(request, routeEntry, deps.nonceStore);
       if (!siwx.valid) {
-        return fail(
-          402,
-          'SIWX verification failed — signature invalid, message expired, or nonce already used',
-          meta,
-          pluginCtx,
+        // Return structured error with code for client auto-retry
+        const response = NextResponse.json(
+          { error: siwx.code, message: SIWX_ERROR_MESSAGES[siwx.code] },
+          { status: 402 },
         );
+        firePluginResponse(deps, pluginCtx, meta, response);
+        return response;
       }
 
-      pluginCtx.setVerifiedWallet(siwx.wallet);
-      return handleAuth(siwx.wallet, undefined);
+      // Normalize to lowercase — checksumming is a display concern, not storage
+      const wallet = siwx.wallet.toLowerCase();
+      pluginCtx.setVerifiedWallet(wallet);
+      firePluginHook(deps.plugin, 'onAuthVerified', pluginCtx, {
+        authMode: 'siwx',
+        wallet,
+        route: routeEntry.key,
+      });
+      return handleAuth(wallet, undefined);
     }
 
     // ---- No payment header → 402 challenge ----
@@ -302,10 +318,12 @@ export function createRequestHandler(
       );
       if (!verify?.valid) return await build402(request, routeEntry, deps, meta, pluginCtx);
 
-      pluginCtx.setVerifiedWallet(verify.payer);
+      // Normalize to lowercase — checksumming is a display concern, not storage
+      const wallet = verify.payer.toLowerCase();
+      pluginCtx.setVerifiedWallet(wallet);
       firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
         protocol: 'x402',
-        payer: verify.payer,
+        payer: wallet,
         amount: price,
         network: deps.network,
       });
@@ -314,7 +332,7 @@ export function createRequestHandler(
         request,
         meta,
         pluginCtx,
-        verify.payer,
+        wallet,
         account,
         body.data,
       );
@@ -353,7 +371,8 @@ export function createRequestHandler(
       const verify = await verifyMPPCredential(request, routeEntry, deps.mppConfig, price);
       if (!verify?.valid) return await build402(request, routeEntry, deps, meta, pluginCtx);
 
-      const wallet = verify.payer!;
+      // Normalize to lowercase — checksumming is a display concern, not storage
+      const wallet = verify.payer!.toLowerCase();
       pluginCtx.setVerifiedWallet(wallet);
       firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
         protocol: 'mpp',
