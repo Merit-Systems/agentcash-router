@@ -106,11 +106,18 @@ export function firePluginHook(
     const result = (fn as (...a: unknown[]) => unknown).apply(plugin, args);
     // Catch async rejections — plugin hooks are fire-and-forget
     if (result && typeof (result as Promise<unknown>).catch === 'function') {
-      (result as Promise<unknown>).catch(() => {});
+      (result as Promise<unknown>).catch((error) => {
+        console.error(
+          `[router] ERROR ${method}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
     }
     return result;
-  } catch {
+  } catch (error) {
     // Plugin errors are silently swallowed — fire and forget.
+    console.error(
+      `[router] ERROR ${method}: ${error instanceof Error ? error.message : String(error)}`,
+    );
     return undefined;
   }
 }
