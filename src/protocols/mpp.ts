@@ -1,6 +1,6 @@
-import { Challenge, Credential, Receipt } from 'mpay';
-import type { Credential as CredentialType, Challenge as ChallengeType } from 'mpay';
-import { tempo } from 'mpay/server';
+import { Challenge, Credential, Receipt } from 'mppx';
+import type { Credential as CredentialType, Challenge as ChallengeType } from 'mppx';
+import { tempo } from 'mppx/server';
 import { createClient, http } from 'viem';
 import { tempo as tempoChain } from 'viem/chains';
 import type { RouteEntry } from '../types.js';
@@ -12,7 +12,7 @@ type TempoChargePayload =
 
 /**
  * Tempo charge request shape (output of the charge request schema after Zod transform).
- * The `OutputRequestType` utility in mpay merges methodDetails into the base,
+ * The `OutputRequestType` utility in mppx merges methodDetails into the base,
  * making all fields required (some as `string | undefined`).
  * `recipient` becomes required `string` (not `string | undefined`) because
  * the method schema's `requires` tuple includes it.
@@ -36,7 +36,7 @@ type TempoChargeCredential = CredentialType.Credential<
 /**
  * Builds getClient option for tempo.charge() when an RPC URL is available.
  * Falls back to TEMPO_RPC_URL env var. Returns empty object if neither is set
- * (lets mpay use its default, which may require auth).
+ * (lets mppx use its default, which may require auth).
  */
 function buildGetClient(rpcUrl?: string): Record<string, unknown> {
   const url = rpcUrl ?? process.env.TEMPO_RPC_URL;
@@ -49,7 +49,7 @@ function buildGetClient(rpcUrl?: string): Record<string, unknown> {
 /**
  * Converts NextRequest to standard Web API Request.
  * NextRequest extends Request but has subtle header handling differences
- * that break mpay's Credential.fromRequest(). This ensures compatibility.
+ * that break mppx's Credential.fromRequest(). This ensures compatibility.
  *
  * NOTE: Body is intentionally omitted. By the time verifyMPPCredential() is
  * called, orchestrate.ts has already consumed the body stream via parseBody().
@@ -81,18 +81,15 @@ export async function buildMPPChallenge(
   mppConfig: { secretKey: string; currency: string; recipient?: string; rpcUrl?: string },
   price: string,
 ) {
-  // Convert NextRequest to standard Request for mpay compatibility
+  // Convert NextRequest to standard Request for mppx compatibility
   const standardRequest = toStandardRequest(request);
 
   const currency = mppConfig.currency as `0x${string}`;
   const recipient = (mppConfig.recipient ?? '') as `0x${string}`;
 
   // Create a MethodIntent to define payment requirements (tempo.charge for one-time payments).
-  // This sets up the schema and defaults (decimals, expires) for the payment method.
-  const methodIntent = tempo.charge({
-    currency,
-    recipient,
-  });
+  // In mppx, currency/recipient are passed in the request object, not in the constructor.
+  const methodIntent = tempo.charge();
 
   // Build challenge using payment request data (NOT the HTTP Request object).
   // The 'request' field here is the payment data that will be sent to the client.
@@ -116,7 +113,7 @@ export async function verifyMPPCredential(
   mppConfig: { secretKey: string; currency: string; recipient?: string; rpcUrl?: string },
   price: string,
 ) {
-  // Convert NextRequest to standard Request for mpay compatibility
+  // Convert NextRequest to standard Request for mppx compatibility
   const standardRequest = toStandardRequest(request);
 
   const currency = mppConfig.currency as `0x${string}`;
@@ -148,12 +145,9 @@ export async function verifyMPPCredential(
     }
 
     // Verify on-chain via Tempo.
-    // tempo.charge() returns a MethodIntent server object whose verify()
-    // expects { credential, request } — matching the high-level Mpay.create() convention.
-    // The request() transform resolves chainId/feePayer before verify() checks on-chain.
+    // tempo.charge() returns a MethodIntent.Server whose verify()
+    // expects { credential, request } and handles chain resolution internally.
     const methodIntent = tempo.charge({
-      currency,
-      recipient,
       ...buildGetClient(mppConfig.rpcUrl),
     });
 
@@ -163,14 +157,11 @@ export async function verifyMPPCredential(
       recipient,
       decimals: DEFAULT_DECIMALS,
     };
-    const resolvedRequest = methodIntent.request
-      ? await methodIntent.request({ credential, request: paymentRequest })
-      : paymentRequest;
 
     // verify() returns a receipt { method, status, reference } on success, throws on failure.
     const receipt = await methodIntent.verify({
       credential,
-      request: resolvedRequest,
+      request: paymentRequest,
     });
     if (!receipt || receipt.status !== 'success') {
       console.error('[MPP] Tempo verification failed:', receipt);

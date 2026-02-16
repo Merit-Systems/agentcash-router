@@ -15,7 +15,7 @@ Peer dependencies:
 ```bash
 pnpm add next zod @x402/core @x402/evm @x402/extensions @coinbase/x402 zod-openapi
 # Optional: for MPP support
-pnpm add mpay
+pnpm add mppx
 ```
 
 ## Environment Setup
