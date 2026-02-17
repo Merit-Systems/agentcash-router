@@ -14,8 +14,8 @@ import { detectProtocol } from './protocols/detect.js';
 import { safeCallHandler } from './handler.js';
 import { bufferBody, validateBody } from './body.js';
 import { resolvePrice, resolveMaxPrice } from './pricing.js';
+import { Credential } from 'mppx';
 import { buildX402Challenge, verifyX402Payment, settleX402Payment } from './protocols/x402.js';
-import { buildMPPChallenge, verifyMPPCredential, buildMPPReceipt } from './protocols/mpp.js';
 import { verifySIWX, buildSIWXExtension, SIWX_ERROR_MESSAGES } from './auth/siwx.js';
 import { verifyApiKey } from './auth/api-key.js';
 
@@ -27,7 +27,16 @@ export interface OrchestrateDeps {
   nonceStore: NonceStore;
   payeeAddress: string;
   network: string;
-  mppConfig?: { secretKey: string; currency: string; recipient?: string; rpcUrl?: string };
+  mppx?: {
+    charge: (options: {
+      amount: string;
+    }) => (
+      input: Request,
+    ) => Promise<
+      | { status: 402; challenge: Response }
+      | { status: 200; withReceipt: (response: Response) => Response }
+    >;
+  } | null;
 }
 
 export function createRequestHandler(
@@ -458,13 +467,18 @@ export function createRequestHandler(
 
     // ---- MPP ----
     if (protocol === 'mpp') {
-      if (!deps.mppConfig) return await build402(request, routeEntry, deps, meta, pluginCtx);
+      if (!deps.mppx) return await build402(request, routeEntry, deps, meta, pluginCtx);
 
-      const verify = await verifyMPPCredential(request, routeEntry, deps.mppConfig, price);
-      if (!verify?.valid) return await build402(request, routeEntry, deps, meta, pluginCtx);
+      const mppResult = await deps.mppx.charge({ amount: price })(request);
 
-      // Normalize to lowercase — checksumming is a display concern, not storage
-      const wallet = verify.payer!.toLowerCase();
+      if (mppResult.status === 402) {
+        return await build402(request, routeEntry, deps, meta, pluginCtx);
+      }
+
+      // Payment verified — extract wallet from credential source (DID)
+      const credential = Credential.fromRequest(request);
+      const wallet = (credential?.source ?? '').toLowerCase();
+
       pluginCtx.setVerifiedWallet(wallet);
       firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
         protocol: 'mpp',
@@ -483,11 +497,9 @@ export function createRequestHandler(
       );
 
       if (response.status < 400) {
-        try {
-          response.headers.set('Payment-Receipt', await buildMPPReceipt(crypto.randomUUID()));
-        } catch {
-          // MPP receipt is best-effort — handler already succeeded
-        }
+        const receiptResponse = mppResult.withReceipt(response);
+        finalize(receiptResponse as NextResponse, rawResult, meta, pluginCtx);
+        return receiptResponse as NextResponse;
       }
 
       finalize(response, rawResult, meta, pluginCtx);
@@ -704,12 +716,13 @@ async function build402(
     }
   }
 
-  if (routeEntry.protocols.includes('mpp') && deps.mppConfig) {
+  if (routeEntry.protocols.includes('mpp') && deps.mppx) {
     try {
-      response.headers.set(
-        'WWW-Authenticate',
-        await buildMPPChallenge(routeEntry, request, deps.mppConfig, challengePrice),
-      );
+      const result = await deps.mppx.charge({ amount: challengePrice })(request);
+      if (result.status === 402) {
+        const wwwAuth = result.challenge.headers.get('WWW-Authenticate');
+        if (wwwAuth) response.headers.set('WWW-Authenticate', wwwAuth);
+      }
     } catch (err) {
       firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
         level: 'critical' as const,

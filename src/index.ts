@@ -86,14 +86,11 @@ export function createRouter(config: RouterConfig): ServiceRouter {
     nonceStore,
     payeeAddress: config.payeeAddress,
     network,
-    mppConfig: config.mpp,
+    mppx: null,
   };
 
-  // x402 server init — fully async to avoid dynamic require() which breaks
-  // Turbopack's __require polyfill. Errors stored in deps.x402InitError for
-  // clear request-time messaging (e.g. "CDP_API_KEY_ID not set" instead of
-  // a generic "server not initialized"). Every request handler awaits
-  // deps.initPromise before touching deps.x402Server.
+  // Async init — dynamic imports avoid require() which breaks Turbopack's
+  // __require polyfill. Every request handler awaits deps.initPromise.
   deps.initPromise = (async () => {
     try {
       const { createX402Server } = await import('./server.js');
@@ -103,6 +100,20 @@ export function createRouter(config: RouterConfig): ServiceRouter {
     } catch (err: unknown) {
       deps.x402Server = null;
       deps.x402InitError = err instanceof Error ? err.message : String(err);
+    }
+
+    if (config.mpp) {
+      const { Mppx, tempo } = await import('mppx/server');
+      deps.mppx = Mppx.create({
+        methods: [
+          tempo.charge({
+            currency: config.mpp.currency as `0x${string}`,
+            recipient: config.mpp.recipient as `0x${string}`,
+            rpcUrl: config.mpp.rpcUrl ?? process.env.TEMPO_RPC_URL,
+          }),
+        ],
+        secretKey: config.mpp.secretKey,
+      });
     }
   })();
 
