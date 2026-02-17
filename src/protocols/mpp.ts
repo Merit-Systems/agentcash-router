@@ -1,6 +1,7 @@
 import { Challenge, Credential, Receipt } from 'mppx';
 import type { Credential as CredentialType, Challenge as ChallengeType } from 'mppx';
 import { tempo } from 'mppx/server';
+import { Methods } from 'mppx/tempo';
 import { createClient, http } from 'viem';
 import { tempo as tempoChain } from 'viem/chains';
 import type { RouteEntry } from '../types.js';
@@ -87,13 +88,9 @@ export async function buildMPPChallenge(
   const currency = mppConfig.currency as `0x${string}`;
   const recipient = (mppConfig.recipient ?? '') as `0x${string}`;
 
-  // Create a MethodIntent to define payment requirements (tempo.charge for one-time payments).
-  // In mppx, currency/recipient are passed in the request object, not in the constructor.
-  const methodIntent = tempo.charge();
-
-  // Build challenge using payment request data (NOT the HTTP Request object).
-  // The 'request' field here is the payment data that will be sent to the client.
-  const challenge = Challenge.fromIntent(methodIntent, {
+  // Build challenge using the static Method descriptor (not a MethodIntent).
+  // Challenge.fromMethod validates the request against the method's schema.
+  const challenge = Challenge.fromMethod(Methods.charge, {
     secretKey: mppConfig.secretKey,
     realm: new URL(standardRequest.url).origin,
     request: {
