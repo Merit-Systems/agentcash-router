@@ -31,7 +31,7 @@ Every paid API route in a Merit Systems service shared the same ~80-150 lines of
 
 7. **Self-registering routes + validated barrel (Approach B).** Routes self-register via `.handler()` at import time. A barrel file imports all route modules. Discovery endpoints (`.wellKnown()`, `.openapi()`) validate that the barrel is complete by comparing registered routes against the `prices` map. For routes in separate handler files (e.g., Next.js `route.ts` files), use **discovery stubs** — lightweight registrations that provide metadata for discovery without the real handler. Guard stubs with `registry.has()` to avoid unnecessary overwrites.
 
-8. **Both x402 and MPP ship from day one.** Dual-protocol support is not an afterthought. Routes declare `protocols: ['x402', 'mpp']` and the orchestration layer routes to the correct handler based on the request header. MPP uses low-level `mppx` primitives (`Challenge`, `Credential`, `tempo.charge`) — not the high-level `Mppx.create()` wrapper — because the router owns orchestration.
+8. **Both x402 and MPP ship from day one.** Dual-protocol support is not an afterthought. Routes declare `protocols: ['x402', 'mpp']` and the orchestration layer routes to the correct handler based on the request header. MPP uses `mppx`'s high-level `Mppx.create()` API — the router creates an instance at init time and calls `mppx.charge({ amount })(request)` at request time. This returns either a 402 challenge or a 200 with `withReceipt()` for attaching the payment receipt header.
 
 9. **`zod-openapi` for OpenAPI 3.1.** Zod schemas are the single source of truth for request/response types. OpenAPI docs are auto-generated from them. No manual spec maintenance.
 
@@ -80,7 +80,7 @@ Request in
   → protocol verify (x402 or MPP)
   → plugin.onPaymentVerified()
   → handler(ctx) → result
-  → if status < 400: settle payment (x402) or receipt (MPP)
+  → if status < 400: settle payment (x402) or withReceipt (MPP)
   → if provider configured: fireProviderQuota()
   → plugin.onResponse()
 Response out
@@ -101,7 +101,6 @@ Response out
 | `src/registry.ts` | `RouteRegistry` with barrel validation |
 | `src/protocols/detect.ts` | Header-based protocol detection |
 | `src/protocols/x402.ts` | x402 challenge/verify/settle wrappers |
-| `src/protocols/mpp.ts` | MPP challenge/verify/receipt wrappers (uses mppx low-level primitives) |
 | `src/server.ts` | x402 server initialization with retry |
 | `src/auth/siwx.ts` | SIWX verification |
 | `src/auth/api-key.ts` | API key verification |
@@ -159,7 +158,7 @@ TEMPO_RPC_URL=https://user:pass@rpc.mainnet.tempo.xyz  # Authenticated Tempo RPC
 
 **Tempo RPC requires authentication.** The default `rpc.tempo.xyz` returns 401. Get credentials from the Tempo team. The `rpcUrl` can be set in config or via `TEMPO_RPC_URL` env var (config takes precedence).
 
-**Peer dependencies for MPP:** `mppx` is an optional peer dep. It has `viem` as a peer dependency. Both are required for MPP support.
+**Peer dependency for MPP:** `mppx` is an optional peer dep. Required only when `protocols` includes `'mpp'`.
 
 ## Creating Routes
 
@@ -415,21 +414,26 @@ The type system (generic parameters `HasAuth`, `NeedsBody`, `HasBody`) prevents 
 - `.siwx()` is mutually exclusive with `.paid()`
 - `.apiKey()` CAN compose with `.paid()`
 
-## MPP Internals (Critical Pitfalls)
+## MPP Internals
 
-The router uses mppx's **low-level primitives**, not the high-level `Mppx.create()` API. This matters because mppx's internals have subtle conventions:
+The router uses `mppx`'s high-level `Mppx.create()` API, which encapsulates the entire challenge-credential-receipt lifecycle.
 
-1. **NextRequest vs Request.** `Credential.fromRequest()` breaks with Next.js `NextRequest` due to subtle header handling differences. The router converts via `toStandardRequest()` — creating a new standard `Request` with the same URL, method, headers, and body.
+### How it works
 
-2. **`Challenge.fromIntent()` takes payment data, not an HTTP Request.** The `request` field in `fromIntent()` is the payment request object (`{ amount, currency, recipient, decimals }`), NOT the HTTP Request. Passing the wrong object causes silent challenge generation failures.
+1. **Init time** (`src/index.ts`): `Mppx.create({ methods: [tempo.charge({ currency, recipient, rpcUrl })], secretKey })` creates a server instance. This is done inside the async `initPromise` IIFE alongside x402 server init.
 
-3. **`tempo.charge().verify()` returns a receipt, not `{ valid, payer }`.** On success it returns `{ method, status, reference, timestamp }`. On failure it throws. Check `receipt.status === 'success'`, not `receipt.valid`.
+2. **Challenge** (`build402` in orchestrate.ts): `deps.mppx.charge({ amount })(request)` returns `{ status: 402, challenge: Response }`. The `WWW-Authenticate` header is extracted from the challenge `Response` and set on the router's 402 response.
 
-4. **`tempo.charge()` constructor takes operational config only.** In mppx, `currency` and `recipient` are NOT passed to `tempo.charge()`. They are passed in the `request` object to `Challenge.fromIntent()` and `verify()`. Only `getClient`, `decimals`, `feePayer`, `testnet`, etc. go in the constructor.
+3. **Verify + Receipt** (MPP section in orchestrate.ts): `deps.mppx.charge({ amount })(request)` returns `{ status: 200, withReceipt }` when the credential is valid. `withReceipt(response)` returns a new `Response` with the `Payment-Receipt` header attached.
 
-5. **Tempo RPC requires authentication.** The default `rpc.tempo.xyz` returns 401. Always provide `rpcUrl` or set `TEMPO_RPC_URL` env var with authenticated credentials.
+4. **Wallet extraction**: `Credential.fromRequest(request)` (from `mppx` core) extracts the credential, and `credential.source` contains the payer's DID.
 
-6. **viem is a peer dep of mppx.** The router uses viem directly for `createClient` and `http` in `buildGetClient()`. viem is always available when mppx is installed as a peer dep.
+### Key details
+
+- **`withReceipt()` creates a new Response** — it does not mutate the original. The returned value must be used (cast to `NextResponse`).
+- **`Credential.fromRequest()` is the only low-level mppx import** — used solely for wallet extraction after mppx has already verified the payment.
+- **`mppx` is an optional peer dep** — routes using `protocols: ['mpp']` require it. The router's `OrchestrateDeps.mppx` is `null` when not configured.
+- **Tempo RPC requires authentication.** The default `rpc.tempo.xyz` returns 401. Always provide `rpcUrl` or set `TEMPO_RPC_URL` env var with authenticated credentials.
 
 ## Registration-Time Validation
 
@@ -497,9 +501,6 @@ Barrel validation catches mismatches: keys in `prices` but not registered → er
 | Route not in discovery docs | Missing barrel import | Import the route file in your barrel |
 | Settlement not happening | Handler returned status >= 400 | Settlement is gated on success responses |
 | MPP 401 `unauthorized: authentication required` | Using default unauthenticated Tempo RPC | Set `TEMPO_RPC_URL` env var or `mpp.rpcUrl` config with authenticated URL |
-| MPP `Credential.fromRequest()` returns undefined | NextRequest header handling incompatibility | Router handles this via `toStandardRequest()` — if you see this, the router dist is stale |
-| MPP verify returns `status: 'success'` but route returns 402 | Code checking `.valid` instead of `.status` | Verify returns a receipt `{ status, reference }`, not `{ valid, payer }` |
-| MPP using wrong RPC URL after rebuild | Next.js webpack cache or stale pnpm link | Delete `.next/`, run `pnpm install` in the app to pick up new router dist |
 | `route 'X' in prices map but not registered` | Discovery endpoint hit before route module loaded | Add barrel import to discovery route files |
 | `mppx package is required` | mppx not installed | `pnpm add mppx` — it's an optional peer dep |
 
