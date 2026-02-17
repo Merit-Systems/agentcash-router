@@ -326,7 +326,9 @@ export function createRequestHandler(
           const payloadFingerprint =
             typeof verifyPayload === 'object' && verifyPayload !== null
               ? {
-                  keys: Object.keys(verifyPayload as object).sort().join(','),
+                  keys: Object.keys(verifyPayload as object)
+                    .sort()
+                    .join(','),
                   payloadType: typeof verifyPayload,
                 }
               : { payloadType: typeof verifyPayload };
