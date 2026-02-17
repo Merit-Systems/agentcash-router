@@ -243,7 +243,8 @@ export function createRequestHandler(
         // of auth mode. SIWX info goes in extensions['sign-in-with-x'].
         // accepts: [] signals "no payment needed, just prove identity."
         const url = new URL(request.url);
-        const nonce = crypto.randomUUID();
+        // SIWE requires alphanumeric nonce — strip hyphens from UUID
+        const nonce = crypto.randomUUID().replace(/-/g, '');
         const siwxInfo = {
           domain: url.hostname,
           uri: request.url,
@@ -275,6 +276,8 @@ export function createRequestHandler(
           extensions: {
             'sign-in-with-x': {
               info: siwxInfo,
+              // supportedChains at top level required by MCP tools for chain detection
+              supportedChains: [{ chainId: deps.network, type: 'eip191' }],
               ...(siwxSchema ? { schema: siwxSchema } : {}),
             },
           },
