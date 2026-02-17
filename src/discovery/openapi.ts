@@ -75,11 +75,22 @@ function deriveTag(routeKey: string): string {
 
 function buildOperation(routeKey: string, entry: RouteEntry, tag: string): Record<string, unknown> {
   const protocols = entry.protocols.length > 0 ? entry.protocols : undefined;
-  let price: number | undefined;
+  let price: string | undefined;
   if (typeof entry.pricing === 'string') {
-    price = parseFloat(entry.pricing);
+    // Static pricing — exact value
+    price = entry.pricing;
+  } else if (typeof entry.pricing === 'object' && 'tiers' in entry.pricing) {
+    // Tiered pricing — auto-compute range from lowest to highest tier
+    const tierPrices = Object.values(entry.pricing.tiers).map((t) => parseFloat(t.price));
+    const min = Math.min(...tierPrices);
+    const max = Math.max(...tierPrices);
+    price = min === max ? String(min) : `${min}-${max}`;
+  } else if (entry.minPrice && entry.maxPrice) {
+    // Dynamic pricing with explicit range
+    price = `${entry.minPrice}-${entry.maxPrice}`;
   } else if (entry.maxPrice) {
-    price = parseFloat(entry.maxPrice);
+    // Dynamic pricing with only a ceiling
+    price = entry.maxPrice;
   }
 
   const operation: Record<string, unknown> = {
