@@ -90,23 +90,6 @@ export async function settleX402Payment(
 ) {
   const { encodePaymentResponseHeader } = await import('@x402/core/http');
 
-  const payloadKeys =
-    typeof payload === 'object' && payload !== null
-      ? Object.keys(payload as object)
-          .sort()
-          .join(',')
-      : 'n/a';
-  const reqKeys =
-    typeof requirements === 'object' && requirements !== null
-      ? Object.keys(requirements as object)
-          .sort()
-          .join(',')
-      : 'n/a';
-  console.info('x402 settle input', {
-    payloadKeys,
-    requirementsKeys: reqKeys,
-  });
-
   const result = await server.settlePayment(payload, requirements);
   const encoded = encodePaymentResponseHeader(result);
 
