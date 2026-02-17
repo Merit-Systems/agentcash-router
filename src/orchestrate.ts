@@ -624,12 +624,8 @@ async function build402(
   pluginCtx: PluginContext,
   bodyData?: unknown,
 ): Promise<NextResponse> {
-  const response = new NextResponse(null, {
-    status: 402,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+  let challengeBody: unknown;
+  const challengeHeaders: Record<string, string> = {};
 
   let challengePrice: string;
 
@@ -683,7 +679,7 @@ async function build402(
 
   if (routeEntry.protocols.includes('x402') && deps.x402Server) {
     try {
-      const { encoded } = await buildX402Challenge(
+      const { encoded, paymentRequired } = await buildX402Challenge(
         deps.x402Server,
         routeEntry,
         request,
@@ -692,7 +688,8 @@ async function build402(
         deps.network,
         extensions,
       );
-      response.headers.set('PAYMENT-REQUIRED', encoded);
+      challengeBody = paymentRequired;
+      challengeHeaders['PAYMENT-REQUIRED'] = encoded;
     } catch (err) {
       // x402 challenge failure is critical: clients get a bare 402 with no
       // payment info and can't pay. Surface through plugin so operators see it.
@@ -706,9 +703,11 @@ async function build402(
 
   if (routeEntry.protocols.includes('mpp') && deps.mppConfig) {
     try {
-      response.headers.set(
-        'WWW-Authenticate',
-        await buildMPPChallenge(routeEntry, request, deps.mppConfig, challengePrice),
+      challengeHeaders['WWW-Authenticate'] = await buildMPPChallenge(
+        routeEntry,
+        request,
+        deps.mppConfig,
+        challengePrice,
       );
     } catch (err) {
       firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
@@ -718,6 +717,17 @@ async function build402(
       });
     }
   }
+
+  const response = new NextResponse(
+    challengeBody ? JSON.stringify(challengeBody) : null,
+    {
+      status: 402,
+      headers: {
+        'Content-Type': 'application/json',
+        ...challengeHeaders,
+      },
+    },
+  );
 
   firePluginResponse(deps, pluginCtx, meta, response);
   return response;

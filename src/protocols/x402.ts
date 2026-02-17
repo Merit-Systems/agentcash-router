@@ -39,7 +39,7 @@ export async function buildX402Challenge(
   );
   const encoded = encodePaymentRequiredHeader(paymentRequired);
 
-  return { encoded, requirements };
+  return { encoded, requirements, paymentRequired };
 }
 
 export async function verifyX402Payment(
