@@ -11,7 +11,7 @@
   "dependencies": {
     "@agentcash/router": "file:../..",
     "@modelcontextprotocol/sdk": "^1.26.0",
-    "mppx": "^0.1.1",
+    "mppx": "^0.2.0",
     "next": "^15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
