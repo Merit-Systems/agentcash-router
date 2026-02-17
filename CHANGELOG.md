@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 0.4.6
+
+### Patch Changes
+
+- 2c7f244: logs
+
 ## 0.4.5
 
 ### Patch Changes
