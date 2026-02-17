@@ -175,6 +175,7 @@ export interface RouterConfig {
   plugin?: import('./plugin.js').RouterPlugin;
   siwx?: { nonceStore?: import('./auth/nonce.js').NonceStore };
   prices?: Record<string, string>;
+  testMode?: boolean;
   mpp?: {
     secretKey: string;
     currency: string;

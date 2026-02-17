@@ -86,6 +86,7 @@ export function createRouter(config: RouterConfig): ServiceRouter {
     nonceStore,
     payeeAddress: config.payeeAddress,
     network,
+    testMode: config.testMode,
     mppConfig: config.mpp,
   };
 
@@ -94,17 +95,22 @@ export function createRouter(config: RouterConfig): ServiceRouter {
   // clear request-time messaging (e.g. "CDP_API_KEY_ID not set" instead of
   // a generic "server not initialized"). Every request handler awaits
   // deps.initPromise before touching deps.x402Server.
-  deps.initPromise = (async () => {
-    try {
-      const { createX402Server } = await import('./server.js');
-      const result = await createX402Server(config);
-      deps.x402Server = result.server;
-      await result.initPromise;
-    } catch (err: unknown) {
-      deps.x402Server = null;
-      deps.x402InitError = err instanceof Error ? err.message : String(err);
-    }
-  })();
+  // In test mode, skip x402 server init — no CDP keys needed.
+  if (config.testMode) {
+    deps.x402InitError = 'test mode — x402 server not initialized';
+  } else {
+    deps.initPromise = (async () => {
+      try {
+        const { createX402Server } = await import('./server.js');
+        const result = await createX402Server(config);
+        deps.x402Server = result.server;
+        await result.initPromise;
+      } catch (err: unknown) {
+        deps.x402Server = null;
+        deps.x402InitError = err instanceof Error ? err.message : String(err);
+      }
+    })();
+  }
 
   const pricesKeys = config.prices ? Object.keys(config.prices) : undefined;
 

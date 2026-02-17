@@ -27,6 +27,7 @@ export interface OrchestrateDeps {
   nonceStore: NonceStore;
   payeeAddress: string;
   network: string;
+  testMode?: boolean;
   mppConfig?: { secretKey: string; currency: string; recipient?: string; rpcUrl?: string };
 }
 
@@ -363,6 +364,46 @@ export function createRequestHandler(
       );
     }
 
+    // ---- Test mode: skip verify + settle, run handler with dummy wallet ----
+    if (deps.testMode && (protocol === 'x402' || protocol === 'mpp')) {
+      const payer = extractTestPayer(request) ?? '0x0000000000000000000000000000000000000000';
+      pluginCtx.setVerifiedWallet(payer);
+      firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
+        protocol,
+        payer,
+        amount: price,
+        network: protocol === 'mpp' ? 'tempo:42431' : deps.network,
+        testMode: true,
+      });
+
+      const { response, rawResult } = await invoke(
+        request,
+        meta,
+        pluginCtx,
+        payer,
+        account,
+        body.data,
+      );
+
+      if (response.status < 400) {
+        if (protocol === 'x402') {
+          response.headers.set('PAYMENT-RESPONSE', 'test-mode');
+        } else {
+          response.headers.set('Payment-Receipt', 'test-mode');
+        }
+        firePluginHook(deps.plugin, 'onPaymentSettled', pluginCtx, {
+          protocol,
+          payer,
+          transaction: 'test-mode',
+          network: protocol === 'mpp' ? 'tempo:42431' : deps.network,
+          testMode: true,
+        });
+      }
+
+      finalize(response, rawResult, meta, pluginCtx);
+      return response;
+    }
+
     // ---- x402 ----
     if (protocol === 'x402') {
       if (!deps.x402Server) {
@@ -496,6 +537,14 @@ export function createRequestHandler(
 
     return await build402(request, routeEntry, deps, meta, pluginCtx);
   };
+}
+
+// ---------------------------------------------------------------------------
+// Test mode helpers
+// ---------------------------------------------------------------------------
+
+function extractTestPayer(request: Request): string | null {
+  return request.headers.get('X-Wallet-Address') ?? request.headers.get('X-Test-Payer');
 }
 
 // ---------------------------------------------------------------------------
