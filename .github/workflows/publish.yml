@@ -1,41 +1,49 @@
-name: Publish to npm
+name: Publish Packages
 
 on:
-  release:
-    types: [published]
+  push:
+    branches:
+      - main
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
 
 jobs:
-  publish:
+  release:
+    name: Release
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: pnpm
-          registry-url: https://registry.npmjs.org
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
 
-      - run: pnpm install --frozen-lockfile
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
 
-      # Run full test suite before publishing
-      - run: pnpm check
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      # Verify package.json version matches release tag
-      - name: Verify version match
-        run: |
-          PKG_VERSION=$(node -p "require('./package.json').version")
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
-            echo "::error::Version mismatch! package.json=$PKG_VERSION, tag=$TAG_VERSION"
-            echo "Update package.json version to match the release tag."
-            exit 1
-          fi
-          echo "Version verified: $PKG_VERSION"
+      - name: Build
+        run: pnpm build
 
-      # Publish to npm (--access public required for scoped packages)
-      - run: pnpm publish --access public --no-git-checks
+      - name: Create Release Pull Request or Publish to npm
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: pnpm changeset version
+          publish: pnpm changeset publish
+          title: 'chore: version packages'
+          commit: 'chore: version packages'
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

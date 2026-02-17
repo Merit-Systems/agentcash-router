@@ -382,6 +382,8 @@ export function createRequestHandler(
       );
       if (!verify?.valid) return await build402(request, routeEntry, deps, meta, pluginCtx);
 
+      const { payload: verifyPayload, requirements: verifyRequirements } = verify;
+
       // Normalize to lowercase — checksumming is a display concern, not storage
       const wallet = verify.payer.toLowerCase();
       pluginCtx.setVerifiedWallet(wallet);
@@ -403,10 +405,24 @@ export function createRequestHandler(
 
       if (response.status < 400) {
         try {
+          const payloadFingerprint =
+            typeof verifyPayload === 'object' && verifyPayload !== null
+              ? {
+                  keys: Object.keys(verifyPayload as object)
+                    .sort()
+                    .join(','),
+                  payloadType: typeof verifyPayload,
+                }
+              : { payloadType: typeof verifyPayload };
+          console.info('Settlement attempt', {
+            route: routeEntry.key,
+            network: deps.network,
+            ...payloadFingerprint,
+          });
           const settle = await settleX402Payment(
             deps.x402Server,
-            verify.payload,
-            verify.requirements,
+            verifyPayload,
+            verifyRequirements,
           );
           response.headers.set('PAYMENT-RESPONSE', settle.encoded);
           firePluginHook(deps.plugin, 'onPaymentSettled', pluginCtx, {
@@ -416,11 +432,23 @@ export function createRequestHandler(
             network: deps.network,
           });
         } catch (err) {
+          const errObj = err as {
+            message?: string;
+            response?: { status?: number; data?: unknown; body?: unknown };
+          };
+          console.error('Settlement failed', {
+            message: err instanceof Error ? err.message : String(err),
+            route: routeEntry.key,
+            network: deps.network,
+            facilitatorStatus: errObj.response?.status,
+            facilitatorBody: errObj.response?.data ?? errObj.response?.body,
+          });
           firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
             level: 'critical' as const,
             message: `Settlement failed: ${err instanceof Error ? err.message : String(err)}`,
             route: routeEntry.key,
           });
+          return fail(500, 'Settlement failed', meta, pluginCtx);
         }
       }
 

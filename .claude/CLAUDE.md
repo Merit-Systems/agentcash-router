@@ -229,3 +229,23 @@ The `publish.yml` workflow will:
 The `.claude/` directory contains design docs, decision records, and bug analyses that document the reasoning behind the router's architecture. See `.claude/INDEX.md` for a table of contents.
 
 **Convention:** Every doc has a `Status` header. When you resolve work described in a doc, update its Status to `Resolved in vX.Y.Z` and update INDEX.md.
+
+## Releasing
+
+This repo uses [changesets](https://github.com/changesets/changesets) for versioning and npm publishing.
+
+### When doing work that should be released:
+
+1. **Create a changeset** — Run `pnpm changeset` and describe the changes (patch/minor/major)
+2. **Include the changeset file** in your PR (committed to `.changeset/`)
+3. **Merge PR to main**
+
+### What happens automatically:
+
+1. When PRs with changesets merge to `main`, the `changesets/action` creates a **"chore: version packages"** PR that bumps `package.json` version and updates `CHANGELOG.md`
+2. When that version PR is merged, the action **publishes to npm** automatically
+
+### Troubleshooting
+
+- **Publish fails**: Check `NPM_TOKEN` secret is set and has write access to `@agentcash` scope
+- **No version PR created**: Ensure your PR included a `.changeset/*.md` file

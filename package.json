@@ -1,6 +1,6 @@
 {
   "name": "@agentcash/router",
-  "version": "0.5.0",
+  "version": "0.4.6",
   "description": "Unified route builder for Next.js App Router APIs with x402, MPP, SIWX, and API key auth",
   "type": "module",
   "exports": {
@@ -12,16 +12,6 @@
       "require": {
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
-      }
-    },
-    "./client": {
-      "import": {
-        "types": "./dist/client/index.d.ts",
-        "default": "./dist/client/index.js"
-      },
-      "require": {
-        "types": "./dist/client/index.d.cts",
-        "default": "./dist/client/index.cjs"
       }
     }
   },
@@ -46,25 +36,21 @@
   },
   "peerDependencies": {
     "@coinbase/x402": "^2.1.0",
-    "@upstash/redis": "^1.0.0",
     "@x402/core": "^2.3.0",
     "@x402/evm": "^2.3.0",
     "@x402/extensions": "^2.3.0",
-    "ioredis": "^5.0.0",
-    "mpay": "^0.2.4",
+    "mppx": "^0.2.0",
     "next": ">=15.0.0",
     "zod": "^4.0.0",
     "zod-openapi": "^5.0.0"
   },
   "peerDependenciesMeta": {
-    "@upstash/redis": {
-      "optional": true
-    },
-    "ioredis": {
+    "mppx": {
       "optional": true
     }
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.8",
     "@coinbase/x402": "^2.1.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.0.0",
@@ -72,7 +58,7 @@
     "@x402/evm": "^2.3.0",
     "@x402/extensions": "^2.3.0",
     "eslint": "^10.0.0",
-    "mpay": "^0.2.4",
+    "mppx": "^0.2.0",
     "next": "^15.0.0",
     "prettier": "^3.8.1",
     "react": "^19.0.0",
