@@ -27,6 +27,7 @@ export interface OrchestrateDeps {
   nonceStore: NonceStore;
   payeeAddress: string;
   network: string;
+  testMode?: boolean;
   mppConfig?: { secretKey: string; currency: string; recipient?: string; rpcUrl?: string };
 }
 
@@ -363,6 +364,46 @@ export function createRequestHandler(
       );
     }
 
+    // ---- Test mode: skip verify + settle, run handler with dummy wallet ----
+    if (deps.testMode && (protocol === 'x402' || protocol === 'mpp')) {
+      const payer = extractTestPayer(request) ?? '0x0000000000000000000000000000000000000000';
+      pluginCtx.setVerifiedWallet(payer);
+      firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
+        protocol,
+        payer,
+        amount: price,
+        network: protocol === 'mpp' ? 'tempo:42431' : deps.network,
+        testMode: true,
+      });
+
+      const { response, rawResult } = await invoke(
+        request,
+        meta,
+        pluginCtx,
+        payer,
+        account,
+        body.data,
+      );
+
+      if (response.status < 400) {
+        if (protocol === 'x402') {
+          response.headers.set('PAYMENT-RESPONSE', 'test-mode');
+        } else {
+          response.headers.set('Payment-Receipt', 'test-mode');
+        }
+        firePluginHook(deps.plugin, 'onPaymentSettled', pluginCtx, {
+          protocol,
+          payer,
+          transaction: 'test-mode',
+          network: protocol === 'mpp' ? 'tempo:42431' : deps.network,
+          testMode: true,
+        });
+      }
+
+      finalize(response, rawResult, meta, pluginCtx);
+      return response;
+    }
+
     // ---- x402 ----
     if (protocol === 'x402') {
       if (!deps.x402Server) {
@@ -394,6 +435,57 @@ export function createRequestHandler(
         network: deps.network,
       });
 
+      // Settle BEFORE executing the handler to prevent data leaks.
+      // Without this, concurrent requests sharing a payment nonce can both
+      // pass verification but only one settles on-chain — the other gets
+      // free data because the handler already ran.
+      let settle: { encoded: string; result: { transaction?: string } | null };
+      try {
+        const payloadFingerprint =
+          typeof verifyPayload === 'object' && verifyPayload !== null
+            ? {
+                keys: Object.keys(verifyPayload as object)
+                  .sort()
+                  .join(','),
+                payloadType: typeof verifyPayload,
+              }
+            : { payloadType: typeof verifyPayload };
+        console.info('Settlement attempt', {
+          route: routeEntry.key,
+          network: deps.network,
+          ...payloadFingerprint,
+        });
+        settle = await settleX402Payment(
+          deps.x402Server,
+          verifyPayload,
+          verifyRequirements,
+        );
+        firePluginHook(deps.plugin, 'onPaymentSettled', pluginCtx, {
+          protocol: 'x402',
+          payer: verify.payer,
+          transaction: String(settle.result?.transaction ?? ''),
+          network: deps.network,
+        });
+      } catch (err) {
+        const errObj = err as {
+          message?: string;
+          response?: { status?: number; data?: unknown; body?: unknown };
+        };
+        console.error('Settlement failed', {
+          message: err instanceof Error ? err.message : String(err),
+          route: routeEntry.key,
+          network: deps.network,
+          facilitatorStatus: errObj.response?.status,
+          facilitatorBody: errObj.response?.data ?? errObj.response?.body,
+        });
+        firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+          level: 'critical' as const,
+          message: `Settlement failed: ${err instanceof Error ? err.message : String(err)}`,
+          route: routeEntry.key,
+        });
+        return fail(402, 'Settlement failed', meta, pluginCtx);
+      }
+
       const { response, rawResult } = await invoke(
         request,
         meta,
@@ -404,52 +496,7 @@ export function createRequestHandler(
       );
 
       if (response.status < 400) {
-        try {
-          const payloadFingerprint =
-            typeof verifyPayload === 'object' && verifyPayload !== null
-              ? {
-                  keys: Object.keys(verifyPayload as object)
-                    .sort()
-                    .join(','),
-                  payloadType: typeof verifyPayload,
-                }
-              : { payloadType: typeof verifyPayload };
-          console.info('Settlement attempt', {
-            route: routeEntry.key,
-            network: deps.network,
-            ...payloadFingerprint,
-          });
-          const settle = await settleX402Payment(
-            deps.x402Server,
-            verifyPayload,
-            verifyRequirements,
-          );
-          response.headers.set('PAYMENT-RESPONSE', settle.encoded);
-          firePluginHook(deps.plugin, 'onPaymentSettled', pluginCtx, {
-            protocol: 'x402',
-            payer: verify.payer,
-            transaction: String(settle.result?.transaction ?? ''),
-            network: deps.network,
-          });
-        } catch (err) {
-          const errObj = err as {
-            message?: string;
-            response?: { status?: number; data?: unknown; body?: unknown };
-          };
-          console.error('Settlement failed', {
-            message: err instanceof Error ? err.message : String(err),
-            route: routeEntry.key,
-            network: deps.network,
-            facilitatorStatus: errObj.response?.status,
-            facilitatorBody: errObj.response?.data ?? errObj.response?.body,
-          });
-          firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
-            level: 'critical' as const,
-            message: `Settlement failed: ${err instanceof Error ? err.message : String(err)}`,
-            route: routeEntry.key,
-          });
-          return fail(500, 'Settlement failed', meta, pluginCtx);
-        }
+        response.headers.set('PAYMENT-RESPONSE', settle.encoded);
       }
 
       finalize(response, rawResult, meta, pluginCtx);
@@ -496,6 +543,14 @@ export function createRequestHandler(
 
     return await build402(request, routeEntry, deps, meta, pluginCtx);
   };
+}
+
+// ---------------------------------------------------------------------------
+// Test mode helpers
+// ---------------------------------------------------------------------------
+
+function extractTestPayer(request: Request): string | null {
+  return request.headers.get('X-Wallet-Address') ?? request.headers.get('X-Test-Payer');
 }
 
 // ---------------------------------------------------------------------------
