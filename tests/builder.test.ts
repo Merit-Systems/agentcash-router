@@ -129,6 +129,27 @@ describe('registration-time safety', () => {
     );
   });
 
+  it('.validate() without .body() throws at registration', () => {
+    const { builder } = makeBuilder();
+    expect(() =>
+      builder
+        .paid('0.01')
+        .validate(() => {})
+        .handler(async () => ({})),
+    ).toThrow('.validate() requires .body()');
+  });
+
+  it('.validate() with .body() does not throw', () => {
+    const { builder } = makeBuilder();
+    expect(() =>
+      builder
+        .paid('0.01')
+        .validate(() => {})
+        .body(bodySchema)
+        .handler(async () => ({})),
+    ).not.toThrow();
+  });
+
   it('fork() does not leak protocol array mutations', () => {
     const reg = new RouteRegistry();
     const b1 = new RouteBuilder('fork/base', reg, makeDeps());

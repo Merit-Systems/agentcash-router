@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 0.4.7
+
+### Patch Changes
+
+- fix(siwx): alphanumeric nonce and supportedChains for spec compliance
+
 ## 0.4.6
 
 ### Patch Changes

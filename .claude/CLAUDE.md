@@ -28,6 +28,98 @@ Protocol-agnostic route framework for Next.js App Router APIs with x402 payment,
 - `src/protocols/` — Protocol handlers (x402.ts, mpp.ts, detect.ts)
 - `src/discovery/` — Auto-generated endpoints (well-known.ts, openapi.ts)
 
+## Auth Modes
+
+Four auth modes, mutually exclusive (except `.apiKey()` composes with `.paid()`):
+
+### `.paid(pricing)` — Payment required
+```typescript
+.paid('0.01')                    // Static price
+.paid((body) => calcPrice(body)) // Dynamic pricing
+.paid({ field: 'tier', tiers: { basic: { price: '0.01' } } }) // Tiered
+```
+
+### `.siwx()` — Wallet identity required (no payment)
+```typescript
+.siwx().handler(async ({ wallet }) => { /* wallet is verified */ })
+```
+
+### `.apiKey(resolver)` — API key / Bearer token auth
+For admin routes, cron jobs, internal services. Checks `X-API-Key` header OR `Authorization: Bearer <token>`.
+
+```typescript
+// Admin route with API key
+export const GET = router
+  .route('admin/users')
+  .apiKey(async (key) => {
+    const admin = await db.admin.findByKey(key);
+    return admin ?? null; // null = 401, truthy = ctx.account
+  })
+  .handler(async ({ account }) => {
+    // account is whatever resolver returned
+    return db.user.findMany();
+  });
+
+// Cron job with static secret
+export const POST = router
+  .route('cron/cleanup')
+  .apiKey((key) => key === process.env.CRON_SECRET ? { cron: true } : null)
+  .handler(async () => { /* ... */ });
+```
+
+**Headers accepted:** `X-API-Key: <key>` or `Authorization: Bearer <key>`
+
+**Composing with payment:** `.apiKey()` can layer on `.paid()` — auth runs first, payment second:
+```typescript
+.apiKey(resolver).paid('0.01') // Must pass API key AND pay
+```
+
+### `.unprotected()` — No auth
+```typescript
+.unprotected().handler(async () => { /* public endpoint */ })
+```
+
+## Pre-Payment Validation
+
+### `.validate(fn)` — Async business validation before 402 challenge
+
+For checks that need DB lookups or external APIs before showing a price. Runs after body parsing, before the 402 challenge. Requires `.body()`.
+
+```typescript
+// Domain registration with availability check
+router
+  .route('domain/register')
+  .paid(calculatePrice, { maxPrice: '10.00' })
+  .body(RegisterSchema)  // .body() before .validate() for type inference
+  .validate(async (body) => {
+    if (await isDomainTaken(body.domain)) {
+      throw Object.assign(new Error('Domain already taken'), { status: 409 });
+    }
+  })
+  .handler(async ({ body, wallet }) => {
+    return registerDomain(body.domain, wallet);
+  });
+
+// Rate limiting before payment
+router
+  .route('api/expensive')
+  .paid('1.00')
+  .body(RequestSchema)
+  .validate(async (body) => {
+    const usage = await getUserUsage(body.userId);
+    if (usage >= DAILY_LIMIT) {
+      throw Object.assign(new Error('Daily limit reached'), { status: 429 });
+    }
+  })
+  .handler(async ({ body }) => { ... });
+```
+
+**Pipeline order:** `body parse → validate → 402 challenge → payment → handler`
+
+**Error handling:** Respects `.status` on thrown errors (default: 400). Use `Object.assign(new Error('msg'), { status: 409 })` for custom codes.
+
+**Works with all auth modes:** paid, siwx, apiKey, unprotected.
+
 ## Critical Rules
 
 - **Error handling:** Respect `.status` on any thrown error, not just `HttpError`. The `Object.assign(new Error(), { status })` pattern is universal in Node.js.
@@ -94,6 +186,43 @@ pnpm test       # vitest
 pnpm typecheck  # tsc --noEmit
 pnpm check      # format + lint + typecheck + build + test
 ```
+
+## Releasing
+
+**Release flow:** PR with version bump → merge → create GitHub Release → auto-publish to npm
+
+### When doing work that should be released:
+
+1. **Update `CHANGELOG.md`** — Add entry under new version heading with changes
+2. **Bump version in `package.json`** — Match the changelog version
+3. **Commit both** — e.g., `chore: bump to v0.6.0`
+4. **Merge PR to main**
+
+### To publish (human step):
+
+1. Go to [GitHub Releases](https://github.com/Merit-Systems/agentcash-router/releases)
+2. Click **Draft a new release**
+3. Create tag: `v0.6.0` (must match package.json version)
+4. Title: `v0.6.0`
+5. Description: Copy from CHANGELOG.md or click "Generate release notes"
+6. Click **Publish release**
+
+The `publish.yml` workflow will:
+- Run full test suite (`pnpm check`)
+- Verify package.json version matches tag
+- Publish to npm with `--access public`
+
+### Version format
+
+- **Patch** (`0.5.1`): Bug fixes, docs, internal changes
+- **Minor** (`0.6.0`): New features, non-breaking additions
+- **Major** (`1.0.0`): Breaking changes (holding until API stabilizes)
+
+### Troubleshooting
+
+- **Version mismatch error**: package.json version must exactly match the release tag (without `v` prefix)
+- **Publish fails**: Check `NPM_TOKEN` secret is set and has write access to `@agentcash` scope
+- **Tests fail**: Fix in a new PR, then re-create the release
 
 ## Development Record
 

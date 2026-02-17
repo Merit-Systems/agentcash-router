@@ -9,14 +9,14 @@ import type {
 } from './types.js';
 import type { RouterPlugin, PluginContext, RequestMeta } from './plugin.js';
 import { createDefaultContext, firePluginHook } from './plugin.js';
-import type { NonceStore } from './auth/nonce.js';
+import { SIWX_CHALLENGE_EXPIRY_MS, type NonceStore } from './auth/nonce.js';
 import { detectProtocol } from './protocols/detect.js';
 import { safeCallHandler } from './handler.js';
 import { bufferBody, validateBody } from './body.js';
 import { resolvePrice, resolveMaxPrice } from './pricing.js';
 import { buildX402Challenge, verifyX402Payment, settleX402Payment } from './protocols/x402.js';
 import { buildMPPChallenge, verifyMPPCredential, buildMPPReceipt } from './protocols/mpp.js';
-import { verifySIWX, buildSIWXExtension } from './auth/siwx.js';
+import { verifySIWX, buildSIWXExtension, SIWX_ERROR_MESSAGES } from './auth/siwx.js';
 import { verifyApiKey } from './auth/api-key.js';
 
 export interface OrchestrateDeps {
@@ -107,13 +107,25 @@ export function createRequestHandler(
       (firePluginHook(deps.plugin, 'onRequest', meta) as PluginContext | undefined) ??
       createDefaultContext(meta);
 
-    /** Shared non-payment tail: parse body → invoke handler → finalize. */
+    /** Shared non-payment tail: parse body → validate → invoke handler → finalize. */
     async function handleAuth(wallet: string | null, account: unknown): Promise<NextResponse> {
       const body = await parseBody(request, routeEntry);
       if (!body.ok) {
         firePluginResponse(deps, pluginCtx, meta, body.response);
         return body.response;
       }
+
+      // Run pre-handler validation if configured
+      if (routeEntry.validateFn) {
+        try {
+          await routeEntry.validateFn(body.data);
+        } catch (err: unknown) {
+          const status = (err as { status?: number }).status ?? 400;
+          const message = err instanceof Error ? err.message : 'Validation failed';
+          return fail(status, message, meta, pluginCtx);
+        }
+      }
+
       const { response, rawResult } = await invoke(
         request,
         meta,
@@ -143,6 +155,14 @@ export function createRequestHandler(
       }
       account = keyResult.account;
 
+      // Fire auth hook for API key verification
+      firePluginHook(deps.plugin, 'onAuthVerified', pluginCtx, {
+        authMode: 'apiKey',
+        wallet: null,
+        route: routeEntry.key,
+        account,
+      });
+
       if (routeEntry.authMode === 'apiKey' && !routeEntry.pricing) {
         return handleAuth(null, account);
       }
@@ -150,18 +170,23 @@ export function createRequestHandler(
 
     const protocol = detectProtocol(request);
 
-    // ---- Early body parsing for dynamic pricing ----
-    // If no payment header and dynamic pricing exists, clone request and parse body early
-    // so pricing function can calculate accurate price for 402 challenge.
+    // ---- Early body parsing for dynamic pricing or validation ----
+    // If no payment header and (dynamic pricing OR validateFn) exists, clone request
+    // and parse body early so we can calculate accurate price and/or reject invalid
+    // requests before showing the 402 challenge.
     let earlyBodyData: unknown;
+    const needsEarlyParse =
+      !protocol &&
+      routeEntry.bodySchema &&
+      (typeof routeEntry.pricing === 'function' || routeEntry.validateFn);
 
-    if (!protocol && typeof routeEntry.pricing === 'function' && routeEntry.bodySchema) {
+    if (needsEarlyParse) {
       // CRITICAL: Clone BEFORE consuming body (stream can only be read once)
       // Direct cast: clone() returns Request but the runtime object is still NextRequest
       // with all properties intact. TypeScript doesn't track this through clone().
       const requestForPricing = request.clone() as NextRequest;
 
-      // Parse clone for pricing calculation
+      // Parse clone for pricing/validation
       const earlyBodyResult = await parseBody(requestForPricing, routeEntry);
 
       // Early validation failure - return 400, don't charge them!
@@ -171,6 +196,17 @@ export function createRequestHandler(
       }
 
       earlyBodyData = earlyBodyResult.data;
+
+      // Run pre-payment validation if configured
+      if (routeEntry.validateFn) {
+        try {
+          await routeEntry.validateFn(earlyBodyData);
+        } catch (err: unknown) {
+          const status = (err as { status?: number }).status ?? 400;
+          const message = err instanceof Error ? err.message : 'Validation failed';
+          return fail(status, message, meta, pluginCtx);
+        }
+      }
     }
 
     // ---- SIWX ----
@@ -178,6 +214,28 @@ export function createRequestHandler(
     // handler context, and there's no price to resolve. This avoids
     // unnecessary body buffering for unauthenticated requests.
     if (routeEntry.authMode === 'siwx') {
+      // Early body parsing + validation for SIWX routes with validateFn
+      // Reject invalid requests before showing the SIWX challenge
+      if (
+        routeEntry.validateFn &&
+        routeEntry.bodySchema &&
+        !request.headers.get('SIGN-IN-WITH-X')
+      ) {
+        const requestForValidation = request.clone() as NextRequest;
+        const earlyBodyResult = await parseBody(requestForValidation, routeEntry);
+        if (!earlyBodyResult.ok) {
+          firePluginResponse(deps, pluginCtx, meta, earlyBodyResult.response);
+          return earlyBodyResult.response;
+        }
+        try {
+          await routeEntry.validateFn(earlyBodyResult.data);
+        } catch (err: unknown) {
+          const status = (err as { status?: number }).status ?? 400;
+          const message = err instanceof Error ? err.message : 'Validation failed';
+          return fail(status, message, meta, pluginCtx);
+        }
+      }
+
       if (!request.headers.get('SIGN-IN-WITH-X')) {
         // Uniform 402 challenge format: SIWX routes return the same x402v2
         // challenge structure as paid routes, with PAYMENT-REQUIRED header
@@ -185,7 +243,8 @@ export function createRequestHandler(
         // of auth mode. SIWX info goes in extensions['sign-in-with-x'].
         // accepts: [] signals "no payment needed, just prove identity."
         const url = new URL(request.url);
-        const nonce = crypto.randomUUID();
+        // SIWE requires alphanumeric nonce — strip hyphens from UUID
+        const nonce = crypto.randomUUID().replace(/-/g, '');
         const siwxInfo = {
           domain: url.hostname,
           uri: request.url,
@@ -194,7 +253,7 @@ export function createRequestHandler(
           type: 'eip191',
           nonce,
           issuedAt: new Date().toISOString(),
-          expirationTime: new Date(Date.now() + 300_000).toISOString(),
+          expirationTime: new Date(Date.now() + SIWX_CHALLENGE_EXPIRY_MS).toISOString(),
           statement: 'Sign in to verify your wallet identity',
         };
 
@@ -217,6 +276,8 @@ export function createRequestHandler(
           extensions: {
             'sign-in-with-x': {
               info: siwxInfo,
+              // supportedChains at top level required by MCP tools for chain detection
+              supportedChains: [{ chainId: deps.network, type: 'eip191' }],
               ...(siwxSchema ? { schema: siwxSchema } : {}),
             },
           },
@@ -247,16 +308,24 @@ export function createRequestHandler(
 
       const siwx = await verifySIWX(request, routeEntry, deps.nonceStore);
       if (!siwx.valid) {
-        return fail(
-          402,
-          'SIWX verification failed — signature invalid, message expired, or nonce already used',
-          meta,
-          pluginCtx,
+        // Return structured error with code for client auto-retry
+        const response = NextResponse.json(
+          { error: siwx.code, message: SIWX_ERROR_MESSAGES[siwx.code] },
+          { status: 402 },
         );
+        firePluginResponse(deps, pluginCtx, meta, response);
+        return response;
       }
 
-      pluginCtx.setVerifiedWallet(siwx.wallet);
-      return handleAuth(siwx.wallet, undefined);
+      // Normalize to lowercase — checksumming is a display concern, not storage
+      const wallet = siwx.wallet.toLowerCase();
+      pluginCtx.setVerifiedWallet(wallet);
+      firePluginHook(deps.plugin, 'onAuthVerified', pluginCtx, {
+        authMode: 'siwx',
+        wallet,
+        route: routeEntry.key,
+      });
+      return handleAuth(wallet, undefined);
     }
 
     // ---- No payment header → 402 challenge ----
@@ -264,11 +333,22 @@ export function createRequestHandler(
       return await build402(request, routeEntry, deps, meta, pluginCtx, earlyBodyData);
     }
 
-    // ---- Payment present: parse body + resolve price ----
+    // ---- Payment present: parse body + validate + resolve price ----
     const body = await parseBody(request, routeEntry);
     if (!body.ok) {
       firePluginResponse(deps, pluginCtx, meta, body.response);
       return body.response;
+    }
+
+    // Run validation before price resolution (reject invalid requests before charging)
+    if (routeEntry.validateFn) {
+      try {
+        await routeEntry.validateFn(body.data);
+      } catch (err: unknown) {
+        const status = (err as { status?: number }).status ?? 400;
+        const message = err instanceof Error ? err.message : 'Validation failed';
+        return fail(status, message, meta, pluginCtx);
+      }
     }
 
     let price: string;
@@ -304,10 +384,12 @@ export function createRequestHandler(
 
       const { payload: verifyPayload, requirements: verifyRequirements } = verify;
 
-      pluginCtx.setVerifiedWallet(verify.payer);
+      // Normalize to lowercase — checksumming is a display concern, not storage
+      const wallet = verify.payer.toLowerCase();
+      pluginCtx.setVerifiedWallet(wallet);
       firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
         protocol: 'x402',
-        payer: verify.payer,
+        payer: wallet,
         amount: price,
         network: deps.network,
       });
@@ -316,7 +398,7 @@ export function createRequestHandler(
         request,
         meta,
         pluginCtx,
-        verify.payer,
+        wallet,
         account,
         body.data,
       );
@@ -381,7 +463,8 @@ export function createRequestHandler(
       const verify = await verifyMPPCredential(request, routeEntry, deps.mppConfig, price);
       if (!verify?.valid) return await build402(request, routeEntry, deps, meta, pluginCtx);
 
-      const wallet = verify.payer!;
+      // Normalize to lowercase — checksumming is a display concern, not storage
+      const wallet = verify.payer!.toLowerCase();
       pluginCtx.setVerifiedWallet(wallet);
       firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
         protocol: 'mpp',

@@ -56,6 +56,17 @@ export interface ErrorEvent {
   settled: boolean;
 }
 
+export interface AuthEvent {
+  /** Authentication mode that was verified */
+  authMode: 'siwx' | 'apiKey';
+  /** Verified wallet address (lowercase) */
+  wallet: string | null;
+  /** Route key */
+  route: string;
+  /** Account data from API key resolver (for apiKey auth) */
+  account?: unknown;
+}
+
 // ---------------------------------------------------------------------------
 // RouterPlugin interface
 // ---------------------------------------------------------------------------
@@ -63,6 +74,8 @@ export interface ErrorEvent {
 export interface RouterPlugin {
   init?(config: { origin?: string }): void | Promise<void>;
   onRequest?(meta: RequestMeta): PluginContext;
+  /** Fired after successful SIWX or API key verification, before handler */
+  onAuthVerified?(ctx: PluginContext, event: AuthEvent): void;
   onPaymentVerified?(ctx: PluginContext, payment: PaymentEvent): void;
   onPaymentSettled?(ctx: PluginContext, settlement: SettlementEvent): void;
   onResponse?(ctx: PluginContext, response: ResponseMeta): void;
@@ -131,6 +144,11 @@ export function consolePlugin(): RouterPlugin {
     onRequest(meta) {
       const ctx = createDefaultContext(meta);
       return ctx;
+    },
+
+    onAuthVerified(_ctx, auth) {
+      const wallet = auth.wallet ? ` wallet=${auth.wallet}` : '';
+      console.log(`[router] AUTH ${auth.authMode} ${auth.route}${wallet}`);
     },
 
     onPaymentVerified(_ctx, payment) {

@@ -47,6 +47,7 @@ export class RouteBuilder<
   /** @internal */ _apiKeyResolver: ((key: string) => unknown | Promise<unknown>) | undefined;
   /** @internal */ _providerName: string | undefined;
   /** @internal */ _providerConfig: ProviderConfig | undefined;
+  /** @internal */ _validateFn: ((body: TBody) => void | Promise<void>) | undefined;
 
   constructor(key: string, registry: RouteRegistry, deps: OrchestrateDeps) {
     this._key = key;
@@ -83,6 +84,15 @@ export class RouteBuilder<
     pricing: PricingConfig,
     options?: PaidOptions,
   ): RouteBuilder<TBody, TQuery, True, boolean, HasBody> {
+    // Runtime guard: prevent combining .paid() with .siwx()
+    if (this._authMode === 'siwx') {
+      throw new Error(
+        `route '${this._key}': Cannot combine .paid() and .siwx() on the same route. ` +
+          'Paid routes get wallet identity from the payment proof. ' +
+          'Use separate routes if you need both payment and SIWX auth.',
+      );
+    }
+
     const next = this.fork() as RouteBuilder<TBody, TQuery, True, boolean, HasBody>;
     next._authMode = 'paid';
     next._pricing = pricing;
@@ -116,6 +126,15 @@ export class RouteBuilder<
   }
 
   siwx(): HasAuth extends true ? never : RouteBuilder<TBody, TQuery, True, False, HasBody> {
+    // Runtime guard: prevent combining .siwx() with .paid()
+    if (this._authMode === 'paid') {
+      throw new Error(
+        `route '${this._key}': Cannot combine .paid() and .siwx() on the same route. ` +
+          'Paid routes get wallet identity from the payment proof. ' +
+          'Use separate routes if you need both payment and SIWX auth.',
+      );
+    }
+
     const next = this.fork() as RouteBuilder<TBody, TQuery, True, False, HasBody>;
     next._authMode = 'siwx';
     // SIWX routes set protocols to [] because they're not payment
@@ -196,6 +215,39 @@ export class RouteBuilder<
   }
 
   // -------------------------------------------------------------------------
+  // Pre-payment validation
+  // -------------------------------------------------------------------------
+
+  /**
+   * Add pre-payment validation that runs after body parsing but before the 402
+   * challenge is shown. Use this for async business logic like "is this resource
+   * available?" or "has this user hit their rate limit?".
+   *
+   * Requires `.body()` — call `.body()` before `.validate()` for type inference.
+   *
+   * @example
+   * ```typescript
+   * router
+   *   .route('domain/register')
+   *   .paid(calculatePrice)
+   *   .body(RegisterSchema)  // .body() first for type inference
+   *   .validate(async (body) => {
+   *     if (await isDomainTaken(body.domain)) {
+   *       throw Object.assign(new Error('Domain taken'), { status: 409 });
+   *     }
+   *   })
+   *   .handler(async ({ body }) => { ... });
+   * ```
+   */
+  validate(
+    fn: (body: TBody) => void | Promise<void>,
+  ): RouteBuilder<TBody, TQuery, HasAuth, NeedsBody, HasBody> {
+    const next = this.fork();
+    next._validateFn = fn;
+    return next as RouteBuilder<TBody, TQuery, HasAuth, NeedsBody, HasBody>;
+  }
+
+  // -------------------------------------------------------------------------
   // Terminal method
   // -------------------------------------------------------------------------
 
@@ -212,6 +264,13 @@ export class RouteBuilder<
   handler(
     fn: (ctx: HandlerContext<TBody, TQuery>) => Promise<unknown>,
   ): (request: NextRequest) => Promise<Response> {
+    // Registration-time validation
+    if (this._validateFn && !this._bodySchema) {
+      throw new Error(
+        `route '${this._key}': .validate() requires .body() — validation runs on parsed body`,
+      );
+    }
+
     // Build route entry
     const entry: RouteEntry = {
       key: this._key,
@@ -228,6 +287,7 @@ export class RouteBuilder<
       apiKeyResolver: this._apiKeyResolver,
       providerName: this._providerName,
       providerConfig: this._providerConfig,
+      validateFn: this._validateFn as ((body: unknown) => void | Promise<void>) | undefined,
     };
 
     // Register in registry
