@@ -38,6 +38,7 @@ export class RouteBuilder<
   /** @internal */ _pricing: PricingConfig | undefined;
   /** @internal */ _protocols: ProtocolType[] = ['x402'];
   /** @internal */ _maxPrice: string | undefined;
+  /** @internal */ _minPrice: string | undefined;
   /** @internal */ _bodySchema: ZodType | undefined;
   /** @internal */ _querySchema: ZodType | undefined;
   /** @internal */ _outputSchema: ZodType | undefined;
@@ -98,6 +99,7 @@ export class RouteBuilder<
     next._pricing = pricing;
     if (options?.protocols) next._protocols = options.protocols;
     if (options?.maxPrice) next._maxPrice = options.maxPrice;
+    if (options?.minPrice) next._minPrice = options.minPrice;
 
     // Registration-time validation
     if (typeof pricing === 'object' && 'tiers' in pricing) {
@@ -284,6 +286,7 @@ export class RouteBuilder<
       path: this._path,
       method: this._method,
       maxPrice: this._maxPrice,
+      minPrice: this._minPrice,
       apiKeyResolver: this._apiKeyResolver,
       providerName: this._providerName,
       providerConfig: this._providerConfig,

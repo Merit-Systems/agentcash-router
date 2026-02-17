@@ -90,6 +90,7 @@ export type PricingConfig<TBody = unknown> =
 export interface PaidOptions {
   protocols?: ProtocolType[];
   maxPrice?: string;
+  minPrice?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -156,6 +157,7 @@ export interface RouteEntry {
   path?: string;
   method: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH';
   maxPrice?: string;
+  minPrice?: string;
   apiKeyResolver?: (key: string) => unknown | Promise<unknown>;
   providerName?: string;
   providerConfig?: ProviderConfig;
