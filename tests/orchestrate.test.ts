@@ -296,7 +296,7 @@ describe('x402 paid route', () => {
     expect(res.status).toBe(402);
   });
 
-  it('skips settlement when handler returns error status', async () => {
+  it('settles before handler — payment collected even if handler returns error', async () => {
     const entry = makeEntry({ bodySchema });
     const deps = makeDeps();
     const server = deps.x402Server as unknown as FakeX402Server;
@@ -311,10 +311,10 @@ describe('x402 paid route', () => {
     const res = await handler(makePaymentRequest({ query: 'test' }));
     expect(res.status).toBe(400);
     expect(res.headers.get('PAYMENT-RESPONSE')).toBeNull();
-    expect(server.settledPayments).toHaveLength(0);
+    expect(server.settledPayments).toHaveLength(1);
   });
 
-  it('skips settlement when handler throws', async () => {
+  it('settles before handler — payment collected even if handler throws', async () => {
     const entry = makeEntry({ bodySchema });
     const deps = makeDeps();
     const server = deps.x402Server as unknown as FakeX402Server;
@@ -328,7 +328,7 @@ describe('x402 paid route', () => {
     const res = await handler(makePaymentRequest({ query: 'test' }));
     expect(res.status).toBe(500);
     expect(res.headers.get('PAYMENT-RESPONSE')).toBeNull();
-    expect(server.settledPayments).toHaveLength(0);
+    expect(server.settledPayments).toHaveLength(1);
   });
 
   it('sets wallet on handler context from verified payer', async () => {
