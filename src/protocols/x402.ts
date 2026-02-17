@@ -69,6 +69,9 @@ export async function verifyX402Payment(
     request,
   });
   const matching = server.findMatchingRequirements(requirements, payload);
+  if (!matching) {
+    return { valid: false as const, payload: null, requirements: null, payer: null };
+  }
   const verify = await server.verifyPayment(payload, matching);
 
   if (!verify.isValid) {

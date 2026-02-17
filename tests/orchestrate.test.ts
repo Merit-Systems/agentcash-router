@@ -467,6 +467,83 @@ describe('SIWX route', () => {
   });
 });
 
+describe('tiered pricing', () => {
+  const tierSchema = z.object({
+    filename: z.string(),
+    tier: z.enum(['10mb', '100mb', '1gb']),
+  });
+
+  const tieredPricing = {
+    field: 'tier',
+    tiers: {
+      '10mb': { price: '0.02', label: '10 MB' },
+      '100mb': { price: '0.20', label: '100 MB' },
+      '1gb': { price: '2.00', label: '1 GB' },
+    },
+  };
+
+  it('402 challenge uses tier-specific price from body (not max price)', async () => {
+    const entry = makeEntry({
+      bodySchema: tierSchema,
+      pricing: tieredPricing,
+    });
+    const handler = createRequestHandler(entry, async () => ({ ok: true }), makeDeps());
+
+    const req = new NextRequest('http://localhost:3000/api/test', {
+      method: 'POST',
+      body: JSON.stringify({ filename: 'test.txt', tier: '10mb' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const res = await handler(req);
+    expect(res.status).toBe(402);
+
+    const paymentRequired = res.headers.get('PAYMENT-REQUIRED');
+    expect(paymentRequired).toBeTruthy();
+    const decoded = JSON.parse(Buffer.from(paymentRequired!, 'base64').toString());
+    expect(decoded.requirements[0].maxAmountRequired).toBe('0.02');
+  });
+
+  it('402 challenge uses max price when no body sent', async () => {
+    const entry = makeEntry({
+      bodySchema: tierSchema,
+      pricing: tieredPricing,
+    });
+    const handler = createRequestHandler(entry, async () => ({ ok: true }), makeDeps());
+
+    const req = new NextRequest('http://localhost:3000/api/test', {
+      method: 'POST',
+    });
+    const res = await handler(req);
+    expect(res.status).toBe(402);
+    const paymentRequired = res.headers.get('PAYMENT-REQUIRED');
+    expect(paymentRequired).toBeTruthy();
+    const decoded = JSON.parse(Buffer.from(paymentRequired!, 'base64').toString());
+    expect(decoded.requirements[0].maxAmountRequired).toBe('2.00');
+  });
+
+  it('resolves correct tier price during payment verification', async () => {
+    const entry = makeEntry({
+      bodySchema: tierSchema,
+      pricing: tieredPricing,
+    });
+    let capturedWallet: string | null = null;
+    const handler = createRequestHandler(
+      entry,
+      async (ctx) => {
+        capturedWallet = ctx.wallet;
+        return { ok: true };
+      },
+      makeDeps(),
+    );
+
+    const res = await handler(
+      makePaymentRequest({ filename: 'test.txt', tier: '10mb' }),
+    );
+    expect(res.status).toBe(200);
+    expect(capturedWallet).toBe(KNOWN_PAYER.toLowerCase());
+  });
+});
+
 describe('unprotected route', () => {
   it('returns 200 with no auth required', async () => {
     const entry = makeEntry({ authMode: 'unprotected', protocols: [] });

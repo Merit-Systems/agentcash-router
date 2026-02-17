@@ -175,10 +175,18 @@ export function createRequestHandler(
     // and parse body early so we can calculate accurate price and/or reject invalid
     // requests before showing the 402 challenge.
     let earlyBodyData: unknown;
+    const isTieredPricing =
+      typeof routeEntry.pricing === 'object' &&
+      routeEntry.pricing !== null &&
+      'field' in routeEntry.pricing;
+    const hasRequestBody =
+      !!request.headers.get('content-type') ||
+      (!!request.headers.get('content-length') && request.headers.get('content-length') !== '0');
     const needsEarlyParse =
       !protocol &&
       routeEntry.bodySchema &&
-      (typeof routeEntry.pricing === 'function' || routeEntry.validateFn);
+      hasRequestBody &&
+      (typeof routeEntry.pricing === 'function' || routeEntry.validateFn || isTieredPricing);
 
     if (needsEarlyParse) {
       // CRITICAL: Clone BEFORE consuming body (stream can only be read once)
@@ -633,8 +641,8 @@ async function build402(
 
   let challengePrice: string;
 
-  // Dynamic pricing with body data (early parsing happened)
-  if (bodyData !== undefined && typeof routeEntry.pricing === 'function') {
+  // Dynamic/tiered pricing with body data (early parsing happened)
+  if (bodyData !== undefined && typeof routeEntry.pricing !== 'string') {
     const result = await resolveDynamicPrice(bodyData, routeEntry, deps, pluginCtx, meta);
     if ('error' in result) return result.error;
     challengePrice = result.price;
