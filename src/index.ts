@@ -104,12 +104,24 @@ export function createRouter(config: RouterConfig): ServiceRouter {
 
     if (config.mpp) {
       const { Mppx, tempo } = await import('mppx/server');
+      const rpcUrl = config.mpp.rpcUrl ?? process.env.TEMPO_RPC_URL;
+
       deps.mppx = Mppx.create({
         methods: [
           tempo.charge({
             currency: config.mpp.currency as `0x${string}`,
             recipient: config.mpp.recipient as `0x${string}`,
-            rpcUrl: config.mpp.rpcUrl ?? process.env.TEMPO_RPC_URL,
+            // tempo.charge() ignores rpcUrl — it hardcodes defaults.rpcUrl internally.
+            // Pass getClient to override the RPC endpoint for on-chain verification.
+            ...(rpcUrl
+              ? {
+                  getClient: async () => {
+                    const { createClient, http } = await import('viem');
+                    const { tempo: tempoChain } = await import('viem/chains');
+                    return createClient({ chain: tempoChain, transport: http(rpcUrl) });
+                  },
+                }
+              : {}),
           }),
         ],
         secretKey: config.mpp.secretKey,
