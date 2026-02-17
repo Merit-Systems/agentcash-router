@@ -1,5 +1,12 @@
 # @agentcash/router
 
+## 0.4.8
+
+### Patch Changes
+
+- 9f87e41: mppx version bump
+- 86f777a: tiered pricing
+
 ## 0.4.7
 
 ### Patch Changes
