@@ -35,6 +35,7 @@ vi.mock('../src/protocols/x402.js', () => ({
     return {
       encoded: Buffer.from(JSON.stringify(paymentRequired)).toString('base64'),
       requirements,
+      paymentRequired,
     };
   },
 
@@ -284,6 +285,16 @@ describe('probe request (no auth header)', () => {
     const res = await handler(makeProbeRequest());
     expect(res.status).toBe(402);
     expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
+  });
+
+  it('returns 402 with JSON body containing paymentOptions', async () => {
+    const entry = makeEntry();
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(makeProbeRequest());
+    expect(res.status).toBe(402);
+    const body = await res.json();
+    expect(body).toBeTruthy();
+    expect(body.requirements).toBeDefined();
   });
 
   it('does not run Zod validation on probe', async () => {

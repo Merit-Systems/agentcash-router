@@ -705,13 +705,6 @@ async function build402(
   pluginCtx: PluginContext,
   bodyData?: unknown,
 ): Promise<NextResponse> {
-  const response = new NextResponse(null, {
-    status: 402,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
-
   let challengePrice: string;
 
   // Dynamic/tiered pricing with body data (early parsing happened)
@@ -766,9 +759,13 @@ async function build402(
     // Bazaar extensions are optional enrichment for 402 challenges
   }
 
+  // Build protocol challenges — collect the x402 payload for the response body
+  let paymentRequiredBody: unknown;
+  let x402Encoded: string | undefined;
+
   if (routeEntry.protocols.includes('x402') && deps.x402Server) {
     try {
-      const { encoded } = await buildX402Challenge(
+      const { encoded, paymentRequired } = await buildX402Challenge(
         deps.x402Server,
         routeEntry,
         request,
@@ -777,7 +774,8 @@ async function build402(
         deps.network,
         extensions,
       );
-      response.headers.set('PAYMENT-REQUIRED', encoded);
+      paymentRequiredBody = paymentRequired;
+      x402Encoded = encoded;
     } catch (err) {
       // x402 challenge failure is critical: clients get a bare 402 with no
       // payment info and can't pay. Surface through plugin so operators see it.
@@ -787,6 +785,21 @@ async function build402(
         route: routeEntry.key,
       });
     }
+  }
+
+  // Create response with JSON body (not null)
+  const response = new NextResponse(
+    paymentRequiredBody != null ? JSON.stringify(paymentRequiredBody) : null,
+    {
+      status: 402,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    },
+  );
+
+  if (x402Encoded) {
+    response.headers.set('PAYMENT-REQUIRED', x402Encoded);
   }
 
   if (routeEntry.protocols.includes('mpp') && deps.mppx) {
