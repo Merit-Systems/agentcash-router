@@ -44,25 +44,33 @@ export function createRouter(config: RouterConfig): ServiceRouter {
       ? (process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000')
       : 'http://localhost:3000';
 
-  // Validate protocols configuration
-  if (config.protocols) {
-    if (config.protocols.length === 0) {
-      throw new Error(
-        "RouterConfig.protocols cannot be empty. Omit the field to use default ['x402'] or specify protocols explicitly.",
-      );
-    }
+  // Deferred config validation — runs once on first request so that
+  // `createRouter()` stays side-effect-free and doesn't throw during
+  // `next build` (static analysis) when env vars aren't available.
+  let configValidated = false;
+  function validateConfig(): void {
+    if (configValidated) return;
+    configValidated = true;
 
-    if (config.protocols.includes('mpp') && !config.mpp) {
-      throw new Error(
-        'RouterConfig.protocols includes "mpp" but RouterConfig.mpp is not configured. ' +
-          'Add mpp: { secretKey, currency, recipient } to your router config.',
-      );
-    }
+    if (config.protocols) {
+      if (config.protocols.length === 0) {
+        throw new Error(
+          "RouterConfig.protocols cannot be empty. Omit the field to use default ['x402'] or specify protocols explicitly.",
+        );
+      }
 
-    if (config.protocols.includes('x402') && !config.payeeAddress) {
-      throw new Error(
-        'RouterConfig.protocols includes "x402" but RouterConfig.payeeAddress is not configured.',
-      );
+      if (config.protocols.includes('mpp') && !config.mpp) {
+        throw new Error(
+          'RouterConfig.protocols includes "mpp" but RouterConfig.mpp is not configured. ' +
+            'Add mpp: { secretKey, currency, recipient } to your router config.',
+        );
+      }
+
+      if (config.protocols.includes('x402') && !config.payeeAddress) {
+        throw new Error(
+          'RouterConfig.protocols includes "x402" but RouterConfig.payeeAddress is not configured.',
+        );
+      }
     }
   }
 
@@ -86,6 +94,7 @@ export function createRouter(config: RouterConfig): ServiceRouter {
     nonceStore,
     payeeAddress: config.payeeAddress,
     network,
+    validateConfig,
     mppx: null,
   };
 

@@ -27,6 +27,8 @@ export interface OrchestrateDeps {
   nonceStore: NonceStore;
   payeeAddress: string;
   network: string;
+  /** Deferred config validation — throws on first call if config is invalid. */
+  validateConfig: () => void;
   mppx?: {
     charge: (options: {
       amount: string;
@@ -109,6 +111,7 @@ export function createRequestHandler(
   // -- Request handler --
 
   return async (request: NextRequest): Promise<NextResponse> => {
+    deps.validateConfig();
     await deps.initPromise;
 
     const meta = buildMeta(request, routeEntry);

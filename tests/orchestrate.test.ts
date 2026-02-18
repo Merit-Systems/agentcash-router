@@ -159,6 +159,7 @@ function makeDeps(overrides: Partial<OrchestrateDeps> = {}): OrchestrateDeps {
     nonceStore: new MemoryNonceStore(),
     payeeAddress: KNOWN_PAYEE,
     network: 'eip155:8453',
+    validateConfig: () => {},
     ...overrides,
   };
 }
@@ -238,6 +239,7 @@ function makeMPPDeps(overrides: Partial<OrchestrateDeps> = {}): OrchestrateDeps 
     nonceStore: new MemoryNonceStore(),
     payeeAddress: KNOWN_PAYEE,
     network: 'tempo:42431',
+    validateConfig: () => {},
     mppx: createFakeMppx(),
     ...overrides,
   };
