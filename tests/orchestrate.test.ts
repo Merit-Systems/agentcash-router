@@ -271,6 +271,33 @@ describe('probe request (no auth header)', () => {
     // The challenge should be built (no error from missing maxPrice)
     expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
   });
+
+  it('parses body early for tiered pricing so challenge uses tier price', async () => {
+    const tierSchema = z.object({ tier: z.string() });
+    const entry = makeEntry({
+      bodySchema: tierSchema,
+      pricing: {
+        field: 'tier',
+        tiers: {
+          '10mb': { price: '0.02', label: '10 MB' },
+          '1gb': { price: '2.00', label: '1 GB' },
+        },
+      },
+    });
+    const handler = createRequestHandler(entry, async () => ({ ok: true }), makeDeps());
+    // Probe with body specifying the cheap tier
+    const req = new NextRequest('http://localhost:3000/api/test', {
+      method: 'POST',
+      body: JSON.stringify({ tier: '10mb' }),
+    });
+    const res = await handler(req);
+    expect(res.status).toBe(402);
+    expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
+    // Decode the challenge to verify the price is the tier price, not maxPrice
+    const encoded = res.headers.get('PAYMENT-REQUIRED')!;
+    const challenge = JSON.parse(Buffer.from(encoded, 'base64').toString());
+    expect(challenge.requirements[0].maxAmountRequired).toBe('0.02');
+  });
 });
 
 describe('x402 paid route', () => {
