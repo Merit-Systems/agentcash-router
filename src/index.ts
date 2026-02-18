@@ -23,8 +23,12 @@ export interface MonitorEntry {
   critical?: number;
 }
 
-export interface ServiceRouter {
-  route(key: string): RouteBuilder;
+export interface ServiceRouter<TPriceKeys extends string = never> {
+  route<K extends string>(
+    key: K,
+  ): [K] extends [TPriceKeys]
+    ? RouteBuilder<undefined, undefined, true, false, false>
+    : RouteBuilder<undefined, undefined, false, false, false>;
   wellKnown(options?: WellKnownOptions): (request: NextRequest) => Promise<NextResponse>;
   openapi(options: OpenAPIOptions): (request: NextRequest) => Promise<NextResponse>;
   monitors(): MonitorEntry[];
@@ -35,7 +39,9 @@ export interface ServiceRouter {
 // createRouter
 // ---------------------------------------------------------------------------
 
-export function createRouter(config: RouterConfig): ServiceRouter {
+export function createRouter<const P extends Record<string, string> = Record<string, never>>(
+  config: RouterConfig & { prices?: P },
+): ServiceRouter<Extract<keyof P, string>> {
   const registry = new RouteRegistry();
   const nonceStore = config.siwx?.nonceStore ?? new MemoryNonceStore();
   const network = config.network ?? 'eip155:8453';
@@ -44,26 +50,43 @@ export function createRouter(config: RouterConfig): ServiceRouter {
       ? (process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000')
       : 'http://localhost:3000';
 
-  // Validate protocols configuration eagerly — misconfiguration should
-  // fail fast at startup, not on the first request.
-  if (config.protocols) {
-    if (config.protocols.length === 0) {
-      throw new Error(
-        "RouterConfig.protocols cannot be empty. Omit the field to use default ['x402'] or specify protocols explicitly.",
-      );
-    }
+  // Empty protocols is a programming error — always throw.
+  if (config.protocols && config.protocols.length === 0) {
+    throw new Error(
+      "RouterConfig.protocols cannot be empty. Omit the field to use default ['x402'] or specify protocols explicitly.",
+    );
+  }
 
-    if (config.protocols.includes('mpp') && !config.mpp) {
-      throw new Error(
-        'RouterConfig.protocols includes "mpp" but RouterConfig.mpp is not configured. ' +
-          'Add mpp: { secretKey, currency, recipient } to your router config.',
-      );
-    }
+  // Validate per-protocol config synchronously.
+  let x402ConfigError: string | undefined;
+  let mppConfigError: string | undefined;
 
-    if (config.protocols.includes('x402') && !config.payeeAddress) {
-      throw new Error(
-        'RouterConfig.protocols includes "x402" but RouterConfig.payeeAddress is not configured.',
-      );
+  if ((!config.protocols || config.protocols.includes('x402')) && !config.payeeAddress) {
+    x402ConfigError = 'x402 requires payeeAddress in router config.';
+  }
+
+  if (config.protocols?.includes('mpp')) {
+    if (!config.mpp) {
+      mppConfigError =
+        'protocols includes "mpp" but mpp config is missing. ' +
+        'Add mpp: { secretKey, currency, recipient } to your router config.';
+    } else if (!config.mpp.recipient && !config.payeeAddress) {
+      mppConfigError =
+        'MPP requires a recipient address. Set mpp.recipient or payeeAddress in your router config.';
+    } else if (!(config.mpp.rpcUrl ?? process.env.TEMPO_RPC_URL)) {
+      mppConfigError =
+        'MPP requires an authenticated Tempo RPC URL. ' +
+        'Set TEMPO_RPC_URL env var or pass rpcUrl in the mpp config object.';
+    }
+  }
+
+  const allConfigErrors = [x402ConfigError, mppConfigError].filter(Boolean);
+  if (allConfigErrors.length > 0) {
+    for (const err of allConfigErrors) console.error(`[router] ${err}`);
+    // Throw in production to fail `next build`. In development, errors are
+    // stored per-protocol and surfaced as clean JSON 500s at request time.
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(allConfigErrors.join('\n'));
     }
   }
 
@@ -90,40 +113,42 @@ export function createRouter(config: RouterConfig): ServiceRouter {
     mppx: null,
   };
 
-  // Async init — dynamic imports avoid require() which breaks Turbopack's
-  // __require polyfill. Every request handler awaits deps.initPromise.
+  // Async init — dynamic imports avoid require() which breaks Turbopack.
+  // Config errors (caught above) skip runtime init and just set the error field.
+  // Every request handler awaits deps.initPromise.
   deps.initPromise = (async () => {
-    try {
-      const { createX402Server } = await import('./server.js');
-      const result = await createX402Server(config);
-      deps.x402Server = result.server;
-      await result.initPromise;
-    } catch (err: unknown) {
-      deps.x402Server = null;
-      deps.x402InitError = err instanceof Error ? err.message : String(err);
+    // ---- x402 ----
+    if (x402ConfigError) {
+      deps.x402InitError = x402ConfigError;
+    } else {
+      try {
+        const { createX402Server } = await import('./server.js');
+        const result = await createX402Server(config);
+        deps.x402Server = result.server;
+        await result.initPromise;
+      } catch (err: unknown) {
+        deps.x402Server = null;
+        deps.x402InitError = err instanceof Error ? err.message : String(err);
+      }
     }
 
-    if (config.mpp) {
+    // ---- MPP ----
+    if (mppConfigError) {
+      deps.mppInitError = mppConfigError;
+    } else if (config.mpp) {
       try {
         const { Mppx, tempo } = await import('mppx/server');
-        const rpcUrl = config.mpp.rpcUrl ?? process.env.TEMPO_RPC_URL;
-
+        const rpcUrl = (config.mpp.rpcUrl ?? process.env.TEMPO_RPC_URL)!;
         deps.mppx = Mppx.create({
           methods: [
             tempo.charge({
               currency: config.mpp.currency as `0x${string}`,
-              recipient: config.mpp.recipient as `0x${string}`,
-              // tempo.charge() ignores rpcUrl — it hardcodes defaults.rpcUrl internally.
-              // Pass getClient to override the RPC endpoint for on-chain verification.
-              ...(rpcUrl
-                ? {
-                    getClient: async () => {
-                      const { createClient, http } = await import('viem');
-                      const { tempo: tempoChain } = await import('viem/chains');
-                      return createClient({ chain: tempoChain, transport: http(rpcUrl) });
-                    },
-                  }
-                : {}),
+              recipient: (config.mpp.recipient ?? config.payeeAddress) as `0x${string}`,
+              getClient: async () => {
+                const { createClient, http } = await import('viem');
+                const { tempo: tempoChain } = await import('viem/chains');
+                return createClient({ chain: tempoChain, transport: http(rpcUrl) });
+              },
             }),
           ],
           secretKey: config.mpp.secretKey,
@@ -139,16 +164,15 @@ export function createRouter(config: RouterConfig): ServiceRouter {
   const pricesKeys = config.prices ? Object.keys(config.prices) : undefined;
 
   return {
-    route(key: string): RouteBuilder {
+    route(key) {
       const builder = new RouteBuilder(key, registry, deps);
 
-      // Auto-apply pricing from prices map
       if (config.prices && key in config.prices) {
         const options = config.protocols ? { protocols: config.protocols } : undefined;
-        return builder.paid(config.prices[key], options) as unknown as RouteBuilder;
+        return builder.paid(config.prices[key], options) as never;
       }
 
-      return builder;
+      return builder as never;
     },
 
     wellKnown(options?: WellKnownOptions) {

@@ -340,6 +340,25 @@ export function createRequestHandler(
 
     // ---- No payment header → 402 challenge ----
     if (!protocol || protocol === 'siwx') {
+      // If any configured protocol failed to init, return 500 with the errors.
+      // A partial 402 (missing protocols) leads to confusing client errors.
+      if (routeEntry.pricing) {
+        const initErrors = routeEntry.protocols
+          .map((p) => {
+            if (p === 'x402' && deps.x402InitError) return `x402: ${deps.x402InitError}`;
+            if (p === 'mpp' && deps.mppInitError) return `mpp: ${deps.mppInitError}`;
+            return null;
+          })
+          .filter(Boolean);
+        if (initErrors.length > 0) {
+          return fail(
+            500,
+            `Payment protocol initialization failed. ${initErrors.join('; ')}`,
+            meta,
+            pluginCtx,
+          );
+        }
+      }
       return await build402(request, routeEntry, deps, meta, pluginCtx, earlyBodyData);
     }
 
