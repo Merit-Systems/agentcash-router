@@ -115,28 +115,23 @@ vi.mock('zod', async (importOriginal) => {
   };
 });
 
-// Mock MPP protocol to use simple fake credential verification
+// Mock MPP known payer
 const KNOWN_MPP_PAYER = '0xMPP_PAYER_1234567890';
 
-vi.mock('../src/protocols/mpp.js', () => ({
-  buildMPPChallenge: async () => 'MOCK_MPP_CHALLENGE',
-
-  verifyMPPCredential: async (request: Request) => {
-    const auth = request.headers.get('Authorization');
-    if (!auth?.startsWith('Payment ')) return null;
-
-    try {
-      const payload = JSON.parse(Buffer.from(auth.slice(8), 'base64').toString());
-      if (payload.payer === KNOWN_MPP_PAYER) {
-        return { valid: true, payer: payload.payer, txHash: '0xMOCK_TX' };
+// Mock Credential.fromRequest to return source as the payer DID
+vi.mock('mppx', () => ({
+  Credential: {
+    fromRequest: (request: Request) => {
+      const auth = request.headers.get('Authorization');
+      if (!auth?.startsWith('Payment ')) return null;
+      try {
+        const payload = JSON.parse(Buffer.from(auth.slice(8), 'base64').toString());
+        return { source: payload.payer, challenge: {}, payload: {} };
+      } catch {
+        return null;
       }
-      return { valid: false, payer: null };
-    } catch {
-      return null;
-    }
+    },
   },
-
-  buildMPPReceipt: () => 'MOCK_MPP_RECEIPT',
 }));
 
 // ---------------------------------------------------------------------------
@@ -188,6 +183,53 @@ function makeSIWXRequest(
   });
 }
 
+// Fake mppx instance for tests
+function createFakeMppx() {
+  return {
+    charge: (options: { amount: string }) => async (input: Request) => {
+      const auth = input.headers.get('Authorization');
+      if (!auth?.startsWith('Payment ')) {
+        // No credential — return 402 challenge
+        return {
+          status: 402 as const,
+          challenge: new Response(null, {
+            status: 402,
+            headers: { 'WWW-Authenticate': 'MOCK_MPP_CHALLENGE' },
+          }),
+        };
+      }
+
+      try {
+        const payload = JSON.parse(Buffer.from(auth.slice(8), 'base64').toString());
+        if (payload.payer === KNOWN_MPP_PAYER) {
+          return {
+            status: 200 as const,
+            withReceipt: (response: Response) => {
+              const newResponse = new Response(response.body, {
+                status: response.status,
+                headers: response.headers,
+              });
+              newResponse.headers.set('Payment-Receipt', 'MOCK_MPP_RECEIPT');
+              return newResponse;
+            },
+          };
+        }
+      } catch {
+        // Invalid credential
+      }
+
+      // Bad credential — return 402
+      return {
+        status: 402 as const,
+        challenge: new Response(null, {
+          status: 402,
+          headers: { 'WWW-Authenticate': 'MOCK_MPP_CHALLENGE' },
+        }),
+      };
+    },
+  };
+}
+
 // MPP-specific helpers
 function makeMPPDeps(overrides: Partial<OrchestrateDeps> = {}): OrchestrateDeps {
   return {
@@ -196,11 +238,7 @@ function makeMPPDeps(overrides: Partial<OrchestrateDeps> = {}): OrchestrateDeps 
     nonceStore: new MemoryNonceStore(),
     payeeAddress: KNOWN_PAYEE,
     network: 'tempo:42431',
-    mppConfig: {
-      secretKey: 'test-secret',
-      currency: '0xUSDC',
-      recipient: '0xRECIPIENT',
-    },
+    mppx: createFakeMppx(),
     ...overrides,
   };
 }

@@ -1,22 +1,20 @@
 {
-  "name": "agentcash-router-fortune-example",
+  "name": "mpp-native-example",
   "version": "0.0.1",
   "private": true,
-  "description": "Minimal example app for testing @agentcash/router with MPP and x402",
+  "description": "Minimal example using mppx/nextjs middleware directly (no @agentcash/router)",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3003",
     "build": "next build",
     "start": "next start"
   },
   "dependencies": {
-    "@agentcash/router": "link:../..",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "mppx": "^0.2.4",
     "next": "^15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "viem": "^2.46.0",
-    "zod": "^4.3.6"
+    "viem": "^2.46.2"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

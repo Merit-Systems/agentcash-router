@@ -10,7 +10,7 @@ Protocol-agnostic route framework for Next.js App Router APIs with x402 payment,
 4. **Observability is pluggable via RouterPlugin.** Zero boilerplate.
 5. **The package owns the x402 server lifecycle.** Init, verify, settle.
 6. **Convention over configuration.** Sane defaults for Base, USDC, exact scheme.
-7. **Compose, don't reimplement.** Zero payment/auth protocol logic — delegates to `@x402/*` and `@coinbase/x402`.
+7. **Compose, don't reimplement.** Zero payment/auth protocol logic — delegates to `@x402/*`, `@coinbase/x402`, and `mppx`.
 
 ## Architecture
 
@@ -25,7 +25,7 @@ Protocol-agnostic route framework for Next.js App Router APIs with x402 payment,
 - `src/plugin.ts` — Plugin hook system
 - `src/server.ts` — x402 server initialization
 - `src/auth/` — Auth modules (siwx.ts, api-key.ts, nonce.ts)
-- `src/protocols/` — Protocol handlers (x402.ts, mpp.ts, detect.ts)
+- `src/protocols/` — Protocol handlers (x402.ts, detect.ts). MPP is handled via `mppx` high-level API (`Mppx.create` in index.ts)
 - `src/discovery/` — Auto-generated endpoints (well-known.ts, openapi.ts)
 
 ## Auth Modes
@@ -186,43 +186,6 @@ pnpm test       # vitest
 pnpm typecheck  # tsc --noEmit
 pnpm check      # format + lint + typecheck + build + test
 ```
-
-## Releasing
-
-**Release flow:** PR with version bump → merge → create GitHub Release → auto-publish to npm
-
-### When doing work that should be released:
-
-1. **Update `CHANGELOG.md`** — Add entry under new version heading with changes
-2. **Bump version in `package.json`** — Match the changelog version
-3. **Commit both** — e.g., `chore: bump to v0.6.0`
-4. **Merge PR to main**
-
-### To publish (human step):
-
-1. Go to [GitHub Releases](https://github.com/Merit-Systems/agentcash-router/releases)
-2. Click **Draft a new release**
-3. Create tag: `v0.6.0` (must match package.json version)
-4. Title: `v0.6.0`
-5. Description: Copy from CHANGELOG.md or click "Generate release notes"
-6. Click **Publish release**
-
-The `publish.yml` workflow will:
-- Run full test suite (`pnpm check`)
-- Verify package.json version matches tag
-- Publish to npm with `--access public`
-
-### Version format
-
-- **Patch** (`0.5.1`): Bug fixes, docs, internal changes
-- **Minor** (`0.6.0`): New features, non-breaking additions
-- **Major** (`1.0.0`): Breaking changes (holding until API stabilizes)
-
-### Troubleshooting
-
-- **Version mismatch error**: package.json version must exactly match the release tag (without `v` prefix)
-- **Publish fails**: Check `NPM_TOKEN` secret is set and has write access to `@agentcash` scope
-- **Tests fail**: Fix in a new PR, then re-create the release
 
 ## Development Record
 
