@@ -23,12 +23,12 @@ This example exists to compare how `mppx` handles error cases (missing TEMPO_RPC
    ```
 
 4. **Test the endpoint**
-   ```bash
-   # Get challenge (402)
-   curl -i -X POST http://localhost:3003/api/fortune
+Set your env var:
 
-   # With presto (MPP CLI)
-   npx presto http://localhost:3003/api/fortune --method POST
+   `export RPC_URL = xxx`
+
+   ```bash
+   npx mppx http://localhost:3003/api/fortune --method POST
    ```
 
 ## Error Scenarios to Test
