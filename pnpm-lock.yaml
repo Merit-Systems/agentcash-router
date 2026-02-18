@@ -33,8 +33,8 @@ importers:
         specifier: ^10.0.0
         version: 10.0.0
       mppx:
-        specifier: ^0.2.3
-        version: 0.2.3(typescript@5.9.3)(viem@2.45.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
+        specifier: ^0.2.5
+        version: 0.2.5(typescript@5.9.3)(viem@2.45.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
       next:
         specifier: ^15.0.0
         version: 15.5.12(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -1961,15 +1961,15 @@ packages:
   mlly@1.8.0:
     resolution: {integrity: sha512-l8D9ODSRWLe2KHJSifWGwBqpTZXIXTeo8mlKjY+E2HAakaTeNpqAyBZ8GSqLzHgw4XmHmC8whvpjJNMbFZN7/g==}
 
-  mppx@0.2.3:
-    resolution: {integrity: sha512-32Upg9Jmvj0pU86icE3GQ2Xsqop5KoaAUavglw4AoT7cs6zN1AIWCOIYe8rOrPIHlKnAT2zj0XGcxah4GONhpw==}
+  mppx@0.2.5:
+    resolution: {integrity: sha512-fh2Pt5jhf/01ueTVneSv/kI7gi2tVMsmw66QL8eiO/RRP94natrc+fBjjZKlNR5F3mZ3AZifdQ1gu3eDs2MSrQ==}
     hasBin: true
     peerDependencies:
       '@modelcontextprotocol/sdk': '>=1.25.0'
       elysia: '>=1'
       express: '>=5'
       hono: '>=4'
-      viem: '>=2.44.4'
+      viem: '>=2.46.2'
     peerDependenciesMeta:
       '@modelcontextprotocol/sdk':
         optional: true
@@ -4594,7 +4594,7 @@ snapshots:
       pkg-types: 1.3.1
       ufo: 1.6.3
 
-  mppx@0.2.3(typescript@5.9.3)(viem@2.45.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)):
+  mppx@0.2.5(typescript@5.9.3)(viem@2.45.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)):
     dependencies:
       '@remix-run/fetch-proxy': 0.7.1
       '@remix-run/node-fetch-server': 0.13.0
