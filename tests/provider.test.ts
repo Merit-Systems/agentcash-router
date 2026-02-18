@@ -317,7 +317,7 @@ describe('.provider() builder method', () => {
       nonceStore: new MemoryNonceStore(),
       payeeAddress: '0x1234',
       network: 'eip155:8453',
-      };
+    };
   }
 
   it('stores provider config in registry entry', () => {

@@ -379,7 +379,9 @@ export function createRequestHandler(
     // which would cause an infinite retry loop.
     if (!routeEntry.protocols.includes(protocol)) {
       const accepted = routeEntry.protocols.join(', ') || 'none';
-      console.warn(`[router] ${routeEntry.key}: received ${protocol} payment but route accepts [${accepted}]`);
+      console.warn(
+        `[router] ${routeEntry.key}: received ${protocol} payment but route accepts [${accepted}]`,
+      );
       return fail(
         400,
         `This route does not accept ${protocol} payments. Accepted protocols: ${accepted}`,
@@ -512,10 +514,13 @@ export function createRequestHandler(
         // 2. Server-side config issue (missing TEMPO_RPC_URL) → should be 500
         // We can't distinguish these from the return value alone, so log a warning
         // to help operators diagnose. If this shows up repeatedly, it's likely (2).
-        console.warn(`[router] ${routeEntry.key}: MPP credential present but charge() returned 402 — credential may be invalid, or check TEMPO_RPC_URL configuration`);
+        console.warn(
+          `[router] ${routeEntry.key}: MPP credential present but charge() returned 402 — credential may be invalid, or check TEMPO_RPC_URL configuration`,
+        );
         firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
           level: 'warn' as const,
-          message: 'MPP payment rejected despite credential present — possible config issue (TEMPO_RPC_URL)',
+          message:
+            'MPP payment rejected despite credential present — possible config issue (TEMPO_RPC_URL)',
           route: routeEntry.key,
         });
         return await build402(request, routeEntry, deps, meta, pluginCtx);
