@@ -23,12 +23,11 @@ export interface OrchestrateDeps {
   x402Server: X402Server | null;
   initPromise: Promise<void>;
   x402InitError?: string;
+  mppInitError?: string;
   plugin?: RouterPlugin;
   nonceStore: NonceStore;
   payeeAddress: string;
   network: string;
-  /** Deferred config validation — throws on first call if config is invalid. */
-  validateConfig: () => void;
   mppx?: {
     charge: (options: {
       amount: string;
@@ -111,7 +110,6 @@ export function createRequestHandler(
   // -- Request handler --
 
   return async (request: NextRequest): Promise<NextResponse> => {
-    deps.validateConfig();
     await deps.initPromise;
 
     const meta = buildMeta(request, routeEntry);
@@ -375,12 +373,28 @@ export function createRequestHandler(
       );
     }
 
+    // ---- Protocol mismatch check ----
+    // Client sent payment via a protocol this route doesn't accept.
+    // Return 400 so the client knows to use a different protocol, not 402
+    // which would cause an infinite retry loop.
+    if (!routeEntry.protocols.includes(protocol)) {
+      const accepted = routeEntry.protocols.join(', ') || 'none';
+      console.warn(`[router] ${routeEntry.key}: received ${protocol} payment but route accepts [${accepted}]`);
+      return fail(
+        400,
+        `This route does not accept ${protocol} payments. Accepted protocols: ${accepted}`,
+        meta,
+        pluginCtx,
+      );
+    }
+
     // ---- x402 ----
     if (protocol === 'x402') {
       if (!deps.x402Server) {
         const reason = deps.x402InitError
           ? `x402 facilitator initialization failed: ${deps.x402InitError}`
           : 'x402 server not initialized — ensure @x402/core, @x402/evm, and @coinbase/x402 are installed';
+        console.error(`[router] ${routeEntry.key}: ${reason}`);
         return fail(500, reason, meta, pluginCtx);
       }
 
@@ -470,11 +484,40 @@ export function createRequestHandler(
 
     // ---- MPP ----
     if (protocol === 'mpp') {
-      if (!deps.mppx) return await build402(request, routeEntry, deps, meta, pluginCtx);
+      if (!deps.mppx) {
+        const reason = deps.mppInitError
+          ? `MPP initialization failed: ${deps.mppInitError}`
+          : 'MPP not initialized — ensure mppx is installed and mpp config (secretKey, currency, recipient) is correct';
+        console.error(`[router] ${routeEntry.key}: ${reason}`);
+        return fail(500, reason, meta, pluginCtx);
+      }
 
-      const mppResult = await deps.mppx.charge({ amount: price })(request);
+      let mppResult: Awaited<ReturnType<ReturnType<typeof deps.mppx.charge>>>;
+      try {
+        mppResult = await deps.mppx.charge({ amount: price })(request);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[router] ${routeEntry.key}: MPP charge failed: ${message}`);
+        firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+          level: 'critical' as const,
+          message: `MPP charge failed: ${message}`,
+          route: routeEntry.key,
+        });
+        return fail(500, `MPP payment processing failed: ${message}`, meta, pluginCtx);
+      }
 
       if (mppResult.status === 402) {
+        // Client sent a credential but charge() rejected it. This could be:
+        // 1. Legitimate rejection (expired, tampered, wrong amount) → 402 is correct
+        // 2. Server-side config issue (missing TEMPO_RPC_URL) → should be 500
+        // We can't distinguish these from the return value alone, so log a warning
+        // to help operators diagnose. If this shows up repeatedly, it's likely (2).
+        console.warn(`[router] ${routeEntry.key}: MPP credential present but charge() returned 402 — credential may be invalid, or check TEMPO_RPC_URL configuration`);
+        firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+          level: 'warn' as const,
+          message: 'MPP payment rejected despite credential present — possible config issue (TEMPO_RPC_URL)',
+          route: routeEntry.key,
+        });
         return await build402(request, routeEntry, deps, meta, pluginCtx);
       }
 

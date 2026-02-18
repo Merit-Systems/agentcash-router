@@ -44,7 +44,6 @@ function makeDeps(plugin?: RouterPlugin): OrchestrateDeps {
     nonceStore: new MemoryNonceStore(),
     payeeAddress: KNOWN_PAYEE,
     network: 'eip155:8453',
-    validateConfig: () => {},
     plugin,
   };
 }

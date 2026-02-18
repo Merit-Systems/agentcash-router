@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { NextRequest } from 'next/server';
 import { createRouter } from '../src/index.js';
 import type { RouterConfig } from '../src/types.js';
 
@@ -56,56 +55,42 @@ describe('RouterConfig.protocols', () => {
   });
 
   describe('validation', () => {
-    // Config validation is deferred to first request so that createRouter()
-    // stays side-effect-free and doesn't throw during `next build`.
-
-    it('throws on first request when protocols is empty array', async () => {
-      const router = createRouter({ ...baseConfig, protocols: [] });
-      const handler = router
-        .route('test/route')
-        .unprotected()
-        .handler(async () => ({}));
-      await expect(handler(new NextRequest('http://localhost/api/test'))).rejects.toThrow(
-        /cannot be empty/,
-      );
+    it('throws when protocols is empty array', () => {
+      expect(() => {
+        createRouter({
+          ...baseConfig,
+          protocols: [],
+        });
+      }).toThrow(/cannot be empty/);
     });
 
-    it('throws on first request when protocols includes mpp without mpp config', async () => {
-      const router = createRouter({ ...baseConfig, protocols: ['mpp'] });
-      const handler = router
-        .route('test/route')
-        .unprotected()
-        .handler(async () => ({}));
-      await expect(handler(new NextRequest('http://localhost/api/test'))).rejects.toThrow(
-        /mpp is not configured/,
-      );
+    it('throws when protocols includes mpp without mpp config', () => {
+      expect(() => {
+        createRouter({
+          ...baseConfig,
+          protocols: ['mpp'],
+        });
+      }).toThrow(/mpp is not configured/);
     });
 
-    it('throws on first request when protocols includes both but mpp config missing', async () => {
-      const router = createRouter({ ...baseConfig, protocols: ['x402', 'mpp'] });
-      const handler = router
-        .route('test/route')
-        .unprotected()
-        .handler(async () => ({}));
-      await expect(handler(new NextRequest('http://localhost/api/test'))).rejects.toThrow(
-        /mpp is not configured/,
-      );
+    it('throws when protocols includes both but mpp config missing', () => {
+      expect(() => {
+        createRouter({
+          ...baseConfig,
+          protocols: ['x402', 'mpp'],
+        });
+      }).toThrow(/mpp is not configured/);
     });
 
-    it('throws on first request when protocols includes x402 without payeeAddress', async () => {
+    it('throws when protocols includes x402 without payeeAddress', () => {
       const configWithoutPayee = {
         network: 'eip155:8453',
         prices: { 'test/route': '0.01' },
         protocols: ['x402'] as const,
       };
-      const router = createRouter(configWithoutPayee as RouterConfig);
-      const handler = router
-        .route('test/route')
-        .unprotected()
-        .handler(async () => ({}));
-      await expect(handler(new NextRequest('http://localhost/api/test'))).rejects.toThrow(
-        /payeeAddress is not configured/,
-      );
+      expect(() => {
+        createRouter(configWithoutPayee as RouterConfig);
+      }).toThrow(/payeeAddress is not configured/);
     });
   });
 

@@ -44,33 +44,26 @@ export function createRouter(config: RouterConfig): ServiceRouter {
       ? (process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000')
       : 'http://localhost:3000';
 
-  // Deferred config validation — runs once on first request so that
-  // `createRouter()` stays side-effect-free and doesn't throw during
-  // `next build` (static analysis) when env vars aren't available.
-  let configValidated = false;
-  function validateConfig(): void {
-    if (configValidated) return;
-    configValidated = true;
+  // Validate protocols configuration eagerly — misconfiguration should
+  // fail fast at startup, not on the first request.
+  if (config.protocols) {
+    if (config.protocols.length === 0) {
+      throw new Error(
+        "RouterConfig.protocols cannot be empty. Omit the field to use default ['x402'] or specify protocols explicitly.",
+      );
+    }
 
-    if (config.protocols) {
-      if (config.protocols.length === 0) {
-        throw new Error(
-          "RouterConfig.protocols cannot be empty. Omit the field to use default ['x402'] or specify protocols explicitly.",
-        );
-      }
+    if (config.protocols.includes('mpp') && !config.mpp) {
+      throw new Error(
+        'RouterConfig.protocols includes "mpp" but RouterConfig.mpp is not configured. ' +
+          'Add mpp: { secretKey, currency, recipient } to your router config.',
+      );
+    }
 
-      if (config.protocols.includes('mpp') && !config.mpp) {
-        throw new Error(
-          'RouterConfig.protocols includes "mpp" but RouterConfig.mpp is not configured. ' +
-            'Add mpp: { secretKey, currency, recipient } to your router config.',
-        );
-      }
-
-      if (config.protocols.includes('x402') && !config.payeeAddress) {
-        throw new Error(
-          'RouterConfig.protocols includes "x402" but RouterConfig.payeeAddress is not configured.',
-        );
-      }
+    if (config.protocols.includes('x402') && !config.payeeAddress) {
+      throw new Error(
+        'RouterConfig.protocols includes "x402" but RouterConfig.payeeAddress is not configured.',
+      );
     }
   }
 
@@ -94,7 +87,6 @@ export function createRouter(config: RouterConfig): ServiceRouter {
     nonceStore,
     payeeAddress: config.payeeAddress,
     network,
-    validateConfig,
     mppx: null,
   };
 
@@ -112,29 +104,35 @@ export function createRouter(config: RouterConfig): ServiceRouter {
     }
 
     if (config.mpp) {
-      const { Mppx, tempo } = await import('mppx/server');
-      const rpcUrl = config.mpp.rpcUrl ?? process.env.TEMPO_RPC_URL;
+      try {
+        const { Mppx, tempo } = await import('mppx/server');
+        const rpcUrl = config.mpp.rpcUrl ?? process.env.TEMPO_RPC_URL;
 
-      deps.mppx = Mppx.create({
-        methods: [
-          tempo.charge({
-            currency: config.mpp.currency as `0x${string}`,
-            recipient: config.mpp.recipient as `0x${string}`,
-            // tempo.charge() ignores rpcUrl — it hardcodes defaults.rpcUrl internally.
-            // Pass getClient to override the RPC endpoint for on-chain verification.
-            ...(rpcUrl
-              ? {
-                  getClient: async () => {
-                    const { createClient, http } = await import('viem');
-                    const { tempo: tempoChain } = await import('viem/chains');
-                    return createClient({ chain: tempoChain, transport: http(rpcUrl) });
-                  },
-                }
-              : {}),
-          }),
-        ],
-        secretKey: config.mpp.secretKey,
-      });
+        deps.mppx = Mppx.create({
+          methods: [
+            tempo.charge({
+              currency: config.mpp.currency as `0x${string}`,
+              recipient: config.mpp.recipient as `0x${string}`,
+              // tempo.charge() ignores rpcUrl — it hardcodes defaults.rpcUrl internally.
+              // Pass getClient to override the RPC endpoint for on-chain verification.
+              ...(rpcUrl
+                ? {
+                    getClient: async () => {
+                      const { createClient, http } = await import('viem');
+                      const { tempo: tempoChain } = await import('viem/chains');
+                      return createClient({ chain: tempoChain, transport: http(rpcUrl) });
+                    },
+                  }
+                : {}),
+            }),
+          ],
+          secretKey: config.mpp.secretKey,
+        });
+      } catch (err: unknown) {
+        deps.mppx = null;
+        deps.mppInitError = err instanceof Error ? err.message : String(err);
+        console.error(`[router] MPP initialization failed: ${deps.mppInitError}`);
+      }
     }
   })();
 

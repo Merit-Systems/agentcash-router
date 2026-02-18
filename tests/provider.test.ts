@@ -37,7 +37,6 @@ function makeDeps(plugin?: RouterPlugin): OrchestrateDeps {
     nonceStore: new MemoryNonceStore(),
     payeeAddress: KNOWN_PAYEE,
     network: 'eip155:8453',
-    validateConfig: () => {},
     plugin,
   };
 }
@@ -318,8 +317,7 @@ describe('.provider() builder method', () => {
       nonceStore: new MemoryNonceStore(),
       payeeAddress: '0x1234',
       network: 'eip155:8453',
-      validateConfig: () => {},
-    };
+      };
   }
 
   it('stores provider config in registry entry', () => {

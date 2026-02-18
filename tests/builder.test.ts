@@ -12,7 +12,6 @@ function makeDeps(): OrchestrateDeps {
     nonceStore: new MemoryNonceStore(),
     payeeAddress: '0x1234',
     network: 'eip155:8453',
-    validateConfig: () => {},
   };
 }
 
