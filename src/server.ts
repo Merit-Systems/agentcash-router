@@ -41,7 +41,9 @@ async function retryInit(
     } catch (err: unknown) {
       if (attempt === maxAttempts - 1) throw err;
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[router] x402 init attempt ${attempt + 1}/${maxAttempts} failed: ${msg}, retrying...`);
+      console.warn(
+        `[router] x402 init attempt ${attempt + 1}/${maxAttempts} failed: ${msg}, retrying...`,
+      );
       await new Promise((r) => setTimeout(r, backoff[attempt] ?? 4000));
     }
   }
