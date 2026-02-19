@@ -14,6 +14,7 @@ export function createWellKnownHandler(
   pricesKeys: string[] | undefined,
   options: WellKnownOptions = {},
 ) {
+  const normalizedBase = baseUrl.replace(/\/+$/, '');
   let validated = false;
 
   return async (_request: NextRequest): Promise<NextResponse> => {
@@ -31,7 +32,7 @@ export function createWellKnownHandler(
     const mppSet = new Set<string>();
 
     for (const [key, entry] of registry.entries()) {
-      const url = `${baseUrl}/api/${entry.path ?? key}`;
+      const url = `${normalizedBase}/api/${entry.path ?? key}`;
       if (entry.authMode !== 'unprotected') x402Set.add(url);
       if (entry.protocols.includes('mpp')) mppSet.add(url);
     }

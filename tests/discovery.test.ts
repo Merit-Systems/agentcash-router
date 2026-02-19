@@ -88,6 +88,18 @@ describe('.well-known/x402', () => {
     expect(body.mppResources[0]).toContain('dual');
   });
 
+  it('strips trailing slash from baseUrl to avoid double-slash URLs', async () => {
+    const reg = new RouteRegistry();
+    reg.register(makeEntry({ key: 'upload', protocols: ['x402', 'mpp'] }));
+
+    const handler = createWellKnownHandler(reg, 'https://stableupload.dev/', undefined);
+    const res = await handler(dummyRequest);
+    const body = await res.json();
+
+    expect(body.resources[0]).toBe('https://stableupload.dev/api/upload');
+    expect(body.mppResources[0]).toBe('https://stableupload.dev/api/upload');
+  });
+
   it('deduplicates URLs from routes sharing the same path', async () => {
     const reg = new RouteRegistry();
     reg.register(
