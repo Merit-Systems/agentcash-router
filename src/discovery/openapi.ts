@@ -17,6 +17,7 @@ export function createOpenAPIHandler(
   pricesKeys: string[] | undefined,
   options: OpenAPIOptions,
 ) {
+  const normalizedBase = baseUrl.replace(/\/+$/, '');
   let cached: unknown = null;
   let validated = false;
 
@@ -54,7 +55,7 @@ export function createOpenAPIHandler(
         version: options.version,
         ...(options.contact && { contact: options.contact }),
       },
-      servers: [{ url: options.baseUrl ?? baseUrl }],
+      servers: [{ url: (options.baseUrl ?? normalizedBase).replace(/\/+$/, '') }],
       tags: Array.from(tagSet)
         .sort()
         .map((name) => ({ name })),

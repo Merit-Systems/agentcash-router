@@ -67,7 +67,7 @@ export function createRouter<const P extends Record<string, string> = Record<str
     console.warn(`[router] ${msg}`);
   }
 
-  const resolvedBaseUrl = baseUrl ?? 'http://localhost:3000';
+  const resolvedBaseUrl = (baseUrl ?? 'http://localhost:3000').replace(/\/+$/, '');
 
   // Validate per-protocol config synchronously.
   let x402ConfigError: string | undefined;
