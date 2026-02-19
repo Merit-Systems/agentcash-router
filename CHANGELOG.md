@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 0.5.1
+
+### Patch Changes
+
+- 89b9bc0: remove trailing slash, bump
+
 ## 0.5.0
 
 ### Minor Changes
