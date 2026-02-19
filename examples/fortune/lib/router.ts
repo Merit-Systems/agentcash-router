@@ -25,5 +25,6 @@ export const router = createRouter({
   ...(mppConfig ? { mpp: mppConfig } : {}),
   prices: {
     fortune: '0.001', // $0.001 per fortune
+    'fortune/premium': '0.005', // $0.005 per premium fortune
   },
 });

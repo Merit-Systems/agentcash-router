@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { NextRequest } from 'next/server';
 import { createRouter } from '../src/index.js';
 import type { RouterConfig } from '../src/types.js';
 
@@ -7,6 +8,12 @@ describe('RouterConfig.protocols', () => {
     payeeAddress: '0x1234567890123456789012345678901234567890',
     network: 'eip155:8453',
     prices: { 'test/route': '0.01' },
+  };
+
+  const validMppConfig = {
+    secretKey: 'test-secret-key',
+    currency: 'USDC',
+    rpcUrl: 'https://rpc.example.com',
   };
 
   describe('defaults and basic behavior', () => {
@@ -22,7 +29,7 @@ describe('RouterConfig.protocols', () => {
       const router = createRouter({
         ...baseConfig,
         protocols: ['x402', 'mpp'],
-        mpp: { secretKey: 'test-secret-key', currency: 'USDC' },
+        mpp: validMppConfig,
       });
       router.route('test/route').handler(async () => ({}));
       const entry = router.registry.get('test/route');
@@ -34,7 +41,7 @@ describe('RouterConfig.protocols', () => {
       const router = createRouter({
         ...baseConfig,
         protocols: ['mpp'],
-        mpp: { secretKey: 'test-secret-key', currency: 'USDC' },
+        mpp: validMppConfig,
       });
       router.route('test/route').handler(async () => ({}));
       const entry = router.registry.get('test/route');
@@ -55,42 +62,135 @@ describe('RouterConfig.protocols', () => {
   });
 
   describe('validation', () => {
+    // protocols: [] always throws (programming error).
+    // Other config errors: throw in production (fails next build),
+    // log + return JSON 500 in development.
+
     it('throws when protocols is empty array', () => {
       expect(() => {
-        createRouter({
-          ...baseConfig,
-          protocols: [],
-        });
+        createRouter({ ...baseConfig, protocols: [] });
       }).toThrow(/cannot be empty/);
     });
 
-    it('throws when protocols includes mpp without mpp config', () => {
-      expect(() => {
-        createRouter({
+    it('throws in production when mpp config is missing', () => {
+      const origEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        expect(() => {
+          createRouter({ ...baseConfig, protocols: ['mpp'] });
+        }).toThrow(/mpp config is missing/);
+      } finally {
+        process.env.NODE_ENV = origEnv;
+        spy.mockRestore();
+      }
+    });
+
+    it('throws in production when TEMPO_RPC_URL is missing', () => {
+      const origEnv = process.env.NODE_ENV;
+      const origRpc = process.env.TEMPO_RPC_URL;
+      process.env.NODE_ENV = 'production';
+      delete process.env.TEMPO_RPC_URL;
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        expect(() => {
+          createRouter({
+            ...baseConfig,
+            protocols: ['mpp'],
+            mpp: { secretKey: 'test', currency: 'USDC' },
+          });
+        }).toThrow(/Tempo RPC URL/);
+      } finally {
+        process.env.NODE_ENV = origEnv;
+        spy.mockRestore();
+        if (origRpc !== undefined) process.env.TEMPO_RPC_URL = origRpc;
+      }
+    });
+
+    it('throws in production when x402 payeeAddress is missing', () => {
+      const origEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        expect(() => {
+          createRouter({ protocols: ['x402'] } as RouterConfig);
+        }).toThrow(/payeeAddress/);
+      } finally {
+        process.env.NODE_ENV = origEnv;
+        spy.mockRestore();
+      }
+    });
+
+    it('logs error in development when mpp config is missing', async () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const router = createRouter({ ...baseConfig, protocols: ['mpp'] });
+      const handler = router
+        .route('test/route')
+        .unprotected()
+        .handler(async () => ({ ok: true }));
+      // Await init to ensure console.error has fired
+      await handler(new NextRequest('http://localhost/api/test'));
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('mpp config is missing'));
+      spy.mockRestore();
+    });
+
+    it('logs error in development when rpcUrl is missing', async () => {
+      const origRpc = process.env.TEMPO_RPC_URL;
+      delete process.env.TEMPO_RPC_URL;
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const router = createRouter({
           ...baseConfig,
           protocols: ['mpp'],
+          mpp: { secretKey: 'test', currency: 'USDC' },
         });
-      }).toThrow(/mpp is not configured/);
+        const handler = router
+          .route('test/route')
+          .unprotected()
+          .handler(async () => ({ ok: true }));
+        await handler(new NextRequest('http://localhost/api/test'));
+        expect(spy).toHaveBeenCalledWith(expect.stringContaining('Tempo RPC URL'));
+      } finally {
+        spy.mockRestore();
+        if (origRpc !== undefined) process.env.TEMPO_RPC_URL = origRpc;
+      }
     });
 
-    it('throws when protocols includes both but mpp config missing', () => {
-      expect(() => {
-        createRouter({
-          ...baseConfig,
-          protocols: ['x402', 'mpp'],
-        });
-      }).toThrow(/mpp is not configured/);
-    });
-
-    it('throws when protocols includes x402 without payeeAddress', () => {
-      const configWithoutPayee = {
+    it('logs error in development when mpp has no recipient and no payeeAddress', async () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const router = createRouter({
         network: 'eip155:8453',
-        prices: { 'test/route': '0.01' },
-        protocols: ['x402'] as const,
-      };
-      expect(() => {
-        createRouter(configWithoutPayee as RouterConfig);
-      }).toThrow(/payeeAddress is not configured/);
+        protocols: ['mpp'],
+        mpp: { secretKey: 'test', currency: 'USDC', rpcUrl: 'https://rpc.example.com' },
+      } as RouterConfig);
+      const handler = router
+        .route('test/route')
+        .unprotected()
+        .handler(async () => ({ ok: true }));
+      await handler(new NextRequest('http://localhost/api/test'));
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('recipient address'));
+      spy.mockRestore();
+    });
+
+    it('accepts mpp config with rpcUrl from env var', () => {
+      const original = process.env.TEMPO_RPC_URL;
+      process.env.TEMPO_RPC_URL = 'https://rpc.example.com';
+      try {
+        const router = createRouter({
+          ...baseConfig,
+          protocols: ['mpp'],
+          mpp: { secretKey: 'test', currency: 'USDC' },
+        });
+        router.route('test/route').handler(async () => ({}));
+        const entry = router.registry.get('test/route');
+        expect(entry!.protocols).toEqual(['mpp']);
+      } finally {
+        if (original !== undefined) {
+          process.env.TEMPO_RPC_URL = original;
+        } else {
+          delete process.env.TEMPO_RPC_URL;
+        }
+      }
     });
   });
 
@@ -115,7 +215,7 @@ describe('RouterConfig.protocols', () => {
       const router = createRouter({
         payeeAddress: '0x1234567890123456789012345678901234567890',
         protocols: ['x402', 'mpp'],
-        mpp: { secretKey: 'test', currency: 'USDC' },
+        mpp: validMppConfig,
         prices: { 'auto/route': '0.01' },
       });
 
@@ -138,7 +238,7 @@ describe('RouterConfig.protocols', () => {
       const router = createRouter({
         payeeAddress: '0x1234567890123456789012345678901234567890',
         protocols: ['x402', 'mpp'],
-        mpp: { secretKey: 'test', currency: 'USDC' },
+        mpp: validMppConfig,
         prices: {
           'route/one': '0.01',
           'route/two': '0.02',
@@ -169,6 +269,7 @@ describe('RouterConfig.protocols', () => {
           secretKey: 'test',
           currency: 'USDC',
           recipient: '0xCustomRecipient',
+          rpcUrl: 'https://rpc.example.com',
         },
       });
       router.route('test/route').handler(async () => ({}));

@@ -23,8 +23,12 @@ export interface MonitorEntry {
   critical?: number;
 }
 
-export interface ServiceRouter {
-  route(key: string): RouteBuilder;
+export interface ServiceRouter<TPriceKeys extends string = never> {
+  route<K extends string>(
+    key: K,
+  ): [K] extends [TPriceKeys]
+    ? RouteBuilder<undefined, undefined, true, false, false>
+    : RouteBuilder<undefined, undefined, false, false, false>;
   wellKnown(options?: WellKnownOptions): (request: NextRequest) => Promise<NextResponse>;
   openapi(options: OpenAPIOptions): (request: NextRequest) => Promise<NextResponse>;
   monitors(): MonitorEntry[];
@@ -35,7 +39,9 @@ export interface ServiceRouter {
 // createRouter
 // ---------------------------------------------------------------------------
 
-export function createRouter(config: RouterConfig): ServiceRouter {
+export function createRouter<const P extends Record<string, string> = Record<string, never>>(
+  config: RouterConfig & { prices?: P },
+): ServiceRouter<Extract<keyof P, string>> {
   const registry = new RouteRegistry();
   const nonceStore = config.siwx?.nonceStore ?? new MemoryNonceStore();
   const network = config.network ?? 'eip155:8453';
@@ -44,25 +50,43 @@ export function createRouter(config: RouterConfig): ServiceRouter {
       ? (process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000')
       : 'http://localhost:3000';
 
-  // Validate protocols configuration
-  if (config.protocols) {
-    if (config.protocols.length === 0) {
-      throw new Error(
-        "RouterConfig.protocols cannot be empty. Omit the field to use default ['x402'] or specify protocols explicitly.",
-      );
-    }
+  // Empty protocols is a programming error — always throw.
+  if (config.protocols && config.protocols.length === 0) {
+    throw new Error(
+      "RouterConfig.protocols cannot be empty. Omit the field to use default ['x402'] or specify protocols explicitly.",
+    );
+  }
 
-    if (config.protocols.includes('mpp') && !config.mpp) {
-      throw new Error(
-        'RouterConfig.protocols includes "mpp" but RouterConfig.mpp is not configured. ' +
-          'Add mpp: { secretKey, currency, recipient } to your router config.',
-      );
-    }
+  // Validate per-protocol config synchronously.
+  let x402ConfigError: string | undefined;
+  let mppConfigError: string | undefined;
 
-    if (config.protocols.includes('x402') && !config.payeeAddress) {
-      throw new Error(
-        'RouterConfig.protocols includes "x402" but RouterConfig.payeeAddress is not configured.',
-      );
+  if ((!config.protocols || config.protocols.includes('x402')) && !config.payeeAddress) {
+    x402ConfigError = 'x402 requires payeeAddress in router config.';
+  }
+
+  if (config.protocols?.includes('mpp')) {
+    if (!config.mpp) {
+      mppConfigError =
+        'protocols includes "mpp" but mpp config is missing. ' +
+        'Add mpp: { secretKey, currency, recipient } to your router config.';
+    } else if (!config.mpp.recipient && !config.payeeAddress) {
+      mppConfigError =
+        'MPP requires a recipient address. Set mpp.recipient or payeeAddress in your router config.';
+    } else if (!(config.mpp.rpcUrl ?? process.env.TEMPO_RPC_URL)) {
+      mppConfigError =
+        'MPP requires an authenticated Tempo RPC URL. ' +
+        'Set TEMPO_RPC_URL env var or pass rpcUrl in the mpp config object.';
+    }
+  }
+
+  const allConfigErrors = [x402ConfigError, mppConfigError].filter(Boolean);
+  if (allConfigErrors.length > 0) {
+    for (const err of allConfigErrors) console.error(`[router] ${err}`);
+    // Throw in production to fail `next build`. In development, errors are
+    // stored per-protocol and surfaced as clean JSON 500s at request time.
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(allConfigErrors.join('\n'));
     }
   }
 
@@ -87,19 +111,16 @@ export function createRouter(config: RouterConfig): ServiceRouter {
     payeeAddress: config.payeeAddress,
     network,
     testMode: config.testMode,
-    mppConfig: config.mpp,
+    mppx: null,
   };
 
-  // x402 server init — fully async to avoid dynamic require() which breaks
-  // Turbopack's __require polyfill. Errors stored in deps.x402InitError for
-  // clear request-time messaging (e.g. "CDP_API_KEY_ID not set" instead of
-  // a generic "server not initialized"). Every request handler awaits
-  // deps.initPromise before touching deps.x402Server.
-  // In test mode, skip x402 server init — no CDP keys needed.
-  if (config.testMode) {
-    deps.x402InitError = 'test mode — x402 server not initialized';
-  } else {
-    deps.initPromise = (async () => {
+  deps.initPromise = (async () => {
+    // ---- x402 ----
+    if (config.testMode) {
+      deps.x402InitError = 'test mode — x402 server not initialized';
+    } else if (x402ConfigError) {
+      deps.x402InitError = x402ConfigError;
+    } else {
       try {
         const { createX402Server } = await import('./server.js');
         const result = await createX402Server(config);
@@ -109,22 +130,49 @@ export function createRouter(config: RouterConfig): ServiceRouter {
         deps.x402Server = null;
         deps.x402InitError = err instanceof Error ? err.message : String(err);
       }
-    })();
-  }
+    }
+
+    // ---- MPP ----
+    if (mppConfigError) {
+      deps.mppInitError = mppConfigError;
+    } else if (config.mpp) {
+      try {
+        const { Mppx, tempo } = await import('mppx/server');
+        const rpcUrl = (config.mpp.rpcUrl ?? process.env.TEMPO_RPC_URL)!;
+        deps.mppx = Mppx.create({
+          methods: [
+            tempo.charge({
+              currency: config.mpp.currency as `0x${string}`,
+              recipient: (config.mpp.recipient ?? config.payeeAddress) as `0x${string}`,
+              getClient: async () => {
+                const { createClient, http } = await import('viem');
+                const { tempo: tempoChain } = await import('viem/chains');
+                return createClient({ chain: tempoChain, transport: http(rpcUrl) });
+              },
+            }),
+          ],
+          secretKey: config.mpp.secretKey,
+        });
+      } catch (err: unknown) {
+        deps.mppx = null;
+        deps.mppInitError = err instanceof Error ? err.message : String(err);
+        console.error(`[router] MPP initialization failed: ${deps.mppInitError}`);
+      }
+    }
+  })();
 
   const pricesKeys = config.prices ? Object.keys(config.prices) : undefined;
 
   return {
-    route(key: string): RouteBuilder {
+    route(key) {
       const builder = new RouteBuilder(key, registry, deps);
 
-      // Auto-apply pricing from prices map
       if (config.prices && key in config.prices) {
         const options = config.protocols ? { protocols: config.protocols } : undefined;
-        return builder.paid(config.prices[key], options) as unknown as RouteBuilder;
+        return builder.paid(config.prices[key], options) as never;
       }
 
-      return builder;
+      return builder as never;
     },
 
     wellKnown(options?: WellKnownOptions) {

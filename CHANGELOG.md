@@ -1,5 +1,18 @@
 # @agentcash/router
 
+## 0.4.10
+
+### Patch Changes
+
+- 9b05697: Bump mppx to 0.2.5
+
+## 0.4.9
+
+### Patch Changes
+
+- 9a1c154: massive simplification of mpp logic
+- 2bacbc2: fix price tieres'
+
 ## 0.4.8
 
 ### Patch Changes

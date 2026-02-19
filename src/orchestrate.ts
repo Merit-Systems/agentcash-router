@@ -14,8 +14,8 @@ import { detectProtocol } from './protocols/detect.js';
 import { safeCallHandler } from './handler.js';
 import { bufferBody, validateBody } from './body.js';
 import { resolvePrice, resolveMaxPrice } from './pricing.js';
+import { Credential } from 'mppx';
 import { buildX402Challenge, verifyX402Payment, settleX402Payment } from './protocols/x402.js';
-import { buildMPPChallenge, verifyMPPCredential, buildMPPReceipt } from './protocols/mpp.js';
 import { verifySIWX, buildSIWXExtension, SIWX_ERROR_MESSAGES } from './auth/siwx.js';
 import { verifyApiKey } from './auth/api-key.js';
 
@@ -23,12 +23,22 @@ export interface OrchestrateDeps {
   x402Server: X402Server | null;
   initPromise: Promise<void>;
   x402InitError?: string;
+  mppInitError?: string;
   plugin?: RouterPlugin;
   nonceStore: NonceStore;
   payeeAddress: string;
   network: string;
   testMode?: boolean;
-  mppConfig?: { secretKey: string; currency: string; recipient?: string; rpcUrl?: string };
+  mppx?: {
+    charge: (options: {
+      amount: string;
+    }) => (
+      input: Request,
+    ) => Promise<
+      | { status: 402; challenge: Response }
+      | { status: 200; withReceipt: (response: Response) => Response }
+    >;
+  } | null;
 }
 
 export function createRequestHandler(
@@ -176,10 +186,9 @@ export function createRequestHandler(
     // and parse body early so we can calculate accurate price and/or reject invalid
     // requests before showing the 402 challenge.
     let earlyBodyData: unknown;
+    const pricingNeedsBody = routeEntry.pricing != null && typeof routeEntry.pricing !== 'string';
     const needsEarlyParse =
-      !protocol &&
-      routeEntry.bodySchema &&
-      (typeof routeEntry.pricing === 'function' || routeEntry.validateFn);
+      !protocol && routeEntry.bodySchema && (pricingNeedsBody || routeEntry.validateFn);
 
     if (needsEarlyParse) {
       // CRITICAL: Clone BEFORE consuming body (stream can only be read once)
@@ -331,6 +340,25 @@ export function createRequestHandler(
 
     // ---- No payment header → 402 challenge ----
     if (!protocol || protocol === 'siwx') {
+      // If any configured protocol failed to init, return 500 with the errors.
+      // A partial 402 (missing protocols) leads to confusing client errors.
+      if (routeEntry.pricing) {
+        const initErrors = routeEntry.protocols
+          .map((p) => {
+            if (p === 'x402' && deps.x402InitError) return `x402: ${deps.x402InitError}`;
+            if (p === 'mpp' && deps.mppInitError) return `mpp: ${deps.mppInitError}`;
+            return null;
+          })
+          .filter(Boolean);
+        if (initErrors.length > 0) {
+          return fail(
+            500,
+            `Payment protocol initialization failed. ${initErrors.join('; ')}`,
+            meta,
+            pluginCtx,
+          );
+        }
+      }
       return await build402(request, routeEntry, deps, meta, pluginCtx, earlyBodyData);
     }
 
@@ -404,12 +432,27 @@ export function createRequestHandler(
       return response;
     }
 
+    // ---- Protocol mismatch check ----
+    if (!routeEntry.protocols.includes(protocol)) {
+      const accepted = routeEntry.protocols.join(', ') || 'none';
+      console.warn(
+        `[router] ${routeEntry.key}: received ${protocol} payment but route accepts [${accepted}]`,
+      );
+      return fail(
+        400,
+        `This route does not accept ${protocol} payments. Accepted protocols: ${accepted}`,
+        meta,
+        pluginCtx,
+      );
+    }
+
     // ---- x402 ----
     if (protocol === 'x402') {
       if (!deps.x402Server) {
         const reason = deps.x402InitError
           ? `x402 facilitator initialization failed: ${deps.x402InitError}`
           : 'x402 server not initialized — ensure @x402/core, @x402/evm, and @coinbase/x402 are installed';
+        console.error(`[router] ${routeEntry.key}: ${reason}`);
         return fail(500, reason, meta, pluginCtx);
       }
 
@@ -499,13 +542,50 @@ export function createRequestHandler(
 
     // ---- MPP ----
     if (protocol === 'mpp') {
-      if (!deps.mppConfig) return await build402(request, routeEntry, deps, meta, pluginCtx);
+      if (!deps.mppx) {
+        const reason = deps.mppInitError
+          ? `MPP initialization failed: ${deps.mppInitError}`
+          : 'MPP not initialized — ensure mppx is installed and mpp config (secretKey, currency, recipient) is correct';
+        console.error(`[router] ${routeEntry.key}: ${reason}`);
+        return fail(500, reason, meta, pluginCtx);
+      }
 
-      const verify = await verifyMPPCredential(request, routeEntry, deps.mppConfig, price);
-      if (!verify?.valid) return await build402(request, routeEntry, deps, meta, pluginCtx);
+      let mppResult: Awaited<ReturnType<ReturnType<typeof deps.mppx.charge>>>;
+      try {
+        mppResult = await deps.mppx.charge({ amount: price })(request);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[router] ${routeEntry.key}: MPP charge failed: ${message}`);
+        firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+          level: 'critical' as const,
+          message: `MPP charge failed: ${message}`,
+          route: routeEntry.key,
+        });
+        return fail(500, `MPP payment processing failed: ${message}`, meta, pluginCtx);
+      }
 
-      // Normalize to lowercase — checksumming is a display concern, not storage
-      const wallet = verify.payer!.toLowerCase();
+      if (mppResult.status === 402) {
+        // Client sent a credential but charge() rejected it. This could be:
+        // 1. Legitimate rejection (expired, tampered, wrong amount) → 402 is correct
+        // 2. Server-side config issue (missing TEMPO_RPC_URL) → should be 500
+        // We can't distinguish these from the return value alone, so log a warning
+        // to help operators diagnose. If this shows up repeatedly, it's likely (2).
+        console.warn(
+          `[router] ${routeEntry.key}: MPP credential present but charge() returned 402 — credential may be invalid, or check TEMPO_RPC_URL configuration`,
+        );
+        firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+          level: 'warn' as const,
+          message:
+            'MPP payment rejected despite credential present — possible config issue (TEMPO_RPC_URL)',
+          route: routeEntry.key,
+        });
+        return await build402(request, routeEntry, deps, meta, pluginCtx);
+      }
+
+      // Payment verified — extract wallet from credential source (DID)
+      const credential = Credential.fromRequest(request);
+      const wallet = (credential?.source ?? '').toLowerCase();
+
       pluginCtx.setVerifiedWallet(wallet);
       firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
         protocol: 'mpp',
@@ -524,11 +604,9 @@ export function createRequestHandler(
       );
 
       if (response.status < 400) {
-        try {
-          response.headers.set('Payment-Receipt', await buildMPPReceipt(crypto.randomUUID()));
-        } catch {
-          // MPP receipt is best-effort — handler already succeeded
-        }
+        const receiptResponse = mppResult.withReceipt(response);
+        finalize(receiptResponse as NextResponse, rawResult, meta, pluginCtx);
+        return receiptResponse as NextResponse;
       }
 
       finalize(response, rawResult, meta, pluginCtx);
@@ -682,8 +760,12 @@ async function build402(
 
   let challengePrice: string;
 
-  // Dynamic pricing with body data (early parsing happened)
-  if (bodyData !== undefined && typeof routeEntry.pricing === 'function') {
+  // Dynamic/tiered pricing with body data (early parsing happened)
+  if (
+    bodyData !== undefined &&
+    typeof routeEntry.pricing !== 'string' &&
+    routeEntry.pricing != null
+  ) {
     const result = await resolveDynamicPrice(bodyData, routeEntry, deps, pluginCtx, meta);
     if ('error' in result) return result.error;
     challengePrice = result.price;
@@ -753,12 +835,13 @@ async function build402(
     }
   }
 
-  if (routeEntry.protocols.includes('mpp') && deps.mppConfig) {
+  if (routeEntry.protocols.includes('mpp') && deps.mppx) {
     try {
-      response.headers.set(
-        'WWW-Authenticate',
-        await buildMPPChallenge(routeEntry, request, deps.mppConfig, challengePrice),
-      );
+      const result = await deps.mppx.charge({ amount: challengePrice })(request);
+      if (result.status === 402) {
+        const wwwAuth = result.challenge.headers.get('WWW-Authenticate');
+        if (wwwAuth) response.headers.set('WWW-Authenticate', wwwAuth);
+      }
     } catch (err) {
       firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
         level: 'critical' as const,
