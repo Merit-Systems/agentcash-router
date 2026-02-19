@@ -46,9 +46,8 @@ export function createRouter<const P extends Record<string, string> = Record<str
   const nonceStore = config.siwx?.nonceStore ?? new MemoryNonceStore();
   const network = config.network ?? 'eip155:8453';
   const baseUrl =
-    typeof globalThis.process !== 'undefined'
-      ? (process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000')
-      : 'http://localhost:3000';
+    config.baseUrl ??
+    (typeof globalThis.process !== 'undefined' ? process.env.NEXT_PUBLIC_BASE_URL : undefined);
 
   // Empty protocols is a programming error — always throw.
   if (config.protocols && config.protocols.length === 0) {
@@ -56,6 +55,19 @@ export function createRouter<const P extends Record<string, string> = Record<str
       "RouterConfig.protocols cannot be empty. Omit the field to use default ['x402'] or specify protocols explicitly.",
     );
   }
+
+  if (!baseUrl) {
+    const msg =
+      'baseUrl is required. Pass it in RouterConfig or set NEXT_PUBLIC_BASE_URL ' +
+      '(e.g. https://myapp.com). It is used for discovery URLs, OpenAPI servers, ' +
+      'and MPP realm.';
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(msg);
+    }
+    console.warn(`[router] ${msg}`);
+  }
+
+  const resolvedBaseUrl = baseUrl ?? 'http://localhost:3000';
 
   // Validate per-protocol config synchronously.
   let x402ConfigError: string | undefined;
@@ -94,7 +106,7 @@ export function createRouter<const P extends Record<string, string> = Record<str
   // RouterPlugin.init may return void or Promise<void>.
   if (config.plugin?.init) {
     try {
-      const result = config.plugin.init({ origin: baseUrl });
+      const result = config.plugin.init({ origin: resolvedBaseUrl });
       if (result && typeof (result as Promise<void>).catch === 'function') {
         (result as Promise<void>).catch(() => {});
       }
@@ -152,6 +164,7 @@ export function createRouter<const P extends Record<string, string> = Record<str
             }),
           ],
           secretKey: config.mpp.secretKey,
+          realm: new URL(resolvedBaseUrl).host,
         });
       } catch (err: unknown) {
         deps.mppx = null;
@@ -176,11 +189,11 @@ export function createRouter<const P extends Record<string, string> = Record<str
     },
 
     wellKnown(options?: WellKnownOptions) {
-      return createWellKnownHandler(registry, baseUrl, pricesKeys, options);
+      return createWellKnownHandler(registry, resolvedBaseUrl, pricesKeys, options);
     },
 
     openapi(options: OpenAPIOptions) {
-      return createOpenAPIHandler(registry, baseUrl, pricesKeys, options);
+      return createOpenAPIHandler(registry, resolvedBaseUrl, pricesKeys, options);
     },
 
     monitors(): MonitorEntry[] {

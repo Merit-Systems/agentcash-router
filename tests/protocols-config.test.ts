@@ -78,7 +78,7 @@ describe('RouterConfig.protocols', () => {
       const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
       try {
         expect(() => {
-          createRouter({ ...baseConfig, protocols: ['mpp'] });
+          createRouter({ ...baseConfig, baseUrl: 'https://test.example.com', protocols: ['mpp'] });
         }).toThrow(/mpp config is missing/);
       } finally {
         process.env.NODE_ENV = origEnv;
@@ -96,6 +96,7 @@ describe('RouterConfig.protocols', () => {
         expect(() => {
           createRouter({
             ...baseConfig,
+            baseUrl: 'https://test.example.com',
             protocols: ['mpp'],
             mpp: { secretKey: 'test', currency: 'USDC' },
           });
@@ -113,7 +114,10 @@ describe('RouterConfig.protocols', () => {
       const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
       try {
         expect(() => {
-          createRouter({ protocols: ['x402'] } as RouterConfig);
+          createRouter({
+            baseUrl: 'https://test.example.com',
+            protocols: ['x402'],
+          } as RouterConfig);
         }).toThrow(/payeeAddress/);
       } finally {
         process.env.NODE_ENV = origEnv;
