@@ -1,5 +1,15 @@
 # @agentcash/router
 
+## 0.5.0
+
+### Minor Changes
+
+- a16fab7: Require baseUrl in config, or NEXT_PUBLIC_BASE_URL
+
+### Patch Changes
+
+- 897c761: Bump mppx
+
 ## 0.4.10
 
 ### Patch Changes
