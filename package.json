@@ -53,6 +53,7 @@
     "@changesets/cli": "^2.29.8",
     "@coinbase/x402": "^2.1.0",
     "@eslint/js": "^10.0.1",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@types/node": "^22.0.0",
     "@x402/core": "^2.3.0",
     "@x402/evm": "^2.3.0",
