@@ -40,6 +40,7 @@ import type { PaymentRequired, PaymentRequirements, SettleResponse } from '@x402
 
 export interface X402Server {
   initialize(): Promise<void>;
+  supportedResponsesMap: Map<string, unknown>;
 
   buildPaymentRequirementsFromOptions(
     options: Array<{ scheme: string; network: string; price: string; payTo: string }>,

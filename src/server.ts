@@ -27,18 +27,21 @@ export async function createX402Server(config: RouterConfig) {
 }
 
 async function retryInit(
-  server: Pick<X402Server, 'initialize'>,
+  server: Pick<X402Server, 'initialize' | 'supportedResponsesMap'>,
   maxAttempts = 3,
   backoff = [1000, 2000, 4000],
 ): Promise<void> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       await server.initialize();
+      if (server.supportedResponsesMap.size === 0) {
+        throw new Error('x402 facilitator returned no supported schemes');
+      }
       return;
     } catch (err: unknown) {
-      const is429 =
-        err instanceof Error && (err.message.includes('429') || err.message.includes('rate limit'));
-      if (!is429 || attempt === maxAttempts - 1) throw err;
+      if (attempt === maxAttempts - 1) throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[router] x402 init attempt ${attempt + 1}/${maxAttempts} failed: ${msg}, retrying...`);
       await new Promise((r) => setTimeout(r, backoff[attempt] ?? 4000));
     }
   }
