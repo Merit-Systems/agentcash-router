@@ -1,4 +1,5 @@
-import type { FacilitatorConfig } from '@x402/core/http';
+import type { FacilitatorConfig, FacilitatorClient } from '@x402/core/http';
+import type { SupportedResponse, Network } from '@x402/core/types';
 import type { RouterConfig, X402Server } from './types.js';
 
 export async function createX402Server(config: RouterConfig) {
@@ -14,32 +15,47 @@ export async function createX402Server(config: RouterConfig) {
   // Normalize string URLs into the config object shape; pass objects through.
   const raw = config.facilitatorUrl ?? defaultFacilitator;
   const facilitatorConfig: FacilitatorConfig = typeof raw === 'string' ? { url: raw } : raw;
-  const client = new HTTPFacilitatorClient(facilitatorConfig);
+  const httpClient = new HTTPFacilitatorClient(facilitatorConfig);
+
+  // Wrap the HTTP client to bypass getSupported() on cold start.
+  // For EVM exact scheme, enhancePaymentRequirements is a no-op — the
+  // supported kind data is never used. The only purpose of getSupported()
+  // is a gate check ("does the facilitator support exact on eip155:8453?"),
+  // which has been true since day one. Hitting the facilitator on every
+  // lambda cold start causes 429 rate limit storms when multiple instances
+  // boot simultaneously. Hardcode the response; verify/settle still go
+  // through the real facilitator.
+  const network = (config.network ?? 'eip155:8453') as Network;
+  const client = cachedClient(httpClient, network);
   const server = new x402ResourceServer(client);
 
   registerExactEvmScheme(server);
   server.registerExtension(bazaarResourceServerExtension);
   server.registerExtension(siwxResourceServerExtension);
 
-  const initPromise = retryInit(server as unknown as X402Server);
+  const initPromise = server.initialize();
 
   return { server: server as unknown as X402Server, initPromise };
 }
 
-async function retryInit(
-  server: Pick<X402Server, 'initialize'>,
-  maxAttempts = 3,
-  backoff = [1000, 2000, 4000],
-): Promise<void> {
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      await server.initialize();
-      return;
-    } catch (err: unknown) {
-      const is429 =
-        err instanceof Error && (err.message.includes('429') || err.message.includes('rate limit'));
-      if (!is429 || attempt === maxAttempts - 1) throw err;
-      await new Promise((r) => setTimeout(r, backoff[attempt] ?? 4000));
-    }
-  }
+/**
+ * Wrap an HTTPFacilitatorClient to return a hardcoded getSupported() response
+ * for EVM exact scheme. verify() and settle() pass through to the real client.
+ *
+ * Why: getSupported() hits the Coinbase facilitator on every cold start.
+ * On Vercel, N simultaneous cold starts blast the facilitator and get 429'd.
+ * The EVM exact scheme's enhancePaymentRequirements() doesn't use the
+ * supported kind data at all (it's a pass-through), so the HTTP call is pure
+ * overhead and a reliability risk.
+ */
+function cachedClient(inner: FacilitatorClient, network: Network): FacilitatorClient {
+  return {
+    verify: inner.verify.bind(inner),
+    settle: inner.settle.bind(inner),
+    getSupported: async (): Promise<SupportedResponse> => ({
+      kinds: [{ x402Version: 2, scheme: 'exact', network }],
+      extensions: [],
+      signers: {},
+    }),
+  };
 }
