@@ -92,6 +92,8 @@ function buildOperation(routeKey: string, entry: RouteEntry, tag: string): Recor
   } else if (entry.maxPrice) {
     // Dynamic pricing with only a ceiling
     price = entry.maxPrice;
+  } else if (entry.minPrice) {
+    price = entry.minPrice;
   }
 
   const operation: Record<string, unknown> = {
