@@ -19,6 +19,16 @@ import { buildX402Challenge, verifyX402Payment, settleX402Payment } from './prot
 import { verifySIWX, buildSIWXExtension, SIWX_ERROR_MESSAGES } from './auth/siwx.js';
 import { verifyApiKey } from './auth/api-key.js';
 
+async function resolvePayTo(
+  routeEntry: RouteEntry,
+  request: Request,
+  fallback: string,
+): Promise<string> {
+  if (!routeEntry.payTo) return fallback;
+  if (typeof routeEntry.payTo === 'string') return routeEntry.payTo;
+  return routeEntry.payTo(request);
+}
+
 export interface OrchestrateDeps {
   x402Server: X402Server | null;
   initPromise: Promise<void>;
@@ -418,12 +428,13 @@ export function createRequestHandler(
         return fail(500, reason, meta, pluginCtx);
       }
 
+      const payTo = await resolvePayTo(routeEntry, request, deps.payeeAddress);
       const verify = await verifyX402Payment(
         deps.x402Server,
         request,
         routeEntry,
         price,
-        deps.payeeAddress,
+        payTo,
         deps.network,
       );
       if (!verify?.valid) return await build402(request, routeEntry, deps, meta, pluginCtx);
@@ -768,12 +779,13 @@ async function build402(
 
   if (routeEntry.protocols.includes('x402') && deps.x402Server) {
     try {
+      const payTo = await resolvePayTo(routeEntry, request, deps.payeeAddress);
       const { encoded } = await buildX402Challenge(
         deps.x402Server,
         routeEntry,
         request,
         challengePrice,
-        deps.payeeAddress,
+        payTo,
         deps.network,
         extensions,
       );
