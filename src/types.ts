@@ -91,6 +91,8 @@ export interface PaidOptions {
   protocols?: ProtocolType[];
   maxPrice?: string;
   minPrice?: string;
+  /** Override the payment recipient. String for static, function for dynamic (receives the Request). */
+  payTo?: string | ((request: Request) => string | Promise<string>);
 }
 
 // ---------------------------------------------------------------------------
@@ -158,6 +160,7 @@ export interface RouteEntry {
   method: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH';
   maxPrice?: string;
   minPrice?: string;
+  payTo?: string | ((request: Request) => string | Promise<string>);
   apiKeyResolver?: (key: string) => unknown | Promise<unknown>;
   providerName?: string;
   providerConfig?: ProviderConfig;
