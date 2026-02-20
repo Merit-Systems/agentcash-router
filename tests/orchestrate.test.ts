@@ -829,3 +829,44 @@ describe('validate()', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('x402 challenge build failure (facilitator 429 / empty supported kinds)', () => {
+  it('returns 500 when challenge build throws — not a bare 402', async () => {
+    // Simulate what happens when getSupported() failed silently during init:
+    // the server has empty supported-kinds maps, so buildPaymentRequirementsFromOptions
+    // throws "Facilitator does not support scheme X on network Y".
+    const brokenServer = new FakeX402Server();
+    brokenServer.buildPaymentRequirementsFromOptions = () => {
+      throw new Error(
+        'Facilitator does not support scheme "exact" on network "eip155:8453". ' +
+          'Make sure to call initialize() to fetch supported kinds from facilitators.',
+      );
+    };
+
+    const entry = makeEntry();
+    const deps = makeDeps({ x402Server: brokenServer as unknown as OrchestrateDeps['x402Server'] });
+    const handler = createRequestHandler(entry, async () => ({}), deps);
+    const res = await handler(makeProbeRequest());
+
+    // Must NOT be a bare 402 — that's the bug. Clients get a 402 with no
+    // PAYMENT-REQUIRED header and can't pay. Should be 500 so operators
+    // see the init failure instead of silent payment breakage.
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toMatch(/challenge|facilitator/i);
+  });
+
+  it('returns 500 when x402InitError is set (retryInit threw)', async () => {
+    const entry = makeEntry();
+    const deps = makeDeps({
+      x402Server: null,
+      x402InitError: 'Facilitator getSupported failed (429): Too Many Requests',
+    });
+    const handler = createRequestHandler(entry, async () => ({}), deps);
+    const res = await handler(makeProbeRequest());
+
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toMatch(/429|initialization failed/i);
+  });
+});

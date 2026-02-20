@@ -779,13 +779,18 @@ async function build402(
       );
       response.headers.set('PAYMENT-REQUIRED', encoded);
     } catch (err) {
-      // x402 challenge failure is critical: clients get a bare 402 with no
-      // payment info and can't pay. Surface through plugin so operators see it.
+      // x402 challenge failure is critical: a bare 402 with no PAYMENT-REQUIRED
+      // header is useless — clients can't pay. Return 500 so operators see the
+      // init failure instead of silent payment breakage.
+      const message = `x402 challenge build failed: ${err instanceof Error ? err.message : String(err)}`;
       firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
         level: 'critical' as const,
-        message: `x402 challenge build failed: ${err instanceof Error ? err.message : String(err)}`,
+        message,
         route: routeEntry.key,
       });
+      const errorResponse = NextResponse.json({ success: false, error: message }, { status: 500 });
+      firePluginResponse(deps, pluginCtx, meta, errorResponse);
+      return errorResponse;
     }
   }
 
