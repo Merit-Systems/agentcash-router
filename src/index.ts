@@ -39,7 +39,7 @@ export interface ServiceRouter<TPriceKeys extends string = never> {
 // createRouter
 // ---------------------------------------------------------------------------
 
-export function createRouter<const P extends Record<string, string> = Record<string, never>>(
+export function createRouter<const P extends Record<string, string> = Record<never, string>>(
   config: RouterConfig & { prices?: P },
 ): ServiceRouter<Extract<keyof P, string>> {
   const registry = new RouteRegistry();
