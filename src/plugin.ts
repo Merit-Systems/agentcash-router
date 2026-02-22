@@ -48,6 +48,8 @@ export interface ResponseMeta {
   duration: number;
   contentType: string | null;
   headers: Record<string, string>;
+  requestBody: string | null;
+  responseBody: string | null;
 }
 
 export interface ErrorEvent {
