@@ -841,12 +841,20 @@ function firePluginResponse(
 ): void {
   let requestBodyStr: string | null = null;
   if (requestBody !== undefined && requestBody !== null) {
-    try { requestBodyStr = JSON.stringify(requestBody); } catch { /* skip */ }
+    try {
+      requestBodyStr = JSON.stringify(requestBody);
+    } catch {
+      /* skip */
+    }
   }
 
   let responseBodyStr: string | null = null;
   if (rawResult !== undefined && rawResult !== null && !(rawResult instanceof Response)) {
-    try { responseBodyStr = JSON.stringify(rawResult); } catch { /* skip */ }
+    try {
+      responseBodyStr = JSON.stringify(rawResult);
+    } catch {
+      /* skip */
+    }
   }
 
   firePluginHook(deps.plugin, 'onResponse', pluginCtx, {
