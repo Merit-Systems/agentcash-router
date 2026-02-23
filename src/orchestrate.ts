@@ -112,9 +112,10 @@ export function createRequestHandler(
     message: string,
     meta: RequestMeta,
     pluginCtx: PluginContext,
+    requestBody?: unknown,
   ): NextResponse {
     const response = NextResponse.json({ success: false, error: message }, { status });
-    firePluginResponse(deps, pluginCtx, meta, response);
+    firePluginResponse(deps, pluginCtx, meta, response, requestBody);
     return response;
   }
 
@@ -143,7 +144,7 @@ export function createRequestHandler(
         } catch (err: unknown) {
           const status = (err as { status?: number }).status ?? 400;
           const message = err instanceof Error ? err.message : 'Validation failed';
-          return fail(status, message, meta, pluginCtx);
+          return fail(status, message, meta, pluginCtx, body.data);
         }
       }
 
@@ -224,7 +225,7 @@ export function createRequestHandler(
         } catch (err: unknown) {
           const status = (err as { status?: number }).status ?? 400;
           const message = err instanceof Error ? err.message : 'Validation failed';
-          return fail(status, message, meta, pluginCtx);
+          return fail(status, message, meta, pluginCtx, earlyBodyData);
         }
       }
     }
@@ -252,7 +253,7 @@ export function createRequestHandler(
         } catch (err: unknown) {
           const status = (err as { status?: number }).status ?? 400;
           const message = err instanceof Error ? err.message : 'Validation failed';
-          return fail(status, message, meta, pluginCtx);
+          return fail(status, message, meta, pluginCtx, earlyBodyResult.data);
         }
       }
 
@@ -386,7 +387,7 @@ export function createRequestHandler(
       } catch (err: unknown) {
         const status = (err as { status?: number }).status ?? 400;
         const message = err instanceof Error ? err.message : 'Validation failed';
-        return fail(status, message, meta, pluginCtx);
+        return fail(status, message, meta, pluginCtx, body.data);
       }
     }
 
@@ -399,6 +400,7 @@ export function createRequestHandler(
         err instanceof Error ? err.message : 'Price resolution failed',
         meta,
         pluginCtx,
+        body.data,
       );
     }
 
@@ -416,6 +418,7 @@ export function createRequestHandler(
         `This route does not accept ${protocol} payments. Accepted protocols: ${accepted}`,
         meta,
         pluginCtx,
+        body.data,
       );
     }
 
@@ -426,7 +429,7 @@ export function createRequestHandler(
           ? `x402 facilitator initialization failed: ${deps.x402InitError}`
           : 'x402 server not initialized — ensure @x402/core, @x402/evm, and @coinbase/x402 are installed';
         console.error(`[router] ${routeEntry.key}: ${reason}`);
-        return fail(500, reason, meta, pluginCtx);
+        return fail(500, reason, meta, pluginCtx, body.data);
       }
 
       const payTo = await resolvePayTo(routeEntry, request, deps.payeeAddress);
@@ -506,7 +509,7 @@ export function createRequestHandler(
             message: `Settlement failed: ${err instanceof Error ? err.message : String(err)}`,
             route: routeEntry.key,
           });
-          return fail(500, 'Settlement failed', meta, pluginCtx);
+          return fail(500, 'Settlement failed', meta, pluginCtx, body.data);
         }
       }
 
@@ -521,7 +524,7 @@ export function createRequestHandler(
           ? `MPP initialization failed: ${deps.mppInitError}`
           : 'MPP not initialized — ensure mppx is installed and mpp config (secretKey, currency, recipient) is correct';
         console.error(`[router] ${routeEntry.key}: ${reason}`);
-        return fail(500, reason, meta, pluginCtx);
+        return fail(500, reason, meta, pluginCtx, body.data);
       }
 
       let mppResult: Awaited<ReturnType<ReturnType<typeof deps.mppx.charge>>>;
@@ -535,7 +538,7 @@ export function createRequestHandler(
           message: `MPP charge failed: ${message}`,
           route: routeEntry.key,
         });
-        return fail(500, `MPP payment processing failed: ${message}`, meta, pluginCtx);
+        return fail(500, `MPP payment processing failed: ${message}`, meta, pluginCtx, body.data);
       }
 
       if (mppResult.status === 402) {
