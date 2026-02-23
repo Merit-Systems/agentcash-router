@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 0.6.3
+
+### Patch Changes
+
+- 17ab73c: body parsing
+
 ## 0.6.2
 
 ### Patch Changes
