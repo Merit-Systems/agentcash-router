@@ -100,9 +100,10 @@ export function createRequestHandler(
     rawResult: unknown,
     meta: RequestMeta,
     pluginCtx: PluginContext,
+    requestBody?: unknown,
   ): void {
     fireProviderQuota(routeEntry, response, rawResult, deps, pluginCtx);
-    firePluginResponse(deps, pluginCtx, meta, response);
+    firePluginResponse(deps, pluginCtx, meta, response, requestBody, rawResult);
   }
 
   /** Error response shorthand. */
@@ -154,7 +155,7 @@ export function createRequestHandler(
         account,
         body.data,
       );
-      finalize(response, rawResult, meta, pluginCtx);
+      finalize(response, rawResult, meta, pluginCtx, body.data);
       return response;
     }
 
@@ -509,7 +510,7 @@ export function createRequestHandler(
         }
       }
 
-      finalize(response, rawResult, meta, pluginCtx);
+      finalize(response, rawResult, meta, pluginCtx, body.data);
       return response;
     }
 
@@ -578,11 +579,11 @@ export function createRequestHandler(
 
       if (response.status < 400) {
         const receiptResponse = mppResult.withReceipt(response);
-        finalize(receiptResponse as NextResponse, rawResult, meta, pluginCtx);
+        finalize(receiptResponse as NextResponse, rawResult, meta, pluginCtx, body.data);
         return receiptResponse as NextResponse;
       }
 
-      finalize(response, rawResult, meta, pluginCtx);
+      finalize(response, rawResult, meta, pluginCtx, body.data);
       return response;
     }
 
@@ -835,6 +836,8 @@ function firePluginResponse(
   pluginCtx: PluginContext,
   meta: RequestMeta,
   response: NextResponse,
+  requestBody?: unknown,
+  responseBody?: unknown,
 ): void {
   firePluginHook(deps.plugin, 'onResponse', pluginCtx, {
     statusCode: response.status,
@@ -842,6 +845,8 @@ function firePluginResponse(
     duration: Date.now() - meta.startTime,
     contentType: response.headers.get('content-type'),
     headers: Object.fromEntries(response.headers.entries()),
+    requestBody,
+    responseBody,
   });
 
   // 402 is a payment challenge, not an error

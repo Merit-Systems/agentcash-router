@@ -48,6 +48,10 @@ export interface ResponseMeta {
   duration: number;
   contentType: string | null;
   headers: Record<string, string>;
+  /** Parsed request body (when .body() was used). undefined when no body was parsed. */
+  requestBody?: unknown;
+  /** Handler return value. undefined for raw Response returns (streams) or error paths. */
+  responseBody?: unknown;
 }
 
 export interface ErrorEvent {
