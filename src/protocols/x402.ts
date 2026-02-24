@@ -26,6 +26,7 @@ export async function buildX402Challenge(
     url: request.url,
     method: routeEntry.method,
     description: routeEntry.description,
+    mimeType: 'application/json',
   };
 
   const requirements = await server.buildPaymentRequirementsFromOptions([options], {
