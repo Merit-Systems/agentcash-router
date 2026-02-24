@@ -1,5 +1,15 @@
 # @agentcash/router
 
+## 0.6.5
+
+### Patch Changes
+
+- 11f3a82: fix: auto-detect baseUrl from VERCEL_URL, remove NEXT_PUBLIC_BASE_URL
+
+  baseUrl is now auto-resolved: `config.baseUrl` > `VERCEL_URL` > `localhost:PORT`.
+  Consumers on Vercel no longer need to pass baseUrl or set any custom env vars.
+  The `NEXT_PUBLIC_BASE_URL` fallback has been removed.
+
 ## 0.6.4
 
 ### Patch Changes
