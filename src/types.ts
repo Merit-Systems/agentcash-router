@@ -174,11 +174,11 @@ export interface RouteEntry {
 export interface RouterConfig {
   payeeAddress: string;
   /**
-   * Production origin URL (e.g. `https://myapp.com`).
+   * Origin URL (e.g. `https://myapp.com`).
    * Used for discovery URLs, OpenAPI servers, and MPP realm.
    *
-   * Falls back to `NEXT_PUBLIC_BASE_URL` env var.
-   * Required in production — `next build` will fail without it.
+   * Auto-detected on Vercel via `VERCEL_URL`. Falls back to `localhost:PORT` in dev.
+   * Only needed for non-Vercel production deployments.
    */
   baseUrl?: string;
   network?: string;
