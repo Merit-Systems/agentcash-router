@@ -136,7 +136,7 @@ router
 `baseUrl` is auto-detected — most consumers don't need to pass it:
 
 1. **`config.baseUrl`** — Explicit override (for non-Vercel deployments)
-2. **`VERCEL_URL`** — Auto-detected on Vercel (set by the platform on every build and deployment)
+2. **`NEXT_PUBLIC_BASE_URL`** — Canonical base URL env var (e.g. `https://myapp.com`)
 3. **`localhost:PORT`** — Fallback for local dev (`PORT` env var, defaults to 3000)
 
 In production on a non-Vercel host, pass `baseUrl` explicitly. On Vercel, it just works. In dev, it just works. No custom env vars needed.

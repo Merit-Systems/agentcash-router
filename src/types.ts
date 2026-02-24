@@ -177,7 +177,7 @@ export interface RouterConfig {
    * Origin URL (e.g. `https://myapp.com`).
    * Used for discovery URLs, OpenAPI servers, and MPP realm.
    *
-   * Auto-detected on Vercel via `VERCEL_URL`. Falls back to `localhost:PORT` in dev.
+   * Falls back to `NEXT_PUBLIC_BASE_URL` env var, then `localhost:PORT` in dev.
    * Only needed for non-Vercel production deployments.
    */
   baseUrl?: string;

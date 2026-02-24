@@ -45,12 +45,10 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   const registry = new RouteRegistry();
   const nonceStore = config.siwx?.nonceStore ?? new MemoryNonceStore();
   const network = config.network ?? 'eip155:8453';
-  // baseUrl resolution: explicit config > VERCEL_URL (auto-set on Vercel) > localhost:PORT
+  // baseUrl resolution: explicit config > NEXT_PUBLIC_BASE_URL > localhost:PORT
   const baseUrl =
     config.baseUrl ??
-    (typeof globalThis.process !== 'undefined' && process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : undefined);
+    (typeof globalThis.process !== 'undefined' ? process.env.NEXT_PUBLIC_BASE_URL : undefined);
 
   // Empty protocols is a programming error — always throw.
   if (config.protocols && config.protocols.length === 0) {
@@ -59,11 +57,15 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     );
   }
 
-  if (!baseUrl && process.env.NODE_ENV === 'production') {
-    console.warn(
-      '[router] baseUrl was not provided and VERCEL_URL is not set. ' +
-        'Falling back to localhost. Pass baseUrl in RouterConfig for non-Vercel deployments.',
-    );
+  if (!baseUrl) {
+    const msg =
+      'baseUrl is required. Pass it in RouterConfig or set NEXT_PUBLIC_BASE_URL ' +
+      '(e.g. https://myapp.com). It is used for discovery URLs, OpenAPI servers, ' +
+      'and MPP realm.';
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(msg);
+    }
+    console.warn(`[router] ${msg}`);
   }
 
   const resolvedBaseUrl = (baseUrl ?? `http://localhost:${process.env.PORT ?? 3000}`).replace(
