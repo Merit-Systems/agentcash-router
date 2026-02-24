@@ -131,6 +131,20 @@ router
 
 ## Environment Variables
 
+### Base URL Resolution
+
+`baseUrl` is auto-detected — most consumers don't need to pass it:
+
+1. **`config.baseUrl`** — Explicit override (for non-Vercel deployments)
+2. **`VERCEL_URL`** — Auto-detected on Vercel (set by the platform on every build and deployment)
+3. **`localhost:PORT`** — Fallback for local dev (`PORT` env var, defaults to 3000)
+
+In production on a non-Vercel host, pass `baseUrl` explicitly. On Vercel, it just works. In dev, it just works. No custom env vars needed.
+
+**Do NOT use `NEXT_PUBLIC_BASE_URL`.** It was removed in 0.6.5. The library handles base URL resolution internally.
+
+### CDP API Keys
+
 The router uses the default facilitator from `@coinbase/x402`, which requires CDP API keys in `process.env`:
 
 - `CDP_API_KEY_ID` — Coinbase Developer Platform API key ID
