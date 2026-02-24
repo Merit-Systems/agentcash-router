@@ -207,27 +207,33 @@ export function createRequestHandler(
       // with all properties intact. TypeScript doesn't track this through clone().
       const requestForPricing = request.clone() as NextRequest;
 
-      // Parse clone for pricing/validation
+      // Parse clone for pricing/validation.
+      // On failure, earlyBodyData stays undefined so build402 falls back to
+      // maxPrice. This ensures discovery probes (empty body, no payment header)
+      // still receive a 402 challenge. Real validation errors surface later
+      // when a payment IS present (line 374+).
       const earlyBodyResult = await parseBody(requestForPricing, routeEntry);
 
-      // Early validation failure - return 400, don't charge them!
-      if (!earlyBodyResult.ok) {
-        firePluginResponse(deps, pluginCtx, meta, earlyBodyResult.response);
-        return earlyBodyResult.response;
-      }
+      if (earlyBodyResult.ok) {
+        earlyBodyData = earlyBodyResult.data;
 
-      earlyBodyData = earlyBodyResult.data;
-
-      // Run pre-payment validation if configured
-      if (routeEntry.validateFn) {
-        try {
-          await routeEntry.validateFn(earlyBodyData);
-        } catch (err: unknown) {
-          const status = (err as { status?: number }).status ?? 400;
-          const message = err instanceof Error ? err.message : 'Validation failed';
-          return fail(status, message, meta, pluginCtx, earlyBodyData);
+        // Run pre-payment validation if configured.
+        // Unlike body parse failures (which fall through to 402 for discovery),
+        // validateFn errors on a valid body are intentional rejections (e.g.
+        // "domain taken", "rate limited") and should surface immediately.
+        if (routeEntry.validateFn) {
+          try {
+            await routeEntry.validateFn(earlyBodyData);
+          } catch (err: unknown) {
+            const status = (err as { status?: number }).status ?? 400;
+            const message = err instanceof Error ? err.message : 'Validation failed';
+            return fail(status, message, meta, pluginCtx, earlyBodyData);
+          }
         }
       }
+      // Body parse failed — earlyBodyData stays undefined so build402 falls
+      // back to maxPrice. This ensures discovery probes (empty/invalid body,
+      // no payment header) still receive a 402 challenge.
     }
 
     // ---- SIWX ----
@@ -235,8 +241,10 @@ export function createRequestHandler(
     // handler context, and there's no price to resolve. This avoids
     // unnecessary body buffering for unauthenticated requests.
     if (routeEntry.authMode === 'siwx') {
-      // Early body parsing + validation for SIWX routes with validateFn
-      // Reject invalid requests before showing the SIWX challenge
+      // Early body parsing + validation for SIWX routes with validateFn.
+      // Body parse failures fall through to the SIWX challenge so discovery
+      // probes aren't blocked. validateFn errors on valid bodies still
+      // reject immediately (same as paid routes).
       if (
         routeEntry.validateFn &&
         routeEntry.bodySchema &&
@@ -244,16 +252,14 @@ export function createRequestHandler(
       ) {
         const requestForValidation = request.clone() as NextRequest;
         const earlyBodyResult = await parseBody(requestForValidation, routeEntry);
-        if (!earlyBodyResult.ok) {
-          firePluginResponse(deps, pluginCtx, meta, earlyBodyResult.response);
-          return earlyBodyResult.response;
-        }
-        try {
-          await routeEntry.validateFn(earlyBodyResult.data);
-        } catch (err: unknown) {
-          const status = (err as { status?: number }).status ?? 400;
-          const message = err instanceof Error ? err.message : 'Validation failed';
-          return fail(status, message, meta, pluginCtx, earlyBodyResult.data);
+        if (earlyBodyResult.ok) {
+          try {
+            await routeEntry.validateFn(earlyBodyResult.data);
+          } catch (err: unknown) {
+            const status = (err as { status?: number }).status ?? 400;
+            const message = err instanceof Error ? err.message : 'Validation failed';
+            return fail(status, message, meta, pluginCtx, earlyBodyResult.data);
+          }
         }
       }
 
