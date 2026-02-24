@@ -66,9 +66,10 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     );
   }
 
-  const resolvedBaseUrl = (
-    baseUrl ?? `http://localhost:${process.env.PORT ?? 3000}`
-  ).replace(/\/+$/, '');
+  const resolvedBaseUrl = (baseUrl ?? `http://localhost:${process.env.PORT ?? 3000}`).replace(
+    /\/+$/,
+    '',
+  );
 
   // Validate per-protocol config synchronously.
   let x402ConfigError: string | undefined;

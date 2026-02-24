@@ -496,9 +496,9 @@ describe('discovery probe (x402scan prober)', () => {
       });
       const handler = createRequestHandler(entry, async () => ({}), makeDeps());
       // Payment header present, but body is invalid
-      const payload = Buffer.from(
-        JSON.stringify({ payer: KNOWN_PAYER, amount: '0.05' }),
-      ).toString('base64');
+      const payload = Buffer.from(JSON.stringify({ payer: KNOWN_PAYER, amount: '0.05' })).toString(
+        'base64',
+      );
       const req = new NextRequest('http://localhost:3000/api/test', {
         method: 'POST',
         headers: { 'PAYMENT-SIGNATURE': payload, 'Content-Type': 'application/json' },
@@ -511,9 +511,7 @@ describe('discovery probe (x402scan prober)', () => {
     it('MPP: returns 400 when credential present but body invalid', async () => {
       const entry = makeMPPEntry({ bodySchema });
       const handler = createRequestHandler(entry, async () => ({}), makeMPPDeps());
-      const credential = Buffer.from(
-        JSON.stringify({ payer: KNOWN_MPP_PAYER }),
-      ).toString('base64');
+      const credential = Buffer.from(JSON.stringify({ payer: KNOWN_MPP_PAYER })).toString('base64');
       const req = new NextRequest('http://localhost:3000/api/test', {
         method: 'POST',
         headers: { Authorization: `Payment ${credential}`, 'Content-Type': 'application/json' },
