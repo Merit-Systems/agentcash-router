@@ -175,12 +175,12 @@ export interface RouterConfig {
   payeeAddress: string;
   /**
    * Origin URL (e.g. `https://myapp.com`).
-   * Used for discovery URLs, OpenAPI servers, and MPP realm.
+   * Used for 402 challenge realm, discovery URLs, OpenAPI servers, and MPP memo indexing.
    *
-   * Auto-detected on Vercel via `VERCEL_URL`. Falls back to `localhost:PORT` in dev.
-   * Only needed for non-Vercel production deployments.
+   * **Required.** No auto-detection — the realm is load-bearing for payment matching,
+   * so it must be explicitly set by the consuming app.
    */
-  baseUrl?: string;
+  baseUrl: string;
   network?: string;
   facilitatorUrl?: string;
   plugin?: import('./plugin.js').RouterPlugin;

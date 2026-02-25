@@ -45,12 +45,15 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   const registry = new RouteRegistry();
   const nonceStore = config.siwx?.nonceStore ?? new MemoryNonceStore();
   const network = config.network ?? 'eip155:8453';
-  // baseUrl resolution: explicit config > VERCEL_URL (auto-set on Vercel) > localhost:PORT
-  const baseUrl =
-    config.baseUrl ??
-    (typeof globalThis.process !== 'undefined' && process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : undefined);
+  // baseUrl is required — the realm is load-bearing for payment matching and MPP indexing.
+  // No auto-detection; consuming apps must explicitly set it.
+  if (!config.baseUrl) {
+    throw new Error(
+      '[router] baseUrl is required in RouterConfig. ' +
+        'Set it to your production domain (e.g., "https://api.example.com"). ' +
+        'The realm is used for payment matching and must be correct.',
+    );
+  }
 
   // Empty protocols is a programming error — always throw.
   if (config.protocols && config.protocols.length === 0) {
@@ -59,17 +62,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     );
   }
 
-  if (!baseUrl && process.env.NODE_ENV === 'production') {
-    console.warn(
-      '[router] baseUrl was not provided and VERCEL_URL is not set. ' +
-        'Falling back to localhost. Pass baseUrl in RouterConfig for non-Vercel deployments.',
-    );
-  }
-
-  const resolvedBaseUrl = (baseUrl ?? `http://localhost:${process.env.PORT ?? 3000}`).replace(
-    /\/+$/,
-    '',
-  );
+  const resolvedBaseUrl = config.baseUrl.replace(/\/+$/, '');
 
   // Validate per-protocol config synchronously.
   let x402ConfigError: string | undefined;
