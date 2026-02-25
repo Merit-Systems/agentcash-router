@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 0.6.8
+
+### Patch Changes
+
+- 20137d9: Bump mppx to 0.3.8
+
 ## 0.6.7
 
 ### Patch Changes
