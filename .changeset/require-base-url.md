@@ -1,5 +1,5 @@
 ---
-"@agentcash/router": minor
+"@agentcash/router": patch
 ---
 
 BREAKING: `baseUrl` is now required in `RouterConfig`. Removed `VERCEL_URL` auto-detection and `localhost` fallback.
