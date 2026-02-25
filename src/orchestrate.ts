@@ -15,6 +15,7 @@ import { safeCallHandler } from './handler.js';
 import { bufferBody, validateBody } from './body.js';
 import { resolvePrice, resolveMaxPrice } from './pricing.js';
 import { Credential } from 'mppx';
+import { isAddress, getAddress } from 'viem';
 import { buildX402Challenge, verifyX402Payment, settleX402Payment } from './protocols/x402.js';
 import { verifySIWX, buildSIWXExtension, SIWX_ERROR_MESSAGES } from './auth/siwx.js';
 import { verifyApiKey } from './auth/api-key.js';
@@ -566,15 +567,20 @@ export function createRequestHandler(
       }
 
       // Payment verified — extract wallet from credential source (DID)
+      // MPP source format: "did:pkh:eip155:<chainId>:<address>"
+      // Normalize to plain address for consistency with x402/SIWX flows
       const credential = Credential.fromRequest(request);
-      const wallet = (credential?.source ?? '').toLowerCase();
+      const rawSource = credential?.source ?? '';
+      const didParts = rawSource.split(':');
+      const lastPart = didParts[didParts.length - 1];
+      const wallet = (isAddress(lastPart) ? getAddress(lastPart) : rawSource).toLowerCase();
 
       pluginCtx.setVerifiedWallet(wallet);
       firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
         protocol: 'mpp',
         payer: wallet,
         amount: price,
-        network: 'tempo:42431',
+        network: 'tempo:4217',
       });
 
       const { response, rawResult } = await invoke(
