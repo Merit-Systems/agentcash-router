@@ -6,6 +6,7 @@ import type { RouterConfig } from '../src/types.js';
 describe('RouterConfig.protocols', () => {
   const baseConfig: RouterConfig = {
     payeeAddress: '0x1234567890123456789012345678901234567890',
+    baseUrl: 'http://localhost:3000',
     network: 'eip155:8453',
     prices: { 'test/route': '0.01' },
   };
@@ -163,6 +164,7 @@ describe('RouterConfig.protocols', () => {
     it('logs error in development when mpp has no recipient and no payeeAddress', async () => {
       const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const router = createRouter({
+        baseUrl: 'http://localhost:3000',
         network: 'eip155:8453',
         protocols: ['mpp'],
         mpp: { secretKey: 'test', currency: 'USDC', rpcUrl: 'https://rpc.example.com' },
@@ -202,6 +204,7 @@ describe('RouterConfig.protocols', () => {
     it('does not affect manually-priced routes', () => {
       const router = createRouter({
         payeeAddress: '0x1234567890123456789012345678901234567890',
+        baseUrl: 'http://localhost:3000',
         protocols: ['x402'],
       });
 
@@ -218,6 +221,7 @@ describe('RouterConfig.protocols', () => {
     it('manual routes can override global protocols', () => {
       const router = createRouter({
         payeeAddress: '0x1234567890123456789012345678901234567890',
+        baseUrl: 'http://localhost:3000',
         protocols: ['x402', 'mpp'],
         mpp: validMppConfig,
         prices: { 'auto/route': '0.01' },
@@ -241,6 +245,7 @@ describe('RouterConfig.protocols', () => {
     it('applies protocols to all auto-priced routes', () => {
       const router = createRouter({
         payeeAddress: '0x1234567890123456789012345678901234567890',
+        baseUrl: 'http://localhost:3000',
         protocols: ['x402', 'mpp'],
         mpp: validMppConfig,
         prices: {

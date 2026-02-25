@@ -19,6 +19,7 @@ const mppConfig = mppSecretKey
 
 // Create router with both x402 and MPP support
 export const router = createRouter({
+  baseUrl: process.env.BASE_URL!,
   protocols: mppConfig ? ['x402', 'mpp'] : ['x402'],
   network: 'eip155:8453', // Base mainnet
   payeeAddress,

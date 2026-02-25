@@ -131,17 +131,18 @@ router
 
 ## Environment Variables
 
-### Base URL Resolution
+### Base URL
 
-`baseUrl` is auto-detected — most consumers don't need to pass it:
+`baseUrl` is **required** in `RouterConfig`. No auto-detection, no fallbacks. The realm is load-bearing for payment matching (MPP memo indexing, 402 challenge realm), so it must be explicitly set.
 
-1. **`config.baseUrl`** — Explicit override (for non-Vercel deployments)
-2. **`VERCEL_URL`** — Auto-detected on Vercel (set by the platform on every build and deployment)
-3. **`localhost:PORT`** — Fallback for local dev (`PORT` env var, defaults to 3000)
+```typescript
+createRouter({
+  baseUrl: process.env.BASE_URL!,
+  // ...
+})
+```
 
-In production on a non-Vercel host, pass `baseUrl` explicitly. On Vercel, it just works. In dev, it just works. No custom env vars needed.
-
-**Do NOT use `NEXT_PUBLIC_BASE_URL`.** It was removed in 0.6.5. The library handles base URL resolution internally.
+If `baseUrl` is missing, `createRouter` throws immediately — in dev and prod. This ensures devs discover the issue on first `pnpm dev` rather than deploying with a wrong realm.
 
 ### CDP API Keys
 
