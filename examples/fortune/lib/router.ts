@@ -11,7 +11,7 @@ if (!payeeAddress) {
 const mppConfig = mppSecretKey
   ? {
       secretKey: mppSecretKey,
-      currency: '0x20c0000000000000000000000000000000000000', // PathUSD on Tempo mainnet (6 decimals)
+      currency: '0x20c000000000000000000000b9537d11c60e8b50', // PathUSD on Tempo mainnet (6 decimals)
       recipient: payeeAddress,
       rpcUrl: process.env.TEMPO_RPC_URL,
     }

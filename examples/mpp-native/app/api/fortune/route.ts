@@ -1,23 +1,4 @@
-import { Mppx, tempo } from 'mppx/nextjs';
-
-const mppx = Mppx.create({
-  methods: [
-    tempo({
-      currency: '0x20c0000000000000000000000000000000000000', // PathUSD on Tempo mainnet
-      recipient: (process.env.MPP_RECIPIENT_ADDRESS ?? '0x0') as `0x${string}`,
-      ...(process.env.TEMPO_RPC_URL
-        ? {
-            getClient: async () => {
-              const { createClient, http } = await import('viem');
-              const { tempo: tempoChain } = await import('viem/chains');
-              return createClient({ chain: tempoChain, transport: http(process.env.TEMPO_RPC_URL) });
-            },
-          }
-        : {}),
-    }),
-  ],
-  secretKey: process.env.MPP_SECRET_KEY!,
-});
+import { mppx } from '@/app/lib/mppx';
 
 const fortunes = [
   'A beautiful, smart, and loving person will be coming into your life.',
