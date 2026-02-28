@@ -7,6 +7,7 @@ import type { OpenAPIOptions } from './discovery/openapi.js';
 import { RouteRegistry } from './registry.js';
 import { RouteBuilder } from './builder.js';
 import { MemoryNonceStore } from './auth/nonce.js';
+import { MemoryEntitlementStore } from './auth/entitlement.js';
 import { createWellKnownHandler } from './discovery/well-known.js';
 import { createOpenAPIHandler } from './discovery/openapi.js';
 
@@ -44,6 +45,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
 ): ServiceRouter<Extract<keyof P, string>> {
   const registry = new RouteRegistry();
   const nonceStore = config.siwx?.nonceStore ?? new MemoryNonceStore();
+  const entitlementStore = config.siwx?.entitlementStore ?? new MemoryEntitlementStore();
   const network = config.network ?? 'eip155:8453';
   // baseUrl is required — the realm is load-bearing for payment matching and MPP indexing.
   // No auto-detection; consuming apps must explicitly set it.
@@ -115,6 +117,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     initPromise: Promise.resolve(),
     plugin: config.plugin,
     nonceStore,
+    entitlementStore,
     payeeAddress: config.payeeAddress,
     network,
     mppx: null,
@@ -251,6 +254,8 @@ export type {
 
 export type { NonceStore, RedisNonceStoreOptions } from './auth/nonce.js';
 export { MemoryNonceStore, createRedisNonceStore, SIWX_CHALLENGE_EXPIRY_MS } from './auth/nonce.js';
+export type { EntitlementStore, RedisEntitlementStoreOptions } from './auth/entitlement.js';
+export { MemoryEntitlementStore, createRedisEntitlementStore } from './auth/entitlement.js';
 export type { SiwxErrorCode } from './auth/siwx.js';
 export { SIWX_ERROR_MESSAGES } from './auth/siwx.js';
 export { RouteBuilder } from './builder.js';

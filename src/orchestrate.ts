@@ -10,6 +10,7 @@ import type {
 import type { RouterPlugin, PluginContext, RequestMeta } from './plugin.js';
 import { createDefaultContext, firePluginHook } from './plugin.js';
 import { SIWX_CHALLENGE_EXPIRY_MS, type NonceStore } from './auth/nonce.js';
+import type { EntitlementStore } from './auth/entitlement.js';
 import { detectProtocol } from './protocols/detect.js';
 import { safeCallHandler } from './handler.js';
 import { bufferBody, validateBody } from './body.js';
@@ -37,6 +38,7 @@ export interface OrchestrateDeps {
   mppInitError?: string;
   plugin?: RouterPlugin;
   nonceStore: NonceStore;
+  entitlementStore: EntitlementStore;
   payeeAddress: string;
   network: string;
   mppx?: {
@@ -238,10 +240,11 @@ export function createRequestHandler(
     }
 
     // ---- SIWX ----
-    // SIWX runs before body parsing: the wallet address is needed for
-    // handler context, and there's no price to resolve. This avoids
-    // unnecessary body buffering for unauthenticated requests.
-    if (routeEntry.authMode === 'siwx') {
+    // SIWX runs before payment processing.
+    // - Pure SIWX routes: signature is the primary gate.
+    // - Paid+SIWX routes: valid signature can bypass repeat payment when
+    //   entitlement is present; otherwise we continue to payment flow.
+    if (routeEntry.authMode === 'siwx' || routeEntry.siwxEnabled) {
       // Early body parsing + validation for SIWX routes with validateFn.
       // Body parse failures fall through to the SIWX challenge so discovery
       // probes aren't blocked. validateFn errors on valid bodies still
@@ -264,7 +267,8 @@ export function createRequestHandler(
         }
       }
 
-      if (!request.headers.get('SIGN-IN-WITH-X')) {
+      const siwxHeader = request.headers.get('SIGN-IN-WITH-X');
+      if (!siwxHeader && routeEntry.authMode === 'siwx') {
         // Uniform 402 challenge format: SIWX routes return the same x402v2
         // challenge structure as paid routes, with PAYMENT-REQUIRED header
         // and JSON body. MCP clients parse one response format regardless
@@ -334,26 +338,46 @@ export function createRequestHandler(
         return response;
       }
 
-      const siwx = await verifySIWX(request, routeEntry, deps.nonceStore);
-      if (!siwx.valid) {
-        // Return structured error with code for client auto-retry
-        const response = NextResponse.json(
-          { error: siwx.code, message: SIWX_ERROR_MESSAGES[siwx.code] },
-          { status: 402 },
-        );
-        firePluginResponse(deps, pluginCtx, meta, response);
-        return response;
-      }
+      if (siwxHeader) {
+        const siwx = await verifySIWX(request, routeEntry, deps.nonceStore);
+        if (!siwx.valid) {
+          // Pure SIWX routes return structured SIWX errors.
+          if (routeEntry.authMode === 'siwx') {
+            const response = NextResponse.json(
+              { error: siwx.code, message: SIWX_ERROR_MESSAGES[siwx.code] },
+              { status: 402 },
+            );
+            firePluginResponse(deps, pluginCtx, meta, response);
+            return response;
+          }
+          // Paid+SIWX acceleration: invalid SIWX falls back to payment flow.
+        } else {
+          // Normalize to lowercase — checksumming is a display concern, not storage
+          const wallet = siwx.wallet.toLowerCase();
+          pluginCtx.setVerifiedWallet(wallet);
 
-      // Normalize to lowercase — checksumming is a display concern, not storage
-      const wallet = siwx.wallet.toLowerCase();
-      pluginCtx.setVerifiedWallet(wallet);
-      firePluginHook(deps.plugin, 'onAuthVerified', pluginCtx, {
-        authMode: 'siwx',
-        wallet,
-        route: routeEntry.key,
-      });
-      return handleAuth(wallet, undefined);
+          if (routeEntry.authMode === 'siwx') {
+            firePluginHook(deps.plugin, 'onAuthVerified', pluginCtx, {
+              authMode: 'siwx',
+              wallet,
+              route: routeEntry.key,
+            });
+            return handleAuth(wallet, undefined);
+          }
+
+          if (routeEntry.siwxEnabled && routeEntry.pricing) {
+            const entitled = await deps.entitlementStore.has(routeEntry.key, wallet);
+            if (entitled) {
+              firePluginHook(deps.plugin, 'onAuthVerified', pluginCtx, {
+                authMode: 'siwx',
+                wallet,
+                route: routeEntry.key,
+              });
+              return handleAuth(wallet, account);
+            }
+          }
+        }
+      }
     }
 
     // ---- No payment header → 402 challenge ----
@@ -492,6 +516,17 @@ export function createRequestHandler(
             verifyPayload,
             verifyRequirements,
           );
+          if (routeEntry.siwxEnabled) {
+            try {
+              await deps.entitlementStore.grant(routeEntry.key, wallet);
+            } catch (error) {
+              firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+                level: 'warn' as const,
+                message: `Entitlement grant failed: ${error instanceof Error ? error.message : String(error)}`,
+                route: routeEntry.key,
+              });
+            }
+          }
           response.headers.set('PAYMENT-RESPONSE', settle.encoded);
           firePluginHook(deps.plugin, 'onPaymentSettled', pluginCtx, {
             protocol: 'x402',
@@ -593,6 +628,17 @@ export function createRequestHandler(
       );
 
       if (response.status < 400) {
+        if (routeEntry.siwxEnabled) {
+          try {
+            await deps.entitlementStore.grant(routeEntry.key, wallet);
+          } catch (error) {
+            firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+              level: 'warn' as const,
+              message: `Entitlement grant failed: ${error instanceof Error ? error.message : String(error)}`,
+              route: routeEntry.key,
+            });
+          }
+        }
         const receiptResponse = mppResult.withReceipt(response);
         finalize(receiptResponse as NextResponse, rawResult, meta, pluginCtx, body.data);
         return receiptResponse as NextResponse;
@@ -791,6 +837,20 @@ async function build402(
     }
   } catch {
     // Bazaar extensions are optional enrichment for 402 challenges
+  }
+
+  if (routeEntry.siwxEnabled) {
+    try {
+      const siwxExtension = await buildSIWXExtension();
+      if (siwxExtension && typeof siwxExtension === 'object' && !Array.isArray(siwxExtension)) {
+        extensions = {
+          ...(extensions ?? {}),
+          ...(siwxExtension as Record<string, unknown>),
+        };
+      }
+    } catch {
+      // SIWX extension is optional enrichment for 402 challenges
+    }
   }
 
   if (routeEntry.protocols.includes('x402') && deps.x402Server) {

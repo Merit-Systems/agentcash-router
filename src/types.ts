@@ -150,6 +150,11 @@ export interface ProviderQuotaEvent {
 export interface RouteEntry {
   key: string;
   authMode: AuthMode;
+  /**
+   * Enables SIWX acceleration on paid routes.
+   * When true, valid SIWX proofs can bypass repeat payment if entitlement exists.
+   */
+  siwxEnabled?: boolean;
   pricing?: PricingConfig;
   protocols: ProtocolType[];
   bodySchema?: ZodType;
@@ -184,7 +189,10 @@ export interface RouterConfig {
   network?: string;
   facilitatorUrl?: string;
   plugin?: import('./plugin.js').RouterPlugin;
-  siwx?: { nonceStore?: import('./auth/nonce.js').NonceStore };
+  siwx?: {
+    nonceStore?: import('./auth/nonce.js').NonceStore;
+    entitlementStore?: import('./auth/entitlement.js').EntitlementStore;
+  };
   prices?: Record<string, string>;
   mpp?: {
     secretKey: string;

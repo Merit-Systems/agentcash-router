@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createRequestHandler, type OrchestrateDeps } from '../src/orchestrate.js';
 import { MemoryNonceStore } from '../src/auth/nonce.js';
+import { MemoryEntitlementStore } from '../src/auth/entitlement.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
 import { withX402Payment } from './fakes/request.js';
 import type { RouteEntry, HandlerContext } from '../src/types.js';
@@ -157,6 +158,7 @@ function makeDeps(overrides: Partial<OrchestrateDeps> = {}): OrchestrateDeps {
     x402Server: server as unknown as Record<string, Function>,
     initPromise: Promise.resolve(),
     nonceStore: new MemoryNonceStore(),
+    entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: KNOWN_PAYEE,
     network: 'eip155:8453',
     ...overrides,
@@ -236,6 +238,7 @@ function makeMPPDeps(overrides: Partial<OrchestrateDeps> = {}): OrchestrateDeps 
     x402Server: null,
     initPromise: Promise.resolve(),
     nonceStore: new MemoryNonceStore(),
+    entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: KNOWN_PAYEE,
     network: 'tempo:42431',
     mppx: createFakeMppx(),
@@ -714,6 +717,49 @@ describe('SIWX route', () => {
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
     const res = await handler(makeSIWXRequest('0xWallet', 'nonce-1', true));
     expect(res.status).toBe(402);
+  });
+});
+
+describe('paid + SIWX acceleration', () => {
+  it('grants access with SIWX when entitlement already exists', async () => {
+    const deps = makeDeps();
+    await deps.entitlementStore.grant('test/route', '0xwallet');
+    const entry = makeEntry({ authMode: 'paid', siwxEnabled: true });
+    let capturedWallet: string | null = null;
+    const handler = createRequestHandler(
+      entry,
+      async (ctx) => {
+        capturedWallet = ctx.wallet;
+        return { ok: true };
+      },
+      deps,
+    );
+
+    const res = await handler(makeSIWXRequest('0xWallet', 'entitled-nonce'));
+    expect(res.status).toBe(200);
+    expect(capturedWallet).toBe('0xwallet');
+  });
+
+  it('falls back to payment challenge when SIWX is valid but entitlement is missing', async () => {
+    const entry = makeEntry({ authMode: 'paid', siwxEnabled: true });
+    const handler = createRequestHandler(entry, async () => ({ ok: true }), makeDeps());
+
+    const res = await handler(makeSIWXRequest('0xWallet', 'not-entitled-nonce'));
+    expect(res.status).toBe(402);
+    expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
+  });
+
+  it('records entitlement after successful payment settlement', async () => {
+    const deps = makeDeps();
+    const entry = makeEntry({ authMode: 'paid', siwxEnabled: true });
+    const handler = createRequestHandler(entry, async () => ({ ok: true }), deps);
+
+    const paid = await handler(makePaymentRequest());
+    expect(paid.status).toBe(200);
+    expect(await deps.entitlementStore.has('test/route', KNOWN_PAYER)).toBe(true);
+
+    const accelerated = await handler(makeSIWXRequest(KNOWN_PAYER, 'post-payment-nonce'));
+    expect(accelerated.status).toBe(200);
   });
 });
 

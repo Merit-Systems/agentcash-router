@@ -106,8 +106,19 @@ export const GET = router.wellKnown();
 // app/openapi.json/route.ts
 import { router } from '@/lib/routes';
 import '@/lib/routes/barrel';
-export const GET = router.openapi({ title: 'My API', version: '1.0.0' });
+export const GET = router.openapi({
+  title: 'My API',
+  version: '1.0.0',
+  llmsTxtUrl: 'https://my-api.dev/llms.txt',
+  ownershipProofs: ['did:example:proof'],
+});
 ```
+
+OpenAPI output follows the discovery contract:
+
+- Paid signaling via `responses.402` + `x-payment-info`
+- Auth signaling via `security` + `components.securitySchemes`
+- Optional top-level metadata via `x-discovery` (`llmsTxtUrl`, `ownershipProofs`)
 
 ## API
 
