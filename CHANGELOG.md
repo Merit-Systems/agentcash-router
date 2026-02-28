@@ -1,5 +1,16 @@
 # @agentcash/router
 
+## 0.7.0
+
+### Minor Changes
+
+- faa4757: Add paid plus SIWX acceleration support with pluggable entitlement storage.
+
+  This release adds:
+  - `.paid(...).siwx()` route composition for paid routes with SIWX acceleration
+  - `EntitlementStore` support with in-memory and Redis-backed adapters
+  - OpenAPI discovery improvements for auth and payment signaling
+
 ## 0.6.8
 
 ### Patch Changes
