@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { RouteRegistry } from '../src/registry.js';
 import { RouteBuilder } from '../src/builder.js';
 import { MemoryNonceStore } from '../src/auth/nonce.js';
+import { MemoryEntitlementStore } from '../src/auth/entitlement.js';
 import type { OrchestrateDeps } from '../src/orchestrate.js';
 
 function makeDeps(): OrchestrateDeps {
@@ -10,6 +11,7 @@ function makeDeps(): OrchestrateDeps {
     x402Server: null,
     initPromise: Promise.resolve(),
     nonceStore: new MemoryNonceStore(),
+    entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: '0x1234',
     network: 'eip155:8453',
   };
@@ -70,6 +72,20 @@ describe('fluent chain', () => {
     const { builder, registry } = makeBuilder('stored/key');
     builder.unprotected().handler(async () => ({ ok: true }));
     expect(registry.has('stored/key')).toBe(true);
+  });
+
+  it('.paid().siwx().handler() enables SIWX acceleration on paid routes', () => {
+    const { builder, registry } = makeBuilder('paid/siwx');
+    const handler = builder
+      .paid('0.01')
+      .siwx()
+      .handler(async () => ({ ok: true }));
+
+    expect(typeof handler).toBe('function');
+    const entry = registry.get('paid/siwx');
+    expect(entry?.authMode).toBe('paid');
+    expect(entry?.siwxEnabled).toBe(true);
+    expect(entry?.protocols).toEqual(['x402']);
   });
 });
 

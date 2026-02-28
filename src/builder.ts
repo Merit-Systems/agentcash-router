@@ -36,6 +36,7 @@ export class RouteBuilder<
   /** @internal */ readonly _deps: OrchestrateDeps;
   /** @internal */ _authMode: AuthMode | null = null;
   /** @internal */ _pricing: PricingConfig | undefined;
+  /** @internal */ _siwxEnabled = false;
   /** @internal */ _protocols: ProtocolType[] = ['x402'];
   /** @internal */ _maxPrice: string | undefined;
   /** @internal */ _minPrice: string | undefined;
@@ -86,19 +87,14 @@ export class RouteBuilder<
     pricing: PricingConfig,
     options?: PaidOptions,
   ): RouteBuilder<TBody, TQuery, True, boolean, HasBody> {
-    // Runtime guard: prevent combining .paid() with .siwx()
-    if (this._authMode === 'siwx') {
-      throw new Error(
-        `route '${this._key}': Cannot combine .paid() and .siwx() on the same route. ` +
-          'Paid routes get wallet identity from the payment proof. ' +
-          'Use separate routes if you need both payment and SIWX auth.',
-      );
-    }
-
     const next = this.fork() as RouteBuilder<TBody, TQuery, True, boolean, HasBody>;
     next._authMode = 'paid';
     next._pricing = pricing;
-    if (options?.protocols) next._protocols = options.protocols;
+    if (options?.protocols) {
+      next._protocols = options.protocols;
+    } else if (next._protocols.length === 0) {
+      next._protocols = ['x402'];
+    }
     if (options?.maxPrice) next._maxPrice = options.maxPrice;
     if (options?.minPrice) next._minPrice = options.minPrice;
     if (options?.payTo) next._payTo = options.payTo;
@@ -129,29 +125,43 @@ export class RouteBuilder<
     return next;
   }
 
-  siwx(): HasAuth extends true ? never : RouteBuilder<TBody, TQuery, True, False, HasBody> {
-    // Runtime guard: prevent combining .siwx() with .paid()
-    if (this._authMode === 'paid') {
+  siwx(): RouteBuilder<TBody, TQuery, True, False, HasBody> {
+    if (this._authMode === 'unprotected') {
       throw new Error(
-        `route '${this._key}': Cannot combine .paid() and .siwx() on the same route. ` +
-          'Paid routes get wallet identity from the payment proof. ' +
-          'Use separate routes if you need both payment and SIWX auth.',
+        `route '${this._key}': Cannot combine .unprotected() and .siwx() on the same route.`,
+      );
+    }
+
+    if (this._apiKeyResolver) {
+      throw new Error(
+        `route '${this._key}': Combining .siwx() and .apiKey() is not supported on the same route.`,
       );
     }
 
     const next = this.fork() as RouteBuilder<TBody, TQuery, True, False, HasBody>;
+    next._siwxEnabled = true;
+
+    // If route is paid (or already has pricing), SIWX is an acceleration capability.
+    if (next._authMode === 'paid' || next._pricing) {
+      next._authMode = 'paid';
+      if (next._protocols.length === 0) next._protocols = ['x402'];
+      return next;
+    }
+
+    // Pure SIWX auth route (no payment protocol).
     next._authMode = 'siwx';
-    // SIWX routes set protocols to [] because they're not payment
-    // protocol routes — they use the 402 challenge mechanism for
-    // identity proof, not for payment. Discovery uses authMode,
-    // not protocols, to determine visibility.
     next._protocols = [];
-    return next as never;
+    return next;
   }
 
   apiKey(
     resolver: (key: string) => unknown | Promise<unknown>,
   ): RouteBuilder<TBody, TQuery, True, NeedsBody, HasBody> {
+    if (this._siwxEnabled) {
+      throw new Error(
+        `route '${this._key}': Combining .apiKey() and .siwx() is not supported on the same route.`,
+      );
+    }
     const next = this.fork() as RouteBuilder<TBody, TQuery, True, NeedsBody, HasBody>;
     next._authMode = 'apiKey';
     next._apiKeyResolver = resolver;
@@ -279,6 +289,7 @@ export class RouteBuilder<
     const entry: RouteEntry = {
       key: this._key,
       authMode: this._authMode!,
+      siwxEnabled: this._siwxEnabled,
       pricing: this._pricing,
       protocols: this._protocols,
       bodySchema: this._bodySchema,

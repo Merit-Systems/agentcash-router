@@ -9,6 +9,8 @@ export interface OpenAPIOptions {
   description?: string;
   baseUrl?: string;
   contact?: { name?: string; url?: string };
+  llmsTxtUrl?: string;
+  ownershipProofs?: string[];
 }
 
 export function createOpenAPIHandler(
@@ -34,20 +36,49 @@ export function createOpenAPIHandler(
 
     const paths: Record<string, Record<string, unknown>> = {};
     const tagSet = new Set<string>();
+    let requiresSiwxScheme = false;
+    let requiresApiKeyScheme = false;
 
     for (const [key, entry] of registry.entries()) {
       const apiPath = `/api/${entry.path ?? key}`;
       const method = entry.method.toLowerCase();
       const tag = deriveTag(key);
       tagSet.add(tag);
+      const built = buildOperation(key, entry, tag);
+      if (built.requiresSiwxScheme) requiresSiwxScheme = true;
+      if (built.requiresApiKeyScheme) requiresApiKeyScheme = true;
 
       // Merge, don't overwrite: multiple HTTP methods on the same path
       // are standard REST (GET + DELETE on /jobs/{id}). Each method gets
       // its own operation under the shared path key.
-      paths[apiPath] = { ...paths[apiPath], [method]: buildOperation(key, entry, tag) };
+      paths[apiPath] = { ...paths[apiPath], [method]: built.operation };
     }
 
-    cached = createDocument({
+    const securitySchemes: Record<string, unknown> = {};
+    if (requiresSiwxScheme) {
+      securitySchemes.siwx = {
+        type: 'apiKey',
+        in: 'header',
+        name: 'SIGN-IN-WITH-X',
+      };
+    }
+    if (requiresApiKeyScheme) {
+      securitySchemes.apiKey = {
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-API-Key',
+      };
+    }
+
+    const discoveryMetadata: Record<string, unknown> = {};
+    if (options.ownershipProofs && options.ownershipProofs.length > 0) {
+      discoveryMetadata.ownershipProofs = options.ownershipProofs;
+    }
+    if (options.llmsTxtUrl) {
+      discoveryMetadata.llmsTxtUrl = options.llmsTxtUrl;
+    }
+
+    const openApiDocument: Record<string, unknown> = {
       openapi: '3.1.0',
       info: {
         title: options.title,
@@ -59,8 +90,22 @@ export function createOpenAPIHandler(
       tags: Array.from(tagSet)
         .sort()
         .map((name) => ({ name })),
+      ...(Object.keys(securitySchemes).length > 0
+        ? {
+            components: {
+              securitySchemes,
+            },
+          }
+        : {}),
+      ...(Object.keys(discoveryMetadata).length > 0
+        ? {
+            'x-discovery': discoveryMetadata,
+          }
+        : {}),
       paths: paths as never,
-    });
+    };
+
+    cached = createDocument(openApiDocument as never);
 
     return NextResponse.json(cached);
   };
@@ -74,25 +119,20 @@ function deriveTag(routeKey: string): string {
     .join(' ');
 }
 
-function buildOperation(routeKey: string, entry: RouteEntry, tag: string): Record<string, unknown> {
+function buildOperation(
+  routeKey: string,
+  entry: RouteEntry,
+  tag: string,
+): {
+  operation: Record<string, unknown>;
+  requiresSiwxScheme: boolean;
+  requiresApiKeyScheme: boolean;
+} {
   const protocols = entry.protocols.length > 0 ? entry.protocols : undefined;
-  let price: string | undefined;
-  if (typeof entry.pricing === 'string') {
-    // Static pricing — exact value
-    price = entry.pricing;
-  } else if (typeof entry.pricing === 'object' && 'tiers' in entry.pricing) {
-    // Tiered pricing — auto-compute range from lowest to highest tier
-    const tierPrices = Object.values(entry.pricing.tiers).map((t) => parseFloat(t.price));
-    const min = Math.min(...tierPrices);
-    const max = Math.max(...tierPrices);
-    price = min === max ? String(min) : `${min}-${max}`;
-  } else if (entry.minPrice && entry.maxPrice) {
-    // Dynamic pricing with explicit range
-    price = `${entry.minPrice}-${entry.maxPrice}`;
-  } else if (entry.maxPrice) {
-    // Dynamic pricing with only a ceiling
-    price = entry.maxPrice;
-  }
+  const paymentRequired = Boolean(entry.pricing) || entry.authMode === 'paid';
+  const requiresSiwxScheme = entry.authMode === 'siwx' || Boolean(entry.siwxEnabled);
+  const requiresApiKeyScheme = Boolean(entry.apiKeyResolver) && entry.authMode !== 'siwx';
+  const pricingInfo = buildPricingInfo(entry);
 
   const operation: Record<string, unknown> = {
     operationId: routeKey.replace(/\//g, '_'),
@@ -107,19 +147,30 @@ function buildOperation(routeKey: string, entry: RouteEntry, tag: string): Recor
           },
         }),
       },
-      ...(entry.authMode === 'paid' && {
+      ...((paymentRequired || requiresSiwxScheme) && {
         '402': {
-          description: 'Payment Required',
+          description: requiresSiwxScheme ? 'Authentication Required' : 'Payment Required',
+        },
+      }),
+      ...(requiresApiKeyScheme && {
+        '401': {
+          description: 'Unauthorized',
         },
       }),
     },
   };
 
-  if (price !== undefined || protocols) {
+  if (paymentRequired && (pricingInfo || protocols)) {
     operation['x-payment-info'] = {
-      ...(price !== undefined && { price }),
+      ...(pricingInfo ?? {}),
       ...(protocols && { protocols }),
     };
+  }
+
+  if (requiresSiwxScheme) {
+    operation.security = [{ siwx: [] }];
+  } else if (requiresApiKeyScheme) {
+    operation.security = [{ apiKey: [] }];
   }
 
   if (entry.bodySchema) {
@@ -137,5 +188,55 @@ function buildOperation(routeKey: string, entry: RouteEntry, tag: string): Recor
     };
   }
 
-  return operation;
+  return {
+    operation,
+    requiresSiwxScheme,
+    requiresApiKeyScheme,
+  };
+}
+
+function buildPricingInfo(entry: RouteEntry): Record<string, unknown> | undefined {
+  if (!entry.pricing) return undefined;
+
+  if (typeof entry.pricing === 'string') {
+    return {
+      pricingMode: 'fixed',
+      price: entry.pricing,
+    };
+  }
+
+  if (typeof entry.pricing === 'function') {
+    return {
+      pricingMode: 'quote',
+      ...(entry.minPrice ? { minPrice: entry.minPrice } : {}),
+      ...(entry.maxPrice ? { maxPrice: entry.maxPrice } : {}),
+    };
+  }
+
+  if ('tiers' in entry.pricing) {
+    const tierPrices = Object.values(entry.pricing.tiers).map((tier) => parseFloat(tier.price));
+    const min = Math.min(...tierPrices);
+    const max = Math.max(...tierPrices);
+
+    if (Number.isFinite(min) && Number.isFinite(max)) {
+      if (min === max) {
+        return {
+          pricingMode: 'fixed',
+          price: String(min),
+        };
+      }
+      return {
+        pricingMode: 'range',
+        minPrice: String(min),
+        maxPrice: String(max),
+      };
+    }
+
+    return {
+      pricingMode: 'quote',
+      ...(entry.maxPrice ? { maxPrice: entry.maxPrice } : {}),
+    };
+  }
+
+  return undefined;
 }
