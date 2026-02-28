@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  createRedisEntitlementStore,
-  MemoryEntitlementStore,
-} from '../src/auth/entitlement.js';
+import { createRedisEntitlementStore, MemoryEntitlementStore } from '../src/auth/entitlement.js';
 
 describe('MemoryEntitlementStore', () => {
   it('grants and checks entitlements by route + wallet', async () => {
