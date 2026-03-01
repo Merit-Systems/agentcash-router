@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import type { NextResponse } from 'next/server';
 import type { RouterConfig } from './types.js';
+import type { RouteDefinition, RouteMethod } from './types.js';
 import type { OrchestrateDeps } from './orchestrate.js';
 import type { WellKnownOptions } from './discovery/well-known.js';
 import type { OpenAPIOptions } from './discovery/openapi.js';
@@ -26,7 +27,7 @@ export interface MonitorEntry {
 
 export interface ServiceRouter<TPriceKeys extends string = never> {
   route<K extends string>(
-    key: K,
+    keyOrDefinition: K | RouteDefinition<K>,
   ): [K] extends [TPriceKeys]
     ? RouteBuilder<undefined, undefined, true, false, false>
     : RouteBuilder<undefined, undefined, false, false, false>;
@@ -175,8 +176,32 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   const pricesKeys = config.prices ? Object.keys(config.prices) : undefined;
 
   return {
-    route(key) {
-      const builder = new RouteBuilder(key, registry, deps);
+    route(keyOrDefinition) {
+      const isDefinition = typeof keyOrDefinition !== 'string';
+      if (config.strictRoutes && !isDefinition) {
+        throw new Error(
+          '[router] strictRoutes=true requires route({ path }) form. ' +
+            "Replace route('my/key') with route({ path: 'my/key' }).",
+        );
+      }
+
+      const definition = isDefinition
+        ? keyOrDefinition
+        : ({ path: keyOrDefinition, key: keyOrDefinition } as RouteDefinition<string>);
+
+      const normalizedPath = normalizePath(definition.path);
+      const key = definition.key ?? normalizedPath;
+      if (config.strictRoutes && definition.key && definition.key !== definition.path) {
+        throw new Error(
+          `[router] strictRoutes=true forbids key/path divergence for route '${definition.path}'. ` +
+            'Remove custom `key` or make it equal to `path`.',
+        );
+      }
+      let builder = new RouteBuilder(key, registry, deps);
+      builder = builder.path(normalizedPath);
+      if (definition.method) {
+        builder = builder.method(definition.method as RouteMethod);
+      }
 
       if (config.prices && key in config.prices) {
         const options = config.protocols ? { protocols: config.protocols } : undefined;
@@ -213,6 +238,13 @@ export function createRouter<const P extends Record<string, string> = Record<nev
 
     registry,
   };
+}
+
+function normalizePath(path: string): string {
+  let normalized = path.trim();
+  normalized = normalized.replace(/^\/+/, '');
+  normalized = normalized.replace(/^api\/+/, '');
+  return normalized.replace(/\/+$/, '');
 }
 
 // ---------------------------------------------------------------------------

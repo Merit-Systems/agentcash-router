@@ -6,6 +6,15 @@ export interface WellKnownOptions {
   description?: string;
   instructions?: string | (() => string | Promise<string>);
   ownershipProofs?: string[];
+  /**
+   * Whether to include explicit HTTP method prefixes in `resources`.
+   * - `off`: always emit plain URLs.
+   * - `non-default`: emit `METHOD url` for PUT/PATCH/DELETE routes.
+   * - `always`: emit `METHOD url` for all routes.
+   *
+   * @default 'non-default'
+   */
+  methodHints?: 'off' | 'non-default' | 'always';
 }
 
 export function createWellKnownHandler(
@@ -30,11 +39,13 @@ export function createWellKnownHandler(
     // adapt to the specific auth mode at probe time.
     const x402Set = new Set<string>();
     const mppSet = new Set<string>();
+    const methodHints = options.methodHints ?? 'non-default';
 
     for (const [key, entry] of registry.entries()) {
       const url = `${normalizedBase}/api/${entry.path ?? key}`;
-      if (entry.authMode !== 'unprotected') x402Set.add(url);
-      if (entry.protocols.includes('mpp')) mppSet.add(url);
+      const resource = toDiscoveryResource(entry.method, url, methodHints);
+      if (entry.authMode !== 'unprotected') x402Set.add(resource);
+      if (entry.protocols.includes('mpp')) mppSet.add(resource);
     }
 
     // Resolve instructions
@@ -75,4 +86,15 @@ export function createWellKnownHandler(
       },
     });
   };
+}
+
+function toDiscoveryResource(
+  method: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH',
+  url: string,
+  mode: NonNullable<WellKnownOptions['methodHints']>,
+): string {
+  if (mode === 'off') return url;
+  if (mode === 'always') return `${method} ${url}`;
+  const isDefaultProbeMethod = method === 'GET' || method === 'POST';
+  return isDefaultProbeMethod ? url : `${method} ${url}`;
 }

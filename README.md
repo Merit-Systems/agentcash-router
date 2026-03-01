@@ -58,6 +58,8 @@ import { createRouter } from '@agentcash/router';
 
 export const router = createRouter({
   payeeAddress: process.env.X402_PAYEE_ADDRESS!,
+  baseUrl: process.env.NEXT_PUBLIC_BASE_URL!,
+  strictRoutes: true, // recommended
 });
 ```
 
@@ -70,7 +72,7 @@ export const router = createRouter({
 import { router } from '@/lib/routes';
 import { searchSchema, searchResponseSchema } from '@/lib/schemas';
 
-export const POST = router.route('search')
+export const POST = router.route({ path: 'search' })
   .paid('0.01')
   .body(searchSchema)
   .output(searchResponseSchema)
@@ -81,7 +83,7 @@ export const POST = router.route('search')
 **SIWX-authenticated route**
 
 ```typescript
-export const GET = router.route('inbox/status')
+export const GET = router.route({ path: 'inbox/status' })
   .siwx()
   .query(statusQuerySchema)
   .handler(async ({ query, wallet }) => getStatus(query, wallet));
@@ -90,7 +92,7 @@ export const GET = router.route('inbox/status')
 **Unprotected route**
 
 ```typescript
-export const GET = router.route('health')
+export const GET = router.route({ path: 'health' })
   .unprotected()
   .handler(async () => ({ status: 'ok' }));
 ```
@@ -101,7 +103,7 @@ export const GET = router.route('health')
 // app/.well-known/x402/route.ts
 import { router } from '@/lib/routes';
 import '@/lib/routes/barrel'; // ensures all routes are imported
-export const GET = router.wellKnown();
+export const GET = router.wellKnown({ methodHints: 'non-default' });
 
 // app/openapi.json/route.ts
 import { router } from '@/lib/routes';
@@ -129,11 +131,29 @@ Creates a `ServiceRouter` instance.
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `payeeAddress` | `string` | **required** | Wallet address to receive payments |
+| `baseUrl` | `string` | **required** | Service origin used for discovery/OpenAPI/realm |
 | `network` | `string` | `'eip155:8453'` | Blockchain network |
 | `plugin` | `RouterPlugin` | `undefined` | Observability plugin |
 | `prices` | `Record<string, string>` | `undefined` | Central pricing map (auto-applied) |
 | `siwx.nonceStore` | `NonceStore` | `MemoryNonceStore` | Custom nonce store |
 | `mpp` | `{ secretKey, currency, recipient? }` | `undefined` | MPP config |
+| `strictRoutes` | `boolean` | `false` | Enforce `route({ path })` and prevent key/path divergence |
+
+### Path-First Routing
+
+Use path-first route definitions to keep runtime, OpenAPI, and discovery aligned:
+
+```typescript
+router.route({ path: 'flightaware/airports/id/flights/arrivals', method: 'GET' })
+```
+
+If you need a custom internal key (legacy pricing map), you can pass:
+
+```typescript
+router.route({ path: 'public/path', key: 'legacy/key' })
+```
+
+In `strictRoutes` mode, custom keys are rejected to prevent discovery drift.
 
 ### Route Builder
 
