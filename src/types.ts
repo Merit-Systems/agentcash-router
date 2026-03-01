@@ -72,6 +72,27 @@ export interface X402Server {
 
 export type ProtocolType = 'x402' | 'mpp';
 export type AuthMode = 'paid' | 'siwx' | 'apiKey' | 'unprotected';
+export type RouteMethod = 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH';
+
+export interface RouteDefinition<K extends string = string> {
+  /**
+   * Public API path segment (without `/api/` prefix).
+   * Example: `flightaware/airports/id/flights/arrivals`
+   */
+  path: K;
+  /**
+   * Internal route ID for pricing maps / analytics. Defaults to `path`.
+   *
+   * In `strictRoutes` mode, custom keys are disallowed to prevent discovery
+   * drift between internal IDs and advertised paths.
+   */
+  key?: string;
+  /**
+   * Optional explicit method. If omitted, defaults to builder behavior
+   * (`POST`, or `GET` when `.query()` is used).
+   */
+  method?: RouteMethod;
+}
 
 // ---------------------------------------------------------------------------
 // Pricing
@@ -162,7 +183,7 @@ export interface RouteEntry {
   outputSchema?: ZodType;
   description?: string;
   path?: string;
-  method: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH';
+  method: RouteMethod;
   maxPrice?: string;
   minPrice?: string;
   payTo?: string | ((request: Request) => string | Promise<string>);
@@ -215,4 +236,14 @@ export interface RouterConfig {
    * })
    */
   protocols?: ProtocolType[];
+  /**
+   * Enforce explicit, path-first route definitions.
+   *
+   * When enabled:
+   * - `.route('key')` is rejected; use `.route({ path })`.
+   * - custom `key` differing from `path` is rejected.
+   *
+   * This prevents discovery/openapi drift caused by shorthand internal keys.
+   */
+  strictRoutes?: boolean;
 }

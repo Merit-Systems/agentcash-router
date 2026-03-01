@@ -150,6 +150,31 @@ describe('.well-known/x402', () => {
 
     expect(body.mppResources).toBeUndefined();
   });
+
+  it('emits method-prefixed resources for non-default methods by default', async () => {
+    const reg = new RouteRegistry();
+    reg.register(makeEntry({ key: 'jobs/delete', path: 'jobs/{id}', method: 'DELETE' }));
+
+    const handler = createWellKnownHandler(reg, 'https://example.com', undefined);
+    const res = await handler(dummyRequest);
+    const body = await res.json();
+
+    expect(body.resources).toContain('DELETE https://example.com/api/jobs/{id}');
+  });
+
+  it('can disable method hints', async () => {
+    const reg = new RouteRegistry();
+    reg.register(makeEntry({ key: 'jobs/delete', path: 'jobs/{id}', method: 'DELETE' }));
+
+    const handler = createWellKnownHandler(reg, 'https://example.com', undefined, {
+      methodHints: 'off',
+    });
+    const res = await handler(dummyRequest);
+    const body = await res.json();
+
+    expect(body.resources).toContain('https://example.com/api/jobs/{id}');
+    expect(body.resources).not.toContain('DELETE https://example.com/api/jobs/{id}');
+  });
 });
 
 describe('barrel validation', () => {
