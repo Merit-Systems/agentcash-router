@@ -1,0 +1,34 @@
+name: Deprecate Canary
+
+on:
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+jobs:
+  deprecate:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Deprecate canary versions for PR #${{ github.event.pull_request.number }}
+        run: |
+          PR=${{ github.event.pull_request.number }}
+          VERSIONS=$(npm view @agentcash/router versions --json 2>/dev/null | \
+            jq -r ".[] | select(contains(\"-pr-${PR}-\"))")
+
+          if [ -z "$VERSIONS" ]; then
+            echo "No canary versions found for PR #$PR — nothing to deprecate"
+            exit 0
+          fi
+
+          while IFS= read -r version; do
+            echo "Deprecating @agentcash/router@$version"
+            npm deprecate "@agentcash/router@$version" "Canary build for PR #$PR — merged, use latest instead"
+          done <<< "$VERSIONS"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
