@@ -17,6 +17,7 @@ function makeEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
 }
 
 const dummyRequest = new NextRequest('http://localhost:3000/.well-known/x402');
+const defaultDiscovery = { title: 'Test', version: '1.0.0' };
 
 describe('.well-known/x402', () => {
   it('lists all routes with x402 in protocols', async () => {
@@ -24,7 +25,7 @@ describe('.well-known/x402', () => {
     reg.register(makeEntry({ key: 'search' }));
     reg.register(makeEntry({ key: 'lookup' }));
 
-    const handler = createWellKnownHandler(reg, 'https://example.com', undefined);
+    const handler = createWellKnownHandler(reg, 'https://example.com', undefined, defaultDiscovery);
     const res = await handler(dummyRequest);
     const body = await res.json();
 
@@ -39,7 +40,7 @@ describe('.well-known/x402', () => {
     reg.register(makeEntry({ key: 'siwx-route', authMode: 'siwx', protocols: [] }));
     reg.register(makeEntry({ key: 'free-route', authMode: 'unprotected', protocols: [] }));
 
-    const handler = createWellKnownHandler(reg, 'https://example.com', undefined);
+    const handler = createWellKnownHandler(reg, 'https://example.com', undefined, defaultDiscovery);
     const res = await handler(dummyRequest);
     const body = await res.json();
 
@@ -53,7 +54,9 @@ describe('.well-known/x402', () => {
     reg.register(makeEntry({ key: 'a' }));
 
     const handler = createWellKnownHandler(reg, 'https://example.com', undefined, {
-      instructions: 'Test instructions',
+      title: 'Test',
+      version: '1.0.0',
+      guidance: 'Test instructions',
     });
     const res = await handler(dummyRequest);
     const body = await res.json();
@@ -66,6 +69,7 @@ describe('.well-known/x402', () => {
     reg.register(makeEntry({ key: 'a' }));
 
     const handler = createWellKnownHandler(reg, 'https://example.com', undefined, {
+      ...defaultDiscovery,
       ownershipProofs: ['0xabc'],
     });
     const res = await handler(dummyRequest);
@@ -79,7 +83,7 @@ describe('.well-known/x402', () => {
     reg.register(makeEntry({ key: 'dual', protocols: ['x402', 'mpp'] }));
     reg.register(makeEntry({ key: 'x402only', protocols: ['x402'] }));
 
-    const handler = createWellKnownHandler(reg, 'https://example.com', undefined);
+    const handler = createWellKnownHandler(reg, 'https://example.com', undefined, defaultDiscovery);
     const res = await handler(dummyRequest);
     const body = await res.json();
 
@@ -92,7 +96,12 @@ describe('.well-known/x402', () => {
     const reg = new RouteRegistry();
     reg.register(makeEntry({ key: 'upload', protocols: ['x402', 'mpp'] }));
 
-    const handler = createWellKnownHandler(reg, 'https://stableupload.dev/', undefined);
+    const handler = createWellKnownHandler(
+      reg,
+      'https://stableupload.dev/',
+      undefined,
+      defaultDiscovery,
+    );
     const res = await handler(dummyRequest);
     const body = await res.json();
 
@@ -109,7 +118,7 @@ describe('.well-known/x402', () => {
       makeEntry({ key: 'jobs/delete', path: 'x402/jobs/{jobId}', authMode: 'siwx', protocols: [] }),
     );
 
-    const handler = createWellKnownHandler(reg, 'https://example.com', undefined);
+    const handler = createWellKnownHandler(reg, 'https://example.com', undefined, defaultDiscovery);
     const res = await handler(dummyRequest);
     const body = await res.json();
 
@@ -122,6 +131,7 @@ describe('.well-known/x402', () => {
     reg.register(makeEntry({ key: 'a' }));
 
     const handler = createWellKnownHandler(reg, 'https://example.com', undefined, {
+      ...defaultDiscovery,
       description: 'Test service',
     });
     const res = await handler(dummyRequest);
@@ -134,7 +144,7 @@ describe('.well-known/x402', () => {
     const reg = new RouteRegistry();
     reg.register(makeEntry({ key: 'a' }));
 
-    const handler = createWellKnownHandler(reg, 'https://example.com', undefined);
+    const handler = createWellKnownHandler(reg, 'https://example.com', undefined, defaultDiscovery);
     const res = await handler(dummyRequest);
 
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
@@ -144,7 +154,7 @@ describe('.well-known/x402', () => {
     const reg = new RouteRegistry();
     reg.register(makeEntry({ key: 'a', protocols: ['x402'] }));
 
-    const handler = createWellKnownHandler(reg, 'https://example.com', undefined);
+    const handler = createWellKnownHandler(reg, 'https://example.com', undefined, defaultDiscovery);
     const res = await handler(dummyRequest);
     const body = await res.json();
 
@@ -155,7 +165,7 @@ describe('.well-known/x402', () => {
     const reg = new RouteRegistry();
     reg.register(makeEntry({ key: 'jobs/delete', path: 'jobs/{id}', method: 'DELETE' }));
 
-    const handler = createWellKnownHandler(reg, 'https://example.com', undefined);
+    const handler = createWellKnownHandler(reg, 'https://example.com', undefined, defaultDiscovery);
     const res = await handler(dummyRequest);
     const body = await res.json();
 
@@ -167,6 +177,7 @@ describe('.well-known/x402', () => {
     reg.register(makeEntry({ key: 'jobs/delete', path: 'jobs/{id}', method: 'DELETE' }));
 
     const handler = createWellKnownHandler(reg, 'https://example.com', undefined, {
+      ...defaultDiscovery,
       methodHints: 'off',
     });
     const res = await handler(dummyRequest);
@@ -182,10 +193,12 @@ describe('barrel validation', () => {
     const reg = new RouteRegistry();
     reg.register(makeEntry({ key: 'registered' }));
 
-    const handler = createWellKnownHandler(reg, 'https://example.com', [
-      'registered',
-      'missing-route',
-    ]);
+    const handler = createWellKnownHandler(
+      reg,
+      'https://example.com',
+      ['registered', 'missing-route'],
+      defaultDiscovery,
+    );
 
     await expect(handler(dummyRequest)).rejects.toThrow('missing-route');
   });

@@ -142,7 +142,6 @@ describe('openapi discovery document', () => {
     const handler = createOpenAPIHandler(registry, 'https://example.com', undefined, {
       title: 'Example API',
       version: '1.0.0',
-      llmsTxtUrl: 'https://example.com/llms.txt',
       ownershipProofs: ['did:example:proof'],
     });
 
@@ -150,7 +149,6 @@ describe('openapi discovery document', () => {
     const doc = (await response.json()) as Record<string, any>;
 
     expect(doc['x-discovery']).toEqual({
-      llmsTxtUrl: 'https://example.com/llms.txt',
       ownershipProofs: ['did:example:proof'],
     });
 

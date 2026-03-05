@@ -1,23 +1,14 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import type { RouteRegistry } from '../registry.js';
-import type { RouteEntry } from '../types.js';
-
-export interface OpenAPIOptions {
-  title: string;
-  version: string;
-  description?: string;
-  baseUrl?: string;
-  contact?: { name?: string; url?: string };
-  llmsTxtUrl?: string;
-  ownershipProofs?: string[];
-}
+import type { RouteEntry, DiscoveryConfig } from '../types.js';
+import { resolveGuidance } from './utils/guidance.js';
 
 export function createOpenAPIHandler(
   registry: RouteRegistry,
   baseUrl: string,
   pricesKeys: string[] | undefined,
-  options: OpenAPIOptions,
+  discovery: DiscoveryConfig,
 ) {
   const normalizedBase = baseUrl.replace(/\/+$/, '');
   let cached: unknown = null;
@@ -71,22 +62,22 @@ export function createOpenAPIHandler(
     }
 
     const discoveryMetadata: Record<string, unknown> = {};
-    if (options.ownershipProofs && options.ownershipProofs.length > 0) {
-      discoveryMetadata.ownershipProofs = options.ownershipProofs;
+    if (discovery.ownershipProofs && discovery.ownershipProofs.length > 0) {
+      discoveryMetadata.ownershipProofs = discovery.ownershipProofs;
     }
-    if (options.llmsTxtUrl) {
-      discoveryMetadata.llmsTxtUrl = options.llmsTxtUrl;
-    }
+
+    const guidance = await resolveGuidance(discovery);
 
     const openApiDocument: Record<string, unknown> = {
       openapi: '3.1.0',
       info: {
-        title: options.title,
-        description: options.description,
-        version: options.version,
-        ...(options.contact && { contact: options.contact }),
+        title: discovery.title,
+        description: discovery.description,
+        version: discovery.version,
+        guidance,
+        ...(discovery.contact && { contact: discovery.contact }),
       },
-      servers: [{ url: (options.baseUrl ?? normalizedBase).replace(/\/+$/, '') }],
+      servers: [{ url: (discovery.serverUrl ?? normalizedBase).replace(/\/+$/, '') }],
       tags: Array.from(tagSet)
         .sort()
         .map((name) => ({ name })),
