@@ -12,6 +12,51 @@ import type {
 import type { RouteRegistry } from './registry.js';
 import type { OrchestrateDeps } from './orchestrate.js';
 import { createRequestHandler } from './orchestrate.js';
+// Zod v4 uses lowercase strings in _def.type. These types produce anyOf/oneOf/allOf
+// in JSON Schema and do not round-trip cleanly through OpenAPI → Zod conversion.
+const UNSUPPORTED_SCHEMA_TYPES = new Set(['union', 'nullable', 'intersection']);
+
+type ZodDef = {
+  type: string;
+  innerType?: ZodType;
+  options?: ZodType[];
+  left?: ZodType;
+  right?: ZodType;
+  shape?: Record<string, ZodType>;
+  valueType?: ZodType;
+  element?: ZodType;
+  items?: ZodType[];
+};
+
+function warnUnsupportedSchema(schema: ZodType, field: string): void {
+  if (process.env.NODE_ENV === 'production') return;
+  const isZodType = (v: unknown): v is ZodType =>
+    v != null && typeof v === 'object' && '_def' in v && typeof (v as { _def: ZodDef })._def?.type === 'string';
+  const walk = (s: ZodType, path: string): void => {
+    const def = (s as unknown as { _def: ZodDef })._def;
+    if (UNSUPPORTED_SCHEMA_TYPES.has(def.type)) {
+      console.warn(
+        `[router] .${field}() schema contains "${def.type}" at "${path}" — use z.string(), z.number(), z.boolean(), or z.enum() instead. ` +
+          `z.union(), z.nullable(), and z.intersection() cannot be read back from the OpenAPI spec at runtime.`,
+      );
+    }
+    if (isZodType(def.innerType)) walk(def.innerType, path);
+    if (isZodType(def.element)) walk(def.element, `${path}[]`);
+    if (isZodType(def.valueType)) walk(def.valueType, `${path}{value}`);
+    if (isZodType(def.left)) walk(def.left, `${path}.left`);
+    if (isZodType(def.right)) walk(def.right, `${path}.right`);
+    if (def.options) def.options.filter(isZodType).forEach((o, i) => walk(o, `${path}[${i}]`));
+    if (def.items) def.items.filter(isZodType).forEach((o, i) => walk(o, `${path}[${i}]`));
+    if (def.shape && typeof def.shape === 'object') {
+      for (const [k, v] of Object.entries(def.shape)) {
+        if (isZodType(v)) walk(v, `${path}.${k}`);
+      }
+    }
+  };
+  walk(schema, field);
+}
+
+
 
 // ---------------------------------------------------------------------------
 // Type-level state tracking
@@ -192,12 +237,14 @@ export class RouteBuilder<
   // -------------------------------------------------------------------------
 
   body<T>(schema: ZodType<T>): RouteBuilder<T, TQuery, HasAuth, NeedsBody, True> {
+    warnUnsupportedSchema(schema, 'body');
     const next = this.fork() as unknown as RouteBuilder<T, TQuery, HasAuth, NeedsBody, True>;
     next._bodySchema = schema;
     return next;
   }
 
   query<T>(schema: ZodType<T>): RouteBuilder<TBody, T, HasAuth, NeedsBody, HasBody> {
+    warnUnsupportedSchema(schema, 'query');
     const next = this.fork() as unknown as RouteBuilder<TBody, T, HasAuth, NeedsBody, HasBody>;
     next._querySchema = schema;
     next._method = 'GET';
@@ -205,6 +252,7 @@ export class RouteBuilder<
   }
 
   output(schema: ZodType): this {
+    warnUnsupportedSchema(schema, 'output');
     const next = this.fork();
     next._outputSchema = schema;
     return next;

@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import type { RouteRegistry } from '../registry.js';
 import type { RouteEntry, DiscoveryConfig } from '../types.js';
 import { resolveGuidance } from './utils/guidance.js';
+import { OpenApiDocSchema } from '@agentcash/discovery/schemas';
 import type { OpenApiPaymentInfo } from '@agentcash/discovery/schemas';
 
 export function createOpenAPIHandler(
@@ -98,6 +99,13 @@ export function createOpenAPIHandler(
     };
 
     cached = createDocument(openApiDocument as never);
+
+    const check = OpenApiDocSchema.safeParse(cached);
+    if (!check.success) {
+      throw new Error(
+        `[agentcash-router] OpenAPI document failed discovery schema validation:\n${JSON.stringify(check.error.issues, null, 2)}`,
+      );
+    }
 
     return NextResponse.json(cached);
   };

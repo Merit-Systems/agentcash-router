@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import type { RouteRegistry } from '../registry.js';
 import type { DiscoveryConfig } from '../types.js';
 import { resolveGuidance } from './utils/guidance.js';
+import { WellKnownDocSchema } from '@agentcash/discovery/schemas';
 import type { WellKnownDoc } from '@agentcash/discovery/schemas';
 
 export function createWellKnownHandler(
@@ -47,6 +48,13 @@ export function createWellKnownHandler(
       ...(discovery.ownershipProofs ? { ownershipProofs: discovery.ownershipProofs } : {}),
       ...(instructions ? { instructions } : {}),
     } satisfies WellKnownDoc;
+
+    const check = WellKnownDocSchema.safeParse(body);
+    if (!check.success) {
+      throw new Error(
+        `[agentcash-router] Well-known document failed discovery schema validation:\n${JSON.stringify(check.error.issues, null, 2)}`,
+      );
+    }
 
     return NextResponse.json(body, {
       headers: {

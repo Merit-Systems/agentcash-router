@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { z } from 'zod';
 import { RouteRegistry } from '../src/registry.js';
 import { RouteBuilder } from '../src/builder.js';
@@ -183,5 +183,50 @@ describe('registration-time safety', () => {
     const e2 = reg2.get('fork/other');
     expect(e1!.protocols).toEqual(['x402']);
     expect(e2!.protocols).toEqual(['x402', 'mpp']);
+  });
+});
+
+describe('schema warnings', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const clean = z.object({ name: z.string(), count: z.number(), flag: z.boolean() });
+
+  it('no warning for plain object schemas', () => {
+    const { builder } = makeBuilder();
+    builder.unprotected().body(clean).handler(async () => ({}));
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('no warning for optional fields inside object', () => {
+    const { builder } = makeBuilder();
+    builder.unprotected().body(z.object({ x: z.string().optional() })).handler(async () => ({}));
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  const forbidden = [
+    { label: 'union', name: 'union', schema: z.union([z.string(), z.number()]) },
+    { label: 'discriminatedUnion', name: 'union', schema: z.discriminatedUnion('type', [z.object({ type: z.literal('a') }), z.object({ type: z.literal('b') })]) },
+    { label: 'nullable', name: 'nullable', schema: z.string().nullable() },
+    { label: 'intersection', name: 'intersection', schema: z.intersection(z.object({ a: z.string() }), z.object({ b: z.number() })) },
+  ];
+
+  for (const { label, name, schema } of forbidden) {
+    it(`warns for ${label} in .body()`, () => {
+      const { builder } = makeBuilder();
+      builder.unprotected().body(schema as never).handler(async () => ({}));
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(name));
+    });
+  }
+
+  it('warns for forbidden type nested inside object in .output()', () => {
+    const { builder } = makeBuilder();
+    builder.unprotected().output(z.object({ val: z.string().nullable() })).handler(async () => ({}));
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('nullable'));
   });
 });
