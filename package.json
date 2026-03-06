@@ -41,8 +41,7 @@
     "@x402/extensions": "^2.3.0",
     "mppx": "^0.3.2",
     "next": ">=15.0.0",
-    "zod": "^4.0.0",
-    "zod-openapi": "^5.0.0"
+    "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
     "mppx": {
@@ -69,8 +68,7 @@
     "typescript-eslint": "^8.55.0",
     "viem": "^2.0.0",
     "vitest": "^3.0.0",
-    "zod": "^4.0.0",
-    "zod-openapi": "^5.0.0"
+    "zod": "^4.0.0"
   },
   "packageManager": "pnpm@10.28.0",
   "license": "MIT",

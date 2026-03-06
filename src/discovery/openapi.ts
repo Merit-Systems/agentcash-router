@@ -1,25 +1,26 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { z } from 'zod';
 import type { RouteRegistry } from '../registry.js';
 import type { RouteEntry, DiscoveryConfig } from '../types.js';
 import { resolveGuidance } from './utils/guidance.js';
 import { OpenApiDocSchema } from '@agentcash/discovery/schemas';
 import type { OpenApiDoc, OpenApiOperation, OpenApiPaymentInfo } from '@agentcash/discovery/schemas';
 
-// RouterOperation extends the discovery contract with zod-openapi extras (operationId, tags,
-// requestBody, requestParams). The discovery-relevant fields (security, responses, x-payment-info)
+// RouterOperation extends the discovery contract with standard OpenAPI fields (operationId, tags,
+// requestBody, parameters). The discovery-relevant fields (security, responses, x-payment-info)
 // are fully typed via OpenApiOperation so schema drift is caught at compile time.
 type RouterOperation = OpenApiOperation & {
   operationId?: string;
   tags?: string[];
   requestBody?: { required: boolean; content: { 'application/json': { schema: unknown } } };
-  requestParams?: { query: unknown };
+  parameters?: Array<{ in: string; name: string; schema: unknown; required?: boolean }>;
 };
 
 // Path items keyed by lowercase method — subset of what OpenApiPathItemSchema accepts.
 type RouterPathItem = Partial<Record<'get' | 'post' | 'put' | 'delete' | 'patch', RouterOperation>>;
 
-// OpenApiDoc augmented with standard OpenAPI fields that discovery strips but zod-openapi requires.
+// OpenApiDoc augmented with standard OpenAPI fields that discovery strips but the router needs to serve.
 type RouterOpenApiDoc = OpenApiDoc & {
   servers?: { url: string }[];
   tags?: { name: string }[];
@@ -34,7 +35,7 @@ export function createOpenAPIHandler(
   discovery: DiscoveryConfig,
 ) {
   const normalizedBase = baseUrl.replace(/\/+$/, '');
-  let cached: unknown = null;
+  let cached: RouterOpenApiDoc | null = null;
   let validated = false;
 
   return async (_request: NextRequest): Promise<NextResponse> => {
@@ -45,8 +46,6 @@ export function createOpenAPIHandler(
       registry.validate(pricesKeys);
       validated = true;
     }
-
-    const { createDocument } = await import('zod-openapi');
 
     const paths: Record<string, RouterPathItem> = {};
     const tagSet = new Set<string>();
@@ -95,7 +94,7 @@ export function createOpenAPIHandler(
       paths,
     };
 
-    cached = createDocument(openApiDocument as never);
+    cached = openApiDocument;
 
     const check = OpenApiDocSchema.safeParse(cached);
     if (!check.success) {
@@ -139,7 +138,7 @@ function buildOperation(
       '200': {
         description: 'Successful response',
         ...(entry.outputSchema && {
-          content: { 'application/json': { schema: entry.outputSchema } },
+          content: { 'application/json': { schema: z.toJSONSchema(entry.outputSchema) } },
         }),
       },
       ...((paymentRequired || requiresSiwxScheme) && {
@@ -170,12 +169,19 @@ function buildOperation(
   if (entry.bodySchema) {
     operation.requestBody = {
       required: true,
-      content: { 'application/json': { schema: entry.bodySchema } },
+      content: { 'application/json': { schema: z.toJSONSchema(entry.bodySchema) } },
     };
   }
 
   if (entry.querySchema) {
-    operation.requestParams = { query: entry.querySchema };
+    const queryJsonSchema = z.toJSONSchema(entry.querySchema) as {
+      properties?: Record<string, unknown>;
+      required?: string[];
+    };
+    const required = new Set(queryJsonSchema.required ?? []);
+    operation.parameters = Object.entries(queryJsonSchema.properties ?? {}).map(
+      ([name, schema]) => ({ in: 'query', name, schema, required: required.has(name) }),
+    );
   }
 
   return { operation, requiresSiwxScheme, requiresApiKeyScheme };
