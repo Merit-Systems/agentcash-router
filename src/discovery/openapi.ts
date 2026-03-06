@@ -7,26 +7,7 @@ import { resolveGuidance } from './utils/guidance.js';
 import { OpenApiDocSchema } from '@agentcash/discovery/schemas';
 import type { OpenApiDoc, OpenApiOperation, OpenApiPaymentInfo } from '@agentcash/discovery/schemas';
 
-// RouterOperation extends the discovery contract with standard OpenAPI fields (operationId, tags,
-// requestBody, parameters). The discovery-relevant fields (security, responses, x-payment-info)
-// are fully typed via OpenApiOperation so schema drift is caught at compile time.
-type RouterOperation = OpenApiOperation & {
-  operationId?: string;
-  tags?: string[];
-  requestBody?: { required: boolean; content: { 'application/json': { schema: unknown } } };
-  parameters?: Array<{ in: string; name: string; schema: unknown; required?: boolean }>;
-};
-
-// Path items keyed by lowercase method — subset of what OpenApiPathItemSchema accepts.
-type RouterPathItem = Partial<Record<'get' | 'post' | 'put' | 'delete' | 'patch', RouterOperation>>;
-
-// OpenApiDoc augmented with standard OpenAPI fields that discovery strips but the router needs to serve.
-type RouterOpenApiDoc = OpenApiDoc & {
-  servers?: { url: string }[];
-  tags?: { name: string }[];
-  components?: { securitySchemes?: Record<string, unknown> };
-  'x-discovery'?: Record<string, unknown>;
-};
+type RouterPathItem = Partial<Record<'get' | 'post' | 'put' | 'delete' | 'patch', OpenApiOperation>>;
 
 export function createOpenAPIHandler(
   registry: RouteRegistry,
@@ -35,7 +16,7 @@ export function createOpenAPIHandler(
   discovery: DiscoveryConfig,
 ) {
   const normalizedBase = baseUrl.replace(/\/+$/, '');
-  let cached: RouterOpenApiDoc | null = null;
+  let cached: OpenApiDoc | null = null;
   let validated = false;
 
   return async (_request: NextRequest): Promise<NextResponse> => {
@@ -77,7 +58,7 @@ export function createOpenAPIHandler(
 
     const guidance = await resolveGuidance(discovery);
 
-    const openApiDocument: RouterOpenApiDoc = {
+    const openApiDocument: OpenApiDoc = {
       openapi: '3.1.0',
       info: {
         title: discovery.title,
@@ -120,7 +101,7 @@ function buildOperation(
   entry: RouteEntry,
   tag: string,
 ): {
-  operation: RouterOperation;
+  operation: OpenApiOperation;
   requiresSiwxScheme: boolean;
   requiresApiKeyScheme: boolean;
 } {
@@ -130,7 +111,7 @@ function buildOperation(
   const requiresApiKeyScheme = Boolean(entry.apiKeyResolver) && entry.authMode !== 'siwx';
   const pricingInfo = buildPricingInfo(entry);
 
-  const operation: RouterOperation = {
+  const operation: OpenApiOperation = {
     operationId: routeKey.replace(/\//g, '_'),
     summary: entry.description ?? routeKey,
     tags: [tag],
