@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import type { RouteRegistry } from '../registry.js';
 import type { DiscoveryConfig } from '../types.js';
 import { resolveGuidance } from './utils/guidance.js';
+import type { WellKnownDoc } from '@agentcash/discovery/schemas';
 
 export function createWellKnownHandler(
   registry: RouteRegistry,
@@ -37,27 +38,15 @@ export function createWellKnownHandler(
 
     const instructions = await resolveGuidance(discovery);
 
-    const body: Record<string, unknown> = {
+    const mppResources = Array.from(mppSet);
+    const body = {
       version: 1,
       resources: Array.from(x402Set),
-    };
-
-    const mppResources = Array.from(mppSet);
-    if (mppResources.length > 0) {
-      body.mppResources = mppResources;
-    }
-
-    if (discovery.description) {
-      body.description = discovery.description;
-    }
-
-    if (discovery.ownershipProofs) {
-      body.ownershipProofs = discovery.ownershipProofs;
-    }
-
-    if (instructions) {
-      body.instructions = instructions;
-    }
+      ...(mppResources.length > 0 ? { mppResources } : {}),
+      ...(discovery.description ? { description: discovery.description } : {}),
+      ...(discovery.ownershipProofs ? { ownershipProofs: discovery.ownershipProofs } : {}),
+      ...(instructions ? { instructions } : {}),
+    } satisfies WellKnownDoc;
 
     return NextResponse.json(body, {
       headers: {

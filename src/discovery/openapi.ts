@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import type { RouteRegistry } from '../registry.js';
 import type { RouteEntry, DiscoveryConfig } from '../types.js';
 import { resolveGuidance } from './utils/guidance.js';
+import type { OpenApiPaymentInfo } from '@agentcash/discovery/schemas';
 
 export function createOpenAPIHandler(
   registry: RouteRegistry,
@@ -186,7 +187,7 @@ function buildOperation(
   };
 }
 
-function buildPricingInfo(entry: RouteEntry): Record<string, unknown> | undefined {
+function buildPricingInfo(entry: RouteEntry): Omit<OpenApiPaymentInfo, 'protocols'> | undefined {
   if (!entry.pricing) return undefined;
 
   if (typeof entry.pricing === 'string') {

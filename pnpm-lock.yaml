@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@agentcash/discovery':
+        specifier: 0.0.0-pr-21-20260306191442
+        version: 0.0.0-pr-21-20260306191442
       '@changesets/cli':
         specifier: ^2.29.8
         version: 2.29.8(@types/node@22.19.11)
@@ -76,6 +79,11 @@ packages:
 
   '@adraffy/ens-normalize@1.11.1':
     resolution: {integrity: sha512-nhCBV3quEgesuf7c7KYfperqSS14T8bYuvJ8PcLJp6znkZpFc0AuW4qBtr8eKVyPPe/8RSr7sglCWPU5eaxwKQ==}
+
+  '@agentcash/discovery@0.0.0-pr-21-20260306191442':
+    resolution: {integrity: sha512-iTGtPLhP9LXP11tAAEgYj7r6yo4YCCEzdqSJyb7QeFZ0DJwfV0fvYgvbWYIqnPVnG0/eCRFvv7PjLxFnPHE9+w==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   '@babel/runtime@7.28.6':
     resolution: {integrity: sha512-05WQkdpL9COIMz4LjTxGpPNCdlpyimKppYNoJ5Di5EUObifl8t4tuLuUBBZEpoLYOmfvIWrsp9fCl0HoPRVTdA==}
@@ -1308,6 +1316,9 @@ packages:
 
   '@x402/core@2.3.1':
     resolution: {integrity: sha512-CWvsf09tslISoVOzQ2TIoBLBP+bUycPsYmmRVe3EV5X2FtD7eXXpiPsiXLEVtWP7zhqLNP/5OIATsA2hSVLSfw==}
+
+  '@x402/core@2.6.0':
+    resolution: {integrity: sha512-ISC/JeVss6xlKvor2rp18tJf9K5OQlIDDfZW1VZJQGDI2F4gy+HWxxkFfcQalCsPp4YUlwqh0YOkUxP+LTZWVg==}
 
   '@x402/evm@2.3.1':
     resolution: {integrity: sha512-aN40OHG0HN1PhBXNFMRi5ISLHsExpF4qIvWUoVMKhFCfaXQDrqsfOKOC3PfcFtK/2Q8/SoiXNN7LsCkChL62lw==}
@@ -2882,6 +2893,11 @@ snapshots:
 
   '@adraffy/ens-normalize@1.11.1': {}
 
+  '@agentcash/discovery@0.0.0-pr-21-20260306191442':
+    dependencies:
+      '@x402/core': 2.6.0
+      zod: 4.3.6
+
   '@babel/runtime@7.28.6': {}
 
   '@changesets/apply-release-plan@7.0.14':
@@ -4181,6 +4197,10 @@ snapshots:
       tinyrainbow: 2.0.0
 
   '@x402/core@2.3.1':
+    dependencies:
+      zod: 3.25.76
+
+  '@x402/core@2.6.0':
     dependencies:
       zod: 3.25.76
 

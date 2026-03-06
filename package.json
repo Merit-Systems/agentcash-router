@@ -50,6 +50,7 @@
     }
   },
   "devDependencies": {
+    "@agentcash/discovery": "0.0.0-pr-21-20260306191442",
     "@changesets/cli": "^2.29.8",
     "@coinbase/x402": "^2.1.0",
     "@eslint/js": "^10.0.1",
