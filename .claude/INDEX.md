@@ -14,7 +14,6 @@ Design docs, decision records, and bug analyses for `@agentcash/router`. These d
 
 | File | Description |
 |------|-------------|
-| `20_router-client-spec.md` | Spec for a companion client package that consumes router-powered APIs using `z.fromJSONSchema()` for runtime-typesafe Zod-forward calls. |
 | `18_facilitator-429-cold-start-fix.md` | P0 bug: facilitator `/supported` 429 rate limits on Vercel cold starts cause bare 402 pass-through on all paid routes. Root cause (2 bugs), full timeline of prior fix attempts across enrichx402/x402/router, upstream npm gap, solution (hardcode getSupported for EVM exact + 500 safety net), testing methodology. |
 
 ## Research (protocol reference)
