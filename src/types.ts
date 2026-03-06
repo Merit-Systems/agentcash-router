@@ -194,6 +194,23 @@ export interface RouteEntry {
 }
 
 // ---------------------------------------------------------------------------
+// Discovery config
+// ---------------------------------------------------------------------------
+
+export interface DiscoveryConfig {
+  title: string;
+  version: string;
+  description?: string;
+  contact?: { name?: string; url?: string };
+  ownershipProofs?: string[];
+  methodHints?: 'off' | 'non-default' | 'always';
+  /** Natural language guidance for agents. Served as wellknown `instructions` and `/llms.txt`. */
+  guidance?: string | (() => string | Promise<string>);
+  /** Override the OpenAPI `servers` URL. Defaults to `RouterConfig.baseUrl`. Use when the public API hostname differs from the payment realm URL. */
+  serverUrl?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Router config
 // ---------------------------------------------------------------------------
 
@@ -246,4 +263,5 @@ export interface RouterConfig {
    * This prevents discovery/openapi drift caused by shorthand internal keys.
    */
   strictRoutes?: boolean;
+  discovery: DiscoveryConfig;
 }

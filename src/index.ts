@@ -3,14 +3,13 @@ import type { NextResponse } from 'next/server';
 import type { RouterConfig } from './types.js';
 import type { RouteDefinition, RouteMethod } from './types.js';
 import type { OrchestrateDeps } from './orchestrate.js';
-import type { WellKnownOptions } from './discovery/well-known.js';
-import type { OpenAPIOptions } from './discovery/openapi.js';
 import { RouteRegistry } from './registry.js';
 import { RouteBuilder } from './builder.js';
 import { MemoryNonceStore } from './auth/nonce.js';
 import { MemoryEntitlementStore } from './auth/entitlement.js';
 import { createWellKnownHandler } from './discovery/well-known.js';
 import { createOpenAPIHandler } from './discovery/openapi.js';
+import { createLlmsTxtHandler } from './discovery/llms-txt.js';
 
 // ---------------------------------------------------------------------------
 // ServiceRouter
@@ -31,8 +30,9 @@ export interface ServiceRouter<TPriceKeys extends string = never> {
   ): [K] extends [TPriceKeys]
     ? RouteBuilder<undefined, undefined, true, false, false>
     : RouteBuilder<undefined, undefined, false, false, false>;
-  wellKnown(options?: WellKnownOptions): (request: NextRequest) => Promise<NextResponse>;
-  openapi(options: OpenAPIOptions): (request: NextRequest) => Promise<NextResponse>;
+  wellKnown(): (request: NextRequest) => Promise<NextResponse>;
+  openapi(): (request: NextRequest) => Promise<NextResponse>;
+  llmsTxt(): (request: NextRequest) => Promise<NextResponse>;
   monitors(): MonitorEntry[];
   registry: RouteRegistry;
 }
@@ -211,12 +211,16 @@ export function createRouter<const P extends Record<string, string> = Record<nev
       return builder as never;
     },
 
-    wellKnown(options?: WellKnownOptions) {
-      return createWellKnownHandler(registry, resolvedBaseUrl, pricesKeys, options);
+    wellKnown() {
+      return createWellKnownHandler(registry, resolvedBaseUrl, pricesKeys, config.discovery);
     },
 
-    openapi(options: OpenAPIOptions) {
-      return createOpenAPIHandler(registry, resolvedBaseUrl, pricesKeys, options);
+    openapi() {
+      return createOpenAPIHandler(registry, resolvedBaseUrl, pricesKeys, config.discovery);
+    },
+
+    llmsTxt() {
+      return createLlmsTxtHandler(config.discovery);
     },
 
     monitors(): MonitorEntry[] {
@@ -255,6 +259,7 @@ export { HttpError } from './types.js';
 export type {
   HandlerContext,
   RouterConfig,
+  DiscoveryConfig,
   RouteEntry,
   PricingConfig,
   PaidOptions,
