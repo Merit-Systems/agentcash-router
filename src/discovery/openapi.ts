@@ -4,7 +4,28 @@ import type { RouteRegistry } from '../registry.js';
 import type { RouteEntry, DiscoveryConfig } from '../types.js';
 import { resolveGuidance } from './utils/guidance.js';
 import { OpenApiDocSchema } from '@agentcash/discovery/schemas';
-import type { OpenApiPaymentInfo } from '@agentcash/discovery/schemas';
+import type { OpenApiDoc, OpenApiOperation, OpenApiPaymentInfo } from '@agentcash/discovery/schemas';
+
+// RouterOperation extends the discovery contract with zod-openapi extras (operationId, tags,
+// requestBody, requestParams). The discovery-relevant fields (security, responses, x-payment-info)
+// are fully typed via OpenApiOperation so schema drift is caught at compile time.
+type RouterOperation = OpenApiOperation & {
+  operationId?: string;
+  tags?: string[];
+  requestBody?: { required: boolean; content: { 'application/json': { schema: unknown } } };
+  requestParams?: { query: unknown };
+};
+
+// Path items keyed by lowercase method — subset of what OpenApiPathItemSchema accepts.
+type RouterPathItem = Partial<Record<'get' | 'post' | 'put' | 'delete' | 'patch', RouterOperation>>;
+
+// OpenApiDoc augmented with standard OpenAPI fields that discovery strips but zod-openapi requires.
+type RouterOpenApiDoc = OpenApiDoc & {
+  servers?: { url: string }[];
+  tags?: { name: string }[];
+  components?: { securitySchemes?: Record<string, unknown> };
+  'x-discovery'?: Record<string, unknown>;
+};
 
 export function createOpenAPIHandler(
   registry: RouteRegistry,
@@ -27,14 +48,14 @@ export function createOpenAPIHandler(
 
     const { createDocument } = await import('zod-openapi');
 
-    const paths: Record<string, Record<string, unknown>> = {};
+    const paths: Record<string, RouterPathItem> = {};
     const tagSet = new Set<string>();
     let requiresSiwxScheme = false;
     let requiresApiKeyScheme = false;
 
     for (const [key, entry] of registry.entries()) {
       const apiPath = `/api/${entry.path ?? key}`;
-      const method = entry.method.toLowerCase();
+      const method = entry.method.toLowerCase() as keyof RouterPathItem;
       const tag = deriveTag(key);
       tagSet.add(tag);
       const built = buildOperation(key, entry, tag);
@@ -49,53 +70,29 @@ export function createOpenAPIHandler(
 
     const securitySchemes: Record<string, unknown> = {};
     if (requiresSiwxScheme) {
-      securitySchemes.siwx = {
-        type: 'apiKey',
-        in: 'header',
-        name: 'SIGN-IN-WITH-X',
-      };
+      securitySchemes.siwx = { type: 'apiKey', in: 'header', name: 'SIGN-IN-WITH-X' };
     }
     if (requiresApiKeyScheme) {
-      securitySchemes.apiKey = {
-        type: 'apiKey',
-        in: 'header',
-        name: 'X-API-Key',
-      };
-    }
-
-    const discoveryMetadata: Record<string, unknown> = {};
-    if (discovery.ownershipProofs && discovery.ownershipProofs.length > 0) {
-      discoveryMetadata.ownershipProofs = discovery.ownershipProofs;
+      securitySchemes.apiKey = { type: 'apiKey', in: 'header', name: 'X-API-Key' };
     }
 
     const guidance = await resolveGuidance(discovery);
 
-    const openApiDocument: Record<string, unknown> = {
+    const openApiDocument: RouterOpenApiDoc = {
       openapi: '3.1.0',
       info: {
         title: discovery.title,
         description: discovery.description,
         version: discovery.version,
         guidance,
-        ...(discovery.contact && { contact: discovery.contact }),
       },
       servers: [{ url: (discovery.serverUrl ?? normalizedBase).replace(/\/+$/, '') }],
-      tags: Array.from(tagSet)
-        .sort()
-        .map((name) => ({ name })),
-      ...(Object.keys(securitySchemes).length > 0
-        ? {
-            components: {
-              securitySchemes,
-            },
-          }
+      tags: Array.from(tagSet).sort().map((name) => ({ name })),
+      ...(Object.keys(securitySchemes).length > 0 ? { components: { securitySchemes } } : {}),
+      ...(discovery.ownershipProofs?.length
+        ? { 'x-discovery': { ownershipProofs: discovery.ownershipProofs } }
         : {}),
-      ...(Object.keys(discoveryMetadata).length > 0
-        ? {
-            'x-discovery': discoveryMetadata,
-          }
-        : {}),
-      paths: paths as never,
+      paths,
     };
 
     cached = createDocument(openApiDocument as never);
@@ -124,7 +121,7 @@ function buildOperation(
   entry: RouteEntry,
   tag: string,
 ): {
-  operation: Record<string, unknown>;
+  operation: RouterOperation;
   requiresSiwxScheme: boolean;
   requiresApiKeyScheme: boolean;
 } {
@@ -134,7 +131,7 @@ function buildOperation(
   const requiresApiKeyScheme = Boolean(entry.apiKeyResolver) && entry.authMode !== 'siwx';
   const pricingInfo = buildPricingInfo(entry);
 
-  const operation: Record<string, unknown> = {
+  const operation: RouterOperation = {
     operationId: routeKey.replace(/\//g, '_'),
     summary: entry.description ?? routeKey,
     tags: [tag],
@@ -142,9 +139,7 @@ function buildOperation(
       '200': {
         description: 'Successful response',
         ...(entry.outputSchema && {
-          content: {
-            'application/json': { schema: entry.outputSchema },
-          },
+          content: { 'application/json': { schema: entry.outputSchema } },
         }),
       },
       ...((paymentRequired || requiresSiwxScheme) && {
@@ -152,19 +147,18 @@ function buildOperation(
           description: requiresSiwxScheme ? 'Authentication Required' : 'Payment Required',
         },
       }),
-      ...(requiresApiKeyScheme && {
-        '401': {
-          description: 'Unauthorized',
-        },
-      }),
+      ...(requiresApiKeyScheme && { '401': { description: 'Unauthorized' } }),
     },
   };
 
-  if (paymentRequired && (pricingInfo || protocols)) {
-    operation['x-payment-info'] = {
-      ...(pricingInfo ?? {}),
-      ...(protocols && { protocols }),
+  if (paymentRequired) {
+    // pricingInfo is undefined for auto-priced routes (resolved at request time via `prices` map).
+    // Default to 'quote' so x-payment-info always has the required pricingMode field.
+    const xPaymentInfo: OpenApiPaymentInfo = {
+      ...(pricingInfo ?? { pricingMode: 'quote' }),
+      ...(protocols ? { protocols } : {}),
     };
+    operation['x-payment-info'] = xPaymentInfo;
   }
 
   if (requiresSiwxScheme) {
@@ -176,33 +170,22 @@ function buildOperation(
   if (entry.bodySchema) {
     operation.requestBody = {
       required: true,
-      content: {
-        'application/json': { schema: entry.bodySchema },
-      },
+      content: { 'application/json': { schema: entry.bodySchema } },
     };
   }
 
   if (entry.querySchema) {
-    operation.requestParams = {
-      query: entry.querySchema,
-    };
+    operation.requestParams = { query: entry.querySchema };
   }
 
-  return {
-    operation,
-    requiresSiwxScheme,
-    requiresApiKeyScheme,
-  };
+  return { operation, requiresSiwxScheme, requiresApiKeyScheme };
 }
 
 function buildPricingInfo(entry: RouteEntry): OpenApiPaymentInfo | undefined {
   if (!entry.pricing) return undefined;
 
   if (typeof entry.pricing === 'string') {
-    return {
-      pricingMode: 'fixed',
-      price: entry.pricing,
-    };
+    return { pricingMode: 'fixed', price: entry.pricing };
   }
 
   if (typeof entry.pricing === 'function') {
@@ -219,23 +202,11 @@ function buildPricingInfo(entry: RouteEntry): OpenApiPaymentInfo | undefined {
     const max = Math.max(...tierPrices);
 
     if (Number.isFinite(min) && Number.isFinite(max)) {
-      if (min === max) {
-        return {
-          pricingMode: 'fixed',
-          price: String(min),
-        };
-      }
-      return {
-        pricingMode: 'range',
-        minPrice: String(min),
-        maxPrice: String(max),
-      };
+      if (min === max) return { pricingMode: 'fixed', price: String(min) };
+      return { pricingMode: 'range', minPrice: String(min), maxPrice: String(max) };
     }
 
-    return {
-      pricingMode: 'quote',
-      ...(entry.maxPrice ? { maxPrice: entry.maxPrice } : {}),
-    };
+    return { pricingMode: 'quote', ...(entry.maxPrice ? { maxPrice: entry.maxPrice } : {}) };
   }
 
   return undefined;
