@@ -187,7 +187,7 @@ function buildOperation(
   };
 }
 
-function buildPricingInfo(entry: RouteEntry): Omit<OpenApiPaymentInfo, 'protocols'> | undefined {
+function buildPricingInfo(entry: RouteEntry): OpenApiPaymentInfo | undefined {
   if (!entry.pricing) return undefined;
 
   if (typeof entry.pricing === 'string') {
