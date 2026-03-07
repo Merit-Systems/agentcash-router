@@ -28,8 +28,8 @@ export function createWellKnownHandler(
     const mppSet = new Set<string>();
     const methodHints = discovery.methodHints ?? 'non-default';
 
-    for (const [key, entry] of registry.entries()) {
-      const url = `${normalizedBase}/api/${entry.path ?? key}`;
+    for (const [, entry] of registry.entries()) {
+      const url = `${normalizedBase}/api/${entry.path ?? entry.key}`;
       const resource = toDiscoveryResource(entry.method, url, methodHints);
       if (entry.authMode !== 'unprotected') x402Set.add(resource);
       if (entry.protocols.includes('mpp')) mppSet.add(resource);
