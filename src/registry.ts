@@ -26,8 +26,15 @@ export class RouteRegistry {
     this.routes.set(k, entry);
   }
 
+  // Accepts either a compound key ("site/domain:DELETE") or a path-only key
+  // ("site/domain") — path-only returns the first registered method for that path.
   get(key: string): RouteEntry | undefined {
-    return this.routes.get(key);
+    const direct = this.routes.get(key);
+    if (direct) return direct;
+    for (const entry of this.routes.values()) {
+      if (entry.key === key) return entry;
+    }
+    return undefined;
   }
 
   entries(): IterableIterator<[string, RouteEntry]> {
@@ -35,7 +42,7 @@ export class RouteRegistry {
   }
 
   has(key: string): boolean {
-    return this.routes.has(key);
+    return this.get(key) !== undefined;
   }
 
   get size(): number {

@@ -30,8 +30,8 @@ export function createOpenAPIHandler(
     let requiresSiwxScheme = false;
     let requiresApiKeyScheme = false;
 
-    for (const [key, entry] of registry.entries()) {
-      const apiPath = `/api/${entry.path ?? key}`;
+    for (const [, entry] of registry.entries()) {
+      const apiPath = `/api/${entry.path ?? entry.key}`;
       const method = entry.method.toLowerCase();
       const tag = deriveTag(key);
       tagSet.add(tag);
