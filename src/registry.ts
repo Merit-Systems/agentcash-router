@@ -46,9 +46,7 @@ export class RouteRegistry {
     if (!expectedKeys) return;
     // expectedKeys are path-only (e.g. "site/domain") — check that at least
     // one method is registered for each key.
-    const registeredPathKeys = new Set(
-      [...this.routes.values()].map((e) => e.key),
-    );
+    const registeredPathKeys = new Set([...this.routes.values()].map((e) => e.key));
     const missing = expectedKeys.filter((k) => !registeredPathKeys.has(k));
     if (missing.length > 0) {
       throw new Error(
