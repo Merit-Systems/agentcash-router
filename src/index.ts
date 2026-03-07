@@ -24,12 +24,10 @@ export interface MonitorEntry {
   critical?: number;
 }
 
-export interface ServiceRouter<TPriceKeys extends string = never> {
+export interface ServiceRouter {
   route<K extends string>(
     keyOrDefinition: K | RouteDefinition<K>,
-  ): [K] extends [TPriceKeys]
-    ? RouteBuilder<undefined, undefined, true, false, false>
-    : RouteBuilder<undefined, undefined, false, false, false>;
+  ): RouteBuilder<undefined, undefined, false, false, false>;
   wellKnown(): (request: NextRequest) => Promise<NextResponse>;
   openapi(): (request: NextRequest) => Promise<NextResponse>;
   llmsTxt(): (request: NextRequest) => Promise<NextResponse>;
@@ -41,9 +39,7 @@ export interface ServiceRouter<TPriceKeys extends string = never> {
 // createRouter
 // ---------------------------------------------------------------------------
 
-export function createRouter<const P extends Record<string, string> = Record<never, string>>(
-  config: RouterConfig & { prices?: P },
-): ServiceRouter<Extract<keyof P, string>> {
+export function createRouter(config: RouterConfig): ServiceRouter {
   const registry = new RouteRegistry();
   const nonceStore = config.siwx?.nonceStore ?? new MemoryNonceStore();
   const entitlementStore = config.siwx?.entitlementStore ?? new MemoryEntitlementStore();
@@ -173,8 +169,6 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     }
   })();
 
-  const pricesKeys = config.prices ? Object.keys(config.prices) : undefined;
-
   return {
     route(keyOrDefinition) {
       const isDefinition = typeof keyOrDefinition !== 'string';
@@ -203,20 +197,15 @@ export function createRouter<const P extends Record<string, string> = Record<nev
         builder = builder.method(definition.method as RouteMethod);
       }
 
-      if (config.prices && key in config.prices) {
-        const options = config.protocols ? { protocols: config.protocols } : undefined;
-        return builder.paid(config.prices[key], options) as never;
-      }
-
       return builder as never;
     },
 
     wellKnown() {
-      return createWellKnownHandler(registry, resolvedBaseUrl, pricesKeys, config.discovery);
+      return createWellKnownHandler(registry, resolvedBaseUrl, config.discovery);
     },
 
     openapi() {
-      return createOpenAPIHandler(registry, resolvedBaseUrl, pricesKeys, config.discovery);
+      return createOpenAPIHandler(registry, resolvedBaseUrl, config.discovery);
     },
 
     llmsTxt() {

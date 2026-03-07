@@ -12,20 +12,19 @@ type RouterPathItem = Partial<Record<'get' | 'post' | 'put' | 'delete' | 'patch'
 export function createOpenAPIHandler(
   registry: RouteRegistry,
   baseUrl: string,
-  pricesKeys: string[] | undefined,
   discovery: DiscoveryConfig,
 ) {
   const normalizedBase = baseUrl.replace(/\/+$/, '');
   let cached: OpenApiDoc | null = null;
-  let validated = false;
 
   return async (_request: NextRequest): Promise<NextResponse> => {
     if (cached) return NextResponse.json(cached);
 
-    // Barrel validation on first call
-    if (!validated && pricesKeys) {
-      registry.validate(pricesKeys);
-      validated = true;
+    if (registry.size === 0 && process.env.NODE_ENV !== 'production') {
+      console.warn(
+        '[agentcash/router] openapi() called but no routes are registered. ' +
+          'You must import all route handler files into this file.',
+      );
     }
 
     const paths: Record<string, RouterPathItem> = {};

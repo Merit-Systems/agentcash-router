@@ -231,7 +231,6 @@ export interface RouterConfig {
     nonceStore?: import('./auth/nonce.js').NonceStore;
     entitlementStore?: import('./auth/entitlement.js').EntitlementStore;
   };
-  prices?: Record<string, string>;
   mpp?: {
     secretKey: string;
     currency: string;
@@ -240,17 +239,10 @@ export interface RouterConfig {
     rpcUrl?: string;
   };
   /**
-   * Payment protocols to accept on auto-priced routes (those using the `prices` config).
+   * Payment protocol servers to initialize. Controls which protocols are available
+   * for routes that call `.paid(..., { protocols: [...] })`.
    *
    * @default ['x402']
-   *
-   * @example
-   * // Accept both x402 and MPP payments
-   * createRouter({
-   *   protocols: ['x402', 'mpp'],
-   *   mpp: { secretKey, currency, recipient },
-   *   prices: { 'exa/search': '0.01' }
-   * })
    */
   protocols?: ProtocolType[];
   /**

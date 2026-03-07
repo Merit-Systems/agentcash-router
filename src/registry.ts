@@ -36,14 +36,4 @@ export class RouteRegistry {
     return this.routes.size;
   }
 
-  validate(expectedKeys?: string[]): void {
-    if (!expectedKeys) return;
-    const missing = expectedKeys.filter((k) => !this.routes.has(k));
-    if (missing.length > 0) {
-      throw new Error(
-        `route${missing.length > 1 ? 's' : ''} ${missing.map((k) => `'${k}'`).join(', ')} ` +
-          `in prices map but not registered — add to barrel imports`,
-      );
-    }
-  }
 }

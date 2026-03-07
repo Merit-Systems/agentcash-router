@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@agentcash/discovery':
-        specifier: 0.0.0-pr-21-20260306191442
-        version: 0.0.0-pr-21-20260306191442
+        specifier: 0.0.0-pr-21-20260306210657
+        version: 0.0.0-pr-21-20260306210657
       '@changesets/cli':
         specifier: ^2.29.8
         version: 2.29.8(@types/node@22.19.11)
@@ -68,9 +68,6 @@ importers:
       zod:
         specifier: ^4.0.0
         version: 4.3.6
-      zod-openapi:
-        specifier: ^5.0.0
-        version: 5.4.6(zod@4.3.6)
 
 packages:
 
@@ -80,8 +77,8 @@ packages:
   '@adraffy/ens-normalize@1.11.1':
     resolution: {integrity: sha512-nhCBV3quEgesuf7c7KYfperqSS14T8bYuvJ8PcLJp6znkZpFc0AuW4qBtr8eKVyPPe/8RSr7sglCWPU5eaxwKQ==}
 
-  '@agentcash/discovery@0.0.0-pr-21-20260306191442':
-    resolution: {integrity: sha512-iTGtPLhP9LXP11tAAEgYj7r6yo4YCCEzdqSJyb7QeFZ0DJwfV0fvYgvbWYIqnPVnG0/eCRFvv7PjLxFnPHE9+w==}
+  '@agentcash/discovery@0.0.0-pr-21-20260306210657':
+    resolution: {integrity: sha512-v444HBQyWhXlbBV1GNpVxN3V3NerjxNrgAZ9zj/iWuycMslH+6zvuzOmDlQkUr/NEU1YD8GFlB5c6gb1Y7EePw==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -2870,12 +2867,6 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
-  zod-openapi@5.4.6:
-    resolution: {integrity: sha512-P2jsOOBAq/6hCwUsMCjUATZ8szkMsV5VAwZENfyxp2Hc/XPJQpVwAgevWZc65xZauCwWB9LAn7zYeiCJFAEL+A==}
-    engines: {node: '>=20'}
-    peerDependencies:
-      zod: ^3.25.74 || ^4.0.0
-
   zod-to-json-schema@3.25.1:
     resolution: {integrity: sha512-pM/SU9d3YAggzi6MtR4h7ruuQlqKtad8e9S0fmxcMi+ueAK5Korys/aWcV9LIIHTVbj01NdzxcnXSN+O74ZIVA==}
     peerDependencies:
@@ -2893,7 +2884,7 @@ snapshots:
 
   '@adraffy/ens-normalize@1.11.1': {}
 
-  '@agentcash/discovery@0.0.0-pr-21-20260306191442':
+  '@agentcash/discovery@0.0.0-pr-21-20260306210657':
     dependencies:
       '@x402/core': 2.6.0
       zod: 4.3.6
@@ -5797,10 +5788,6 @@ snapshots:
       utf-8-validate: 5.0.10
 
   yocto-queue@0.1.0: {}
-
-  zod-openapi@5.4.6(zod@4.3.6):
-    dependencies:
-      zod: 4.3.6
 
   zod-to-json-schema@3.25.1(zod@4.3.6):
     dependencies:
