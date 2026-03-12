@@ -6,7 +6,9 @@ import type {
   QuotaLevel,
   ProviderQuotaEvent,
   X402Server,
+  X402AcceptConfig,
 } from './types.js';
+import type { ResolvedX402Facilitator } from './x402-facilitators.js';
 import type { RouterPlugin, PluginContext, RequestMeta } from './plugin.js';
 import { createDefaultContext, firePluginHook } from './plugin.js';
 import { SIWX_CHALLENGE_EXPIRY_MS, type NonceStore } from './auth/nonce.js';
@@ -20,20 +22,35 @@ import { isAddress, getAddress } from 'viem';
 import { buildX402Challenge, verifyX402Payment, settleX402Payment } from './protocols/x402.js';
 import { verifySIWX, buildSIWXExtension, SIWX_ERROR_MESSAGES } from './auth/siwx.js';
 import { verifyApiKey } from './auth/api-key.js';
+import { resolveX402Accepts } from './x402-config.js';
+
+function getRequirementNetwork(requirements: unknown, fallback: string): string {
+  const network = (requirements as { network?: unknown } | null)?.network;
+  return typeof network === 'string' ? network : fallback;
+}
 
 /** Map a CAIP-2 network identifier to its SIWX signature type. */
 function siwxSignatureType(network: string): 'eip191' | 'ed25519' {
   return network.startsWith('solana:') ? 'ed25519' : 'eip191';
 }
 
-async function resolvePayTo(
-  routeEntry: RouteEntry,
-  request: Request,
-  fallback: string,
-): Promise<string> {
-  if (!routeEntry.payTo) return fallback;
-  if (typeof routeEntry.payTo === 'string') return routeEntry.payTo;
-  return routeEntry.payTo(request);
+/** Derive unique SIWX-supported chains from x402 accepts, falling back to the default network. */
+function getSupportedChains(
+  x402Accepts: X402AcceptConfig[],
+  fallbackNetwork: string,
+): Array<{ chainId: string; type: 'eip191' | 'ed25519' }> {
+  const seen = new Set<string>();
+  const chains: Array<{ chainId: string; type: 'eip191' | 'ed25519' }> = [];
+  for (const accept of x402Accepts) {
+    if (accept.network && !seen.has(accept.network)) {
+      seen.add(accept.network);
+      chains.push({ chainId: accept.network, type: siwxSignatureType(accept.network) });
+    }
+  }
+  if (chains.length === 0) {
+    chains.push({ chainId: fallbackNetwork, type: siwxSignatureType(fallbackNetwork) });
+  }
+  return chains;
 }
 
 export interface OrchestrateDeps {
@@ -45,8 +62,9 @@ export interface OrchestrateDeps {
   nonceStore: NonceStore;
   entitlementStore: EntitlementStore;
   payeeAddress: string;
-  /** CAIP-2 network identifiers. First entry is the primary network for x402. */
-  networks: string[];
+  network: string;
+  x402FacilitatorsByNetwork?: Record<string, ResolvedX402Facilitator>;
+  x402Accepts: X402AcceptConfig[];
   mppx?: {
     charge: (options: {
       amount: string;
@@ -283,12 +301,14 @@ export function createRequestHandler(
         const url = new URL(request.url);
         // SIWE requires alphanumeric nonce — strip hyphens from UUID
         const nonce = crypto.randomUUID().replace(/-/g, '');
+        const supportedChains = getSupportedChains(deps.x402Accepts, deps.network);
+        const primaryChain = supportedChains[0];
         const siwxInfo = {
           domain: url.hostname,
           uri: request.url,
           version: '1',
-          chainId: deps.networks[0],
-          type: siwxSignatureType(deps.networks[0]),
+          chainId: primaryChain.chainId,
+          type: primaryChain.type,
           nonce,
           issuedAt: new Date().toISOString(),
           expirationTime: new Date(Date.now() + SIWX_CHALLENGE_EXPIRY_MS).toISOString(),
@@ -301,11 +321,6 @@ export function createRequestHandler(
         } catch {
           // SIWX schema is optional enrichment — challenge works without it
         }
-
-        const supportedChains = deps.networks.map((n) => ({
-          chainId: n,
-          type: siwxSignatureType(n),
-        }));
 
         const paymentRequired = {
           x402Version: 2,
@@ -474,18 +489,22 @@ export function createRequestHandler(
         return fail(500, reason, meta, pluginCtx, body.data);
       }
 
-      const payTo = await resolvePayTo(routeEntry, request, deps.payeeAddress);
-      const verify = await verifyX402Payment(
-        deps.x402Server,
+      const accepts = await resolveX402Accepts(
         request,
         routeEntry,
-        price,
-        payTo,
-        deps.networks[0],
+        deps.x402Accepts,
+        deps.payeeAddress,
       );
+      const verify = await verifyX402Payment({
+        server: deps.x402Server,
+        request,
+        price,
+        accepts,
+      });
       if (!verify?.valid) return await build402(request, routeEntry, deps, meta, pluginCtx);
 
       const { payload: verifyPayload, requirements: verifyRequirements } = verify;
+      const matchedNetwork = getRequirementNetwork(verifyRequirements, deps.network);
 
       // Normalize to lowercase — checksumming is a display concern, not storage
       const wallet = verify.payer.toLowerCase();
@@ -494,7 +513,7 @@ export function createRequestHandler(
         protocol: 'x402',
         payer: wallet,
         amount: price,
-        network: deps.networks[0],
+        network: matchedNetwork,
       });
 
       const { response, rawResult } = await invoke(
@@ -508,25 +527,17 @@ export function createRequestHandler(
 
       if (response.status < 400) {
         try {
-          const payloadFingerprint =
-            typeof verifyPayload === 'object' && verifyPayload !== null
-              ? {
-                  keys: Object.keys(verifyPayload as object)
-                    .sort()
-                    .join(','),
-                  payloadType: typeof verifyPayload,
-                }
-              : { payloadType: typeof verifyPayload };
-          console.info('Settlement attempt', {
-            route: routeEntry.key,
-            network: deps.networks[0],
-            ...payloadFingerprint,
-          });
           const settle = await settleX402Payment(
             deps.x402Server,
             verifyPayload,
             verifyRequirements,
           );
+          if (!settle.result?.success) {
+            const reason = settle.result?.errorReason || 'x402 settlement returned success=false';
+            const error = new Error(reason) as Error & { errorReason?: string };
+            error.errorReason = reason;
+            throw error;
+          }
           if (routeEntry.siwxEnabled) {
             try {
               await deps.entitlementStore.grant(routeEntry.key, wallet);
@@ -543,17 +554,19 @@ export function createRequestHandler(
             protocol: 'x402',
             payer: verify.payer,
             transaction: String(settle.result?.transaction ?? ''),
-            network: deps.networks[0],
+            network: matchedNetwork,
           });
         } catch (err) {
           const errObj = err as {
             message?: string;
+            errorReason?: string;
             response?: { status?: number; data?: unknown; body?: unknown };
           };
           console.error('Settlement failed', {
             message: err instanceof Error ? err.message : String(err),
             route: routeEntry.key,
-            network: deps.networks[0],
+            network: matchedNetwork,
+            errorReason: errObj.errorReason,
             facilitatorStatus: errObj.response?.status,
             facilitatorBody: errObj.response?.data ?? errObj.response?.body,
           });
@@ -866,16 +879,21 @@ async function build402(
 
   if (routeEntry.protocols.includes('x402') && deps.x402Server) {
     try {
-      const payTo = await resolvePayTo(routeEntry, request, deps.payeeAddress);
-      const { encoded } = await buildX402Challenge(
-        deps.x402Server,
+      const accepts = await resolveX402Accepts(
+        request,
+        routeEntry,
+        deps.x402Accepts,
+        deps.payeeAddress,
+      );
+      const { encoded } = await buildX402Challenge({
+        server: deps.x402Server,
         routeEntry,
         request,
-        challengePrice,
-        payTo,
-        deps.networks[0],
+        price: challengePrice,
+        accepts,
+        facilitatorsByNetwork: deps.x402FacilitatorsByNetwork,
         extensions,
-      );
+      });
       response.headers.set('PAYMENT-REQUIRED', encoded);
     } catch (err) {
       // x402 challenge failure is critical: a bare 402 with no PAYMENT-REQUIRED

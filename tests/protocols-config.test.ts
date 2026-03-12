@@ -60,6 +60,25 @@ describe('RouterConfig.protocols', () => {
       expect(entry).toBeDefined();
       expect(entry!.protocols).toEqual(['x402']);
     });
+
+    it('accepts additive multi-network x402 config', () => {
+      const router = createRouter({
+        ...baseConfig,
+        x402: {
+          accepts: [
+            { network: 'eip155:8453' },
+            {
+              network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+              payTo: '9tCZP1W2jNYZjikmteU1HRrkoSGaRqcNs9ciLeQZb4a2',
+            },
+          ],
+        },
+      });
+      router.route('test/route').handler(async () => ({}));
+      const entry = router.registry.get('test/route');
+      expect(entry).toBeDefined();
+      expect(entry!.protocols).toEqual(['x402']);
+    });
   });
 
   describe('validation', () => {
@@ -126,6 +145,57 @@ describe('RouterConfig.protocols', () => {
       }
     });
 
+    it('throws in production when a non-exact x402 accept is missing asset', () => {
+      const origEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        expect(() => {
+          createRouter({
+            ...baseConfig,
+            baseUrl: 'https://test.example.com',
+            x402: {
+              accepts: [
+                {
+                  scheme: '@faremeter/x-solana-settlement',
+                  network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+                  payTo: '9tCZP1W2jNYZjikmteU1HRrkoSGaRqcNs9ciLeQZb4a2',
+                },
+              ],
+            },
+          });
+        }).toThrow(/non-exact x402 accepts require an asset/);
+      } finally {
+        process.env.NODE_ENV = origEnv;
+        spy.mockRestore();
+      }
+    });
+
+    it('throws in production when an x402 accept uses an unsupported network', () => {
+      const origEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        expect(() => {
+          createRouter({
+            ...baseConfig,
+            baseUrl: 'https://test.example.com',
+            x402: {
+              accepts: [
+                {
+                  network: 'cosmos:osmosis-1',
+                  payTo: 'osmo1deadbeefdeadbeefdeadbeefdeadbeefdeadbe',
+                },
+              ],
+            },
+          });
+        }).toThrow(/unsupported x402 network 'cosmos:osmosis-1'/);
+      } finally {
+        process.env.NODE_ENV = origEnv;
+        spy.mockRestore();
+      }
+    });
+
     it('logs error in development when mpp config is missing', async () => {
       const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const router = createRouter({ ...baseConfig, protocols: ['mpp'] });
@@ -175,6 +245,30 @@ describe('RouterConfig.protocols', () => {
         .handler(async () => ({ ok: true }));
       await handler(new NextRequest('http://localhost/api/test'));
       expect(spy).toHaveBeenCalledWith(expect.stringContaining('recipient address'));
+      spy.mockRestore();
+    });
+
+    it('logs error in development when an x402 accept uses an unsupported network', async () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const router = createRouter({
+        ...baseConfig,
+        x402: {
+          accepts: [
+            {
+              network: 'cosmos:osmosis-1',
+              payTo: 'osmo1deadbeefdeadbeefdeadbeefdeadbeefdeadbe',
+            },
+          ],
+        },
+      });
+      const handler = router
+        .route('test/route')
+        .unprotected()
+        .handler(async () => ({ ok: true }));
+      await handler(new NextRequest('http://localhost/api/test'));
+      expect(spy).toHaveBeenCalledWith(
+        expect.stringContaining("unsupported x402 network 'cosmos:osmosis-1'"),
+      );
       spy.mockRestore();
     });
 

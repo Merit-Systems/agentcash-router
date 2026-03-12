@@ -1,5 +1,93 @@
 # @agentcash/router
 
+## 1.1.1
+
+### Patch Changes
+
+- 8c83c21: Fix x402 settlement failure handling so the router no longer returns the handler's success response when settlement reports `success: false`.
+  - Treat `settlePayment()` returning `success: false` as a real settlement failure
+  - Do not attach a contradictory `PAYMENT-RESPONSE` header on failed settlement
+  - Return a server error instead of leaking a false-positive paid response
+
+## 1.1.0
+
+### Minor Changes
+
+- 4ffa40c: Add dual-network x402 support (Base + Solana) with zero breaking changes
+  - New additive `x402.accepts[]` config for multi-network payment options
+  - Existing `payeeAddress` + `network` shorthand continues to work as before
+  - 402 challenges advertise all configured networks in a single response
+  - Verification matches the client-selected accepted requirement (not a rebuilt one)
+  - Settlement routes to the correct network based on the matched requirement
+  - SVM exact scheme registered when Solana networks are configured
+  - Custom (non-exact) schemes supported for Faremeter settlement-account flows
+  - Stable-field matching handles rotating facilitator extras (e.g. feePayer, recentBlockhash)
+
+## 1.0.1
+
+### Patch Changes
+
+- 6cb8bf2: fix(registry): include HTTP method in registry map key so POST and DELETE on the same path coexist
+
+  Previously both methods shared the same key (e.g. `site/domain`), causing the second registration to silently overwrite the first. Only the last-registered method appeared in the OpenAPI spec and well-known discovery. The internal map key is now `{key}:{method}` — same-path-same-method double registration (expected during Next.js build for discovery stubs) still last-write-wins.
+
+## 1.0.0
+
+### Major Changes
+
+- c25a099: # Unified discovery config
+
+  Discovery is now configured once in `createRouter({ discovery })` instead of split across `openapi()` and `wellKnown()` call sites. A new `llmsTxt()` handler serves agent guidance as plain text.
+
+  ## Migration
+
+  **Before:**
+
+  ```typescript
+  export const GET = router.openapi({
+    title: 'My API',
+    version: '1.0.0',
+    llmsTxtUrl: 'https://example.com/llms.txt',
+    ownershipProofs: [...],
+  });
+
+  export const GET = router.wellKnown({
+    instructions: 'Use /api/search for...',
+    ownershipProofs: [...],
+  });
+  ```
+
+  **After:**
+
+  ```typescript
+  const router = createRouter({
+    baseUrl: '...',
+    discovery: {
+      title: 'My API',
+      version: '1.0.0',
+      guidance: 'Use /api/search for...',  // serves as wellknown instructions + /llms.txt
+      ownershipProofs: [...],
+    },
+  });
+
+  export const GET = router.openapi();
+  export const GET = router.wellKnown();
+  export const GET = router.llmsTxt();  // new
+  ```
+
+  ## Breaking changes
+  - `router.openapi(options)` and `router.wellKnown(options?)` are now zero-arg — options move to `createRouter({ discovery })`
+  - `OpenAPIOptions` and `WellKnownOptions` types removed — use `DiscoveryConfig`
+  - `wellKnown.instructions` renamed to `discovery.guidance`
+  - `llmsTxtUrl` removed — inline content via `discovery.guidance` (string or async fn)
+  - `baseUrl` override removed from OpenAPI options — always uses `RouterConfig.baseUrl`
+
+## 0.7.1
+
+### Patch Changes
+
+- 1ed50e9: Bump mppx to 0.3.13
+
 ## 0.7.0
 
 ### Minor Changes

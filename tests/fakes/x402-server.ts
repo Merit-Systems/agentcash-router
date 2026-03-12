@@ -10,31 +10,29 @@ export const KNOWN_PAYEE = '0xPAYEE0987654321';
 const TX_HASH = '0xTX_HASH_FAKE_1234567890abcdef';
 
 export class FakeX402Server {
-  private payeeAddress: string;
   initialized = false;
   settledPayments: Array<{ payload: unknown; requirements: unknown }> = [];
 
-  constructor(payeeAddress = KNOWN_PAYEE) {
-    this.payeeAddress = payeeAddress;
-  }
+  constructor(_payeeAddress = KNOWN_PAYEE) {}
 
   async init() {
     this.initialized = true;
   }
 
   buildPaymentRequirementsFromOptions(
-    options: { price: string; payTo: string; scheme: string; network: string },
+    options: Array<{ price: string; payTo: string; scheme: string; network: string }>,
     _ctx: unknown,
   ) {
-    return [
-      {
-        scheme: options.scheme,
-        network: options.network,
-        maxAmountRequired: options.price,
-        resource: options.payTo,
-        payTo: options.payTo,
-      },
-    ];
+    return options.map((option) => ({
+      scheme: option.scheme,
+      network: option.network,
+      amount: option.price,
+      maxAmountRequired: option.price,
+      asset: 'mock-usdc',
+      resource: option.payTo,
+      payTo: option.payTo,
+      maxTimeoutSeconds: 300,
+    }));
   }
 
   createPaymentRequiredResponse(
@@ -44,19 +42,35 @@ export class FakeX402Server {
     extensions?: Record<string, unknown>,
   ) {
     return {
-      requirements,
+      x402Version: 2,
+      accepts: requirements,
+      resource: _resource,
+      error: _error ?? undefined,
       extensions,
-      version: 1,
     };
   }
 
-  findMatchingRequirements(available: unknown[], _payload: unknown) {
-    return available[0];
+  findMatchingRequirements(available: unknown[], payload: unknown) {
+    const accepted = (payload as { accepted?: { network?: string; scheme?: string } } | null)
+      ?.accepted;
+    const match = available.find((requirement) => {
+      const candidate = requirement as { network?: unknown; scheme?: unknown } | null;
+      return (
+        typeof candidate?.network === 'string' &&
+        candidate.network === accepted?.network &&
+        typeof candidate.scheme === 'string' &&
+        candidate.scheme === accepted?.scheme
+      );
+    });
+    return match ?? available[0];
   }
 
-  async verifyPayment(payload: { payer: string; amount: string }, _requirements: unknown) {
-    if (payload.payer === KNOWN_PAYER) {
-      return { isValid: true, payer: payload.payer };
+  async verifyPayment(payload: unknown, _requirements: unknown) {
+    const payer =
+      (payload as { payload?: { payer?: unknown } } | null)?.payload?.payer ??
+      (payload as { payer?: unknown } | null)?.payer;
+    if (payer === KNOWN_PAYER) {
+      return { isValid: true, payer: KNOWN_PAYER };
     }
     return { isValid: false, payer: null };
   }
@@ -67,7 +81,7 @@ export class FakeX402Server {
       success: true,
       payer: KNOWN_PAYER,
       transaction: TX_HASH,
-      network: 'eip155:8453',
+      network: ((requirements as { network?: string } | null)?.network ?? 'eip155:8453') as string,
     };
   }
 }

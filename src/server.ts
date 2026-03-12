@@ -1,6 +1,13 @@
 import type { FacilitatorConfig, FacilitatorClient } from '@x402/core/http';
 import type { SupportedResponse, Network } from '@x402/core/types';
+import { filterEvmNetworks } from './protocols/evm.js';
+import { filterSolanaNetworks } from './protocols/solana.js';
 import type { RouterConfig, X402Server } from './types.js';
+import {
+  getResolvedX402Facilitators,
+  getResolvedX402FacilitatorGroups,
+} from './x402-facilitators.js';
+import { getConfiguredX402Networks } from './x402-config.js';
 
 export async function createX402Server(config: RouterConfig) {
   // Dynamic ESM imports: peer deps are loaded lazily so the router can
@@ -11,31 +18,36 @@ export async function createX402Server(config: RouterConfig) {
   const { bazaarResourceServerExtension } = await import('@x402/extensions/bazaar');
   const { siwxResourceServerExtension } = await import('@x402/extensions/sign-in-with-x');
   const { facilitator: defaultFacilitator } = await import('@coinbase/x402');
+  const configuredNetworks = getConfiguredX402Networks(config);
+  const facilitatorsByNetwork = getResolvedX402Facilitators(
+    config,
+    configuredNetworks,
+    defaultFacilitator,
+  );
+  const evmNetworks = filterEvmNetworks(configuredNetworks);
+  const svmNetworks = filterSolanaNetworks(configuredNetworks);
+  const facilitatorClients = createFacilitatorClients(facilitatorsByNetwork, HTTPFacilitatorClient);
+  const server = new x402ResourceServer(
+    facilitatorClients.length === 1 ? facilitatorClients[0] : facilitatorClients,
+  );
 
-  // Normalize string URLs into the config object shape; pass objects through.
-  const raw = config.facilitatorUrl ?? defaultFacilitator;
-  const facilitatorConfig: FacilitatorConfig = typeof raw === 'string' ? { url: raw } : raw;
-  const httpClient = new HTTPFacilitatorClient(facilitatorConfig);
-
-  // Wrap the HTTP client to bypass getSupported() on cold start.
-  // For EVM exact scheme, enhancePaymentRequirements is a no-op — the
-  // supported kind data is never used. The only purpose of getSupported()
-  // is a gate check ("does the facilitator support exact on eip155:8453?"),
-  // which has been true since day one. Hitting the facilitator on every
-  // lambda cold start causes 429 rate limit storms when multiple instances
-  // boot simultaneously. Hardcode the response; verify/settle still go
-  // through the real facilitator.
-  const network = (config.networks?.[0] ?? 'eip155:8453') as Network;
-  const client = cachedClient(httpClient, network);
-  const server = new x402ResourceServer(client);
-
-  registerExactEvmScheme(server);
+  if (evmNetworks.length > 0) {
+    registerExactEvmScheme(server, { networks: evmNetworks });
+  }
+  if (svmNetworks.length > 0) {
+    const { registerExactSvmScheme } = await import('@x402/svm/exact/server');
+    registerExactSvmScheme(server, { networks: svmNetworks });
+  }
   server.registerExtension(bazaarResourceServerExtension);
   server.registerExtension(siwxResourceServerExtension);
 
   const initPromise = server.initialize();
 
-  return { server: server as unknown as X402Server, initPromise };
+  return {
+    server: server as unknown as X402Server,
+    initPromise,
+    facilitatorsByNetwork,
+  };
 }
 
 /**
@@ -48,14 +60,26 @@ export async function createX402Server(config: RouterConfig) {
  * supported kind data at all (it's a pass-through), so the HTTP call is pure
  * overhead and a reliability risk.
  */
-function cachedClient(inner: FacilitatorClient, network: Network): FacilitatorClient {
+function cachedClient(inner: FacilitatorClient, networks: Network[]): FacilitatorClient {
   return {
     verify: inner.verify.bind(inner),
     settle: inner.settle.bind(inner),
     getSupported: async (): Promise<SupportedResponse> => ({
-      kinds: [{ x402Version: 2, scheme: 'exact', network }],
+      kinds: networks.map((network) => ({ x402Version: 2, scheme: 'exact', network })),
       extensions: [],
       signers: {},
     }),
   };
+}
+
+function createFacilitatorClients(
+  facilitatorsByNetwork: ReturnType<typeof getResolvedX402Facilitators>,
+  HTTPFacilitatorClient: new (config?: FacilitatorConfig) => FacilitatorClient,
+): FacilitatorClient[] {
+  const groups = getResolvedX402FacilitatorGroups(facilitatorsByNetwork);
+
+  return groups.map((group) => {
+    const inner = new HTTPFacilitatorClient(group.config);
+    return group.family === 'evm' ? cachedClient(inner, group.networks) : inner;
+  });
 }

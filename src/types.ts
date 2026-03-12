@@ -1,3 +1,4 @@
+import type { FacilitatorConfig } from '@x402/core/http';
 import type { NextRequest } from 'next/server';
 import type { ZodType } from 'zod';
 
@@ -49,7 +50,7 @@ export interface X402Server {
   createPaymentRequiredResponse(
     requirements: PaymentRequirements[],
     resource: { url: string; method: string; description?: string },
-    error: string | null,
+    error?: string,
     extensions?: Record<string, unknown>,
   ): Promise<PaymentRequired>;
 
@@ -108,12 +109,43 @@ export type PricingConfig<TBody = unknown> =
   | ((body: TBody) => string | Promise<string>)
   | { field: string; tiers: Record<string, TierConfig>; default?: string };
 
+export type PayToConfig = string | ((request: Request) => string | Promise<string>);
+
+interface X402AcceptBase {
+  network: string;
+  asset?: string;
+  decimals?: number;
+  maxTimeoutSeconds?: number;
+  extra?: Record<string, unknown>;
+}
+
+export interface X402AcceptConfig extends X402AcceptBase {
+  scheme?: string;
+  payTo?: PayToConfig;
+}
+
+export interface X402ResolvedAccept extends X402AcceptBase {
+  scheme: string;
+  payTo: string;
+}
+
+export interface X402RouterFacilitatorConfig extends FacilitatorConfig {
+  createAcceptsHeaders?: () => Promise<Record<string, string>>;
+}
+
+export type X402FacilitatorTarget = string | X402RouterFacilitatorConfig;
+
+export interface X402FacilitatorsConfig {
+  evm?: X402FacilitatorTarget;
+  solana?: X402FacilitatorTarget;
+}
+
 export interface PaidOptions {
   protocols?: ProtocolType[];
   maxPrice?: string;
   minPrice?: string;
   /** Override the payment recipient. String for static, function for dynamic (receives the Request). */
-  payTo?: string | ((request: Request) => string | Promise<string>);
+  payTo?: PayToConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -186,7 +218,7 @@ export interface RouteEntry {
   method: RouteMethod;
   maxPrice?: string;
   minPrice?: string;
-  payTo?: string | ((request: Request) => string | Promise<string>);
+  payTo?: PayToConfig;
   apiKeyResolver?: (key: string) => unknown | Promise<unknown>;
   providerName?: string;
   providerConfig?: ProviderConfig;
@@ -194,11 +226,28 @@ export interface RouteEntry {
 }
 
 // ---------------------------------------------------------------------------
+// Discovery config
+// ---------------------------------------------------------------------------
+
+export interface DiscoveryConfig {
+  title: string;
+  version: string;
+  description?: string;
+  contact?: { name?: string; url?: string };
+  ownershipProofs?: string[];
+  methodHints?: 'off' | 'non-default' | 'always';
+  /** Natural language guidance for agents. Served as wellknown `instructions` and `/llms.txt`. */
+  guidance?: string | (() => string | Promise<string>);
+  /** Override the OpenAPI `servers` URL. Defaults to `RouterConfig.baseUrl`. Use when the public API hostname differs from the payment realm URL. */
+  serverUrl?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Router config
 // ---------------------------------------------------------------------------
 
 export interface RouterConfig {
-  payeeAddress: string;
+  payeeAddress?: string;
   /**
    * Origin URL (e.g. `https://myapp.com`).
    * Used for 402 challenge realm, discovery URLs, OpenAPI servers, and MPP memo indexing.
@@ -207,24 +256,11 @@ export interface RouterConfig {
    * so it must be explicitly set by the consuming app.
    */
   baseUrl: string;
-  /**
-   * CAIP-2 network identifier(s) for SIWX challenges and x402 payment verification.
-   *
-   * When multiple networks are provided, the SIWX challenge advertises all of
-   * them in `supportedChains` so clients can choose EVM or Solana. The first
-   * entry is used as the primary network for x402 payment verification.
-   *
-   * @default ['eip155:8453']
-   *
-   * @example
-   * // EVM only (Base mainnet)
-   * networks: ['eip155:8453']
-   *
-   * // EVM + Solana
-   * networks: ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp']
-   */
-  networks?: string[];
-  facilitatorUrl?: string;
+  network?: string;
+  x402?: {
+    accepts?: X402AcceptConfig[];
+    facilitators?: X402FacilitatorsConfig;
+  };
   plugin?: import('./plugin.js').RouterPlugin;
   siwx?: {
     nonceStore?: import('./auth/nonce.js').NonceStore;
@@ -262,4 +298,5 @@ export interface RouterConfig {
    * This prevents discovery/openapi drift caused by shorthand internal keys.
    */
   strictRoutes?: boolean;
+  discovery: DiscoveryConfig;
 }

@@ -1,27 +1,14 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import type { RouteRegistry } from '../registry.js';
-
-export interface WellKnownOptions {
-  description?: string;
-  instructions?: string | (() => string | Promise<string>);
-  ownershipProofs?: string[];
-  /**
-   * Whether to include explicit HTTP method prefixes in `resources`.
-   * - `off`: always emit plain URLs.
-   * - `non-default`: emit `METHOD url` for PUT/PATCH/DELETE routes.
-   * - `always`: emit `METHOD url` for all routes.
-   *
-   * @default 'non-default'
-   */
-  methodHints?: 'off' | 'non-default' | 'always';
-}
+import type { DiscoveryConfig } from '../types.js';
+import { resolveGuidance } from './utils/guidance.js';
 
 export function createWellKnownHandler(
   registry: RouteRegistry,
   baseUrl: string,
   pricesKeys: string[] | undefined,
-  options: WellKnownOptions = {},
+  discovery: DiscoveryConfig,
 ) {
   const normalizedBase = baseUrl.replace(/\/+$/, '');
   let validated = false;
@@ -39,22 +26,16 @@ export function createWellKnownHandler(
     // adapt to the specific auth mode at probe time.
     const x402Set = new Set<string>();
     const mppSet = new Set<string>();
-    const methodHints = options.methodHints ?? 'non-default';
+    const methodHints = discovery.methodHints ?? 'non-default';
 
-    for (const [key, entry] of registry.entries()) {
-      const url = `${normalizedBase}/api/${entry.path ?? key}`;
+    for (const [, entry] of registry.entries()) {
+      const url = `${normalizedBase}/api/${entry.path ?? entry.key}`;
       const resource = toDiscoveryResource(entry.method, url, methodHints);
       if (entry.authMode !== 'unprotected') x402Set.add(resource);
       if (entry.protocols.includes('mpp')) mppSet.add(resource);
     }
 
-    // Resolve instructions
-    let instructions: string | undefined;
-    if (typeof options.instructions === 'function') {
-      instructions = await options.instructions();
-    } else if (typeof options.instructions === 'string') {
-      instructions = options.instructions;
-    }
+    const instructions = await resolveGuidance(discovery);
 
     const body: Record<string, unknown> = {
       version: 1,
@@ -66,12 +47,12 @@ export function createWellKnownHandler(
       body.mppResources = mppResources;
     }
 
-    if (options.description) {
-      body.description = options.description;
+    if (discovery.description) {
+      body.description = discovery.description;
     }
 
-    if (options.ownershipProofs) {
-      body.ownershipProofs = options.ownershipProofs;
+    if (discovery.ownershipProofs) {
+      body.ownershipProofs = discovery.ownershipProofs;
     }
 
     if (instructions) {
@@ -91,7 +72,7 @@ export function createWellKnownHandler(
 function toDiscoveryResource(
   method: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH',
   url: string,
-  mode: NonNullable<WellKnownOptions['methodHints']>,
+  mode: NonNullable<DiscoveryConfig['methodHints']>,
 ): string {
   if (mode === 'off') return url;
   if (mode === 'always') return `${method} ${url}`;

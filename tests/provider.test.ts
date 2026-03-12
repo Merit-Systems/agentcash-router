@@ -39,6 +39,7 @@ function makeDeps(plugin?: RouterPlugin): OrchestrateDeps {
     entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: KNOWN_PAYEE,
     network: 'eip155:8453',
+    x402Accepts: [{ network: 'eip155:8453', payTo: KNOWN_PAYEE }],
     plugin,
   };
 }
@@ -320,6 +321,7 @@ describe('.provider() builder method', () => {
       entitlementStore: new MemoryEntitlementStore(),
       payeeAddress: '0x1234',
       network: 'eip155:8453',
+      x402Accepts: [{ network: 'eip155:8453', payTo: '0x1234' }],
     };
   }
 
