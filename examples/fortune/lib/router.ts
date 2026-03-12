@@ -22,7 +22,7 @@ const mppConfig = mppSecretKey
 export const router = createRouter({
   baseUrl: process.env.BASE_URL!,
   protocols: mppConfig ? ['x402', 'mpp'] : ['x402'],
-  network: [
+  networks: [
     'eip155:8453', // Base mainnet (EVM)
     'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', // Solana mainnet
   ],
