@@ -34,6 +34,15 @@ function siwxSignatureType(network: string): 'eip191' | 'ed25519' {
   return network.startsWith('solana:') ? 'ed25519' : 'eip191';
 }
 
+/**
+ * Normalize a wallet address for storage/comparison.
+ * EVM addresses are case-insensitive (checksumming is cosmetic) → lowercase.
+ * Solana base58 addresses are case-sensitive → preserve as-is.
+ */
+function normalizeWalletAddress(address: string): string {
+  return address.startsWith('0x') ? address.toLowerCase() : address;
+}
+
 /** Derive unique SIWX-supported chains from x402 accepts, falling back to the default network. */
 function getSupportedChains(
   x402Accepts: X402AcceptConfig[],
@@ -378,8 +387,7 @@ export function createRequestHandler(
           }
           // Paid+SIWX acceleration: invalid SIWX falls back to payment flow.
         } else {
-          // Normalize to lowercase — checksumming is a display concern, not storage
-          const wallet = siwx.wallet.toLowerCase();
+          const wallet = normalizeWalletAddress(siwx.wallet);
           pluginCtx.setVerifiedWallet(wallet);
 
           if (routeEntry.authMode === 'siwx') {
@@ -506,8 +514,7 @@ export function createRequestHandler(
       const { payload: verifyPayload, requirements: verifyRequirements } = verify;
       const matchedNetwork = getRequirementNetwork(verifyRequirements, deps.network);
 
-      // Normalize to lowercase — checksumming is a display concern, not storage
-      const wallet = verify.payer.toLowerCase();
+      const wallet = normalizeWalletAddress(verify.payer);
       pluginCtx.setVerifiedWallet(wallet);
       firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
         protocol: 'x402',
@@ -632,7 +639,7 @@ export function createRequestHandler(
       const rawSource = credential?.source ?? '';
       const didParts = rawSource.split(':');
       const lastPart = didParts[didParts.length - 1];
-      const wallet = (isAddress(lastPart) ? getAddress(lastPart) : rawSource).toLowerCase();
+      const wallet = normalizeWalletAddress(isAddress(lastPart) ? getAddress(lastPart) : rawSource);
 
       pluginCtx.setVerifiedWallet(wallet);
       firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {

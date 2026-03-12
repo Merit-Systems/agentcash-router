@@ -22,12 +22,19 @@ const mppConfig = mppSecretKey
 export const router = createRouter({
   baseUrl: process.env.BASE_URL!,
   protocols: mppConfig ? ['x402', 'mpp'] : ['x402'],
-  networks: [
-    'eip155:8453', // Base mainnet (EVM)
-    'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', // Solana mainnet
-  ],
   payeeAddress,
+  x402: {
+    accepts: [
+      { network: 'eip155:8453', payTo: payeeAddress },
+      { network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' },
+    ],
+  },
   ...(mppConfig ? { mpp: mppConfig } : {}),
+  discovery: {
+    title: 'Fortune API',
+    version: '1.0.0',
+    description: 'Pay-per-call fortune telling API',
+  },
   prices: {
     fortune: '0.001', // $0.001 per fortune
     'fortune/premium': '0.005', // $0.005 per premium fortune
