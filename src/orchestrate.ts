@@ -8,6 +8,7 @@ import type {
   X402Server,
   X402AcceptConfig,
 } from './types.js';
+import { normalizeWalletAddress } from './auth/normalize-wallet.js';
 import type { ResolvedX402Facilitator } from './x402-facilitators.js';
 import type { RouterPlugin, PluginContext, RequestMeta } from './plugin.js';
 import { createDefaultContext, firePluginHook } from './plugin.js';
@@ -32,15 +33,6 @@ function getRequirementNetwork(requirements: unknown, fallback: string): string 
 /** Map a CAIP-2 network identifier to its SIWX signature type. */
 function siwxSignatureType(network: string): 'eip191' | 'ed25519' {
   return network.startsWith('solana:') ? 'ed25519' : 'eip191';
-}
-
-/**
- * Normalize a wallet address for storage/comparison.
- * EVM addresses are case-insensitive (checksumming is cosmetic) → lowercase.
- * Solana base58 addresses are case-sensitive → preserve as-is.
- */
-function normalizeWalletAddress(address: string): string {
-  return address.startsWith('0x') ? address.toLowerCase() : address;
 }
 
 /** Derive unique SIWX-supported chains from x402 accepts, falling back to the default network. */

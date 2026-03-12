@@ -10,6 +10,15 @@ describe('MemoryEntitlementStore', () => {
     expect(await store.has('route/b', '0xwalleta')).toBe(false);
     expect(await store.has('route/a', '0xwalletb')).toBe(false);
   });
+
+  it('preserves Solana base58 address case', async () => {
+    const store = new MemoryEntitlementStore();
+    const solanaAddr = '7EcDhSYGxXyscszYEp35KHN8vvw3svAuLKTzXwCFLtV';
+    await store.grant('route/a', solanaAddr);
+
+    expect(await store.has('route/a', solanaAddr)).toBe(true);
+    expect(await store.has('route/a', solanaAddr.toLowerCase())).toBe(false);
+  });
 });
 
 describe('createRedisEntitlementStore', () => {
