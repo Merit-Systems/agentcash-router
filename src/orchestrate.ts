@@ -507,8 +507,7 @@ export function createRequestHandler(
             verifyRequirements,
           );
           if (!settle.result?.success) {
-            const reason =
-              settle.result?.errorReason || 'x402 settlement returned success=false';
+            const reason = settle.result?.errorReason || 'x402 settlement returned success=false';
             const error = new Error(reason) as Error & { errorReason?: string };
             error.errorReason = reason;
             throw error;
