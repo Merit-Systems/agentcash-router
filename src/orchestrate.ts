@@ -506,6 +506,13 @@ export function createRequestHandler(
             verifyPayload,
             verifyRequirements,
           );
+          if (!settle.result?.success) {
+            const reason =
+              settle.result?.errorReason || 'x402 settlement returned success=false';
+            const error = new Error(reason) as Error & { errorReason?: string };
+            error.errorReason = reason;
+            throw error;
+          }
           if (routeEntry.siwxEnabled) {
             try {
               await deps.entitlementStore.grant(routeEntry.key, wallet);
@@ -527,12 +534,14 @@ export function createRequestHandler(
         } catch (err) {
           const errObj = err as {
             message?: string;
+            errorReason?: string;
             response?: { status?: number; data?: unknown; body?: unknown };
           };
           console.error('Settlement failed', {
             message: err instanceof Error ? err.message : String(err),
             route: routeEntry.key,
             network: matchedNetwork,
+            errorReason: errObj.errorReason,
             facilitatorStatus: errObj.response?.status,
             facilitatorBody: errObj.response?.data ?? errObj.response?.body,
           });

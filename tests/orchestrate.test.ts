@@ -586,6 +586,34 @@ describe('x402 paid route', () => {
     expect(server.settledPayments).toHaveLength(0);
   });
 
+  it('fails the request when x402 settlement returns success=false', async () => {
+    const entry = makeEntry({ bodySchema });
+    const deps = makeDeps();
+    const server = deps.x402Server as unknown as FakeX402Server;
+    server.settlePayment = async (payload: unknown, requirements: unknown) => {
+      server.settledPayments.push({ payload, requirements });
+      return {
+        success: false,
+        errorReason: 'Transaction simulation failed',
+        transaction: '',
+        network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+      };
+    };
+    const handler = createRequestHandler(
+      entry,
+      async ({ body }) => ({ result: (body as { query: string }).query }),
+      deps,
+    );
+
+    const res = await handler(makePaymentRequest({ query: 'test' }));
+    expect(res.status).toBe(500);
+    expect(res.headers.get('PAYMENT-RESPONSE')).toBeNull();
+    expect(server.settledPayments).toHaveLength(1);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.error).toBe('Settlement failed');
+  });
+
   it('skips settlement when handler throws', async () => {
     const entry = makeEntry({ bodySchema });
     const deps = makeDeps();
