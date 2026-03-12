@@ -106,6 +106,26 @@ function makePaymentRequest(
   });
 }
 
+async function withFetchMock<T>(
+  response: unknown,
+  run: (fetchMock: ReturnType<typeof vi.fn>) => Promise<T>,
+): Promise<T> {
+  const originalFetch = globalThis.fetch;
+  const fetchMock = vi.fn(
+    async () =>
+      new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+  );
+  globalThis.fetch = fetchMock as typeof fetch;
+  try {
+    return await run(fetchMock);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
 async function withPassThroughFacilitatorAccepts<T>(
   run: (fetchMock: ReturnType<typeof vi.fn>) => Promise<T>,
 ): Promise<T> {
@@ -118,7 +138,6 @@ async function withPassThroughFacilitatorAccepts<T>(
     });
   });
   globalThis.fetch = fetchMock as typeof fetch;
-
   try {
     return await run(fetchMock);
   } finally {
@@ -282,58 +301,41 @@ describe('x402 multi-network integration', () => {
       },
     ];
 
-    const originalFetch = globalThis.fetch;
-    const acceptsResponse = {
-      x402Version: 2,
-      resource: { url: URL, method: 'POST', mimeType: 'application/json' },
-      accepts: [
-        {
+    const enrichedExtra = { admin: 'admin-pubkey', recentBlockhash: 'recent-blockhash' };
+    await withFetchMock(
+      {
+        accepts: [
+          {
+            scheme: SOLANA_SETTLEMENT_SCHEME,
+            network: SOLANA_NETWORK,
+            amount: '20000',
+            asset: 'solana-usdc',
+            payTo: SOLANA_PAYEE,
+            maxTimeoutSeconds: 60,
+            extra: enrichedExtra,
+          },
+        ],
+      },
+      async (fetchMock) => {
+        const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), deps);
+        const response = await handler(new NextRequest(URL, { method: 'POST' }));
+        const challenge = decodePaymentRequiredHeader(response.headers.get('PAYMENT-REQUIRED')!);
+        const settlementAccept = challenge.accepts.find(
+          (accept) => accept.scheme === SOLANA_SETTLEMENT_SCHEME,
+        );
+
+        expect(fetchMock).toHaveBeenCalledWith('https://facilitator.example/accepts', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: expect.any(String),
+        });
+        expect(settlementAccept).toMatchObject({
           scheme: SOLANA_SETTLEMENT_SCHEME,
           network: SOLANA_NETWORK,
-          amount: '20000',
-          asset: 'solana-usdc',
-          payTo: SOLANA_PAYEE,
-          maxTimeoutSeconds: 60,
-          extra: {
-            admin: 'admin-pubkey',
-            recentBlockhash: 'recent-blockhash',
-          },
-        },
-      ],
-    };
-    const fetchMock = vi.fn(
-      async () =>
-        new Response(JSON.stringify(acceptsResponse), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        }),
+          extra: enrichedExtra,
+        });
+      },
     );
-    globalThis.fetch = fetchMock as typeof fetch;
-
-    try {
-      const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), deps);
-      const response = await handler(new NextRequest(URL, { method: 'POST' }));
-      const challenge = decodePaymentRequiredHeader(response.headers.get('PAYMENT-REQUIRED')!);
-      const settlementAccept = challenge.accepts.find(
-        (accept) => accept.scheme === SOLANA_SETTLEMENT_SCHEME,
-      );
-
-      expect(fetchMock).toHaveBeenCalledWith('https://facilitator.example/accepts', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: expect.any(String),
-      });
-      expect(settlementAccept).toMatchObject({
-        scheme: SOLANA_SETTLEMENT_SCHEME,
-        network: SOLANA_NETWORK,
-        extra: {
-          admin: 'admin-pubkey',
-          recentBlockhash: 'recent-blockhash',
-        },
-      });
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
   });
 
   it('enriches Solana exact challenge requirements through facilitator /accepts', async () => {
@@ -344,65 +346,46 @@ describe('x402 multi-network integration', () => {
       [SOLANA_NETWORK]: makeFacilitator(SOLANA_NETWORK, 'https://facilitator.example'),
     };
 
-    const originalFetch = globalThis.fetch;
-    const acceptsResponse = {
-      x402Version: 2,
-      resource: { url: URL, method: 'POST', mimeType: 'application/json' },
-      accepts: [
-        {
+    const enrichedExtra = {
+      feePayer: 'fee-payer',
+      recentBlockhash: 'recent-blockhash',
+      features: { xSettlementAccountSupported: true },
+    };
+    await withFetchMock(
+      {
+        accepts: [
+          {
+            scheme: 'exact',
+            network: SOLANA_NETWORK,
+            amount: '0.02',
+            asset: 'mock-usdc',
+            payTo: SOLANA_PAYEE,
+            maxTimeoutSeconds: 300,
+            extra: enrichedExtra,
+          },
+        ],
+      },
+      async (fetchMock) => {
+        const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), deps);
+        const response = await handler(new NextRequest(URL, { method: 'POST' }));
+        const challenge = decodePaymentRequiredHeader(response.headers.get('PAYMENT-REQUIRED')!);
+        const solanaAccept = challenge.accepts.find(
+          (accept) => accept.scheme === 'exact' && accept.network === SOLANA_NETWORK,
+        );
+
+        expect(fetchMock).toHaveBeenCalledWith('https://facilitator.example/accepts', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: expect.any(String),
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(solanaAccept).toMatchObject({
           scheme: 'exact',
           network: SOLANA_NETWORK,
-          amount: '0.02',
-          asset: 'mock-usdc',
-          payTo: SOLANA_PAYEE,
-          maxTimeoutSeconds: 300,
-          extra: {
-            feePayer: 'fee-payer',
-            recentBlockhash: 'recent-blockhash',
-            features: {
-              xSettlementAccountSupported: true,
-            },
-          },
-        },
-      ],
-    };
-    const fetchMock = vi.fn(
-      async () =>
-        new Response(JSON.stringify(acceptsResponse), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        }),
+          extra: enrichedExtra,
+        });
+      },
     );
-    globalThis.fetch = fetchMock as typeof fetch;
-
-    try {
-      const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), deps);
-      const response = await handler(new NextRequest(URL, { method: 'POST' }));
-      const challenge = decodePaymentRequiredHeader(response.headers.get('PAYMENT-REQUIRED')!);
-      const solanaAccept = challenge.accepts.find(
-        (accept) => accept.scheme === 'exact' && accept.network === SOLANA_NETWORK,
-      );
-
-      expect(fetchMock).toHaveBeenCalledWith('https://facilitator.example/accepts', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: expect.any(String),
-      });
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(solanaAccept).toMatchObject({
-        scheme: 'exact',
-        network: SOLANA_NETWORK,
-        extra: {
-          feePayer: 'fee-payer',
-          recentBlockhash: 'recent-blockhash',
-          features: {
-            xSettlementAccountSupported: true,
-          },
-        },
-      });
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
   });
 
   it('uses facilitator auth headers for /accepts enrichment', async () => {
@@ -416,17 +399,7 @@ describe('x402 multi-network integration', () => {
       }),
     };
 
-    const originalFetch = globalThis.fetch;
-    const fetchMock = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ accepts: [] }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        }),
-    );
-    globalThis.fetch = fetchMock as typeof fetch;
-
-    try {
+    await withFetchMock({ accepts: [] }, async (fetchMock) => {
       const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), deps);
       await handler(new NextRequest(URL, { method: 'POST' }));
 
@@ -438,9 +411,7 @@ describe('x402 multi-network integration', () => {
         },
         body: expect.any(String),
       });
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+    });
   });
 
   it('verifies against the client accepted requirement when facilitator extras rotate', async () => {
