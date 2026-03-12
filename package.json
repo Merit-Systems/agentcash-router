@@ -31,11 +31,6 @@
     "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts' '*.json' '*.mjs'",
     "format:check": "prettier --check 'src/**/*.ts' 'tests/**/*.ts' '*.json' '*.mjs'",
     "test": "vitest run",
-    "test:live:solana": "pnpm build && node --env-file=.env .claude/scripts/live/live-x402-smoke.mjs",
-    "test:live:faremeter:exact": "pnpm build && node --env-file=.env .claude/scripts/live/live-faremeter-exact.mjs",
-    "test:live:faremeter:settlement": "pnpm build && node --env-file=.env .claude/scripts/live/live-faremeter-settlement.mjs",
-    "test:live:lobster:setup": "node --env-file=.env .claude/scripts/live/live-lobster-setup.mjs",
-    "test:live:lobster:exact": "pnpm build && node --env-file=.env .claude/scripts/live/live-lobster-exact.mjs",
     "test:watch": "vitest",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build && pnpm test"
   },
