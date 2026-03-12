@@ -35,9 +35,17 @@ Minimal Next.js app demonstrating `@agentcash/router` with both x402 and MPP pay
 
 ## Endpoints
 
-- `POST /api/fortune` - Get a random fortune ($0.001)
+- `POST /api/fortune` - Get a random fortune ($0.001, x402/MPP)
+- `POST /api/fortune/premium` - Premium fortune by category ($0.005, x402/MPP)
+- `GET /api/fortune/profile` - Verified wallet identity (SIWX only; EVM + Solana)
+- `POST /api/fortune/favorites` - Save a favorite fortune (SIWX)
+- `GET /api/fortune/favorites` - List saved favorites (SIWX)
 - `GET /.well-known/x402` - Discovery endpoint
 - `GET /openapi.json` - OpenAPI spec
+
+## Solana + SIWX
+
+SIWX routes (profile, favorites) accept both **EVM (Base)** and **Solana** wallets. The router is configured with `network: ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp']`, so the 402 challenge includes `supportedChains` for both. Use `GET /api/fortune/profile` to verify wallet identity with no payment.
 
 ## Testing MPP
 
