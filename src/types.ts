@@ -1,3 +1,4 @@
+import type { FacilitatorConfig } from '@x402/core/http';
 import type { NextRequest } from 'next/server';
 import type { ZodType } from 'zod';
 
@@ -130,6 +131,14 @@ export interface X402ResolvedAccept {
   extra?: Record<string, unknown>;
 }
 
+export type X402FacilitatorTarget = string | FacilitatorConfig;
+
+export interface X402FacilitatorsConfig {
+  evm?: X402FacilitatorTarget;
+  solana?: X402FacilitatorTarget;
+  networks?: Record<string, X402FacilitatorTarget>;
+}
+
 export interface PaidOptions {
   protocols?: ProtocolType[];
   maxPrice?: string;
@@ -250,6 +259,7 @@ export interface RouterConfig {
   facilitatorUrl?: string;
   x402?: {
     accepts?: X402AcceptConfig[];
+    facilitators?: X402FacilitatorsConfig;
   };
   plugin?: import('./plugin.js').RouterPlugin;
   siwx?: {

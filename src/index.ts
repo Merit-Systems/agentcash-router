@@ -142,7 +142,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     entitlementStore,
     payeeAddress: config.payeeAddress,
     network,
-    facilitatorUrl: config.facilitatorUrl,
+    x402FacilitatorUrlsByNetwork: undefined,
     x402Accepts,
     mppx: null,
   };
@@ -159,6 +159,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
         const { createX402Server } = await import('./server.js');
         const result = await createX402Server(config);
         deps.x402Server = result.server;
+        deps.x402FacilitatorUrlsByNetwork = result.facilitatorUrlsByNetwork;
         await result.initPromise;
       } catch (err: unknown) {
         deps.x402Server = null;

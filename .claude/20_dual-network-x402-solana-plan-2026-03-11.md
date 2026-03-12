@@ -1,7 +1,7 @@
 # Dual-Network x402 Solana Plan
 
 **Date:** 2026-03-11 20:26:42 EDT
-**Last Updated:** 2026-03-11 22:29:41 EDT
+**Last Updated:** 2026-03-11 23:44:00 EDT
 **Status:** In Progress
 **Target:** `@agentcash/router` dual-network x402 support with Base USDC + Solana USDC
 
@@ -79,6 +79,71 @@ Practical conclusion:
 - the production-compatible Solana path on Corbits today is `exact`
 - smart-wallet support likely rides on `exact` plus `extra.features.xSettlementAccountSupported`, not on a separately advertised `@faremeter/x-solana-settlement` option
 - router support for custom schemes is still useful, but it should not be assumed to match the live hosted Corbits surface
+
+## Compaction-Safe Confirmed Discoveries
+
+These are facts we have directly confirmed from live behavior or local source execution and can rely on across future compactions.
+
+### Lobster Wallet Setup
+
+- `@crossmint/lobster-cli` setup completed successfully for local agent id `router-live`.
+- The local Lobster signer address is `AboGXxobby4rgwCCwES3tPBgHeUp1HDBTbMvRNJLnaex`.
+- The Lobster smart wallet address is `EidQ7rA7y8mEat3acGuQHng8UR6G3JbhzKFEduh9HDU`.
+- Lobster wallet state is stored locally in `.lobster/wallets.json`.
+
+### Lobster Wallet Funding
+
+- The Lobster smart wallet now holds test funds on Solana mainnet.
+- `0.1 USDC` was transferred into the Lobster smart wallet ATA.
+- The USDC transfer signature was `22GXYcJXpuuDeXSDnCWGsjRrJQfzSBGz2wTpQ7BPajaigN1ho6Ds4j8Ph8MGareHic4zdHBtu9n9Ro6ouZnPUAcP`.
+- An additional `2.0 USDC` was later transferred into the same Lobster smart wallet ATA.
+- That follow-up USDC transfer signature was `23T8P47EbroXjse7oMGH3am99xQvKuCSzrRj7waqPuJRx7PddtLWBg69aRFsohawqpNb8nXMVrE6E2AmVQ1Sg5PP`.
+- `0.01 SOL` was transferred into the Lobster smart wallet.
+- The SOL transfer signature was `EYFaSzhyouRd3CYtPZikv8LKKFcTE8Cj68Lte3cUwABbjw1k7gvtzBwjca9Nnfz6rMn2AuoRCftWhLUAWHGh3uC`.
+
+### Hosted Corbits Behavior
+
+- Hosted `https://facilitator.corbits.dev/supported` currently advertises Solana `exact`, not `@faremeter/x-solana-settlement`.
+- Hosted `https://facilitator.corbits.dev/accepts` returned an empty `accepts` array for an explicit legacy-style `@faremeter/x-solana-settlement` request on `mainnet-beta`.
+- Hosted Corbits Solana `exact` challenge enrichment still works and includes the expected Solana metadata for exact flows.
+
+### Local Faremeter Settlement Findings
+
+- `@faremeter/x-solana-settlement/facilitator` is a legacy v1 handler and must be wrapped with `adaptHandlerV1ToV2(...)` to behave correctly in a v2 facilitator surface.
+- Without that adapter, the router-facing facilitator loop did not produce usable settlement accepts.
+- After wrapping with `adaptHandlerV1ToV2(...)`, the local facilitator `/supported` surface included `@faremeter/x-solana-settlement`.
+- With the adapted local facilitator, the router emitted a v2 `PAYMENT-REQUIRED` challenge that contained `@faremeter/x-solana-settlement` plus facilitator `extra.admin` and `extra.recentBlockhash`.
+
+### Settlement Client Findings
+
+- `@faremeter/x-solana-settlement` client code supports `token.allowOwnerOffCurve`.
+- The Lobster smart-wallet settlement attempt reached the `@faremeter/x-solana-settlement` client handler and failed with `TokenOwnerOffCurveError` before payment submission when `allowOwnerOffCurve` was not enabled.
+- After enabling `token.allowOwnerOffCurve` and refreshing Lobster auth, the Lobster smart-wallet settlement attempt progressed to Lobster proxy transaction simulation.
+- Lobster proxy then rejected the serialized `@faremeter/x-solana-settlement` transaction with `TRANSACTION_SIMULATION_FAILED`.
+- The returned simulation logs ended with:
+  - `Program swigypWHEksbC64pWKwah1WTeh9JXwx8H1rJHLdbQMB failed: Unsupported program id`
+- This proves the Lobster proxy is currently rejecting the `@faremeter/x-solana-settlement` on-chain program during simulation.
+
+### Lobster Exact Findings
+
+- The Lobster/Crossmint `exact` payment path produces a four-instruction client transaction before proxy submission:
+  - compute unit limit
+  - compute unit price
+  - associated token account create-idempotent
+  - SPL `TransferChecked`
+- Before the wallet top-up, Lobster proxy rejected this `exact` smart-wallet payment attempt with `TRANSACTION_SIMULATION_FAILED`.
+- The returned simulation logs showed a second `TransferChecked` failing with `insufficient funds` inside the Lobster/Crossmint smart-wallet execution path.
+- After funding the Lobster smart wallet with an additional `2.0 USDC`, the hosted Corbits `exact` flow succeeded end-to-end.
+- Successful Lobster exact settlement transaction:
+  - `2M1gnMKHTNNj871HDboo1j8kbB9jKfbP1UApqP7MbfNGWyhoLXGAWHK7W4QNcrF5NofbnUsx7BJytwCk3oeQDRjp`
+- A second consecutive hosted Corbits Lobster exact run also succeeded end-to-end.
+- Second successful Lobster exact settlement transaction:
+  - `MBQohBDQEEoLG6thi1RGUBkJ5jdGPfTDHwryt9TBChxGkoCfXcWMpYrvTVerLNBGQeHBzgXuWNfFRkuJ1yxmjrv`
+- The hardened live harness now:
+  - refreshes Lobster auth automatically through `withAuthenticatedApi(...)`
+  - prints current smart-wallet balances before attempting payment
+  - fails early if balances are below configured minimums
+  - surfaces structured `ProxyApiError` details instead of opaque generic failures
 
 ## Confirmed Upstream Facts
 
@@ -511,3 +576,23 @@ The right shape is an additive multi-network x402 config that preserves the curr
 The hardest engineering decision is no longer raw Solana protocol support. That is available in both Coinbase x402 and the live Corbits/Faremeter stack.
 
 The remaining hard part is downstream wallet interoperability. The live Corbits deployment strongly suggests that the right Solana direction is one `exact`-based path with settlement-account support for smart-wallet clients, but that still needs confirmation against real `lobster.cash` and `agentcash` wallet payment attempts.
+
+## Facilitator Routing Decisions
+
+These points are now implemented in `agentcash-router` and backed by passing tests.
+
+- The old top-level `facilitatorUrl` is treated as a legacy global fallback only.
+- `x402` now supports additive per-network facilitator config:
+  - `x402.facilitators.evm`
+  - `x402.facilitators.solana`
+  - `x402.facilitators.networks[caip2Network]`
+- Resolution precedence is:
+  - exact network override
+  - chain-family override
+  - legacy top-level `facilitatorUrl`
+  - family default
+- The family defaults are now:
+  - EVM/Base: Coinbase/CDP facilitator
+  - Solana: `https://facilitator.corbits.dev`
+- Solana challenge enrichment is no longer route-global. The router only calls facilitator `/accepts` for the requirements that actually need enrichment, grouped by the facilitator assigned to that network.
+- This prevents the previous incorrect behavior where one shared facilitator URL was implicitly used for both Base and Solana on the same paid route.

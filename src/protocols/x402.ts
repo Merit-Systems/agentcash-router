@@ -1,5 +1,13 @@
 import type { PaymentPayload, PaymentRequirements, SettleResponse } from '@x402/core/types';
 import type { RouteEntry, X402ResolvedAccept, X402Server } from '../types.js';
+import { getFacilitatorUrlForRequirement } from '../x402-facilitators.js';
+import { buildEvmExactOptions } from './evm.js';
+import {
+  buildSolanaExactOptions,
+  enrichRequirementsWithFacilitatorAccepts,
+  hasSolanaAccepts,
+  isSolanaRequirement,
+} from './solana.js';
 
 // All x402 library interactions go through these thin wrappers.
 // The router never reimplements protocol logic.
@@ -10,7 +18,7 @@ export async function buildX402Challenge(
   request: Request,
   price: string,
   accepts: X402ResolvedAccept[],
-  facilitatorUrl?: string,
+  facilitatorUrlsByNetwork?: Record<string, string | undefined>,
   extensions?: Record<string, unknown>,
 ) {
   const { encodePaymentRequiredHeader } = await import('@x402/core/http');
@@ -28,7 +36,7 @@ export async function buildX402Challenge(
     price,
     accepts,
     resource,
-    facilitatorUrl,
+    facilitatorUrlsByNetwork,
   );
   const paymentRequired = await server.createPaymentRequiredResponse(
     requirements,
@@ -115,20 +123,15 @@ async function buildExpectedRequirements(
   price: string,
   accepts: X402ResolvedAccept[],
 ): Promise<PaymentRequirements[]> {
-  const exactAccepts = accepts.filter((accept) => accept.scheme === 'exact');
   const customAccepts = accepts.filter((accept) => accept.scheme !== 'exact');
+  const exactOptions = [
+    ...buildEvmExactOptions(accepts, price),
+    ...buildSolanaExactOptions(accepts, price),
+  ];
 
   const exactRequirements =
-    exactAccepts.length > 0
-      ? await server.buildPaymentRequirementsFromOptions(
-          exactAccepts.map(({ network, payTo }) => ({
-            scheme: 'exact' as const,
-            network: network as `${string}:${string}`,
-            price,
-            payTo,
-          })),
-          { request },
-        )
+    exactOptions.length > 0
+      ? await server.buildPaymentRequirementsFromOptions(exactOptions, { request })
       : [];
 
   const customRequirements = customAccepts.map(buildCustomRequirement.bind(null, price));
@@ -141,48 +144,70 @@ async function buildChallengeRequirements(
   price: string,
   accepts: X402ResolvedAccept[],
   resource: { url: string; method: string; description?: string; mimeType: string },
-  facilitatorUrl?: string,
+  facilitatorUrlsByNetwork?: Record<string, string | undefined>,
 ): Promise<PaymentRequirements[]> {
   const requirements = await buildExpectedRequirements(server, request, price, accepts);
-  const needsFacilitatorEnrichment = accepts.some(
-    (accept) => accept.scheme !== 'exact' || accept.network.startsWith('solana:'),
-  );
-  if (!facilitatorUrl || !needsFacilitatorEnrichment) {
+  const needsFacilitatorEnrichment =
+    accepts.some((accept) => accept.scheme !== 'exact') || hasSolanaAccepts(accepts);
+  if (!needsFacilitatorEnrichment) {
     return requirements;
   }
 
-  return enrichRequirementsForChallenge(facilitatorUrl, resource, requirements);
-}
+  const groupedRequirements = new Map<
+    string,
+    Array<{ index: number; requirement: PaymentRequirements }>
+  >();
 
-async function enrichRequirementsForChallenge(
-  facilitatorUrl: string,
-  resource: { url: string; method: string; description?: string; mimeType: string },
-  requirements: PaymentRequirements[],
-): Promise<PaymentRequirements[]> {
-  const response = await fetch(`${facilitatorUrl.replace(/\/+$/, '')}/accepts`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      x402Version: 2,
-      resource,
-      accepts: requirements,
-    }),
+  requirements.forEach((requirement, index) => {
+    if (!requiresFacilitatorEnrichment(requirement)) return;
+
+    const facilitatorUrl = getFacilitatorUrlForRequirement(facilitatorUrlsByNetwork, requirement);
+    if (!facilitatorUrl) {
+      throw new Error(
+        `Missing x402 facilitator URL for ${requirement.scheme} requirement on ${requirement.network}`,
+      );
+    }
+
+    const existingGroup = groupedRequirements.get(facilitatorUrl);
+    if (existingGroup) {
+      existingGroup.push({ index, requirement });
+      return;
+    }
+
+    groupedRequirements.set(facilitatorUrl, [{ index, requirement }]);
   });
 
-  if (!response.ok) {
-    throw new Error(`Facilitator /accepts failed with status ${response.status}`);
+  if (groupedRequirements.size === 0) {
+    return requirements;
   }
 
-  const body = (await response.json()) as {
-    accepts?: PaymentRequirements[];
-  };
-  if (!Array.isArray(body.accepts)) {
-    throw new Error('Facilitator /accepts response did not include accepts');
-  }
+  const enrichedRequirements = [...requirements];
+  await Promise.all(
+    [...groupedRequirements.entries()].map(async ([facilitatorUrl, group]) => {
+      const enriched = await enrichRequirementsWithFacilitatorAccepts(
+        facilitatorUrl,
+        resource,
+        group.map(({ requirement }) => requirement),
+      );
+      if (enriched.length !== group.length) {
+        throw new Error(
+          `Facilitator /accepts returned ${enriched.length} requirements for ${group.length} inputs on ${facilitatorUrl}`,
+        );
+      }
 
-  return body.accepts;
+      enriched.forEach((requirement, offset) => {
+        const index = group[offset]?.index;
+        if (index === undefined) return;
+        enrichedRequirements[index] = requirement;
+      });
+    }),
+  );
+
+  return enrichedRequirements;
+}
+
+function requiresFacilitatorEnrichment(requirement: PaymentRequirements): boolean {
+  return requirement.scheme !== 'exact' || isSolanaRequirement(requirement);
 }
 
 function buildCustomRequirement(price: string, accept: X402ResolvedAccept): PaymentRequirements {
@@ -225,23 +250,6 @@ export async function settleX402Payment(
   requirements: PaymentRequirements,
 ) {
   const { encodePaymentResponseHeader } = await import('@x402/core/http');
-
-  const payloadKeys =
-    typeof payload === 'object' && payload !== null
-      ? Object.keys(payload as object)
-          .sort()
-          .join(',')
-      : 'n/a';
-  const reqKeys =
-    typeof requirements === 'object' && requirements !== null
-      ? Object.keys(requirements as object)
-          .sort()
-          .join(',')
-      : 'n/a';
-  console.info('x402 settle input', {
-    payloadKeys,
-    requirementsKeys: reqKeys,
-  });
 
   const result = await server.settlePayment(payload, requirements);
   const encoded = encodePaymentResponseHeader(result);

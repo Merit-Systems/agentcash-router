@@ -1,6 +1,12 @@
 import type { FacilitatorConfig, FacilitatorClient } from '@x402/core/http';
 import type { SupportedResponse, Network } from '@x402/core/types';
+import { filterEvmNetworks } from './protocols/evm.js';
+import { filterSolanaNetworks } from './protocols/solana.js';
 import type { RouterConfig, X402Server } from './types.js';
+import {
+  getResolvedX402FacilitatorGroups,
+  getResolvedX402FacilitatorUrls,
+} from './x402-facilitators.js';
 import { getConfiguredX402Networks } from './x402-config.js';
 
 export async function createX402Server(config: RouterConfig) {
@@ -12,29 +18,18 @@ export async function createX402Server(config: RouterConfig) {
   const { bazaarResourceServerExtension } = await import('@x402/extensions/bazaar');
   const { siwxResourceServerExtension } = await import('@x402/extensions/sign-in-with-x');
   const { facilitator: defaultFacilitator } = await import('@coinbase/x402');
-
-  // Normalize string URLs into the config object shape; pass objects through.
-  const raw = config.facilitatorUrl ?? defaultFacilitator;
-  const facilitatorConfig: FacilitatorConfig = typeof raw === 'string' ? { url: raw } : raw;
-  const httpClient = new HTTPFacilitatorClient(facilitatorConfig);
-  const configuredNetworks = getConfiguredX402Networks(config) as Network[];
-  const evmNetworks = configuredNetworks.filter((network) => network.startsWith('eip155:'));
-  const svmNetworks = configuredNetworks.filter((network) => network.startsWith('solana:'));
-
-  // Wrap the HTTP client to bypass getSupported() on cold start.
-  // For EVM exact scheme, enhancePaymentRequirements is a no-op — the
-  // supported kind data is never used. The only purpose of getSupported()
-  // is a gate check ("does the facilitator support exact on eip155:8453?"),
-  // which has been true since day one. Hitting the facilitator on every
-  // lambda cold start causes 429 rate limit storms when multiple instances
-  // boot simultaneously. Hardcode the response; verify/settle still go
-  // through the real facilitator.
-  const client =
-    configuredNetworks.length > 0 &&
-    configuredNetworks.every((network) => network.startsWith('eip155:'))
-      ? cachedClient(httpClient, configuredNetworks)
-      : httpClient;
-  const server = new x402ResourceServer(client);
+  const configuredNetworks = getConfiguredX402Networks(config);
+  const evmNetworks = filterEvmNetworks(configuredNetworks);
+  const svmNetworks = filterSolanaNetworks(configuredNetworks);
+  const facilitatorClients = createFacilitatorClients(
+    config,
+    configuredNetworks,
+    defaultFacilitator,
+    HTTPFacilitatorClient,
+  );
+  const server = new x402ResourceServer(
+    facilitatorClients.length === 1 ? facilitatorClients[0] : facilitatorClients,
+  );
 
   if (evmNetworks.length > 0) {
     registerExactEvmScheme(server, { networks: evmNetworks });
@@ -48,7 +43,15 @@ export async function createX402Server(config: RouterConfig) {
 
   const initPromise = server.initialize();
 
-  return { server: server as unknown as X402Server, initPromise };
+  return {
+    server: server as unknown as X402Server,
+    initPromise,
+    facilitatorUrlsByNetwork: getResolvedX402FacilitatorUrls(
+      config,
+      configuredNetworks,
+      defaultFacilitator,
+    ),
+  };
 }
 
 /**
@@ -71,4 +74,22 @@ function cachedClient(inner: FacilitatorClient, networks: Network[]): Facilitato
       signers: {},
     }),
   };
+}
+
+function createFacilitatorClients(
+  config: RouterConfig,
+  configuredNetworks: readonly string[],
+  defaultEvmFacilitator: string | FacilitatorConfig,
+  HTTPFacilitatorClient: new (config?: FacilitatorConfig) => FacilitatorClient,
+): FacilitatorClient[] {
+  const groups = getResolvedX402FacilitatorGroups(
+    config,
+    configuredNetworks,
+    defaultEvmFacilitator,
+  );
+
+  return groups.map((group) => {
+    const inner = new HTTPFacilitatorClient(group.config);
+    return group.family === 'evm' ? cachedClient(inner, group.networks) : inner;
+  });
 }

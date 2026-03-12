@@ -37,7 +37,7 @@ export interface OrchestrateDeps {
   entitlementStore: EntitlementStore;
   payeeAddress: string;
   network: string;
-  facilitatorUrl?: string;
+  x402FacilitatorUrlsByNetwork?: Record<string, string | undefined>;
   x402Accepts: import('./types.js').X402AcceptConfig[];
   mppx?: {
     charge: (options: {
@@ -494,20 +494,6 @@ export function createRequestHandler(
 
       if (response.status < 400) {
         try {
-          const payloadFingerprint =
-            typeof verifyPayload === 'object' && verifyPayload !== null
-              ? {
-                  keys: Object.keys(verifyPayload as object)
-                    .sort()
-                    .join(','),
-                  payloadType: typeof verifyPayload,
-                }
-              : { payloadType: typeof verifyPayload };
-          console.info('Settlement attempt', {
-            route: routeEntry.key,
-            network: matchedNetwork,
-            ...payloadFingerprint,
-          });
           const settle = await settleX402Payment(
             deps.x402Server,
             verifyPayload,
@@ -864,7 +850,7 @@ async function build402(
         request,
         challengePrice,
         accepts,
-        deps.facilitatorUrl,
+        deps.x402FacilitatorUrlsByNetwork,
         extensions,
       );
       response.headers.set('PAYMENT-REQUIRED', encoded);

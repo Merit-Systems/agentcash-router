@@ -35,7 +35,9 @@ function makeDeps(server: FakeX402Server): OrchestrateDeps {
     entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: KNOWN_PAYEE,
     network: BASE_NETWORK,
-    facilitatorUrl: undefined,
+    x402FacilitatorUrlsByNetwork: {
+      [SOLANA_NETWORK]: 'https://facilitator.example',
+    },
     x402Accepts: [
       { scheme: 'exact', network: BASE_NETWORK, payTo: KNOWN_PAYEE },
       { scheme: 'exact', network: SOLANA_NETWORK, payTo: SOLANA_PAYEE },
@@ -75,6 +77,26 @@ function makePaymentRequest(
   });
 }
 
+async function withPassThroughFacilitatorAccepts<T>(
+  run: (fetchMock: ReturnType<typeof vi.fn>) => Promise<T>,
+): Promise<T> {
+  const originalFetch = globalThis.fetch;
+  const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body ?? '{}')) as { accepts?: unknown[] };
+    return new Response(JSON.stringify({ accepts: body.accepts ?? [] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  });
+  globalThis.fetch = fetchMock as typeof fetch;
+
+  try {
+    return await run(fetchMock);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
 class RotatingExtraX402Server extends FakeX402Server {
   private buildCount = 0;
 
@@ -111,7 +133,9 @@ describe('x402 multi-network integration', () => {
     const server = new FakeX402Server();
     const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), makeDeps(server));
 
-    const response = await handler(new NextRequest(URL, { method: 'POST' }));
+    const response = await withPassThroughFacilitatorAccepts(() =>
+      handler(new NextRequest(URL, { method: 'POST' })),
+    );
 
     expect(response.status).toBe(402);
 
@@ -179,7 +203,9 @@ describe('x402 multi-network integration', () => {
     ];
 
     const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), deps);
-    const challengeResponse = await handler(new NextRequest(URL, { method: 'POST' }));
+    const challengeResponse = await withPassThroughFacilitatorAccepts(() =>
+      handler(new NextRequest(URL, { method: 'POST' })),
+    );
     const challenge = decodePaymentRequiredHeader(
       challengeResponse.headers.get('PAYMENT-REQUIRED')!,
     );
@@ -241,7 +267,10 @@ describe('x402 multi-network integration', () => {
   it('enriches custom-scheme challenge requirements through facilitator /accepts', async () => {
     const server = new FakeX402Server();
     const deps = makeDeps(server);
-    deps.facilitatorUrl = 'https://facilitator.example';
+    deps.x402FacilitatorUrlsByNetwork = {
+      [BASE_NETWORK]: 'https://cdp.example',
+      [SOLANA_NETWORK]: 'https://facilitator.example',
+    };
     deps.x402Accepts = [
       { scheme: 'exact', network: BASE_NETWORK, payTo: KNOWN_PAYEE },
       {
@@ -259,15 +288,6 @@ describe('x402 multi-network integration', () => {
       x402Version: 2,
       resource: { url: URL, method: 'POST', mimeType: 'application/json' },
       accepts: [
-        {
-          scheme: 'exact',
-          network: BASE_NETWORK,
-          amount: '0.02',
-          asset: 'mock-usdc',
-          payTo: KNOWN_PAYEE,
-          maxTimeoutSeconds: 300,
-          extra: {},
-        },
         {
           scheme: SOLANA_SETTLEMENT_SCHEME,
           network: SOLANA_NETWORK,
@@ -320,22 +340,16 @@ describe('x402 multi-network integration', () => {
   it('enriches Solana exact challenge requirements through facilitator /accepts', async () => {
     const server = new FakeX402Server();
     const deps = makeDeps(server);
-    deps.facilitatorUrl = 'https://facilitator.example';
+    deps.x402FacilitatorUrlsByNetwork = {
+      [BASE_NETWORK]: 'https://cdp.example',
+      [SOLANA_NETWORK]: 'https://facilitator.example',
+    };
 
     const originalFetch = globalThis.fetch;
     const acceptsResponse = {
       x402Version: 2,
       resource: { url: URL, method: 'POST', mimeType: 'application/json' },
       accepts: [
-        {
-          scheme: 'exact',
-          network: BASE_NETWORK,
-          amount: '0.02',
-          asset: 'mock-usdc',
-          payTo: KNOWN_PAYEE,
-          maxTimeoutSeconds: 300,
-          extra: {},
-        },
         {
           scheme: 'exact',
           network: SOLANA_NETWORK,
@@ -375,6 +389,7 @@ describe('x402 multi-network integration', () => {
         headers: { 'content-type': 'application/json' },
         body: expect.any(String),
       });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(solanaAccept).toMatchObject({
         scheme: 'exact',
         network: SOLANA_NETWORK,
@@ -395,7 +410,9 @@ describe('x402 multi-network integration', () => {
     const server = new RotatingExtraX402Server();
     const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), makeDeps(server));
 
-    const challengeResponse = await handler(new NextRequest(URL, { method: 'POST' }));
+    const challengeResponse = await withPassThroughFacilitatorAccepts(() =>
+      handler(new NextRequest(URL, { method: 'POST' })),
+    );
     const challenge = decodePaymentRequiredHeader(
       challengeResponse.headers.get('PAYMENT-REQUIRED')!,
     );
