@@ -46,6 +46,7 @@ function makeDeps(plugin?: RouterPlugin): OrchestrateDeps {
     entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: KNOWN_PAYEE,
     network: 'eip155:8453',
+    x402Accepts: [{ network: 'eip155:8453', payTo: KNOWN_PAYEE }],
     plugin,
   };
 }

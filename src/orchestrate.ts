@@ -20,15 +20,11 @@ import { isAddress, getAddress } from 'viem';
 import { buildX402Challenge, verifyX402Payment, settleX402Payment } from './protocols/x402.js';
 import { verifySIWX, buildSIWXExtension, SIWX_ERROR_MESSAGES } from './auth/siwx.js';
 import { verifyApiKey } from './auth/api-key.js';
+import { resolveX402Accepts } from './x402-config.js';
 
-async function resolvePayTo(
-  routeEntry: RouteEntry,
-  request: Request,
-  fallback: string,
-): Promise<string> {
-  if (!routeEntry.payTo) return fallback;
-  if (typeof routeEntry.payTo === 'string') return routeEntry.payTo;
-  return routeEntry.payTo(request);
+function getRequirementNetwork(requirements: unknown, fallback: string): string {
+  const network = (requirements as { network?: unknown } | null)?.network;
+  return typeof network === 'string' ? network : fallback;
 }
 
 export interface OrchestrateDeps {
@@ -41,6 +37,8 @@ export interface OrchestrateDeps {
   entitlementStore: EntitlementStore;
   payeeAddress: string;
   network: string;
+  facilitatorUrl?: string;
+  x402Accepts: import('./types.js').X402AcceptConfig[];
   mppx?: {
     charge: (options: {
       amount: string;
@@ -463,18 +461,17 @@ export function createRequestHandler(
         return fail(500, reason, meta, pluginCtx, body.data);
       }
 
-      const payTo = await resolvePayTo(routeEntry, request, deps.payeeAddress);
-      const verify = await verifyX402Payment(
-        deps.x402Server,
+      const accepts = await resolveX402Accepts(
         request,
         routeEntry,
-        price,
-        payTo,
-        deps.network,
+        deps.x402Accepts,
+        deps.payeeAddress,
       );
+      const verify = await verifyX402Payment(deps.x402Server, request, routeEntry, price, accepts);
       if (!verify?.valid) return await build402(request, routeEntry, deps, meta, pluginCtx);
 
       const { payload: verifyPayload, requirements: verifyRequirements } = verify;
+      const matchedNetwork = getRequirementNetwork(verifyRequirements, deps.network);
 
       // Normalize to lowercase — checksumming is a display concern, not storage
       const wallet = verify.payer.toLowerCase();
@@ -483,7 +480,7 @@ export function createRequestHandler(
         protocol: 'x402',
         payer: wallet,
         amount: price,
-        network: deps.network,
+        network: matchedNetwork,
       });
 
       const { response, rawResult } = await invoke(
@@ -508,7 +505,7 @@ export function createRequestHandler(
               : { payloadType: typeof verifyPayload };
           console.info('Settlement attempt', {
             route: routeEntry.key,
-            network: deps.network,
+            network: matchedNetwork,
             ...payloadFingerprint,
           });
           const settle = await settleX402Payment(
@@ -532,7 +529,7 @@ export function createRequestHandler(
             protocol: 'x402',
             payer: verify.payer,
             transaction: String(settle.result?.transaction ?? ''),
-            network: deps.network,
+            network: matchedNetwork,
           });
         } catch (err) {
           const errObj = err as {
@@ -542,7 +539,7 @@ export function createRequestHandler(
           console.error('Settlement failed', {
             message: err instanceof Error ? err.message : String(err),
             route: routeEntry.key,
-            network: deps.network,
+            network: matchedNetwork,
             facilitatorStatus: errObj.response?.status,
             facilitatorBody: errObj.response?.data ?? errObj.response?.body,
           });
@@ -855,14 +852,19 @@ async function build402(
 
   if (routeEntry.protocols.includes('x402') && deps.x402Server) {
     try {
-      const payTo = await resolvePayTo(routeEntry, request, deps.payeeAddress);
+      const accepts = await resolveX402Accepts(
+        request,
+        routeEntry,
+        deps.x402Accepts,
+        deps.payeeAddress,
+      );
       const { encoded } = await buildX402Challenge(
         deps.x402Server,
         routeEntry,
         request,
         challengePrice,
-        payTo,
-        deps.network,
+        accepts,
+        deps.facilitatorUrl,
         extensions,
       );
       response.headers.set('PAYMENT-REQUIRED', encoded);

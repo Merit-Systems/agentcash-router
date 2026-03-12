@@ -60,6 +60,25 @@ describe('RouterConfig.protocols', () => {
       expect(entry).toBeDefined();
       expect(entry!.protocols).toEqual(['x402']);
     });
+
+    it('accepts additive multi-network x402 config', () => {
+      const router = createRouter({
+        ...baseConfig,
+        x402: {
+          accepts: [
+            { network: 'eip155:8453' },
+            {
+              network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+              payTo: '9tCZP1W2jNYZjikmteU1HRrkoSGaRqcNs9ciLeQZb4a2',
+            },
+          ],
+        },
+      });
+      router.route('test/route').handler(async () => ({}));
+      const entry = router.registry.get('test/route');
+      expect(entry).toBeDefined();
+      expect(entry!.protocols).toEqual(['x402']);
+    });
   });
 
   describe('validation', () => {
@@ -120,6 +139,32 @@ describe('RouterConfig.protocols', () => {
             protocols: ['x402'],
           } as RouterConfig);
         }).toThrow(/payeeAddress/);
+      } finally {
+        process.env.NODE_ENV = origEnv;
+        spy.mockRestore();
+      }
+    });
+
+    it('throws in production when a non-exact x402 accept is missing asset', () => {
+      const origEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        expect(() => {
+          createRouter({
+            ...baseConfig,
+            baseUrl: 'https://test.example.com',
+            x402: {
+              accepts: [
+                {
+                  scheme: '@faremeter/x-solana-settlement',
+                  network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+                  payTo: '9tCZP1W2jNYZjikmteU1HRrkoSGaRqcNs9ciLeQZb4a2',
+                },
+              ],
+            },
+          });
+        }).toThrow(/non-exact x402 accepts require an asset/);
       } finally {
         process.env.NODE_ENV = origEnv;
         spy.mockRestore();

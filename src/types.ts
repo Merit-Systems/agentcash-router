@@ -49,7 +49,7 @@ export interface X402Server {
   createPaymentRequiredResponse(
     requirements: PaymentRequirements[],
     resource: { url: string; method: string; description?: string },
-    error: string | null,
+    error?: string,
     extensions?: Record<string, unknown>,
   ): Promise<PaymentRequired>;
 
@@ -108,12 +108,34 @@ export type PricingConfig<TBody = unknown> =
   | ((body: TBody) => string | Promise<string>)
   | { field: string; tiers: Record<string, TierConfig>; default?: string };
 
+export type PayToConfig = string | ((request: Request) => string | Promise<string>);
+
+export interface X402AcceptConfig {
+  network: string;
+  scheme?: string;
+  payTo?: PayToConfig;
+  asset?: string;
+  decimals?: number;
+  maxTimeoutSeconds?: number;
+  extra?: Record<string, unknown>;
+}
+
+export interface X402ResolvedAccept {
+  network: string;
+  scheme: string;
+  payTo: string;
+  asset?: string;
+  decimals?: number;
+  maxTimeoutSeconds?: number;
+  extra?: Record<string, unknown>;
+}
+
 export interface PaidOptions {
   protocols?: ProtocolType[];
   maxPrice?: string;
   minPrice?: string;
   /** Override the payment recipient. String for static, function for dynamic (receives the Request). */
-  payTo?: string | ((request: Request) => string | Promise<string>);
+  payTo?: PayToConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -186,7 +208,7 @@ export interface RouteEntry {
   method: RouteMethod;
   maxPrice?: string;
   minPrice?: string;
-  payTo?: string | ((request: Request) => string | Promise<string>);
+  payTo?: PayToConfig;
   apiKeyResolver?: (key: string) => unknown | Promise<unknown>;
   providerName?: string;
   providerConfig?: ProviderConfig;
@@ -226,6 +248,9 @@ export interface RouterConfig {
   baseUrl: string;
   network?: string;
   facilitatorUrl?: string;
+  x402?: {
+    accepts?: X402AcceptConfig[];
+  };
   plugin?: import('./plugin.js').RouterPlugin;
   siwx?: {
     nonceStore?: import('./auth/nonce.js').NonceStore;

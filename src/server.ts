@@ -1,6 +1,7 @@
 import type { FacilitatorConfig, FacilitatorClient } from '@x402/core/http';
 import type { SupportedResponse, Network } from '@x402/core/types';
 import type { RouterConfig, X402Server } from './types.js';
+import { getConfiguredX402Networks } from './x402-config.js';
 
 export async function createX402Server(config: RouterConfig) {
   // Dynamic ESM imports: peer deps are loaded lazily so the router can
@@ -16,6 +17,9 @@ export async function createX402Server(config: RouterConfig) {
   const raw = config.facilitatorUrl ?? defaultFacilitator;
   const facilitatorConfig: FacilitatorConfig = typeof raw === 'string' ? { url: raw } : raw;
   const httpClient = new HTTPFacilitatorClient(facilitatorConfig);
+  const configuredNetworks = getConfiguredX402Networks(config) as Network[];
+  const evmNetworks = configuredNetworks.filter((network) => network.startsWith('eip155:'));
+  const svmNetworks = configuredNetworks.filter((network) => network.startsWith('solana:'));
 
   // Wrap the HTTP client to bypass getSupported() on cold start.
   // For EVM exact scheme, enhancePaymentRequirements is a no-op — the
@@ -25,11 +29,20 @@ export async function createX402Server(config: RouterConfig) {
   // lambda cold start causes 429 rate limit storms when multiple instances
   // boot simultaneously. Hardcode the response; verify/settle still go
   // through the real facilitator.
-  const network = (config.network ?? 'eip155:8453') as Network;
-  const client = cachedClient(httpClient, network);
+  const client =
+    configuredNetworks.length > 0 &&
+    configuredNetworks.every((network) => network.startsWith('eip155:'))
+      ? cachedClient(httpClient, configuredNetworks)
+      : httpClient;
   const server = new x402ResourceServer(client);
 
-  registerExactEvmScheme(server);
+  if (evmNetworks.length > 0) {
+    registerExactEvmScheme(server, { networks: evmNetworks });
+  }
+  if (svmNetworks.length > 0) {
+    const { registerExactSvmScheme } = await import('@x402/svm/exact/server');
+    registerExactSvmScheme(server, { networks: svmNetworks });
+  }
   server.registerExtension(bazaarResourceServerExtension);
   server.registerExtension(siwxResourceServerExtension);
 
@@ -48,12 +61,12 @@ export async function createX402Server(config: RouterConfig) {
  * supported kind data at all (it's a pass-through), so the HTTP call is pure
  * overhead and a reliability risk.
  */
-function cachedClient(inner: FacilitatorClient, network: Network): FacilitatorClient {
+function cachedClient(inner: FacilitatorClient, networks: Network[]): FacilitatorClient {
   return {
     verify: inner.verify.bind(inner),
     settle: inner.settle.bind(inner),
     getSupported: async (): Promise<SupportedResponse> => ({
-      kinds: [{ x402Version: 2, scheme: 'exact', network }],
+      kinds: networks.map((network) => ({ x402Version: 2, scheme: 'exact', network })),
       extensions: [],
       signers: {},
     }),

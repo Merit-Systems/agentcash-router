@@ -1,5 +1,5 @@
-import type { PaymentRequirements, SettleResponse } from '@x402/core/types';
-import type { RouteEntry, X402Server } from '../types.js';
+import type { PaymentPayload, PaymentRequirements, SettleResponse } from '@x402/core/types';
+import type { RouteEntry, X402ResolvedAccept, X402Server } from '../types.js';
 
 // All x402 library interactions go through these thin wrappers.
 // The router never reimplements protocol logic.
@@ -9,18 +9,11 @@ export async function buildX402Challenge(
   routeEntry: RouteEntry,
   request: Request,
   price: string,
-  payeeAddress: string,
-  network: string,
+  accepts: X402ResolvedAccept[],
+  facilitatorUrl?: string,
   extensions?: Record<string, unknown>,
 ) {
   const { encodePaymentRequiredHeader } = await import('@x402/core/http');
-
-  const options = {
-    scheme: 'exact' as const,
-    network: network as `${string}:${string}`,
-    price,
-    payTo: payeeAddress,
-  };
 
   const resource = {
     url: request.url,
@@ -29,13 +22,18 @@ export async function buildX402Challenge(
     mimeType: 'application/json',
   };
 
-  const requirements = await server.buildPaymentRequirementsFromOptions([options], {
+  const requirements = await buildChallengeRequirements(
+    server,
     request,
-  });
+    price,
+    accepts,
+    resource,
+    facilitatorUrl,
+  );
   const paymentRequired = await server.createPaymentRequiredResponse(
     requirements,
     resource,
-    null,
+    undefined,
     extensions,
   );
   const encoded = encodePaymentRequiredHeader(paymentRequired);
@@ -48,8 +46,7 @@ export async function verifyX402Payment(
   request: Request,
   routeEntry: RouteEntry,
   price: string,
-  payeeAddress: string,
-  network: string,
+  accepts: X402ResolvedAccept[],
 ) {
   const { decodePaymentSignatureHeader } = await import('@x402/core/http');
 
@@ -58,18 +55,12 @@ export async function verifyX402Payment(
   if (!paymentHeader) return null;
 
   const payload = decodePaymentSignatureHeader(paymentHeader);
+  const requirements = await buildExpectedRequirements(server, request, price, accepts);
+  const matching = findVerifiableRequirements(server, requirements, payload);
+  if (!matching) {
+    return { valid: false as const, payload: null, requirements: null, payer: null };
+  }
 
-  const options = {
-    scheme: 'exact' as const,
-    network: network as `${string}:${string}`,
-    price,
-    payTo: payeeAddress,
-  };
-
-  const requirements = await server.buildPaymentRequirementsFromOptions([options], {
-    request,
-  });
-  const matching = server.findMatchingRequirements(requirements, payload);
   const verify = await server.verifyPayment(payload, matching);
 
   if (!verify.isValid) {
@@ -82,6 +73,150 @@ export async function verifyX402Payment(
     payload,
     requirements: matching,
   };
+}
+
+function findVerifiableRequirements(
+  server: X402Server,
+  requirements: PaymentRequirements[],
+  payload: PaymentPayload,
+): PaymentRequirements | null {
+  const strictMatch = server.findMatchingRequirements(requirements, payload);
+  if (strictMatch) {
+    return payload.x402Version === 2 ? payload.accepted : strictMatch;
+  }
+
+  if (payload.x402Version !== 2) {
+    return null;
+  }
+
+  const stableMatch = requirements.find((requirement) =>
+    matchesStableFields(requirement, payload.accepted),
+  );
+  return stableMatch ? payload.accepted : null;
+}
+
+function matchesStableFields(
+  requirement: PaymentRequirements,
+  accepted: PaymentRequirements,
+): boolean {
+  return (
+    requirement.scheme === accepted.scheme &&
+    requirement.network === accepted.network &&
+    requirement.payTo === accepted.payTo &&
+    requirement.asset === accepted.asset &&
+    requirement.amount === accepted.amount &&
+    requirement.maxTimeoutSeconds === accepted.maxTimeoutSeconds
+  );
+}
+
+async function buildExpectedRequirements(
+  server: X402Server,
+  request: Request,
+  price: string,
+  accepts: X402ResolvedAccept[],
+): Promise<PaymentRequirements[]> {
+  const exactAccepts = accepts.filter((accept) => accept.scheme === 'exact');
+  const customAccepts = accepts.filter((accept) => accept.scheme !== 'exact');
+
+  const exactRequirements =
+    exactAccepts.length > 0
+      ? await server.buildPaymentRequirementsFromOptions(
+          exactAccepts.map(({ network, payTo }) => ({
+            scheme: 'exact' as const,
+            network: network as `${string}:${string}`,
+            price,
+            payTo,
+          })),
+          { request },
+        )
+      : [];
+
+  const customRequirements = customAccepts.map(buildCustomRequirement.bind(null, price));
+  return [...exactRequirements, ...customRequirements];
+}
+
+async function buildChallengeRequirements(
+  server: X402Server,
+  request: Request,
+  price: string,
+  accepts: X402ResolvedAccept[],
+  resource: { url: string; method: string; description?: string; mimeType: string },
+  facilitatorUrl?: string,
+): Promise<PaymentRequirements[]> {
+  const requirements = await buildExpectedRequirements(server, request, price, accepts);
+  const needsFacilitatorEnrichment = accepts.some(
+    (accept) => accept.scheme !== 'exact' || accept.network.startsWith('solana:'),
+  );
+  if (!facilitatorUrl || !needsFacilitatorEnrichment) {
+    return requirements;
+  }
+
+  return enrichRequirementsForChallenge(facilitatorUrl, resource, requirements);
+}
+
+async function enrichRequirementsForChallenge(
+  facilitatorUrl: string,
+  resource: { url: string; method: string; description?: string; mimeType: string },
+  requirements: PaymentRequirements[],
+): Promise<PaymentRequirements[]> {
+  const response = await fetch(`${facilitatorUrl.replace(/\/+$/, '')}/accepts`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      x402Version: 2,
+      resource,
+      accepts: requirements,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Facilitator /accepts failed with status ${response.status}`);
+  }
+
+  const body = (await response.json()) as {
+    accepts?: PaymentRequirements[];
+  };
+  if (!Array.isArray(body.accepts)) {
+    throw new Error('Facilitator /accepts response did not include accepts');
+  }
+
+  return body.accepts;
+}
+
+function buildCustomRequirement(price: string, accept: X402ResolvedAccept): PaymentRequirements {
+  if (!accept.asset) {
+    throw new Error(
+      `Custom x402 accept '${accept.scheme}' on '${accept.network}' is missing asset`,
+    );
+  }
+
+  return {
+    scheme: accept.scheme,
+    network: accept.network as `${string}:${string}`,
+    amount: decimalToAtomicUnits(price, accept.decimals ?? 6),
+    asset: accept.asset,
+    payTo: accept.payTo,
+    maxTimeoutSeconds: accept.maxTimeoutSeconds ?? 300,
+    extra: accept.extra ?? {},
+  };
+}
+
+function decimalToAtomicUnits(amount: string, decimals: number): string {
+  const match = /^(?<whole>\d+)(?:\.(?<fraction>\d+))?$/.exec(amount);
+  if (!match?.groups) {
+    throw new Error(`Invalid decimal amount '${amount}'`);
+  }
+
+  const whole = match.groups.whole;
+  const fraction = match.groups.fraction ?? '';
+  if (fraction.length > decimals) {
+    throw new Error(`Amount '${amount}' exceeds ${decimals} decimal places`);
+  }
+
+  const normalized = `${whole}${fraction.padEnd(decimals, '0')}`.replace(/^0+(?=\d)/, '');
+  return normalized === '' ? '0' : normalized;
 }
 
 export async function settleX402Payment(

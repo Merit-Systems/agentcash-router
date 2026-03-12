@@ -19,12 +19,11 @@ vi.mock('../src/protocols/x402.js', () => ({
     routeEntry: RouteEntry,
     request: Request,
     price: string,
-    payeeAddress: string,
-    network: string,
+    accepts: Array<{ network: string; payTo: string }>,
     extensions?: Record<string, unknown>,
   ) => {
     const requirements = server.buildPaymentRequirementsFromOptions(
-      { price, payTo: payeeAddress, scheme: 'exact', network },
+      accepts.map(({ network, payTo }) => ({ price, payTo, scheme: 'exact', network })),
       { request },
     );
     const paymentRequired = server.createPaymentRequiredResponse(
@@ -44,21 +43,27 @@ vi.mock('../src/protocols/x402.js', () => ({
     request: Request,
     _routeEntry: RouteEntry,
     price: string,
-    _payeeAddress: string,
-    _network: string,
+    accepts: Array<{ network: string; payTo: string }>,
   ) => {
     const paymentHeader =
       request.headers.get('PAYMENT-SIGNATURE') ?? request.headers.get('X-PAYMENT');
     if (!paymentHeader) return null;
 
-    let payload: { payer: string; amount: string };
+    let payload: { payer: string; amount: string; network?: string };
     try {
       payload = JSON.parse(Buffer.from(paymentHeader, 'base64').toString());
     } catch {
       return { valid: false, payload: null, requirements: null, payer: null };
     }
 
-    const verify = await server.verifyPayment(payload, null);
+    const requirements = server.buildPaymentRequirementsFromOptions(
+      accepts.map(({ network, payTo }) => ({ price, payTo, scheme: 'exact', network })),
+      { request },
+    );
+    const matching =
+      requirements.find((requirement) => requirement.network === payload.network) ??
+      requirements[0];
+    const verify = await server.verifyPayment(payload, matching);
     if (!verify.isValid) {
       return { valid: false, payload: null, requirements: null, payer: null };
     }
@@ -67,7 +72,7 @@ vi.mock('../src/protocols/x402.js', () => ({
       valid: true,
       payer: verify.payer as string,
       payload,
-      requirements: {},
+      requirements: matching,
     };
   },
 
@@ -161,6 +166,7 @@ function makeDeps(overrides: Partial<OrchestrateDeps> = {}): OrchestrateDeps {
     entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: KNOWN_PAYEE,
     network: 'eip155:8453',
+    x402Accepts: [{ network: 'eip155:8453', payTo: KNOWN_PAYEE }],
     ...overrides,
   };
 }
@@ -241,6 +247,7 @@ function makeMPPDeps(overrides: Partial<OrchestrateDeps> = {}): OrchestrateDeps 
     entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: KNOWN_PAYEE,
     network: 'tempo:42431',
+    x402Accepts: [],
     mppx: createFakeMppx(),
     ...overrides,
   };
@@ -337,7 +344,7 @@ describe('probe request (no auth header)', () => {
     // Decode the challenge to verify the price is the tier price, not maxPrice
     const encoded = res.headers.get('PAYMENT-REQUIRED')!;
     const challenge = JSON.parse(Buffer.from(encoded, 'base64').toString());
-    expect(challenge.requirements[0].maxAmountRequired).toBe('0.02');
+    expect(challenge.accepts[0].amount ?? challenge.accepts[0].maxAmountRequired).toBe('0.02');
   });
 });
 

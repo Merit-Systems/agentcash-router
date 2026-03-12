@@ -14,6 +14,7 @@ function makeDeps(): OrchestrateDeps {
     entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: '0x1234',
     network: 'eip155:8453',
+    x402Accepts: [{ network: 'eip155:8453', payTo: '0x1234' }],
   };
 }
 
