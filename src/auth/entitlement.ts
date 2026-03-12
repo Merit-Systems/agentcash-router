@@ -14,17 +14,16 @@ export class MemoryEntitlementStore implements EntitlementStore {
   async has(route: string, wallet: string): Promise<boolean> {
     const wallets = this.routeToWallets.get(route);
     if (!wallets) return false;
-    return wallets.has(wallet.toLowerCase());
+    return wallets.has(wallet);
   }
 
   async grant(route: string, wallet: string): Promise<void> {
-    const normalizedWallet = wallet.toLowerCase();
     let wallets = this.routeToWallets.get(route);
     if (!wallets) {
       wallets = new Set<string>();
       this.routeToWallets.set(route, wallets);
     }
-    wallets.add(normalizedWallet);
+    wallets.add(wallet);
   }
 }
 
@@ -70,39 +69,37 @@ export function createRedisEntitlementStore(
   return {
     async has(route: string, wallet: string): Promise<boolean> {
       const key = `${prefix}${route}`;
-      const normalizedWallet = wallet.toLowerCase();
 
       if (clientType === 'upstash') {
         const redis = client as {
           sismember: (key: string, member: string) => Promise<number | boolean>;
         };
-        const result = await redis.sismember(key, normalizedWallet);
+        const result = await redis.sismember(key, wallet);
         return result === 1 || result === true;
       }
 
       const redis = client as {
         sismember: (key: string, member: string) => Promise<number>;
       };
-      const result = await redis.sismember(key, normalizedWallet);
+      const result = await redis.sismember(key, wallet);
       return result === 1;
     },
 
     async grant(route: string, wallet: string): Promise<void> {
       const key = `${prefix}${route}`;
-      const normalizedWallet = wallet.toLowerCase();
 
       if (clientType === 'upstash') {
         const redis = client as {
           sadd: (key: string, member: string) => Promise<number>;
         };
-        await redis.sadd(key, normalizedWallet);
+        await redis.sadd(key, wallet);
         return;
       }
 
       const redis = client as {
         sadd: (key: string, member: string) => Promise<number>;
       };
-      await redis.sadd(key, normalizedWallet);
+      await redis.sadd(key, wallet);
     },
   };
 }
