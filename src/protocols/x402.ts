@@ -1,6 +1,7 @@
 import type { PaymentPayload, PaymentRequirements, SettleResponse } from '@x402/core/types';
 import type { RouteEntry, X402ResolvedAccept, X402Server } from '../types.js';
-import { getFacilitatorUrlForRequirement } from '../x402-facilitators.js';
+import { getFacilitatorForRequirement } from '../x402-facilitators.js';
+import type { ResolvedX402Facilitator } from '../x402-facilitators.js';
 import { buildEvmExactOptions } from './evm.js';
 import {
   buildSolanaExactOptions,
@@ -18,7 +19,7 @@ export async function buildX402Challenge(
   request: Request,
   price: string,
   accepts: X402ResolvedAccept[],
-  facilitatorUrlsByNetwork?: Record<string, string | undefined>,
+  facilitatorsByNetwork?: Record<string, ResolvedX402Facilitator>,
   extensions?: Record<string, unknown>,
 ) {
   const { encodePaymentRequiredHeader } = await import('@x402/core/http');
@@ -36,7 +37,7 @@ export async function buildX402Challenge(
     price,
     accepts,
     resource,
-    facilitatorUrlsByNetwork,
+    facilitatorsByNetwork,
   );
   const paymentRequired = await server.createPaymentRequiredResponse(
     requirements,
@@ -144,7 +145,7 @@ async function buildChallengeRequirements(
   price: string,
   accepts: X402ResolvedAccept[],
   resource: { url: string; method: string; description?: string; mimeType: string },
-  facilitatorUrlsByNetwork?: Record<string, string | undefined>,
+  facilitatorsByNetwork?: Record<string, ResolvedX402Facilitator>,
 ): Promise<PaymentRequirements[]> {
   const requirements = await buildExpectedRequirements(server, request, price, accepts);
   const needsFacilitatorEnrichment =
@@ -154,27 +155,27 @@ async function buildChallengeRequirements(
   }
 
   const groupedRequirements = new Map<
-    string,
+    ResolvedX402Facilitator,
     Array<{ index: number; requirement: PaymentRequirements }>
   >();
 
   requirements.forEach((requirement, index) => {
     if (!requiresFacilitatorEnrichment(requirement)) return;
 
-    const facilitatorUrl = getFacilitatorUrlForRequirement(facilitatorUrlsByNetwork, requirement);
-    if (!facilitatorUrl) {
+    const facilitator = getFacilitatorForRequirement(facilitatorsByNetwork, requirement);
+    if (!facilitator) {
       throw new Error(
-        `Missing x402 facilitator URL for ${requirement.scheme} requirement on ${requirement.network}`,
+        `Missing x402 facilitator for ${requirement.scheme} requirement on ${requirement.network}`,
       );
     }
 
-    const existingGroup = groupedRequirements.get(facilitatorUrl);
+    const existingGroup = groupedRequirements.get(facilitator);
     if (existingGroup) {
       existingGroup.push({ index, requirement });
       return;
     }
 
-    groupedRequirements.set(facilitatorUrl, [{ index, requirement }]);
+    groupedRequirements.set(facilitator, [{ index, requirement }]);
   });
 
   if (groupedRequirements.size === 0) {
@@ -183,15 +184,15 @@ async function buildChallengeRequirements(
 
   const enrichedRequirements = [...requirements];
   await Promise.all(
-    [...groupedRequirements.entries()].map(async ([facilitatorUrl, group]) => {
+    [...groupedRequirements.entries()].map(async ([facilitator, group]) => {
       const enriched = await enrichRequirementsWithFacilitatorAccepts(
-        facilitatorUrl,
+        facilitator,
         resource,
         group.map(({ requirement }) => requirement),
       );
       if (enriched.length !== group.length) {
         throw new Error(
-          `Facilitator /accepts returned ${enriched.length} requirements for ${group.length} inputs on ${facilitatorUrl}`,
+          `Facilitator /accepts returned ${enriched.length} requirements for ${group.length} inputs on ${facilitator.url ?? facilitator.network}`,
         );
       }
 

@@ -4,8 +4,9 @@ import { filterEvmNetworks } from './protocols/evm.js';
 import { filterSolanaNetworks } from './protocols/solana.js';
 import type { RouterConfig, X402Server } from './types.js';
 import {
+  getHTTPFacilitatorConfig,
+  getResolvedX402Facilitators,
   getResolvedX402FacilitatorGroups,
-  getResolvedX402FacilitatorUrls,
 } from './x402-facilitators.js';
 import { getConfiguredX402Networks } from './x402-config.js';
 
@@ -19,14 +20,14 @@ export async function createX402Server(config: RouterConfig) {
   const { siwxResourceServerExtension } = await import('@x402/extensions/sign-in-with-x');
   const { facilitator: defaultFacilitator } = await import('@coinbase/x402');
   const configuredNetworks = getConfiguredX402Networks(config);
-  const evmNetworks = filterEvmNetworks(configuredNetworks);
-  const svmNetworks = filterSolanaNetworks(configuredNetworks);
-  const facilitatorClients = createFacilitatorClients(
+  const facilitatorsByNetwork = getResolvedX402Facilitators(
     config,
     configuredNetworks,
     defaultFacilitator,
-    HTTPFacilitatorClient,
   );
+  const evmNetworks = filterEvmNetworks(configuredNetworks);
+  const svmNetworks = filterSolanaNetworks(configuredNetworks);
+  const facilitatorClients = createFacilitatorClients(facilitatorsByNetwork, HTTPFacilitatorClient);
   const server = new x402ResourceServer(
     facilitatorClients.length === 1 ? facilitatorClients[0] : facilitatorClients,
   );
@@ -46,11 +47,7 @@ export async function createX402Server(config: RouterConfig) {
   return {
     server: server as unknown as X402Server,
     initPromise,
-    facilitatorUrlsByNetwork: getResolvedX402FacilitatorUrls(
-      config,
-      configuredNetworks,
-      defaultFacilitator,
-    ),
+    facilitatorsByNetwork,
   };
 }
 
@@ -77,19 +74,13 @@ function cachedClient(inner: FacilitatorClient, networks: Network[]): Facilitato
 }
 
 function createFacilitatorClients(
-  config: RouterConfig,
-  configuredNetworks: readonly string[],
-  defaultEvmFacilitator: string | FacilitatorConfig,
+  facilitatorsByNetwork: ReturnType<typeof getResolvedX402Facilitators>,
   HTTPFacilitatorClient: new (config?: FacilitatorConfig) => FacilitatorClient,
 ): FacilitatorClient[] {
-  const groups = getResolvedX402FacilitatorGroups(
-    config,
-    configuredNetworks,
-    defaultEvmFacilitator,
-  );
+  const groups = getResolvedX402FacilitatorGroups(facilitatorsByNetwork);
 
   return groups.map((group) => {
-    const inner = new HTTPFacilitatorClient(group.config);
+    const inner = new HTTPFacilitatorClient(getHTTPFacilitatorConfig(group));
     return group.family === 'evm' ? cachedClient(inner, group.networks) : inner;
   });
 }

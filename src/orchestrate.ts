@@ -37,7 +37,10 @@ export interface OrchestrateDeps {
   entitlementStore: EntitlementStore;
   payeeAddress: string;
   network: string;
-  x402FacilitatorUrlsByNetwork?: Record<string, string | undefined>;
+  x402FacilitatorsByNetwork?: Record<
+    string,
+    import('./x402-facilitators.js').ResolvedX402Facilitator
+  >;
   x402Accepts: import('./types.js').X402AcceptConfig[];
   mppx?: {
     charge: (options: {
@@ -850,7 +853,7 @@ async function build402(
         request,
         challengePrice,
         accepts,
-        deps.x402FacilitatorUrlsByNetwork,
+        deps.x402FacilitatorsByNetwork,
         extensions,
       );
       response.headers.set('PAYMENT-REQUIRED', encoded);

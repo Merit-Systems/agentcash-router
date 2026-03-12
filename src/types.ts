@@ -131,7 +131,11 @@ export interface X402ResolvedAccept {
   extra?: Record<string, unknown>;
 }
 
-export type X402FacilitatorTarget = string | FacilitatorConfig;
+export interface X402RouterFacilitatorConfig extends FacilitatorConfig {
+  createAcceptsHeaders?: () => Promise<Record<string, string>>;
+}
+
+export type X402FacilitatorTarget = string | X402RouterFacilitatorConfig;
 
 export interface X402FacilitatorsConfig {
   evm?: X402FacilitatorTarget;

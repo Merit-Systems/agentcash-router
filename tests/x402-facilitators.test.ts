@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SOLANA_FACILITATOR_URL,
-  getResolvedX402FacilitatorConfig,
+  getAcceptsHeadersForFacilitator,
+  getResolvedX402Facilitator,
+  getResolvedX402Facilitators,
   getResolvedX402FacilitatorGroups,
-  getResolvedX402FacilitatorUrls,
 } from '../src/x402-facilitators.js';
 import type { RouterConfig } from '../src/types.js';
 
@@ -33,15 +34,21 @@ describe('x402 facilitator resolution', () => {
   it('defaults Base to CDP and Solana to Corbits', () => {
     const config = makeConfig();
 
-    expect(getResolvedX402FacilitatorConfig(config, BASE_NETWORK, DEFAULT_CDP_FACILITATOR)).toEqual(
-      {
+    expect(getResolvedX402Facilitator(config, BASE_NETWORK, DEFAULT_CDP_FACILITATOR)).toEqual({
+      family: 'evm',
+      network: BASE_NETWORK,
+      url: DEFAULT_CDP_FACILITATOR,
+      config: {
         url: DEFAULT_CDP_FACILITATOR,
       },
-    );
-    expect(
-      getResolvedX402FacilitatorConfig(config, SOLANA_NETWORK, DEFAULT_CDP_FACILITATOR),
-    ).toEqual({
+    });
+    expect(getResolvedX402Facilitator(config, SOLANA_NETWORK, DEFAULT_CDP_FACILITATOR)).toEqual({
+      family: 'solana',
+      network: SOLANA_NETWORK,
       url: DEFAULT_SOLANA_FACILITATOR_URL,
+      config: {
+        url: DEFAULT_SOLANA_FACILITATOR_URL,
+      },
     });
   });
 
@@ -50,15 +57,21 @@ describe('x402 facilitator resolution', () => {
       facilitatorUrl: 'https://legacy.example',
     });
 
-    expect(getResolvedX402FacilitatorConfig(config, BASE_NETWORK, DEFAULT_CDP_FACILITATOR)).toEqual(
-      {
+    expect(getResolvedX402Facilitator(config, BASE_NETWORK, DEFAULT_CDP_FACILITATOR)).toEqual({
+      family: 'evm',
+      network: BASE_NETWORK,
+      url: 'https://legacy.example',
+      config: {
         url: 'https://legacy.example',
       },
-    );
-    expect(
-      getResolvedX402FacilitatorConfig(config, SOLANA_NETWORK, DEFAULT_CDP_FACILITATOR),
-    ).toEqual({
+    });
+    expect(getResolvedX402Facilitator(config, SOLANA_NETWORK, DEFAULT_CDP_FACILITATOR)).toEqual({
+      family: 'solana',
+      network: SOLANA_NETWORK,
       url: 'https://legacy.example',
+      config: {
+        url: 'https://legacy.example',
+      },
     });
   });
 
@@ -75,16 +88,41 @@ describe('x402 facilitator resolution', () => {
       },
     });
 
-    const urls = getResolvedX402FacilitatorUrls(
+    const facilitators = getResolvedX402Facilitators(
       config,
       [BASE_NETWORK, SOLANA_NETWORK],
       DEFAULT_CDP_FACILITATOR,
     );
 
-    expect(urls).toEqual({
-      [BASE_NETWORK]: DEFAULT_CDP_FACILITATOR,
-      [SOLANA_NETWORK]: 'https://solana.example',
+    expect(facilitators[BASE_NETWORK]?.url).toBe(DEFAULT_CDP_FACILITATOR);
+    expect(facilitators[SOLANA_NETWORK]?.url).toBe('https://solana.example');
+  });
+
+  it('uses accepts-specific auth headers before supported headers', async () => {
+    const acceptsHeaders = { authorization: 'Bearer accepts-token' };
+    const supportedHeaders = { authorization: 'Bearer supported-token' };
+    const config = makeConfig({
+      x402: {
+        accepts: [
+          { network: SOLANA_NETWORK, payTo: '9tCZP1W2jNYZjikmteU1HRrkoSGaRqcNs9ciLeQZb4a2' },
+        ],
+        facilitators: {
+          solana: {
+            url: 'https://solana.example',
+            createAcceptsHeaders: async () => acceptsHeaders,
+            createAuthHeaders: async () => ({
+              verify: {},
+              settle: {},
+              supported: supportedHeaders,
+            }),
+          },
+        },
+      },
     });
+
+    const facilitator = getResolvedX402Facilitator(config, SOLANA_NETWORK, DEFAULT_CDP_FACILITATOR);
+
+    expect(await getAcceptsHeadersForFacilitator(facilitator!)).toEqual(acceptsHeaders);
   });
 
   it('applies network-specific overrides before family and legacy fallbacks', () => {
@@ -105,15 +143,21 @@ describe('x402 facilitator resolution', () => {
       },
     });
 
-    expect(getResolvedX402FacilitatorConfig(config, BASE_NETWORK, DEFAULT_CDP_FACILITATOR)).toEqual(
-      {
+    expect(getResolvedX402Facilitator(config, BASE_NETWORK, DEFAULT_CDP_FACILITATOR)).toEqual({
+      family: 'evm',
+      network: BASE_NETWORK,
+      url: 'https://evm.example',
+      config: {
         url: 'https://evm.example',
       },
-    );
-    expect(
-      getResolvedX402FacilitatorConfig(config, SOLANA_NETWORK, DEFAULT_CDP_FACILITATOR),
-    ).toEqual({
+    });
+    expect(getResolvedX402Facilitator(config, SOLANA_NETWORK, DEFAULT_CDP_FACILITATOR)).toEqual({
+      family: 'solana',
+      network: SOLANA_NETWORK,
       url: 'https://solana-network.example',
+      config: {
+        url: 'https://solana-network.example',
+      },
     });
   });
 
@@ -134,9 +178,11 @@ describe('x402 facilitator resolution', () => {
 
     expect(
       getResolvedX402FacilitatorGroups(
-        config,
-        ['eip155:8453', 'eip155:1', SOLANA_NETWORK],
-        DEFAULT_CDP_FACILITATOR,
+        getResolvedX402Facilitators(
+          config,
+          ['eip155:8453', 'eip155:1', SOLANA_NETWORK],
+          DEFAULT_CDP_FACILITATOR,
+        ),
       ),
     ).toEqual([
       {

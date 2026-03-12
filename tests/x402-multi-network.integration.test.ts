@@ -10,6 +10,7 @@ import { MemoryNonceStore } from '../src/auth/nonce.js';
 import { MemoryEntitlementStore } from '../src/auth/entitlement.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
 import type { RouteEntry } from '../src/types.js';
+import type { ResolvedX402Facilitator } from '../src/x402-facilitators.js';
 
 const BASE_NETWORK = 'eip155:8453';
 const SOLANA_NETWORK = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
@@ -35,13 +36,29 @@ function makeDeps(server: FakeX402Server): OrchestrateDeps {
     entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: KNOWN_PAYEE,
     network: BASE_NETWORK,
-    x402FacilitatorUrlsByNetwork: {
-      [SOLANA_NETWORK]: 'https://facilitator.example',
+    x402FacilitatorsByNetwork: {
+      [SOLANA_NETWORK]: makeFacilitator(SOLANA_NETWORK, 'https://facilitator.example'),
     },
     x402Accepts: [
       { scheme: 'exact', network: BASE_NETWORK, payTo: KNOWN_PAYEE },
       { scheme: 'exact', network: SOLANA_NETWORK, payTo: SOLANA_PAYEE },
     ],
+  };
+}
+
+function makeFacilitator(
+  network: string,
+  url: string,
+  overrides: Partial<ResolvedX402Facilitator['config']> = {},
+): ResolvedX402Facilitator {
+  return {
+    family: network.startsWith('solana:') ? 'solana' : 'evm',
+    network: network as ResolvedX402Facilitator['network'],
+    url,
+    config: {
+      url,
+      ...overrides,
+    },
   };
 }
 
@@ -267,9 +284,9 @@ describe('x402 multi-network integration', () => {
   it('enriches custom-scheme challenge requirements through facilitator /accepts', async () => {
     const server = new FakeX402Server();
     const deps = makeDeps(server);
-    deps.x402FacilitatorUrlsByNetwork = {
-      [BASE_NETWORK]: 'https://cdp.example',
-      [SOLANA_NETWORK]: 'https://facilitator.example',
+    deps.x402FacilitatorsByNetwork = {
+      [BASE_NETWORK]: makeFacilitator(BASE_NETWORK, 'https://cdp.example'),
+      [SOLANA_NETWORK]: makeFacilitator(SOLANA_NETWORK, 'https://facilitator.example'),
     };
     deps.x402Accepts = [
       { scheme: 'exact', network: BASE_NETWORK, payTo: KNOWN_PAYEE },
@@ -340,9 +357,9 @@ describe('x402 multi-network integration', () => {
   it('enriches Solana exact challenge requirements through facilitator /accepts', async () => {
     const server = new FakeX402Server();
     const deps = makeDeps(server);
-    deps.x402FacilitatorUrlsByNetwork = {
-      [BASE_NETWORK]: 'https://cdp.example',
-      [SOLANA_NETWORK]: 'https://facilitator.example',
+    deps.x402FacilitatorsByNetwork = {
+      [BASE_NETWORK]: makeFacilitator(BASE_NETWORK, 'https://cdp.example'),
+      [SOLANA_NETWORK]: makeFacilitator(SOLANA_NETWORK, 'https://facilitator.example'),
     };
 
     const originalFetch = globalThis.fetch;
@@ -400,6 +417,44 @@ describe('x402 multi-network integration', () => {
             xSettlementAccountSupported: true,
           },
         },
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('uses facilitator auth headers for /accepts enrichment', async () => {
+    const server = new FakeX402Server();
+    const deps = makeDeps(server);
+    deps.x402FacilitatorsByNetwork = {
+      [SOLANA_NETWORK]: makeFacilitator(SOLANA_NETWORK, 'https://facilitator.example', {
+        createAcceptsHeaders: async () => ({
+          authorization: 'Bearer accepts-token',
+        }),
+      }),
+    };
+
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ accepts: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    try {
+      const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), deps);
+      await handler(new NextRequest(URL, { method: 'POST' }));
+
+      expect(fetchMock).toHaveBeenCalledWith('https://facilitator.example/accepts', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer accepts-token',
+          'content-type': 'application/json',
+        },
+        body: expect.any(String),
       });
     } finally {
       globalThis.fetch = originalFetch;

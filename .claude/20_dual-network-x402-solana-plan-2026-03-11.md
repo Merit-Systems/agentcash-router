@@ -595,4 +595,6 @@ These points are now implemented in `agentcash-router` and backed by passing tes
   - EVM/Base: Coinbase/CDP facilitator
   - Solana: `https://facilitator.corbits.dev`
 - Solana challenge enrichment is no longer route-global. The router only calls facilitator `/accepts` for the requirements that actually need enrichment, grouped by the facilitator assigned to that network.
+- The router now carries one resolved facilitator object per network through both x402 server bootstrap and challenge enrichment. It no longer flattens facilitator config down to bare URLs during request handling.
+- Router facilitator config now supports `createAcceptsHeaders`, and `/accepts` enrichment falls back to `createAuthHeaders().supported` when explicit accepts headers are not provided.
 - This prevents the previous incorrect behavior where one shared facilitator URL was implicitly used for both Base and Solana on the same paid route.

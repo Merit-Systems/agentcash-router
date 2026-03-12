@@ -1,5 +1,7 @@
 import type { Network, PaymentRequirements } from '@x402/core/types';
 import type { X402ResolvedAccept } from '../types.js';
+import type { ResolvedX402Facilitator } from '../x402-facilitators.js';
+import { getAcceptsHeadersForFacilitator } from '../x402-facilitators.js';
 
 type ChallengeResource = {
   url: string;
@@ -42,13 +44,19 @@ export function hasSolanaAccepts(accepts: readonly X402ResolvedAccept[]): boolea
 }
 
 export async function enrichRequirementsWithFacilitatorAccepts(
-  facilitatorUrl: string,
+  facilitator: ResolvedX402Facilitator,
   resource: ChallengeResource,
   requirements: PaymentRequirements[],
 ): Promise<PaymentRequirements[]> {
-  const response = await fetch(`${facilitatorUrl.replace(/\/+$/, '')}/accepts`, {
+  if (!facilitator.url) {
+    throw new Error(`Facilitator for ${facilitator.network} is missing a URL for /accepts`);
+  }
+
+  const authHeaders = await getAcceptsHeadersForFacilitator(facilitator);
+  const response = await fetch(`${facilitator.url.replace(/\/+$/, '')}/accepts`, {
     method: 'POST',
     headers: {
+      ...authHeaders,
       'content-type': 'application/json',
     },
     body: JSON.stringify({
