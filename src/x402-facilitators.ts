@@ -112,7 +112,6 @@ function resolveX402FacilitatorTarget(
   defaultEvmFacilitator: X402FacilitatorTarget,
 ): X402FacilitatorTarget {
   return (
-    config.x402?.facilitators?.networks?.[network] ??
     (isSolanaNetwork(network) ? config.x402?.facilitators?.solana : undefined) ??
     (isEvmNetwork(network) ? config.x402?.facilitators?.evm : undefined) ??
     config.facilitatorUrl ??

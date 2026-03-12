@@ -585,9 +585,7 @@ These points are now implemented in `agentcash-router` and backed by passing tes
 - `x402` now supports additive per-network facilitator config:
   - `x402.facilitators.evm`
   - `x402.facilitators.solana`
-  - `x402.facilitators.networks[caip2Network]`
 - Resolution precedence is:
-  - exact network override
   - chain-family override
   - legacy top-level `facilitatorUrl`
   - family default
@@ -598,3 +596,4 @@ These points are now implemented in `agentcash-router` and backed by passing tes
 - The router now carries one resolved facilitator object per network through both x402 server bootstrap and challenge enrichment. It no longer flattens facilitator config down to bare URLs during request handling.
 - Router facilitator config now supports `createAcceptsHeaders`, and `/accepts` enrichment falls back to `createAuthHeaders().supported` when explicit accepts headers are not provided.
 - This prevents the previous incorrect behavior where one shared facilitator URL was implicitly used for both Base and Solana on the same paid route.
+- We intentionally removed the per-network public facilitator map because it was not required for the current product surface and made the API harder to understand.

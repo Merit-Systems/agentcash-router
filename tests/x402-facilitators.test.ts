@@ -125,7 +125,7 @@ describe('x402 facilitator resolution', () => {
     expect(await getAcceptsHeadersForFacilitator(facilitator!)).toEqual(acceptsHeaders);
   });
 
-  it('applies network-specific overrides before family and legacy fallbacks', () => {
+  it('applies family-specific facilitators before legacy global fallback', () => {
     const config = makeConfig({
       facilitatorUrl: 'https://legacy.example',
       x402: {
@@ -136,9 +136,6 @@ describe('x402 facilitator resolution', () => {
         facilitators: {
           evm: 'https://evm.example',
           solana: 'https://solana.example',
-          networks: {
-            [SOLANA_NETWORK]: 'https://solana-network.example',
-          },
         },
       },
     });
@@ -154,9 +151,9 @@ describe('x402 facilitator resolution', () => {
     expect(getResolvedX402Facilitator(config, SOLANA_NETWORK, DEFAULT_CDP_FACILITATOR)).toEqual({
       family: 'solana',
       network: SOLANA_NETWORK,
-      url: 'https://solana-network.example',
+      url: 'https://solana.example',
       config: {
-        url: 'https://solana-network.example',
+        url: 'https://solana.example',
       },
     });
   });

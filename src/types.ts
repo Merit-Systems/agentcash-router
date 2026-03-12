@@ -140,7 +140,6 @@ export type X402FacilitatorTarget = string | X402RouterFacilitatorConfig;
 export interface X402FacilitatorsConfig {
   evm?: X402FacilitatorTarget;
   solana?: X402FacilitatorTarget;
-  networks?: Record<string, X402FacilitatorTarget>;
 }
 
 export interface PaidOptions {
