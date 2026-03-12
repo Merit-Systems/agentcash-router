@@ -207,7 +207,23 @@ export interface RouterConfig {
    * so it must be explicitly set by the consuming app.
    */
   baseUrl: string;
-  network?: string;
+  /**
+   * CAIP-2 network identifier(s) for SIWX challenges and x402 payment verification.
+   *
+   * Single string or array. When multiple networks are provided, the SIWX
+   * challenge advertises all of them in `supportedChains` so clients can
+   * choose EVM or Solana.
+   *
+   * @default 'eip155:8453'
+   *
+   * @example
+   * // EVM only (Base mainnet)
+   * network: 'eip155:8453'
+   *
+   * // EVM + Solana
+   * network: ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp']
+   */
+  network?: string | string[];
   facilitatorUrl?: string;
   plugin?: import('./plugin.js').RouterPlugin;
   siwx?: {

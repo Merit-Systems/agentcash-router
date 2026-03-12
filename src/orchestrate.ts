@@ -21,6 +21,11 @@ import { buildX402Challenge, verifyX402Payment, settleX402Payment } from './prot
 import { verifySIWX, buildSIWXExtension, SIWX_ERROR_MESSAGES } from './auth/siwx.js';
 import { verifyApiKey } from './auth/api-key.js';
 
+/** Map a CAIP-2 network identifier to its SIWX signature type. */
+function siwxSignatureType(network: string): 'eip191' | 'ed25519' {
+  return network.startsWith('solana:') ? 'ed25519' : 'eip191';
+}
+
 async function resolvePayTo(
   routeEntry: RouteEntry,
   request: Request,
@@ -40,7 +45,10 @@ export interface OrchestrateDeps {
   nonceStore: NonceStore;
   entitlementStore: EntitlementStore;
   payeeAddress: string;
+  /** Primary CAIP-2 network (first element when multiple configured). */
   network: string;
+  /** All configured CAIP-2 networks for SIWX supportedChains. */
+  networks: string[];
   mppx?: {
     charge: (options: {
       amount: string;
@@ -282,7 +290,7 @@ export function createRequestHandler(
           uri: request.url,
           version: '1',
           chainId: deps.network,
-          type: 'eip191',
+          type: siwxSignatureType(deps.network),
           nonce,
           issuedAt: new Date().toISOString(),
           expirationTime: new Date(Date.now() + SIWX_CHALLENGE_EXPIRY_MS).toISOString(),
@@ -295,6 +303,11 @@ export function createRequestHandler(
         } catch {
           // SIWX schema is optional enrichment — challenge works without it
         }
+
+        const supportedChains = deps.networks.map((n) => ({
+          chainId: n,
+          type: siwxSignatureType(n),
+        }));
 
         const paymentRequired = {
           x402Version: 2,
@@ -309,7 +322,7 @@ export function createRequestHandler(
             'sign-in-with-x': {
               info: siwxInfo,
               // supportedChains at top level required by MCP tools for chain detection
-              supportedChains: [{ chainId: deps.network, type: 'eip191' }],
+              supportedChains,
               ...(siwxSchema ? { schema: siwxSchema } : {}),
             },
           },

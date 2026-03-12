@@ -47,7 +47,10 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   const registry = new RouteRegistry();
   const nonceStore = config.siwx?.nonceStore ?? new MemoryNonceStore();
   const entitlementStore = config.siwx?.entitlementStore ?? new MemoryEntitlementStore();
-  const network = config.network ?? 'eip155:8453';
+  const networks = Array.isArray(config.network)
+    ? config.network
+    : [config.network ?? 'eip155:8453'];
+  const network = networks[0];
   // baseUrl is required — the realm is load-bearing for payment matching and MPP indexing.
   // No auto-detection; consuming apps must explicitly set it.
   if (!config.baseUrl) {
@@ -121,6 +124,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     entitlementStore,
     payeeAddress: config.payeeAddress,
     network,
+    networks,
     mppx: null,
   };
 
