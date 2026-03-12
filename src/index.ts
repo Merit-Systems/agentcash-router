@@ -13,6 +13,7 @@ import { createLlmsTxtHandler } from './discovery/llms-txt.js';
 import { getConfiguredX402Accepts } from './x402-config.js';
 import { isEvmNetwork } from './protocols/evm.js';
 import { isSolanaNetwork } from './protocols/solana.js';
+import { BASE_MAINNET } from './networks.js';
 
 // ---------------------------------------------------------------------------
 // ServiceRouter
@@ -50,7 +51,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   const registry = new RouteRegistry();
   const nonceStore = config.siwx?.nonceStore ?? new MemoryNonceStore();
   const entitlementStore = config.siwx?.entitlementStore ?? new MemoryEntitlementStore();
-  const network = config.network ?? 'eip155:8453';
+  const network = config.network ?? BASE_MAINNET;
   const x402Accepts = getConfiguredX402Accepts(config);
   // baseUrl is required — the realm is load-bearing for payment matching and MPP indexing.
   // No auto-detection; consuming apps must explicitly set it.
@@ -336,3 +337,5 @@ export type { SiwxErrorCode } from './auth/siwx.js';
 export { SIWX_ERROR_MESSAGES } from './auth/siwx.js';
 export { RouteBuilder } from './builder.js';
 export { RouteRegistry } from './registry.js';
+
+export { BASE_MAINNET, BASE_SEPOLIA, SOLANA_MAINNET } from './networks.js';
