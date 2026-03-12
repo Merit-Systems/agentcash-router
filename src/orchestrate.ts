@@ -8,6 +8,7 @@ import type {
   X402Server,
   X402AcceptConfig,
 } from './types.js';
+import { normalizeWalletAddress } from './auth/normalize-wallet.js';
 import type { ResolvedX402Facilitator } from './x402-facilitators.js';
 import type { RouterPlugin, PluginContext, RequestMeta } from './plugin.js';
 import { createDefaultContext, firePluginHook } from './plugin.js';
@@ -27,6 +28,30 @@ import { resolveX402Accepts } from './x402-config.js';
 function getRequirementNetwork(requirements: unknown, fallback: string): string {
   const network = (requirements as { network?: unknown } | null)?.network;
   return typeof network === 'string' ? network : fallback;
+}
+
+/** Map a CAIP-2 network identifier to its SIWX signature type. */
+function siwxSignatureType(network: string): 'eip191' | 'ed25519' {
+  return network.startsWith('solana:') ? 'ed25519' : 'eip191';
+}
+
+/** Derive unique SIWX-supported chains from x402 accepts, falling back to the default network. */
+function getSupportedChains(
+  x402Accepts: X402AcceptConfig[],
+  fallbackNetwork: string,
+): Array<{ chainId: string; type: 'eip191' | 'ed25519' }> {
+  const seen = new Set<string>();
+  const chains: Array<{ chainId: string; type: 'eip191' | 'ed25519' }> = [];
+  for (const accept of x402Accepts) {
+    if (accept.network && !seen.has(accept.network)) {
+      seen.add(accept.network);
+      chains.push({ chainId: accept.network, type: siwxSignatureType(accept.network) });
+    }
+  }
+  if (chains.length === 0) {
+    chains.push({ chainId: fallbackNetwork, type: siwxSignatureType(fallbackNetwork) });
+  }
+  return chains;
 }
 
 export interface OrchestrateDeps {
@@ -277,12 +302,14 @@ export function createRequestHandler(
         const url = new URL(request.url);
         // SIWE requires alphanumeric nonce — strip hyphens from UUID
         const nonce = crypto.randomUUID().replace(/-/g, '');
+        const supportedChains = getSupportedChains(deps.x402Accepts, deps.network);
+        const primaryChain = supportedChains[0];
         const siwxInfo = {
           domain: url.hostname,
           uri: request.url,
           version: '1',
-          chainId: deps.network,
-          type: 'eip191',
+          chainId: primaryChain.chainId,
+          type: primaryChain.type,
           nonce,
           issuedAt: new Date().toISOString(),
           expirationTime: new Date(Date.now() + SIWX_CHALLENGE_EXPIRY_MS).toISOString(),
@@ -309,7 +336,7 @@ export function createRequestHandler(
             'sign-in-with-x': {
               info: siwxInfo,
               // supportedChains at top level required by MCP tools for chain detection
-              supportedChains: [{ chainId: deps.network, type: 'eip191' }],
+              supportedChains,
               ...(siwxSchema ? { schema: siwxSchema } : {}),
             },
           },
@@ -352,8 +379,7 @@ export function createRequestHandler(
           }
           // Paid+SIWX acceleration: invalid SIWX falls back to payment flow.
         } else {
-          // Normalize to lowercase — checksumming is a display concern, not storage
-          const wallet = siwx.wallet.toLowerCase();
+          const wallet = normalizeWalletAddress(siwx.wallet);
           pluginCtx.setVerifiedWallet(wallet);
 
           if (routeEntry.authMode === 'siwx') {
@@ -480,8 +506,7 @@ export function createRequestHandler(
       const { payload: verifyPayload, requirements: verifyRequirements } = verify;
       const matchedNetwork = getRequirementNetwork(verifyRequirements, deps.network);
 
-      // Normalize to lowercase — checksumming is a display concern, not storage
-      const wallet = verify.payer.toLowerCase();
+      const wallet = normalizeWalletAddress(verify.payer);
       pluginCtx.setVerifiedWallet(wallet);
       firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
         protocol: 'x402',
@@ -606,7 +631,7 @@ export function createRequestHandler(
       const rawSource = credential?.source ?? '';
       const didParts = rawSource.split(':');
       const lastPart = didParts[didParts.length - 1];
-      const wallet = (isAddress(lastPart) ? getAddress(lastPart) : rawSource).toLowerCase();
+      const wallet = normalizeWalletAddress(isAddress(lastPart) ? getAddress(lastPart) : rawSource);
 
       pluginCtx.setVerifiedWallet(wallet);
       firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {

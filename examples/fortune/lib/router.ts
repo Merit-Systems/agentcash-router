@@ -17,13 +17,24 @@ const mppConfig = mppSecretKey
     }
   : undefined;
 
-// Create router with both x402 and MPP support
+// Create router with both x402 and MPP support.
+// SIWX routes support both EVM (Base) and Solana wallets via supportedChains.
 export const router = createRouter({
   baseUrl: process.env.BASE_URL!,
   protocols: mppConfig ? ['x402', 'mpp'] : ['x402'],
-  network: 'eip155:8453', // Base mainnet
   payeeAddress,
+  x402: {
+    accepts: [
+      { network: 'eip155:8453', payTo: payeeAddress },
+      { network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' },
+    ],
+  },
   ...(mppConfig ? { mpp: mppConfig } : {}),
+  discovery: {
+    title: 'Fortune API',
+    version: '1.0.0',
+    description: 'Pay-per-call fortune telling API',
+  },
   prices: {
     fortune: '0.001', // $0.001 per fortune
     'fortune/premium': '0.005', // $0.005 per premium fortune

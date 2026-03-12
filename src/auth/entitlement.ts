@@ -1,3 +1,5 @@
+import { normalizeWalletAddress } from './normalize-wallet.js';
+
 export interface EntitlementStore {
   has(route: string, wallet: string): Promise<boolean>;
   grant(route: string, wallet: string): Promise<void>;
@@ -14,17 +16,17 @@ export class MemoryEntitlementStore implements EntitlementStore {
   async has(route: string, wallet: string): Promise<boolean> {
     const wallets = this.routeToWallets.get(route);
     if (!wallets) return false;
-    return wallets.has(wallet.toLowerCase());
+    return wallets.has(normalizeWalletAddress(wallet));
   }
 
   async grant(route: string, wallet: string): Promise<void> {
-    const normalizedWallet = wallet.toLowerCase();
+    const normalized = normalizeWalletAddress(wallet);
     let wallets = this.routeToWallets.get(route);
     if (!wallets) {
       wallets = new Set<string>();
       this.routeToWallets.set(route, wallets);
     }
-    wallets.add(normalizedWallet);
+    wallets.add(normalized);
   }
 }
 
@@ -70,39 +72,39 @@ export function createRedisEntitlementStore(
   return {
     async has(route: string, wallet: string): Promise<boolean> {
       const key = `${prefix}${route}`;
-      const normalizedWallet = wallet.toLowerCase();
+      const normalized = normalizeWalletAddress(wallet);
 
       if (clientType === 'upstash') {
         const redis = client as {
           sismember: (key: string, member: string) => Promise<number | boolean>;
         };
-        const result = await redis.sismember(key, normalizedWallet);
+        const result = await redis.sismember(key, normalized);
         return result === 1 || result === true;
       }
 
       const redis = client as {
         sismember: (key: string, member: string) => Promise<number>;
       };
-      const result = await redis.sismember(key, normalizedWallet);
+      const result = await redis.sismember(key, normalized);
       return result === 1;
     },
 
     async grant(route: string, wallet: string): Promise<void> {
       const key = `${prefix}${route}`;
-      const normalizedWallet = wallet.toLowerCase();
+      const normalized = normalizeWalletAddress(wallet);
 
       if (clientType === 'upstash') {
         const redis = client as {
           sadd: (key: string, member: string) => Promise<number>;
         };
-        await redis.sadd(key, normalizedWallet);
+        await redis.sadd(key, normalized);
         return;
       }
 
       const redis = client as {
         sadd: (key: string, member: string) => Promise<number>;
       };
-      await redis.sadd(key, normalizedWallet);
+      await redis.sadd(key, normalized);
     },
   };
 }
