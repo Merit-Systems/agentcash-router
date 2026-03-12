@@ -1,7 +1,7 @@
 import type { PaymentPayload, PaymentRequirements, SettleResponse } from '@x402/core/types';
 import type { RouteEntry, X402ResolvedAccept, X402Server } from '../types.js';
-import { getFacilitatorForRequirement } from '../x402-facilitators.js';
-import type { ResolvedX402Facilitator } from '../x402-facilitators.js';
+import { getFacilitatorForRequirement, sameResolvedX402Facilitator } from '../x402-facilitators.js';
+import type { ResolvedX402Facilitator, ResolvedX402Facilitators } from '../x402-facilitators.js';
 import { buildEvmExactOptions } from './evm.js';
 import {
   buildSolanaExactOptions,
@@ -19,37 +19,46 @@ interface BuildChallengeOptions {
   request: Request;
   price: string;
   accepts: X402ResolvedAccept[];
-  facilitatorsByNetwork?: Record<string, ResolvedX402Facilitator>;
+  facilitatorsByNetwork?: ResolvedX402Facilitators;
   extensions?: Record<string, unknown>;
 }
 
 interface VerifyPaymentOptions {
   server: X402Server;
   request: Request;
-  routeEntry: RouteEntry;
   price: string;
   accepts: X402ResolvedAccept[];
 }
 
+type ChallengeResource = {
+  url: string;
+  method: string;
+  description?: string;
+  mimeType: string;
+};
+
+type IndexedRequirement = {
+  index: number;
+  requirement: PaymentRequirements;
+};
+
+type EnrichmentGroup = {
+  facilitator: ResolvedX402Facilitator;
+  items: IndexedRequirement[];
+};
+
 export async function buildX402Challenge(opts: BuildChallengeOptions) {
   const { server, routeEntry, request, price, accepts, facilitatorsByNetwork, extensions } = opts;
   const { encodePaymentRequiredHeader } = await import('@x402/core/http');
-
-  const resource = {
-    url: request.url,
-    method: routeEntry.method,
-    description: routeEntry.description,
-    mimeType: 'application/json',
-  };
-
-  const requirements = await buildChallengeRequirements({
+  const resource = buildChallengeResource(request, routeEntry);
+  const requirements = await buildChallengeRequirements(
     server,
     request,
     price,
     accepts,
     resource,
     facilitatorsByNetwork,
-  });
+  );
   const paymentRequired = await server.createPaymentRequiredResponse(
     requirements,
     resource,
@@ -63,24 +72,16 @@ export async function buildX402Challenge(opts: BuildChallengeOptions) {
 
 export async function verifyX402Payment(opts: VerifyPaymentOptions) {
   const { server, request, price, accepts } = opts;
-  const { decodePaymentSignatureHeader } = await import('@x402/core/http');
-
-  const paymentHeader =
-    request.headers.get('PAYMENT-SIGNATURE') ?? request.headers.get('X-PAYMENT');
-  if (!paymentHeader) return null;
-
-  const payload = decodePaymentSignatureHeader(paymentHeader);
+  const payload = await readPaymentPayload(request);
+  if (!payload) return null;
   const requirements = await buildExpectedRequirements(server, request, price, accepts);
   const matching = findVerifiableRequirements(server, requirements, payload);
   if (!matching) {
-    return { valid: false as const, payload: null, requirements: null, payer: null };
+    return invalidPaymentVerification();
   }
 
   const verify = await server.verifyPayment(payload, matching);
-
-  if (!verify.isValid) {
-    return { valid: false as const, payload: null, requirements: null, payer: null };
-  }
+  if (!verify.isValid) return invalidPaymentVerification();
 
   return {
     valid: true as const,
@@ -130,85 +131,75 @@ async function buildExpectedRequirements(
   price: string,
   accepts: X402ResolvedAccept[],
 ): Promise<PaymentRequirements[]> {
-  const customAccepts = accepts.filter((accept) => accept.scheme !== 'exact');
+  const exactRequirements = await buildExactRequirements(server, request, price, accepts);
+  const customRequirements = buildCustomRequirements(price, accepts);
+  return [...exactRequirements, ...customRequirements];
+}
+
+async function buildExactRequirements(
+  server: X402Server,
+  request: Request,
+  price: string,
+  accepts: X402ResolvedAccept[],
+): Promise<PaymentRequirements[]> {
   const exactOptions = [
     ...buildEvmExactOptions(accepts, price),
     ...buildSolanaExactOptions(accepts, price),
   ];
-
-  const exactRequirements =
-    exactOptions.length > 0
-      ? await server.buildPaymentRequirementsFromOptions(exactOptions, { request })
-      : [];
-
-  const customRequirements = customAccepts.map(buildCustomRequirement.bind(null, price));
-  return [...exactRequirements, ...customRequirements];
+  if (exactOptions.length === 0) return [];
+  return server.buildPaymentRequirementsFromOptions(exactOptions, { request });
 }
 
-interface BuildChallengeRequirementsOptions {
-  server: X402Server;
-  request: Request;
-  price: string;
-  accepts: X402ResolvedAccept[];
-  resource: { url: string; method: string; description?: string; mimeType: string };
-  facilitatorsByNetwork?: Record<string, ResolvedX402Facilitator>;
+function buildCustomRequirements(
+  price: string,
+  accepts: X402ResolvedAccept[],
+): PaymentRequirements[] {
+  return accepts
+    .filter((accept) => accept.scheme !== 'exact')
+    .map((accept) => buildCustomRequirement(price, accept));
 }
 
 async function buildChallengeRequirements(
-  opts: BuildChallengeRequirementsOptions,
+  server: X402Server,
+  request: Request,
+  price: string,
+  accepts: X402ResolvedAccept[],
+  resource: ChallengeResource,
+  facilitatorsByNetwork?: ResolvedX402Facilitators,
 ): Promise<PaymentRequirements[]> {
-  const { server, request, price, accepts, resource, facilitatorsByNetwork } = opts;
   const requirements = await buildExpectedRequirements(server, request, price, accepts);
-  const needsFacilitatorEnrichment =
-    accepts.some((accept) => accept.scheme !== 'exact') || hasSolanaAccepts(accepts);
-  if (!needsFacilitatorEnrichment) {
-    return requirements;
-  }
+  if (!needsFacilitatorEnrichment(accepts)) return requirements;
+  return enrichChallengeRequirements(requirements, resource, facilitatorsByNetwork);
+}
 
-  const groupedRequirements = new Map<
-    ResolvedX402Facilitator,
-    Array<{ index: number; requirement: PaymentRequirements }>
-  >();
+function needsFacilitatorEnrichment(accepts: X402ResolvedAccept[]): boolean {
+  return accepts.some((accept) => accept.scheme !== 'exact') || hasSolanaAccepts(accepts);
+}
 
-  requirements.forEach((requirement, index) => {
-    if (!requiresFacilitatorEnrichment(requirement)) return;
-
-    const facilitator = getFacilitatorForRequirement(facilitatorsByNetwork, requirement);
-    if (!facilitator) {
-      throw new Error(
-        `Missing x402 facilitator for ${requirement.scheme} requirement on ${requirement.network}`,
-      );
-    }
-
-    const existingGroup = groupedRequirements.get(facilitator);
-    if (existingGroup) {
-      existingGroup.push({ index, requirement });
-      return;
-    }
-
-    groupedRequirements.set(facilitator, [{ index, requirement }]);
-  });
-
-  if (groupedRequirements.size === 0) {
-    return requirements;
-  }
+async function enrichChallengeRequirements(
+  requirements: PaymentRequirements[],
+  resource: ChallengeResource,
+  facilitatorsByNetwork?: ResolvedX402Facilitators,
+): Promise<PaymentRequirements[]> {
+  const groups = collectEnrichmentGroups(requirements, facilitatorsByNetwork);
+  if (groups.length === 0) return requirements;
 
   const enrichedRequirements = [...requirements];
   await Promise.all(
-    [...groupedRequirements.entries()].map(async ([facilitator, group]) => {
+    groups.map(async (group) => {
       const enriched = await enrichRequirementsWithFacilitatorAccepts(
-        facilitator,
+        group.facilitator,
         resource,
-        group.map(({ requirement }) => requirement),
+        group.items.map(({ requirement }) => requirement),
       );
-      if (enriched.length !== group.length) {
+      if (enriched.length !== group.items.length) {
         throw new Error(
-          `Facilitator /accepts returned ${enriched.length} requirements for ${group.length} inputs on ${facilitator.url ?? facilitator.network}`,
+          `Facilitator /accepts returned ${enriched.length} requirements for ${group.items.length} inputs on ${group.facilitator.url ?? group.facilitator.network}`,
         );
       }
 
       enriched.forEach((requirement, offset) => {
-        const index = group[offset]?.index;
+        const index = group.items[offset]?.index;
         if (index === undefined) return;
         enrichedRequirements[index] = requirement;
       });
@@ -216,6 +207,46 @@ async function buildChallengeRequirements(
   );
 
   return enrichedRequirements;
+}
+
+function collectEnrichmentGroups(
+  requirements: PaymentRequirements[],
+  facilitatorsByNetwork?: ResolvedX402Facilitators,
+): EnrichmentGroup[] {
+  const groups: EnrichmentGroup[] = [];
+
+  requirements.forEach((requirement, index) => {
+    if (!requiresFacilitatorEnrichment(requirement)) return;
+
+    const facilitator = getRequiredFacilitator(requirement, facilitatorsByNetwork);
+    const existing = groups.find((group) =>
+      sameResolvedX402Facilitator(group.facilitator, facilitator),
+    );
+    if (existing) {
+      existing.items.push({ index, requirement });
+      return;
+    }
+
+    groups.push({
+      facilitator,
+      items: [{ index, requirement }],
+    });
+  });
+
+  return groups;
+}
+
+function getRequiredFacilitator(
+  requirement: PaymentRequirements,
+  facilitatorsByNetwork?: ResolvedX402Facilitators,
+): ResolvedX402Facilitator {
+  const facilitator = getFacilitatorForRequirement(facilitatorsByNetwork, requirement);
+  if (!facilitator) {
+    throw new Error(
+      `Missing x402 facilitator for ${requirement.scheme} requirement on ${requirement.network}`,
+    );
+  }
+  return facilitator;
 }
 
 function requiresFacilitatorEnrichment(requirement: PaymentRequirements): boolean {
@@ -238,6 +269,28 @@ function buildCustomRequirement(price: string, accept: X402ResolvedAccept): Paym
     maxTimeoutSeconds: accept.maxTimeoutSeconds ?? 300,
     extra: accept.extra ?? {},
   };
+}
+
+function buildChallengeResource(request: Request, routeEntry: RouteEntry): ChallengeResource {
+  return {
+    url: request.url,
+    method: routeEntry.method,
+    description: routeEntry.description,
+    mimeType: 'application/json',
+  };
+}
+
+async function readPaymentPayload(request: Request): Promise<PaymentPayload | null> {
+  const paymentHeader =
+    request.headers.get('PAYMENT-SIGNATURE') ?? request.headers.get('X-PAYMENT');
+  if (!paymentHeader) return null;
+
+  const { decodePaymentSignatureHeader } = await import('@x402/core/http');
+  return decodePaymentSignatureHeader(paymentHeader);
+}
+
+function invalidPaymentVerification() {
+  return { valid: false as const, payload: null, requirements: null, payer: null };
 }
 
 function decimalToAtomicUnits(amount: string, decimals: number): string {

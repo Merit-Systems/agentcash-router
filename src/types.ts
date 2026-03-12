@@ -247,7 +247,7 @@ export interface DiscoveryConfig {
 // ---------------------------------------------------------------------------
 
 export interface RouterConfig {
-  payeeAddress: string;
+  payeeAddress?: string;
   /**
    * Origin URL (e.g. `https://myapp.com`).
    * Used for 402 challenge realm, discovery URLs, OpenAPI servers, and MPP memo indexing.
@@ -257,7 +257,6 @@ export interface RouterConfig {
    */
   baseUrl: string;
   network?: string;
-  facilitatorUrl?: string;
   x402?: {
     accepts?: X402AcceptConfig[];
     facilitators?: X402FacilitatorsConfig;

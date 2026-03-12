@@ -145,7 +145,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     plugin: config.plugin,
     nonceStore,
     entitlementStore,
-    payeeAddress: config.payeeAddress,
+    payeeAddress: config.payeeAddress ?? '',
     network,
     x402FacilitatorsByNetwork: undefined,
     x402Accepts,
@@ -308,6 +308,12 @@ export type {
   QuotaLevel,
   OveragePolicy,
   X402Server,
+  X402AcceptConfig,
+  X402ResolvedAccept,
+  X402RouterFacilitatorConfig,
+  X402FacilitatorsConfig,
+  X402FacilitatorTarget,
+  PayToConfig,
 } from './types.js';
 
 export { consolePlugin } from './plugin.js';
