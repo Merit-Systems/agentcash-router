@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.1.2
+
+### Patch Changes
+
+- cfe2aa9: siwx on solana
+
 ## 1.1.1
 
 ### Patch Changes
