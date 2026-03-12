@@ -45,9 +45,7 @@ export interface OrchestrateDeps {
   nonceStore: NonceStore;
   entitlementStore: EntitlementStore;
   payeeAddress: string;
-  /** Primary CAIP-2 network (first element when multiple configured). */
-  network: string;
-  /** All configured CAIP-2 networks for SIWX supportedChains. */
+  /** CAIP-2 network identifiers. First entry is the primary network for x402. */
   networks: string[];
   mppx?: {
     charge: (options: {
@@ -289,8 +287,8 @@ export function createRequestHandler(
           domain: url.hostname,
           uri: request.url,
           version: '1',
-          chainId: deps.network,
-          type: siwxSignatureType(deps.network),
+          chainId: deps.networks[0],
+          type: siwxSignatureType(deps.networks[0]),
           nonce,
           issuedAt: new Date().toISOString(),
           expirationTime: new Date(Date.now() + SIWX_CHALLENGE_EXPIRY_MS).toISOString(),
@@ -483,7 +481,7 @@ export function createRequestHandler(
         routeEntry,
         price,
         payTo,
-        deps.network,
+        deps.networks[0],
       );
       if (!verify?.valid) return await build402(request, routeEntry, deps, meta, pluginCtx);
 
@@ -496,7 +494,7 @@ export function createRequestHandler(
         protocol: 'x402',
         payer: wallet,
         amount: price,
-        network: deps.network,
+        network: deps.networks[0],
       });
 
       const { response, rawResult } = await invoke(
@@ -521,7 +519,7 @@ export function createRequestHandler(
               : { payloadType: typeof verifyPayload };
           console.info('Settlement attempt', {
             route: routeEntry.key,
-            network: deps.network,
+            network: deps.networks[0],
             ...payloadFingerprint,
           });
           const settle = await settleX402Payment(
@@ -545,7 +543,7 @@ export function createRequestHandler(
             protocol: 'x402',
             payer: verify.payer,
             transaction: String(settle.result?.transaction ?? ''),
-            network: deps.network,
+            network: deps.networks[0],
           });
         } catch (err) {
           const errObj = err as {
@@ -555,7 +553,7 @@ export function createRequestHandler(
           console.error('Settlement failed', {
             message: err instanceof Error ? err.message : String(err),
             route: routeEntry.key,
-            network: deps.network,
+            network: deps.networks[0],
             facilitatorStatus: errObj.response?.status,
             facilitatorBody: errObj.response?.data ?? errObj.response?.body,
           });
@@ -875,7 +873,7 @@ async function build402(
         request,
         challengePrice,
         payTo,
-        deps.network,
+        deps.networks[0],
         extensions,
       );
       response.headers.set('PAYMENT-REQUIRED', encoded);

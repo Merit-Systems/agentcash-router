@@ -25,7 +25,7 @@ export async function createX402Server(config: RouterConfig) {
   // lambda cold start causes 429 rate limit storms when multiple instances
   // boot simultaneously. Hardcode the response; verify/settle still go
   // through the real facilitator.
-  const network = (config.network ?? 'eip155:8453') as Network;
+  const network = (config.networks?.[0] ?? 'eip155:8453') as Network;
   const client = cachedClient(httpClient, network);
   const server = new x402ResourceServer(client);
 
