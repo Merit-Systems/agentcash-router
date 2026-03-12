@@ -14,6 +14,7 @@ Design docs, decision records, and bug analyses for `@agentcash/router`. These d
 
 | File | Description |
 |------|-------------|
+| `20_dual-network-x402-solana-plan-2026-03-11.md` | Proposed plan for adding Solana mainnet USDC alongside Base USDC with one route, zero breaking changes, separate per-chain recipients, and likely Faremeter-backed downstream wallet compatibility. |
 | `18_facilitator-429-cold-start-fix.md` | P0 bug: facilitator `/supported` 429 rate limits on Vercel cold starts cause bare 402 pass-through on all paid routes. Root cause (2 bugs), full timeline of prior fix attempts across enrichx402/x402/router, upstream npm gap, solution (hardcode getSupported for EVM exact + 500 safety net), testing methodology. |
 
 ## Research (protocol reference)

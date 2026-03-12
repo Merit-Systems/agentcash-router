@@ -1,3 +1,4 @@
+import type { FacilitatorConfig } from '@x402/core/http';
 import type { NextRequest } from 'next/server';
 import type { ZodType } from 'zod';
 
@@ -49,7 +50,7 @@ export interface X402Server {
   createPaymentRequiredResponse(
     requirements: PaymentRequirements[],
     resource: { url: string; method: string; description?: string },
-    error: string | null,
+    error?: string,
     extensions?: Record<string, unknown>,
   ): Promise<PaymentRequired>;
 
@@ -108,12 +109,43 @@ export type PricingConfig<TBody = unknown> =
   | ((body: TBody) => string | Promise<string>)
   | { field: string; tiers: Record<string, TierConfig>; default?: string };
 
+export type PayToConfig = string | ((request: Request) => string | Promise<string>);
+
+interface X402AcceptBase {
+  network: string;
+  asset?: string;
+  decimals?: number;
+  maxTimeoutSeconds?: number;
+  extra?: Record<string, unknown>;
+}
+
+export interface X402AcceptConfig extends X402AcceptBase {
+  scheme?: string;
+  payTo?: PayToConfig;
+}
+
+export interface X402ResolvedAccept extends X402AcceptBase {
+  scheme: string;
+  payTo: string;
+}
+
+export interface X402RouterFacilitatorConfig extends FacilitatorConfig {
+  createAcceptsHeaders?: () => Promise<Record<string, string>>;
+}
+
+export type X402FacilitatorTarget = string | X402RouterFacilitatorConfig;
+
+export interface X402FacilitatorsConfig {
+  evm?: X402FacilitatorTarget;
+  solana?: X402FacilitatorTarget;
+}
+
 export interface PaidOptions {
   protocols?: ProtocolType[];
   maxPrice?: string;
   minPrice?: string;
   /** Override the payment recipient. String for static, function for dynamic (receives the Request). */
-  payTo?: string | ((request: Request) => string | Promise<string>);
+  payTo?: PayToConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -186,7 +218,7 @@ export interface RouteEntry {
   method: RouteMethod;
   maxPrice?: string;
   minPrice?: string;
-  payTo?: string | ((request: Request) => string | Promise<string>);
+  payTo?: PayToConfig;
   apiKeyResolver?: (key: string) => unknown | Promise<unknown>;
   providerName?: string;
   providerConfig?: ProviderConfig;
@@ -215,7 +247,7 @@ export interface DiscoveryConfig {
 // ---------------------------------------------------------------------------
 
 export interface RouterConfig {
-  payeeAddress: string;
+  payeeAddress?: string;
   /**
    * Origin URL (e.g. `https://myapp.com`).
    * Used for 402 challenge realm, discovery URLs, OpenAPI servers, and MPP memo indexing.
@@ -225,7 +257,10 @@ export interface RouterConfig {
    */
   baseUrl: string;
   network?: string;
-  facilitatorUrl?: string;
+  x402?: {
+    accepts?: X402AcceptConfig[];
+    facilitators?: X402FacilitatorsConfig;
+  };
   plugin?: import('./plugin.js').RouterPlugin;
   siwx?: {
     nonceStore?: import('./auth/nonce.js').NonceStore;

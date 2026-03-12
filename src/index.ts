@@ -10,6 +10,9 @@ import { MemoryEntitlementStore } from './auth/entitlement.js';
 import { createWellKnownHandler } from './discovery/well-known.js';
 import { createOpenAPIHandler } from './discovery/openapi.js';
 import { createLlmsTxtHandler } from './discovery/llms-txt.js';
+import { getConfiguredX402Accepts } from './x402-config.js';
+import { isEvmNetwork } from './protocols/evm.js';
+import { isSolanaNetwork } from './protocols/solana.js';
 
 // ---------------------------------------------------------------------------
 // ServiceRouter
@@ -48,6 +51,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   const nonceStore = config.siwx?.nonceStore ?? new MemoryNonceStore();
   const entitlementStore = config.siwx?.entitlementStore ?? new MemoryEntitlementStore();
   const network = config.network ?? 'eip155:8453';
+  const x402Accepts = getConfiguredX402Accepts(config);
   // baseUrl is required — the realm is load-bearing for payment matching and MPP indexing.
   // No auto-detection; consuming apps must explicitly set it.
   if (!config.baseUrl) {
@@ -71,8 +75,30 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   let x402ConfigError: string | undefined;
   let mppConfigError: string | undefined;
 
-  if ((!config.protocols || config.protocols.includes('x402')) && !config.payeeAddress) {
-    x402ConfigError = 'x402 requires payeeAddress in router config.';
+  if (!config.protocols || config.protocols.includes('x402')) {
+    if (x402Accepts.length === 0) {
+      x402ConfigError = 'x402 requires at least one accept configuration.';
+    } else if (x402Accepts.some((accept) => !accept.network)) {
+      x402ConfigError = 'x402 accepts require a network.';
+    } else if (x402Accepts.some((accept) => !isSupportedX402Network(accept.network))) {
+      const unsupported = x402Accepts.find((accept) => !isSupportedX402Network(accept.network));
+      x402ConfigError = `unsupported x402 network '${unsupported?.network}'. Use eip155:* or solana:*.`;
+    } else if (
+      x402Accepts.some((accept) => (accept.scheme ?? 'exact') !== 'exact' && !accept.asset)
+    ) {
+      x402ConfigError = 'non-exact x402 accepts require an asset.';
+    } else if (
+      x402Accepts.some(
+        (accept) =>
+          accept.decimals !== undefined &&
+          (!Number.isInteger(accept.decimals) || accept.decimals < 0),
+      )
+    ) {
+      x402ConfigError = 'x402 accept decimals must be a non-negative integer.';
+    } else if (x402Accepts.some((accept) => !accept.payTo) && !config.payeeAddress) {
+      x402ConfigError =
+        'x402 requires payeeAddress in router config or payTo on every x402 accept.';
+    }
   }
 
   if (config.protocols?.includes('mpp')) {
@@ -119,8 +145,10 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     plugin: config.plugin,
     nonceStore,
     entitlementStore,
-    payeeAddress: config.payeeAddress,
+    payeeAddress: config.payeeAddress ?? '',
     network,
+    x402FacilitatorsByNetwork: undefined,
+    x402Accepts,
     mppx: null,
   };
 
@@ -136,6 +164,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
         const { createX402Server } = await import('./server.js');
         const result = await createX402Server(config);
         deps.x402Server = result.server;
+        deps.x402FacilitatorsByNetwork = result.facilitatorsByNetwork;
         await result.initPromise;
       } catch (err: unknown) {
         deps.x402Server = null;
@@ -244,6 +273,10 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   };
 }
 
+function isSupportedX402Network(network: string): boolean {
+  return isEvmNetwork(network) || isSolanaNetwork(network);
+}
+
 function normalizePath(path: string): string {
   let normalized = path.trim();
   normalized = normalized.replace(/^\/+/, '');
@@ -275,6 +308,12 @@ export type {
   QuotaLevel,
   OveragePolicy,
   X402Server,
+  X402AcceptConfig,
+  X402ResolvedAccept,
+  X402RouterFacilitatorConfig,
+  X402FacilitatorsConfig,
+  X402FacilitatorTarget,
+  PayToConfig,
 } from './types.js';
 
 export { consolePlugin } from './plugin.js';
