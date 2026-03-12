@@ -45,7 +45,7 @@ Minimal Next.js app demonstrating `@agentcash/router` with both x402 and MPP pay
 
 ## Solana + SIWX
 
-SIWX routes (profile, favorites) accept both **EVM (Base)** and **Solana** wallets. The router is configured with `networks: ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp']`, so the 402 challenge includes `supportedChains` for both. Use `GET /api/fortune/profile` to verify wallet identity with no payment.
+SIWX routes (profile, favorites) accept both **EVM (Base)** and **Solana** wallets. The router derives `supportedChains` from `x402.accepts`, so configuring both `eip155:8453` and `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp` accepts enables dual-chain SIWX. Use `GET /api/fortune/profile` to verify wallet identity with no payment.
 
 ## Testing MPP
 
