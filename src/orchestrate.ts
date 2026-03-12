@@ -472,7 +472,6 @@ export function createRequestHandler(
       const verify = await verifyX402Payment({
         server: deps.x402Server,
         request,
-        routeEntry,
         price,
         accepts,
       });

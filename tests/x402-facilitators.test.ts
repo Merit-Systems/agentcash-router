@@ -52,29 +52,6 @@ describe('x402 facilitator resolution', () => {
     });
   });
 
-  it('keeps legacy facilitatorUrl as the global fallback', () => {
-    const config = makeConfig({
-      facilitatorUrl: 'https://legacy.example',
-    });
-
-    expect(getResolvedX402Facilitator(config, BASE_NETWORK, DEFAULT_CDP_FACILITATOR)).toEqual({
-      family: 'evm',
-      network: BASE_NETWORK,
-      url: 'https://legacy.example',
-      config: {
-        url: 'https://legacy.example',
-      },
-    });
-    expect(getResolvedX402Facilitator(config, SOLANA_NETWORK, DEFAULT_CDP_FACILITATOR)).toEqual({
-      family: 'solana',
-      network: SOLANA_NETWORK,
-      url: 'https://legacy.example',
-      config: {
-        url: 'https://legacy.example',
-      },
-    });
-  });
-
   it('lets Solana override independently while Base stays on CDP by default', () => {
     const config = makeConfig({
       x402: {
@@ -125,9 +102,8 @@ describe('x402 facilitator resolution', () => {
     expect(await getAcceptsHeadersForFacilitator(facilitator!)).toEqual(acceptsHeaders);
   });
 
-  it('applies family-specific facilitators before legacy global fallback', () => {
+  it('applies family-specific facilitators', () => {
     const config = makeConfig({
-      facilitatorUrl: 'https://legacy.example',
       x402: {
         accepts: [
           { network: BASE_NETWORK, payTo: '0x1234567890123456789012345678901234567890' },

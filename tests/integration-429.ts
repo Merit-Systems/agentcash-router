@@ -42,8 +42,12 @@ async function main() {
 
   const router = createRouter({
     payeeAddress: '0x0000000000000000000000000000000000000001',
-    facilitatorUrl,
     baseUrl: 'http://localhost:3000',
+    x402: {
+      facilitators: {
+        evm: facilitatorUrl,
+      },
+    },
     prices: { 'test/route': '0.01' },
   });
 

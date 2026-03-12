@@ -4,7 +4,6 @@ import { filterEvmNetworks } from './protocols/evm.js';
 import { filterSolanaNetworks } from './protocols/solana.js';
 import type { RouterConfig, X402Server } from './types.js';
 import {
-  getHTTPFacilitatorConfig,
   getResolvedX402Facilitators,
   getResolvedX402FacilitatorGroups,
 } from './x402-facilitators.js';
@@ -80,7 +79,7 @@ function createFacilitatorClients(
   const groups = getResolvedX402FacilitatorGroups(facilitatorsByNetwork);
 
   return groups.map((group) => {
-    const inner = new HTTPFacilitatorClient(getHTTPFacilitatorConfig(group));
+    const inner = new HTTPFacilitatorClient(group.config);
     return group.family === 'evm' ? cachedClient(inner, group.networks) : inner;
   });
 }

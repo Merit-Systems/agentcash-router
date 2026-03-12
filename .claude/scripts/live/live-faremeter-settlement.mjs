@@ -1,8 +1,8 @@
 import { createRequire } from 'node:module';
-import { Keypair, PublicKey, Connection, clusterApiUrl } from '@solana/web3.js';
+import { Keypair, PublicKey } from '@solana/web3.js';
 import { wrap as wrapFetch, WrappedFetchError } from '@faremeter/fetch';
-import { lookupKnownSPLToken } from '@faremeter/info/solana';
-import { createPaymentHandler as createExactPaymentHandler } from '@faremeter/payment-solana/exact';
+import { lookupKnownSPLToken, normalizeNetworkId } from '@faremeter/info/solana';
+import { createPaymentHandler as createSettlementPaymentHandler } from '@faremeter/x-solana-settlement';
 import { createLocalWallet } from '@faremeter/wallet-solana';
 import { decodePaymentRequiredHeader, decodePaymentResponseHeader } from '@x402/core/http';
 
@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const { NextRequest } = require('next/server');
 const { createRouter } = require('../dist/index.cjs');
 
-const URL = 'http://localhost:3000/live-faremeter-exact';
+const URL = 'http://localhost:3000/live-faremeter-settlement';
 const METHOD = 'GET';
 const PRICE = '0.001';
 const BASE_NETWORK = 'eip155:8453';
@@ -50,17 +50,55 @@ function makeRouterFetch(handler) {
   };
 }
 
-async function createExactFetch(handler, mintAddress) {
+function adaptSettlementHandlerToV2(handler) {
+  return async (context, accepts) => {
+    const v1Accepts = accepts.map((accept) => ({
+      scheme: accept.scheme,
+      network: accept.network === SOLANA_NETWORK ? 'mainnet-beta' : accept.network,
+      maxAmountRequired: accept.amount,
+      resource: typeof context.request === 'string' ? context.request : String(context.request),
+      description: '',
+      mimeType: '',
+      payTo: accept.payTo,
+      maxTimeoutSeconds: accept.maxTimeoutSeconds,
+      asset: accept.asset,
+      ...(accept.extra ? { extra: accept.extra } : {}),
+    }));
+
+    const execers = await handler(context, v1Accepts);
+    return execers.map((execer) => ({
+      requirements: {
+        scheme: execer.requirements.scheme,
+        network: normalizeNetworkId(execer.requirements.network),
+        amount: execer.requirements.maxAmountRequired,
+        asset: execer.requirements.asset,
+        payTo: execer.requirements.payTo,
+        maxTimeoutSeconds: execer.requirements.maxTimeoutSeconds,
+        ...(execer.requirements.extra ? { extra: execer.requirements.extra } : {}),
+      },
+      exec: () => execer.exec(),
+    }));
+  };
+}
+
+async function createSettlementFetch(handler) {
   const clientSecret = requireEnv('SOLANA_TEST_CLIENT_SECRET_KEY_BASE64');
+  const usdcInfo = lookupKnownSPLToken('mainnet-beta', 'USDC');
+  if (!usdcInfo) {
+    throw new Error('Unable to resolve Solana mainnet USDC mint');
+  }
+
   const keypair = Keypair.fromSecretKey(
     Uint8Array.from(Buffer.from(clientSecret, 'base64')),
   );
+  const mint = new PublicKey(usdcInfo.address);
   const wallet = await createLocalWallet('mainnet-beta', keypair);
-  const rpcUrl = process.env.SOLANA_RPC_URL || clusterApiUrl('mainnet-beta');
-  const connection = new Connection(rpcUrl, 'confirmed');
+  const settlementHandler = adaptSettlementHandlerToV2(
+    createSettlementPaymentHandler(wallet, mint),
+  );
 
   return wrapFetch(makeRouterFetch(handler), {
-    handlers: [createExactPaymentHandler(wallet, new PublicKey(mintAddress), connection)],
+    handlers: [settlementHandler],
   });
 }
 
@@ -76,9 +114,11 @@ async function main() {
 
   const router = createRouter({
     baseUrl: 'http://localhost:3000',
-    facilitatorUrl,
     strictRoutes: true,
     x402: {
+      facilitators: {
+        solana: facilitatorUrl,
+      },
       accepts: [
         { network: BASE_NETWORK, payTo: basePayee },
         { network: SOLANA_NETWORK, payTo: solanaPayee },
@@ -95,12 +135,12 @@ async function main() {
   });
 
   const handler = router
-    .route({ path: 'live-faremeter-exact', method: METHOD })
+    .route({ path: 'live-faremeter-settlement', method: METHOD })
     .paid(PRICE)
     .handler(async () => ({
       ok: true,
       price: PRICE,
-      source: 'live-faremeter-exact',
+      source: 'live-faremeter-settlement',
     }));
 
   const probeResponse = await handler(new NextRequest(URL, { method: METHOD }));
@@ -115,13 +155,13 @@ async function main() {
   assert(challengeHeader, `Probe response did not include PAYMENT-REQUIRED: ${probeBody}`);
 
   const challenge = decodePaymentRequiredHeader(challengeHeader);
-  const solanaExactRequirement = challenge.accepts.find(
-    (accept) => accept.scheme === 'exact' && accept.network === SOLANA_NETWORK,
+  const settlementRequirement = challenge.accepts.find(
+    (accept) => accept.scheme === SETTLEMENT_SCHEME && accept.network === SOLANA_NETWORK,
   );
 
   assert(
-    solanaExactRequirement,
-    `Solana exact requirement was not advertised: ${JSON.stringify(challenge.accepts, null, 2)}`,
+    settlementRequirement,
+    `Settlement requirement was not advertised: ${JSON.stringify(challenge.accepts, null, 2)}`,
   );
 
   console.log(
@@ -134,7 +174,6 @@ async function main() {
           asset: accept.asset,
           amount: accept.amount,
           payTo: accept.payTo,
-          extra: accept.extra,
         })),
       },
       null,
@@ -142,7 +181,7 @@ async function main() {
     ),
   );
 
-  const paidFetch = await createExactFetch(handler, usdcInfo.address);
+  const paidFetch = await createSettlementFetch(handler);
 
   let paidResponse;
   try {
@@ -168,7 +207,7 @@ async function main() {
   const paidBodyText = await paidResponse.text();
   assert(
     paidResponse.ok,
-    `Expected exact fetch to succeed, got ${paidResponse.status}: ${paidBodyText}`,
+    `Expected settlement fetch to succeed, got ${paidResponse.status}: ${paidBodyText}`,
   );
 
   const paymentResponseHeader = paidResponse.headers.get('PAYMENT-RESPONSE');

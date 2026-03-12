@@ -143,9 +143,11 @@ async function main() {
 
     const router = createRouter({
       baseUrl: 'http://localhost:3000',
-      facilitatorUrl,
       strictRoutes: true,
       x402: {
+        facilitators: {
+          solana: facilitatorUrl,
+        },
         accepts: [
           { network: BASE_NETWORK, payTo: basePayee },
           { network: SOLANA_NETWORK, payTo: solanaPayee },

@@ -581,13 +581,11 @@ The remaining hard part is downstream wallet interoperability. The live Corbits 
 
 These points are now implemented in `agentcash-router` and backed by passing tests.
 
-- The old top-level `facilitatorUrl` is treated as a legacy global fallback only.
 - `x402` now supports additive per-network facilitator config:
   - `x402.facilitators.evm`
   - `x402.facilitators.solana`
 - Resolution precedence is:
   - chain-family override
-  - legacy top-level `facilitatorUrl`
   - family default
 - The family defaults are now:
   - EVM/Base: Coinbase/CDP facilitator
@@ -597,3 +595,5 @@ These points are now implemented in `agentcash-router` and backed by passing tes
 - Router facilitator config now supports `createAcceptsHeaders`, and `/accepts` enrichment falls back to `createAuthHeaders().supported` when explicit accepts headers are not provided.
 - This prevents the previous incorrect behavior where one shared facilitator URL was implicitly used for both Base and Solana on the same paid route.
 - We intentionally removed the per-network public facilitator map because it was not required for the current product surface and made the API harder to understand.
+- We also removed the old top-level shared `facilitatorUrl` from the public router config so the surface now matches the actual two-rail model explicitly.
+- The live Solana/Lobster validation harnesses were moved out of top-level `scripts/` into `.claude/scripts/live/` because they are internal operator tools, not part of the public library surface.

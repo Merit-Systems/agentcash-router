@@ -1,4 +1,3 @@
-import type { FacilitatorConfig } from '@x402/core/http';
 import type { Network, PaymentRequirements } from '@x402/core/types';
 import { isEvmNetwork } from './protocols/evm.js';
 import { isSolanaNetwork } from './protocols/solana.js';
@@ -14,6 +13,8 @@ export interface ResolvedX402Facilitator {
   url?: string;
   config: X402RouterFacilitatorConfig;
 }
+
+export type ResolvedX402Facilitators = Record<string, ResolvedX402Facilitator>;
 
 export interface ResolvedX402FacilitatorGroup {
   family: NetworkFamily;
@@ -44,7 +45,7 @@ export function getResolvedX402Facilitators(
   config: RouterConfig,
   networks: readonly string[],
   defaultEvmFacilitator: X402FacilitatorTarget,
-): Record<string, ResolvedX402Facilitator> {
+): ResolvedX402Facilitators {
   return Object.fromEntries(
     networks.flatMap((network) => {
       const facilitator = getResolvedX402Facilitator(config, network, defaultEvmFacilitator);
@@ -54,7 +55,7 @@ export function getResolvedX402Facilitators(
 }
 
 export function getResolvedX402FacilitatorGroups(
-  facilitatorsByNetwork: Record<string, ResolvedX402Facilitator>,
+  facilitatorsByNetwork: ResolvedX402Facilitators,
 ): ResolvedX402FacilitatorGroup[] {
   const groups: ResolvedX402FacilitatorGroup[] = [];
 
@@ -81,10 +82,17 @@ export function getResolvedX402FacilitatorGroups(
 }
 
 export function getFacilitatorForRequirement(
-  facilitatorsByNetwork: Record<string, ResolvedX402Facilitator> | undefined,
+  facilitatorsByNetwork: ResolvedX402Facilitators | undefined,
   requirement: PaymentRequirements,
 ): ResolvedX402Facilitator | undefined {
   return facilitatorsByNetwork?.[requirement.network];
+}
+
+export function sameResolvedX402Facilitator(
+  a: ResolvedX402Facilitator,
+  b: ResolvedX402Facilitator,
+): boolean {
+  return sameFacilitatorConfig(a.config, b.config);
 }
 
 export async function getAcceptsHeadersForFacilitator(
@@ -102,12 +110,6 @@ export async function getAcceptsHeadersForFacilitator(
   return {};
 }
 
-export function getHTTPFacilitatorConfig(facilitator: {
-  config: FacilitatorConfig;
-}): FacilitatorConfig {
-  return facilitator.config;
-}
-
 function resolveX402FacilitatorTarget(
   config: RouterConfig,
   network: string,
@@ -116,7 +118,6 @@ function resolveX402FacilitatorTarget(
   return (
     (isSolanaNetwork(network) ? config.x402?.facilitators?.solana : undefined) ??
     (isEvmNetwork(network) ? config.x402?.facilitators?.evm : undefined) ??
-    config.facilitatorUrl ??
     (isSolanaNetwork(network) ? DEFAULT_SOLANA_FACILITATOR_URL : defaultEvmFacilitator)
   );
 }
