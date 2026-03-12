@@ -11,6 +11,8 @@ import { createWellKnownHandler } from './discovery/well-known.js';
 import { createOpenAPIHandler } from './discovery/openapi.js';
 import { createLlmsTxtHandler } from './discovery/llms-txt.js';
 import { getConfiguredX402Accepts } from './x402-config.js';
+import { isEvmNetwork } from './protocols/evm.js';
+import { isSolanaNetwork } from './protocols/solana.js';
 
 // ---------------------------------------------------------------------------
 // ServiceRouter
@@ -78,6 +80,9 @@ export function createRouter<const P extends Record<string, string> = Record<nev
       x402ConfigError = 'x402 requires at least one accept configuration.';
     } else if (x402Accepts.some((accept) => !accept.network)) {
       x402ConfigError = 'x402 accepts require a network.';
+    } else if (x402Accepts.some((accept) => !isSupportedX402Network(accept.network))) {
+      const unsupported = x402Accepts.find((accept) => !isSupportedX402Network(accept.network));
+      x402ConfigError = `unsupported x402 network '${unsupported?.network}'. Use eip155:* or solana:*.`;
     } else if (
       x402Accepts.some((accept) => (accept.scheme ?? 'exact') !== 'exact' && !accept.asset)
     ) {
@@ -266,6 +271,10 @@ export function createRouter<const P extends Record<string, string> = Record<nev
 
     registry,
   };
+}
+
+function isSupportedX402Network(network: string): boolean {
+  return isEvmNetwork(network) || isSolanaNetwork(network);
 }
 
 function normalizePath(path: string): string {

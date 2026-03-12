@@ -6,7 +6,9 @@ import type {
   QuotaLevel,
   ProviderQuotaEvent,
   X402Server,
+  X402AcceptConfig,
 } from './types.js';
+import type { ResolvedX402Facilitator } from './x402-facilitators.js';
 import type { RouterPlugin, PluginContext, RequestMeta } from './plugin.js';
 import { createDefaultContext, firePluginHook } from './plugin.js';
 import { SIWX_CHALLENGE_EXPIRY_MS, type NonceStore } from './auth/nonce.js';
@@ -37,11 +39,8 @@ export interface OrchestrateDeps {
   entitlementStore: EntitlementStore;
   payeeAddress: string;
   network: string;
-  x402FacilitatorsByNetwork?: Record<
-    string,
-    import('./x402-facilitators.js').ResolvedX402Facilitator
-  >;
-  x402Accepts: import('./types.js').X402AcceptConfig[];
+  x402FacilitatorsByNetwork?: Record<string, ResolvedX402Facilitator>;
+  x402Accepts: X402AcceptConfig[];
   mppx?: {
     charge: (options: {
       amount: string;
@@ -470,7 +469,13 @@ export function createRequestHandler(
         deps.x402Accepts,
         deps.payeeAddress,
       );
-      const verify = await verifyX402Payment(deps.x402Server, request, routeEntry, price, accepts);
+      const verify = await verifyX402Payment({
+        server: deps.x402Server,
+        request,
+        routeEntry,
+        price,
+        accepts,
+      });
       if (!verify?.valid) return await build402(request, routeEntry, deps, meta, pluginCtx);
 
       const { payload: verifyPayload, requirements: verifyRequirements } = verify;
@@ -847,15 +852,15 @@ async function build402(
         deps.x402Accepts,
         deps.payeeAddress,
       );
-      const { encoded } = await buildX402Challenge(
-        deps.x402Server,
+      const { encoded } = await buildX402Challenge({
+        server: deps.x402Server,
         routeEntry,
         request,
-        challengePrice,
+        price: challengePrice,
         accepts,
-        deps.x402FacilitatorsByNetwork,
+        facilitatorsByNetwork: deps.x402FacilitatorsByNetwork,
         extensions,
-      );
+      });
       response.headers.set('PAYMENT-REQUIRED', encoded);
     } catch (err) {
       // x402 challenge failure is critical: a bare 402 with no PAYMENT-REQUIRED

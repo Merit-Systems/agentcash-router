@@ -111,24 +111,22 @@ export type PricingConfig<TBody = unknown> =
 
 export type PayToConfig = string | ((request: Request) => string | Promise<string>);
 
-export interface X402AcceptConfig {
+interface X402AcceptBase {
   network: string;
-  scheme?: string;
-  payTo?: PayToConfig;
   asset?: string;
   decimals?: number;
   maxTimeoutSeconds?: number;
   extra?: Record<string, unknown>;
 }
 
-export interface X402ResolvedAccept {
-  network: string;
+export interface X402AcceptConfig extends X402AcceptBase {
+  scheme?: string;
+  payTo?: PayToConfig;
+}
+
+export interface X402ResolvedAccept extends X402AcceptBase {
   scheme: string;
   payTo: string;
-  asset?: string;
-  decimals?: number;
-  maxTimeoutSeconds?: number;
-  extra?: Record<string, unknown>;
 }
 
 export interface X402RouterFacilitatorConfig extends FacilitatorConfig {

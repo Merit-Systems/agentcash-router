@@ -12,6 +12,18 @@ import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js
 import type { RouteEntry } from '../src/types.js';
 import type { ResolvedX402Facilitator } from '../src/x402-facilitators.js';
 
+interface SettledRequirements {
+  scheme?: string;
+  network?: string;
+  payTo?: string;
+  asset?: string;
+  extra?: Record<string, unknown>;
+}
+
+function settledReqs(server: FakeX402Server, index = 0): SettledRequirements | undefined {
+  return server.settledPayments[index]?.requirements as SettledRequirements | undefined;
+}
+
 const BASE_NETWORK = 'eip155:8453';
 const SOLANA_NETWORK = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
 const SOLANA_PAYEE = '9tCZP1W2jNYZjikmteU1HRrkoSGaRqcNs9ciLeQZb4a2';
@@ -176,9 +188,7 @@ describe('x402 multi-network integration', () => {
 
     expect(response.status).toBe(200);
     expect(server.settledPayments).toHaveLength(1);
-    expect((server.settledPayments[0]?.requirements as { network?: string })?.network).toBe(
-      BASE_NETWORK,
-    );
+    expect(settledReqs(server)?.network).toBe(BASE_NETWORK);
 
     const paymentResponse = decodePaymentResponseHeader(response.headers.get('PAYMENT-RESPONSE')!);
     expect(paymentResponse.network).toBe(BASE_NETWORK);
@@ -192,12 +202,8 @@ describe('x402 multi-network integration', () => {
 
     expect(response.status).toBe(200);
     expect(server.settledPayments).toHaveLength(1);
-    expect((server.settledPayments[0]?.requirements as { network?: string })?.network).toBe(
-      SOLANA_NETWORK,
-    );
-    expect((server.settledPayments[0]?.requirements as { payTo?: string })?.payTo).toBe(
-      SOLANA_PAYEE,
-    );
+    expect(settledReqs(server)?.network).toBe(SOLANA_NETWORK);
+    expect(settledReqs(server)?.payTo).toBe(SOLANA_PAYEE);
 
     const paymentResponse = decodePaymentResponseHeader(response.headers.get('PAYMENT-RESPONSE')!);
     expect(paymentResponse.network).toBe(SOLANA_NETWORK);
@@ -252,33 +258,9 @@ describe('x402 multi-network integration', () => {
 
     expect(response.status).toBe(200);
     expect(server.settledPayments).toHaveLength(1);
-    expect(
-      (
-        server.settledPayments[0]?.requirements as {
-          scheme?: string;
-          network?: string;
-          asset?: string;
-        }
-      )?.scheme,
-    ).toBe(SOLANA_SETTLEMENT_SCHEME);
-    expect(
-      (
-        server.settledPayments[0]?.requirements as {
-          scheme?: string;
-          network?: string;
-          asset?: string;
-        }
-      )?.network,
-    ).toBe(SOLANA_NETWORK);
-    expect(
-      (
-        server.settledPayments[0]?.requirements as {
-          scheme?: string;
-          network?: string;
-          asset?: string;
-        }
-      )?.asset,
-    ).toBe('solana-usdc');
+    expect(settledReqs(server)?.scheme).toBe(SOLANA_SETTLEMENT_SCHEME);
+    expect(settledReqs(server)?.network).toBe(SOLANA_NETWORK);
+    expect(settledReqs(server)?.asset).toBe('solana-usdc');
   });
 
   it('enriches custom-scheme challenge requirements through facilitator /accepts', async () => {
@@ -487,12 +469,8 @@ describe('x402 multi-network integration', () => {
 
     expect(response.status).toBe(200);
     expect(server.settledPayments).toHaveLength(1);
-    expect(
-      (
-        server.settledPayments[0]?.requirements as {
-          extra?: { feePayer?: string };
-        }
-      )?.extra?.feePayer,
-    ).toBe((solanaRequirement?.extra as { feePayer?: string } | undefined)?.feePayer);
+    expect(settledReqs(server)?.extra?.feePayer).toBe(
+      (solanaRequirement?.extra as { feePayer?: string } | undefined)?.feePayer,
+    );
   });
 });

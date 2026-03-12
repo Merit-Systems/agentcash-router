@@ -14,14 +14,21 @@ import type { RouteEntry, HandlerContext } from '../src/types.js';
 
 // Mock x402 protocol to use FakeX402Server directly
 vi.mock('../src/protocols/x402.js', () => ({
-  buildX402Challenge: (
-    server: FakeX402Server,
-    routeEntry: RouteEntry,
-    request: Request,
-    price: string,
-    accepts: Array<{ network: string; payTo: string }>,
-    extensions?: Record<string, unknown>,
-  ) => {
+  buildX402Challenge: ({
+    server,
+    request,
+    price,
+    accepts,
+    extensions,
+  }: {
+    server: FakeX402Server;
+    routeEntry: RouteEntry;
+    request: Request;
+    price: string;
+    accepts: Array<{ network: string; payTo: string }>;
+    facilitatorsByNetwork?: Record<string, unknown>;
+    extensions?: Record<string, unknown>;
+  }) => {
     const requirements = server.buildPaymentRequirementsFromOptions(
       accepts.map(({ network, payTo }) => ({ price, payTo, scheme: 'exact', network })),
       { request },
@@ -38,13 +45,18 @@ vi.mock('../src/protocols/x402.js', () => ({
     };
   },
 
-  verifyX402Payment: async (
-    server: FakeX402Server,
-    request: Request,
-    _routeEntry: RouteEntry,
-    price: string,
-    accepts: Array<{ network: string; payTo: string }>,
-  ) => {
+  verifyX402Payment: async ({
+    server,
+    request,
+    price,
+    accepts,
+  }: {
+    server: FakeX402Server;
+    request: Request;
+    routeEntry: RouteEntry;
+    price: string;
+    accepts: Array<{ network: string; payTo: string }>;
+  }) => {
     const paymentHeader =
       request.headers.get('PAYMENT-SIGNATURE') ?? request.headers.get('X-PAYMENT');
     if (!paymentHeader) return null;

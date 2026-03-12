@@ -13,15 +13,26 @@ import {
 // All x402 library interactions go through these thin wrappers.
 // The router never reimplements protocol logic.
 
-export async function buildX402Challenge(
-  server: X402Server,
-  routeEntry: RouteEntry,
-  request: Request,
-  price: string,
-  accepts: X402ResolvedAccept[],
-  facilitatorsByNetwork?: Record<string, ResolvedX402Facilitator>,
-  extensions?: Record<string, unknown>,
-) {
+interface BuildChallengeOptions {
+  server: X402Server;
+  routeEntry: RouteEntry;
+  request: Request;
+  price: string;
+  accepts: X402ResolvedAccept[];
+  facilitatorsByNetwork?: Record<string, ResolvedX402Facilitator>;
+  extensions?: Record<string, unknown>;
+}
+
+interface VerifyPaymentOptions {
+  server: X402Server;
+  request: Request;
+  routeEntry: RouteEntry;
+  price: string;
+  accepts: X402ResolvedAccept[];
+}
+
+export async function buildX402Challenge(opts: BuildChallengeOptions) {
+  const { server, routeEntry, request, price, accepts, facilitatorsByNetwork, extensions } = opts;
   const { encodePaymentRequiredHeader } = await import('@x402/core/http');
 
   const resource = {
@@ -31,14 +42,14 @@ export async function buildX402Challenge(
     mimeType: 'application/json',
   };
 
-  const requirements = await buildChallengeRequirements(
+  const requirements = await buildChallengeRequirements({
     server,
     request,
     price,
     accepts,
     resource,
     facilitatorsByNetwork,
-  );
+  });
   const paymentRequired = await server.createPaymentRequiredResponse(
     requirements,
     resource,
@@ -50,13 +61,8 @@ export async function buildX402Challenge(
   return { encoded, requirements };
 }
 
-export async function verifyX402Payment(
-  server: X402Server,
-  request: Request,
-  routeEntry: RouteEntry,
-  price: string,
-  accepts: X402ResolvedAccept[],
-) {
+export async function verifyX402Payment(opts: VerifyPaymentOptions) {
+  const { server, request, price, accepts } = opts;
   const { decodePaymentSignatureHeader } = await import('@x402/core/http');
 
   const paymentHeader =
@@ -139,14 +145,19 @@ async function buildExpectedRequirements(
   return [...exactRequirements, ...customRequirements];
 }
 
+interface BuildChallengeRequirementsOptions {
+  server: X402Server;
+  request: Request;
+  price: string;
+  accepts: X402ResolvedAccept[];
+  resource: { url: string; method: string; description?: string; mimeType: string };
+  facilitatorsByNetwork?: Record<string, ResolvedX402Facilitator>;
+}
+
 async function buildChallengeRequirements(
-  server: X402Server,
-  request: Request,
-  price: string,
-  accepts: X402ResolvedAccept[],
-  resource: { url: string; method: string; description?: string; mimeType: string },
-  facilitatorsByNetwork?: Record<string, ResolvedX402Facilitator>,
+  opts: BuildChallengeRequirementsOptions,
 ): Promise<PaymentRequirements[]> {
+  const { server, request, price, accepts, resource, facilitatorsByNetwork } = opts;
   const requirements = await buildExpectedRequirements(server, request, price, accepts);
   const needsFacilitatorEnrichment =
     accepts.some((accept) => accept.scheme !== 'exact') || hasSolanaAccepts(accepts);

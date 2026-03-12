@@ -6,15 +6,17 @@ import type { RouterConfig, X402FacilitatorTarget, X402RouterFacilitatorConfig }
 
 export const DEFAULT_SOLANA_FACILITATOR_URL = 'https://facilitator.corbits.dev';
 
+export type NetworkFamily = 'evm' | 'solana';
+
 export interface ResolvedX402Facilitator {
-  family: 'evm' | 'solana';
+  family: NetworkFamily;
   network: Network;
   url?: string;
   config: X402RouterFacilitatorConfig;
 }
 
 export interface ResolvedX402FacilitatorGroup {
-  family: 'evm' | 'solana';
+  family: NetworkFamily;
   config: X402RouterFacilitatorConfig;
   networks: Network[];
 }
@@ -123,7 +125,7 @@ function normalizeFacilitatorTarget(target: X402FacilitatorTarget): X402RouterFa
   return typeof target === 'string' ? { url: target } : target;
 }
 
-function getNetworkFamily(network: string): 'evm' | 'solana' | null {
+function getNetworkFamily(network: string): NetworkFamily | null {
   if (isEvmNetwork(network)) return 'evm';
   if (isSolanaNetwork(network)) return 'solana';
   return null;

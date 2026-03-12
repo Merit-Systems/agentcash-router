@@ -171,6 +171,31 @@ describe('RouterConfig.protocols', () => {
       }
     });
 
+    it('throws in production when an x402 accept uses an unsupported network', () => {
+      const origEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        expect(() => {
+          createRouter({
+            ...baseConfig,
+            baseUrl: 'https://test.example.com',
+            x402: {
+              accepts: [
+                {
+                  network: 'cosmos:osmosis-1',
+                  payTo: 'osmo1deadbeefdeadbeefdeadbeefdeadbeefdeadbe',
+                },
+              ],
+            },
+          });
+        }).toThrow(/unsupported x402 network 'cosmos:osmosis-1'/);
+      } finally {
+        process.env.NODE_ENV = origEnv;
+        spy.mockRestore();
+      }
+    });
+
     it('logs error in development when mpp config is missing', async () => {
       const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const router = createRouter({ ...baseConfig, protocols: ['mpp'] });
@@ -220,6 +245,30 @@ describe('RouterConfig.protocols', () => {
         .handler(async () => ({ ok: true }));
       await handler(new NextRequest('http://localhost/api/test'));
       expect(spy).toHaveBeenCalledWith(expect.stringContaining('recipient address'));
+      spy.mockRestore();
+    });
+
+    it('logs error in development when an x402 accept uses an unsupported network', async () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const router = createRouter({
+        ...baseConfig,
+        x402: {
+          accepts: [
+            {
+              network: 'cosmos:osmosis-1',
+              payTo: 'osmo1deadbeefdeadbeefdeadbeefdeadbeefdeadbe',
+            },
+          ],
+        },
+      });
+      const handler = router
+        .route('test/route')
+        .unprotected()
+        .handler(async () => ({ ok: true }));
+      await handler(new NextRequest('http://localhost/api/test'));
+      expect(spy).toHaveBeenCalledWith(
+        expect.stringContaining("unsupported x402 network 'cosmos:osmosis-1'"),
+      );
       spy.mockRestore();
     });
 
