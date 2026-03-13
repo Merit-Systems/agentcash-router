@@ -176,6 +176,18 @@ class RotatingExtraX402Server extends FakeX402Server {
   }
 }
 
+class SolanaExactFailureX402Server extends FakeX402Server {
+  override buildPaymentRequirementsFromOptions(
+    options: Array<{ price: string; payTo: string; scheme: string; network: string }>,
+    ctx: unknown,
+  ) {
+    if (options.some((option) => option.network === SOLANA_NETWORK)) {
+      throw new Error('Facilitator does not support exact on Solana');
+    }
+    return super.buildPaymentRequirementsFromOptions(options, ctx);
+  }
+}
+
 describe('x402 multi-network integration', () => {
   it('emits one PAYMENT-REQUIRED challenge advertising both Base and Solana', async () => {
     const server = new FakeX402Server();
@@ -197,6 +209,27 @@ describe('x402 multi-network integration', () => {
       SOLANA_NETWORK,
     ]);
     expect(challenge.accepts.map((accept) => accept.payTo)).toEqual([KNOWN_PAYEE, SOLANA_PAYEE]);
+  });
+
+  it('still emits a Base challenge when Solana exact requirement building fails', async () => {
+    const server = new SolanaExactFailureX402Server();
+    const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), makeDeps(server));
+
+    const response = await withPassThroughFacilitatorAccepts(() =>
+      handler(new NextRequest(URL, { method: 'POST' })),
+    );
+
+    expect(response.status).toBe(402);
+
+    const header = response.headers.get('PAYMENT-REQUIRED');
+    expect(header).toBeTruthy();
+
+    const challenge = decodePaymentRequiredHeader(header!);
+    expect(challenge.accepts).toHaveLength(1);
+    expect(challenge.accepts[0]).toMatchObject({
+      network: BASE_NETWORK,
+      payTo: KNOWN_PAYEE,
+    });
   });
 
   it('matches and settles the Base requirement when the client selects Base', async () => {

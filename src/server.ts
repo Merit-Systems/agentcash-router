@@ -52,20 +52,21 @@ export async function createX402Server(config: RouterConfig) {
 
 /**
  * Wrap an HTTPFacilitatorClient to return a hardcoded getSupported() response
- * for EVM exact scheme. verify() and settle() pass through to the real client.
+ * for exact schemes. verify() and settle() pass through to the real client.
  *
- * Why: getSupported() hits the Coinbase facilitator on every cold start.
- * On Vercel, N simultaneous cold starts blast the facilitator and get 429'd.
- * The EVM exact scheme's enhancePaymentRequirements() doesn't use the
- * supported kind data at all (it's a pass-through), so the HTTP call is pure
- * overhead and a reliability risk.
+ * Why: getSupported() hits the facilitator on every cold start. On Vercel,
+ * N simultaneous cold starts blast the facilitator and get 429'd.
+ *
+ * For Solana, dynamic fields like feePayer/recentBlockhash are supplied later
+ * by the /accepts enrichment call, so getSupported() only needs to advertise
+ * that exact is available on the configured networks.
  */
-function cachedClient(inner: FacilitatorClient, networks: Network[]): FacilitatorClient {
+function cachedClient(inner: FacilitatorClient, kinds: SupportedResponse['kinds']): FacilitatorClient {
   return {
     verify: inner.verify.bind(inner),
     settle: inner.settle.bind(inner),
     getSupported: async (): Promise<SupportedResponse> => ({
-      kinds: networks.map((network) => ({ x402Version: 2, scheme: 'exact', network })),
+      kinds,
       extensions: [],
       signers: {},
     }),
@@ -80,6 +81,20 @@ function createFacilitatorClients(
 
   return groups.map((group) => {
     const inner = new HTTPFacilitatorClient(group.config);
-    return group.family === 'evm' ? cachedClient(inner, group.networks) : inner;
+    const kinds = group.networks.map((network) => ({
+      x402Version: 2 as const,
+      scheme: 'exact' as const,
+      network,
+      ...(group.family === 'solana'
+        ? {
+            extra: {
+              features: {
+                xSettlementAccountSupported: true,
+              },
+            },
+          }
+        : {}),
+    }));
+    return cachedClient(inner, kinds);
   });
 }

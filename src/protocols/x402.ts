@@ -142,12 +142,36 @@ async function buildExactRequirements(
   price: string,
   accepts: X402ResolvedAccept[],
 ): Promise<PaymentRequirements[]> {
-  const exactOptions = [
-    ...buildEvmExactOptions(accepts, price),
-    ...buildSolanaExactOptions(accepts, price),
-  ];
-  if (exactOptions.length === 0) return [];
-  return server.buildPaymentRequirementsFromOptions(exactOptions, { request });
+  const exactGroups = [
+    buildEvmExactOptions(accepts, price),
+    buildSolanaExactOptions(accepts, price),
+  ].filter((options) => options.length > 0);
+
+  if (exactGroups.length === 0) return [];
+
+  const requirements: PaymentRequirements[] = [];
+  const failures: Error[] = [];
+
+  for (const options of exactGroups) {
+    try {
+      requirements.push(...(await server.buildPaymentRequirementsFromOptions(options, { request })));
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      failures.push(err);
+      if (exactGroups.length === 1) {
+        throw err;
+      }
+      console.warn(
+        `[router] Failed to build x402 exact requirements for ${options[0]?.network}: ${err.message}`,
+      );
+    }
+  }
+
+  if (requirements.length > 0) {
+    return requirements;
+  }
+
+  throw failures[0] ?? new Error('Failed to build x402 exact requirements');
 }
 
 function buildCustomRequirements(
