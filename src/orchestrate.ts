@@ -501,7 +501,8 @@ export function createRequestHandler(
         price,
         accepts,
       });
-      if (!verify?.valid) return await build402(request, routeEntry, deps, meta, pluginCtx);
+      if (!verify?.valid)
+        return await build402(request, routeEntry, deps, meta, pluginCtx, body.data);
 
       const { payload: verifyPayload, requirements: verifyRequirements } = verify;
       const matchedNetwork = getRequirementNetwork(verifyRequirements, deps.network);
@@ -608,21 +609,28 @@ export function createRequestHandler(
       }
 
       if (mppResult.status === 402) {
-        // Client sent a credential but charge() rejected it. This could be:
-        // 1. Legitimate rejection (expired, tampered, wrong amount) → 402 is correct
-        // 2. Server-side config issue (missing TEMPO_RPC_URL) → should be 500
-        // We can't distinguish these from the return value alone, so log a warning
-        // to help operators diagnose. If this shows up repeatedly, it's likely (2).
-        console.warn(
-          `[router] ${routeEntry.key}: MPP credential present but charge() returned 402 — credential may be invalid, or check TEMPO_RPC_URL configuration`,
-        );
+        // Extract the actual rejection reason from the mppx challenge response.
+        // The body is application/problem+json with { type, title, detail }.
+        let rejectReason = '';
+        try {
+          const problemBody = await mppResult.challenge.clone().text();
+          if (problemBody) {
+            const problem = JSON.parse(problemBody) as { detail?: string; title?: string };
+            rejectReason = problem.detail || problem.title || '';
+          }
+        } catch {
+          // Best-effort extraction — challenge body may not be JSON
+        }
+
+        const detail =
+          rejectReason || 'credential may be invalid, or check TEMPO_RPC_URL configuration';
+        console.warn(`[router] ${routeEntry.key}: MPP credential rejected — ${detail}`);
         firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
           level: 'warn' as const,
-          message:
-            'MPP payment rejected despite credential present — possible config issue (TEMPO_RPC_URL)',
+          message: `MPP payment rejected: ${detail}`,
           route: routeEntry.key,
         });
-        return await build402(request, routeEntry, deps, meta, pluginCtx);
+        return await build402(request, routeEntry, deps, meta, pluginCtx, body.data);
       }
 
       // Payment verified — extract wallet from credential source (DID)
@@ -673,7 +681,7 @@ export function createRequestHandler(
       return response;
     }
 
-    return await build402(request, routeEntry, deps, meta, pluginCtx);
+    return await build402(request, routeEntry, deps, meta, pluginCtx, body.data);
   };
 }
 
