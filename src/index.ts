@@ -187,8 +187,8 @@ export function createRouter<const P extends Record<string, string> = Record<nev
 
         let feePayerAccount: unknown;
         if (config.mpp.feePayerKey) {
-          const { privateKeyToAccount } = await import('viem/accounts');
-          feePayerAccount = privateKeyToAccount(config.mpp.feePayerKey as `0x${string}`);
+          const { Account } = await import('viem/tempo');
+          feePayerAccount = Account.fromSecp256k1(config.mpp.feePayerKey as `0x${string}`);
         }
 
         deps.mppx = Mppx.create({

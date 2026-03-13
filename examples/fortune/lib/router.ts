@@ -6,6 +6,9 @@ const mppSecretKey = process.env.MPP_SECRET_KEY;
 if (!payeeAddress) {
   throw new Error('X402_PAYEE_ADDRESS is required');
 }
+const SOLANA_MAINNET = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
+const CORBITS_FACILITATOR_URL = "https://facilitator.corbits.dev";
+
 
 // MPP config (optional - only for testing MPP protocol)
 const mppConfig = mppSecretKey
@@ -25,9 +28,12 @@ export const router = createRouter({
   protocols: mppConfig ? ['x402', 'mpp'] : ['x402'],
   payeeAddress,
   x402: {
+    facilitators: {
+      solana: CORBITS_FACILITATOR_URL,
+    },
     accepts: [
       { network: 'eip155:8453', payTo: payeeAddress },
-      { network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' },
+      { network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', payTo: process.env.SOLANA_PAYEE_ADDRESS },
     ],
   },
   ...(mppConfig ? { mpp: mppConfig } : {}),
