@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.1.8
+
+### Patch Changes
+
+- b9fb4f6: use diff sig scheme
+
 ## 1.1.7
 
 ### Patch Changes
