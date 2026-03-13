@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.1.6
+
+### Patch Changes
+
+- 2aed725: Fix bug with mpp dynamic routes
+
 ## 1.1.5
 
 ### Patch Changes
