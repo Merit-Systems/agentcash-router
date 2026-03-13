@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.1.3
+
+### Patch Changes
+
+- 8f1a92d: Prevent Solana facilitator cold-start failures from taking down mixed Base plus Solana x402 routes.
+
 ## 1.1.2
 
 ### Patch Changes
