@@ -1,5 +1,12 @@
 # @agentcash/router
 
+## 1.1.5
+
+### Patch Changes
+
+- 39ff764: Add feepayer and cache controls"
+- b597029: bump again
+
 ## 1.1.4
 
 ### Patch Changes
