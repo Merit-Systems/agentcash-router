@@ -61,7 +61,10 @@ export async function createX402Server(config: RouterConfig) {
  * by the /accepts enrichment call, so getSupported() only needs to advertise
  * that exact is available on the configured networks.
  */
-function cachedClient(inner: FacilitatorClient, kinds: SupportedResponse['kinds']): FacilitatorClient {
+function cachedClient(
+  inner: FacilitatorClient,
+  kinds: SupportedResponse['kinds'],
+): FacilitatorClient {
   return {
     verify: inner.verify.bind(inner),
     settle: inner.settle.bind(inner),

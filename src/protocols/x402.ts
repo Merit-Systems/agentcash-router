@@ -154,7 +154,9 @@ async function buildExactRequirements(
 
   for (const options of exactGroups) {
     try {
-      requirements.push(...(await server.buildPaymentRequirementsFromOptions(options, { request })));
+      requirements.push(
+        ...(await server.buildPaymentRequirementsFromOptions(options, { request })),
+      );
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       failures.push(err);
