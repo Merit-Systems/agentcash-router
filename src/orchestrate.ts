@@ -358,7 +358,7 @@ export function createRequestHandler(
 
         const response = new NextResponse(JSON.stringify(paymentRequired), {
           status: 402,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
         });
         if (encoded) response.headers.set('PAYMENT-REQUIRED', encoded);
         firePluginResponse(deps, pluginCtx, meta, response);
@@ -549,6 +549,7 @@ export function createRequestHandler(
             }
           }
           response.headers.set('PAYMENT-RESPONSE', settle.encoded);
+          response.headers.set('Cache-Control', 'private');
           firePluginHook(deps.plugin, 'onPaymentSettled', pluginCtx, {
             protocol: 'x402',
             payer: verify.payer,
@@ -662,9 +663,10 @@ export function createRequestHandler(
             });
           }
         }
-        const receiptResponse = mppResult.withReceipt(response);
-        finalize(receiptResponse as NextResponse, rawResult, meta, pluginCtx, body.data);
-        return receiptResponse as NextResponse;
+        const receiptResponse = mppResult.withReceipt(response) as NextResponse;
+        receiptResponse.headers.set('Cache-Control', 'private');
+        finalize(receiptResponse, rawResult, meta, pluginCtx, body.data);
+        return receiptResponse;
       }
 
       finalize(response, rawResult, meta, pluginCtx, body.data);
@@ -805,6 +807,7 @@ async function build402(
     status: 402,
     headers: {
       'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
     },
   });
 

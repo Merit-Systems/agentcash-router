@@ -179,17 +179,26 @@ export function createRouter<const P extends Record<string, string> = Record<nev
       try {
         const { Mppx, tempo } = await import('mppx/server');
         const rpcUrl = (config.mpp.rpcUrl ?? process.env.TEMPO_RPC_URL)!;
+        const getClient = async () => {
+          const { createClient, http } = await import('viem');
+          const { tempo: tempoChain } = await import('viem/chains');
+          return createClient({ chain: tempoChain, transport: http(rpcUrl) });
+        };
+
+        let feePayerAccount: unknown;
+        if (config.mpp.feePayerKey) {
+          const { privateKeyToAccount } = await import('viem/accounts');
+          feePayerAccount = privateKeyToAccount(config.mpp.feePayerKey as `0x${string}`);
+        }
+
         deps.mppx = Mppx.create({
           methods: [
             tempo.charge({
               currency: config.mpp.currency as `0x${string}`,
               recipient: (config.mpp.recipient ?? config.payeeAddress) as `0x${string}`,
-              getClient: async () => {
-                const { createClient, http } = await import('viem');
-                const { tempo: tempoChain } = await import('viem/chains');
-                return createClient({ chain: tempoChain, transport: http(rpcUrl) });
-              },
-            }),
+              getClient,
+              ...(feePayerAccount ? { feePayer: feePayerAccount } : {}),
+            } as Parameters<typeof tempo.charge>[0]),
           ],
           secretKey: config.mpp.secretKey,
           realm: new URL(resolvedBaseUrl).host,

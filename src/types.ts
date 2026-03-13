@@ -273,6 +273,12 @@ export interface RouterConfig {
     recipient?: string;
     /** Tempo RPC URL for on-chain verification. Falls back to TEMPO_RPC_URL env var. */
     rpcUrl?: string;
+    /**
+     * Private key of the account that sponsors transaction fees.
+     * When set, clients don't need gas tokens — the server pays fees on their behalf.
+     * Must be a hex-encoded private key (e.g. `0xabc123...`).
+     */
+    feePayerKey?: string;
   };
   /**
    * Payment protocols to accept on auto-priced routes (those using the `prices` config).
