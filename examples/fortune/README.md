@@ -42,6 +42,7 @@ Minimal Next.js app demonstrating `@agentcash/router` with both x402 and MPP pay
 - `GET /api/fortune/favorites` - List saved favorites (SIWX)
 - `GET /.well-known/x402` - Discovery endpoint
 - `GET /openapi.json` - OpenAPI spec
+- `GET /llms.txt` - Agent guidance (from `discovery.guidance`)
 
 ## Solana + SIWX
 

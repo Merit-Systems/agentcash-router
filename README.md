@@ -60,6 +60,11 @@ export const router = createRouter({
   payeeAddress: process.env.X402_PAYEE_ADDRESS!,
   baseUrl: process.env.NEXT_PUBLIC_BASE_URL!,
   strictRoutes: true, // recommended
+  discovery: {
+    title: 'My API',
+    version: '1.0.0',
+    description: 'Pay-per-call API',
+  },
 });
 ```
 
@@ -99,28 +104,29 @@ export const GET = router.route({ path: 'health' })
 
 ### 3. Auto-discovery
 
+Discovery metadata (`title`, `version`, `description`, `guidance`) is configured once in `createRouter({ discovery })`. The discovery handlers are zero-arg:
+
 ```typescript
 // app/.well-known/x402/route.ts
 import { router } from '@/lib/routes';
 import '@/lib/routes/barrel'; // ensures all routes are imported
-export const GET = router.wellKnown({ methodHints: 'non-default' });
+export const GET = router.wellKnown();
 
 // app/openapi.json/route.ts
 import { router } from '@/lib/routes';
 import '@/lib/routes/barrel';
-export const GET = router.openapi({
-  title: 'My API',
-  version: '1.0.0',
-  llmsTxtUrl: 'https://my-api.dev/llms.txt',
-  ownershipProofs: ['did:example:proof'],
-});
+export const GET = router.openapi();
+
+// app/llms.txt/route.ts
+import { router } from '@/lib/routes';
+export const GET = router.llmsTxt();
 ```
 
 OpenAPI output follows the discovery contract:
 
 - Paid signaling via `responses.402` + `x-payment-info`
 - Auth signaling via `security` + `components.securitySchemes`
-- Optional top-level metadata via `x-discovery` (`llmsTxtUrl`, `ownershipProofs`)
+- Optional top-level metadata via `x-discovery` (`ownershipProofs`)
 
 ## API
 
@@ -130,8 +136,9 @@ Creates a `ServiceRouter` instance.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `payeeAddress` | `string` | **required** | Wallet address to receive payments |
+| `payeeAddress` | `string` | — | Wallet address to receive payments |
 | `baseUrl` | `string` | **required** | Service origin used for discovery/OpenAPI/realm |
+| `discovery` | `DiscoveryConfig` | **required** | Title, version, description, guidance for OpenAPI/well-known/llms.txt |
 | `network` | `string` | `'eip155:8453'` | Blockchain network |
 | `plugin` | `RouterPlugin` | `undefined` | Observability plugin |
 | `prices` | `Record<string, string>` | `undefined` | Central pricing map (auto-applied) |

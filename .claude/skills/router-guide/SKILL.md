@@ -368,6 +368,8 @@ for (const entry of router.monitors()) {
 
 ## Discovery Setup
 
+Discovery metadata (`title`, `version`, `description`, `guidance`) is configured once in `createRouter({ discovery })`. The discovery handlers are zero-arg:
+
 ```typescript
 // app/.well-known/x402/route.ts
 import '@/lib/routes/barrel';  // barrel import FIRST to register all routes
@@ -377,7 +379,11 @@ export const GET = router.wellKnown();
 // app/openapi.json/route.ts
 import '@/lib/routes/barrel';
 import { router } from '@/lib/routes';
-export const GET = router.openapi({ title: 'My API', version: '1.0.0' });
+export const GET = router.openapi();
+
+// app/llms.txt/route.ts
+import { router } from '@/lib/routes';
+export const GET = router.llmsTxt();
 ```
 
 **Barrel import must come first.** Without it, Next.js lazy-loads route modules, so discovery endpoints hit before routes register → `route 'X' in prices map but not registered` error.
