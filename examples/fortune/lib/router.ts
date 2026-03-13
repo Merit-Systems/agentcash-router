@@ -14,6 +14,7 @@ const mppConfig = mppSecretKey
       currency: '0x20c000000000000000000000b9537d11c60e8b50', // PathUSD on Tempo mainnet (6 decimals)
       recipient: payeeAddress,
       rpcUrl: process.env.TEMPO_RPC_URL,
+      feePayerKey: process.env.MPP_FEE_PAYER_KEY,
     }
   : undefined;
 

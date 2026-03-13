@@ -237,13 +237,15 @@ export function createRouter<const P extends Record<string, string> = Record<nev
       }
       let builder = new RouteBuilder(key, registry, deps);
       builder = builder.path(normalizedPath);
+      if (config.protocols) {
+        builder._protocols = [...config.protocols];
+      }
       if (definition.method) {
         builder = builder.method(definition.method as RouteMethod);
       }
 
       if (config.prices && key in config.prices) {
-        const options = config.protocols ? { protocols: config.protocols } : undefined;
-        return builder.paid(config.prices[key], options) as never;
+        return builder.paid(config.prices[key]) as never;
       }
 
       return builder as never;

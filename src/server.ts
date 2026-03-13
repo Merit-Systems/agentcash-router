@@ -1,5 +1,5 @@
 import type { FacilitatorConfig, FacilitatorClient } from '@x402/core/http';
-import type { SupportedResponse, Network } from '@x402/core/types';
+import type { SupportedResponse } from '@x402/core/types';
 import { filterEvmNetworks } from './protocols/evm.js';
 import { filterSolanaNetworks } from './protocols/solana.js';
 import type { RouterConfig, X402Server } from './types.js';
