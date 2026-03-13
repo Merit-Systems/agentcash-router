@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.1.7
+
+### Patch Changes
+
+- 4b99f6c: pass body to build402
+
 ## 1.1.6
 
 ### Patch Changes
