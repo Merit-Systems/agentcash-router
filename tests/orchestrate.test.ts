@@ -1148,3 +1148,83 @@ describe('x402 challenge build failure (facilitator 429 / empty supported kinds)
     expect(body.error).toMatch(/429|initialization failed/i);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Bazaar schema in 402 challenges
+// ---------------------------------------------------------------------------
+
+describe('Bazaar schema generation', () => {
+  it('includes inputSchema in 402 challenge for plain body schemas', async () => {
+    const entry = makeEntry({ bodySchema });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(makeProbeRequest());
+    expect(res.status).toBe(402);
+
+    const encoded = res.headers.get('PAYMENT-REQUIRED')!;
+    const challenge = JSON.parse(Buffer.from(encoded, 'base64').toString());
+    expect(challenge.extensions?.bazaar?.schema?.properties?.input?.properties?.body).toBeDefined();
+    // The body schema should contain the 'query' field from bodySchema
+    const bodyProps = challenge.extensions.bazaar.schema.properties.input.properties.body;
+    expect(bodyProps.properties?.query).toBeDefined();
+  });
+
+  it('handles .transform() schemas without throwing', async () => {
+    const transformSchema = z.object({
+      amount: z.number(),
+      address: z.string().transform((s) => s.toLowerCase()),
+    });
+    const entry = makeEntry({ bodySchema: transformSchema });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(makeProbeRequest());
+    expect(res.status).toBe(402);
+
+    const encoded = res.headers.get('PAYMENT-REQUIRED')!;
+    const challenge = JSON.parse(Buffer.from(encoded, 'base64').toString());
+    // Bazaar extension should still be present
+    expect(challenge.extensions?.bazaar).toBeDefined();
+    // The body schema should have both fields — 'address' as {} (unrepresentable)
+    const bodyProps = challenge.extensions.bazaar.schema.properties.input.properties.body;
+    expect(bodyProps.properties?.amount).toBeDefined();
+    expect(bodyProps.properties?.address).toBeDefined();
+  });
+
+  it('handles .refine() schemas without throwing', async () => {
+    const refineSchema = z.object({
+      value: z.string().refine((s) => s.length > 0, 'Must not be empty'),
+    });
+    const entry = makeEntry({ bodySchema: refineSchema });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(makeProbeRequest());
+    expect(res.status).toBe(402);
+
+    const encoded = res.headers.get('PAYMENT-REQUIRED')!;
+    const challenge = JSON.parse(Buffer.from(encoded, 'base64').toString());
+    expect(challenge.extensions?.bazaar).toBeDefined();
+    const bodyProps = challenge.extensions.bazaar.schema.properties.input.properties.body;
+    expect(bodyProps.properties?.value).toBeDefined();
+  });
+
+  it('fires onAlert warn when Bazaar generation fails entirely', async () => {
+    const alerts: Array<{ level: string; message: string }> = [];
+    const entry = makeEntry({
+      // Pass a non-schema value that will cause toJSONSchema to throw
+      bodySchema: 'not-a-schema' as unknown as typeof bodySchema,
+    });
+    const deps = makeDeps({
+      plugin: {
+        onAlert: (_ctx: unknown, alert: { level: string; message: string }) => {
+          alerts.push(alert);
+        },
+      },
+    });
+    const handler = createRequestHandler(entry, async () => ({}), deps);
+    const res = await handler(makeProbeRequest());
+    expect(res.status).toBe(402);
+
+    // Should have fired a warn alert about Bazaar failure
+    const bazaarAlert = alerts.find(
+      (a) => a.level === 'warn' && a.message.includes('Bazaar'),
+    );
+    expect(bazaarAlert).toBeDefined();
+  });
+});
