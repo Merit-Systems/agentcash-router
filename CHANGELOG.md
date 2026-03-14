@@ -1,5 +1,18 @@
 # @agentcash/router
 
+## 1.1.9
+
+### Patch Changes
+
+- 7a77052: Fix Bazaar schema generation failing silently for Zod schemas that use `.transform()` or `.refine()`.
+  - Pass `unrepresentable: 'any'` to `z.toJSONSchema()` so untranslatable fields emit `{}` instead of throwing
+  - Replace silent `catch {}` with `onAlert('warn')` so operators see failures in telemetry
+
+- 7a77052: Fix x402 settlement failure handling so the router no longer returns the handler's success response when settlement reports `success: false`.
+  - Treat `settlePayment()` returning `success: false` as a real settlement failure
+  - Do not attach a contradictory `PAYMENT-RESPONSE` header on failed settlement
+  - Return a server error instead of leaking a false-positive paid response
+
 ## 1.1.8
 
 ### Patch Changes
