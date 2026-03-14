@@ -812,19 +812,25 @@ async function build402(
     challengePrice = '0';
   }
 
-  // Bazaar extensions from schemas
+  // Bazaar extensions from schemas — embed input/output JSON Schema in the 402
+  // challenge so discovery tools can tell callers what fields to send.
+  // `unrepresentable: 'any'` handles .transform()/.refine() schemas gracefully
+  // (emits `{}` for those fields instead of throwing).
   let extensions: Record<string, unknown> | undefined;
   try {
     const { z } = await import('zod');
     const { declareDiscoveryExtension } = await import('@x402/extensions/bazaar');
+    const toJSON = (schema: unknown) =>
+      z.toJSONSchema(schema as Parameters<typeof z.toJSONSchema>[0], {
+        target: 'draft-2020-12',
+        unrepresentable: 'any',
+      });
     const inputSchema = routeEntry.bodySchema
-      ? z.toJSONSchema(routeEntry.bodySchema, { target: 'draft-2020-12' })
+      ? toJSON(routeEntry.bodySchema)
       : routeEntry.querySchema
-        ? z.toJSONSchema(routeEntry.querySchema, { target: 'draft-2020-12' })
+        ? toJSON(routeEntry.querySchema)
         : undefined;
-    const outputSchema = routeEntry.outputSchema
-      ? z.toJSONSchema(routeEntry.outputSchema, { target: 'draft-2020-12' })
-      : undefined;
+    const outputSchema = routeEntry.outputSchema ? toJSON(routeEntry.outputSchema) : undefined;
     if (inputSchema) {
       const config: Record<string, unknown> = {
         bodyType: routeEntry.bodySchema ? 'json' : undefined,
@@ -833,8 +839,12 @@ async function build402(
       if (outputSchema) config.output = { schema: outputSchema, example: {} };
       extensions = declareDiscoveryExtension(config);
     }
-  } catch {
-    // Bazaar extensions are optional enrichment for 402 challenges
+  } catch (err) {
+    firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+      level: 'warn' as const,
+      message: `Bazaar schema generation failed: ${err instanceof Error ? err.message : String(err)}`,
+      route: routeEntry.key,
+    });
   }
 
   if (routeEntry.siwxEnabled) {
