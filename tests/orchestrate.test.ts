@@ -1222,9 +1222,7 @@ describe('Bazaar schema generation', () => {
     expect(res.status).toBe(402);
 
     // Should have fired a warn alert about Bazaar failure
-    const bazaarAlert = alerts.find(
-      (a) => a.level === 'warn' && a.message.includes('Bazaar'),
-    );
+    const bazaarAlert = alerts.find((a) => a.level === 'warn' && a.message.includes('Bazaar'));
     expect(bazaarAlert).toBeDefined();
   });
 });
