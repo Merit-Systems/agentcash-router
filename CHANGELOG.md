@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.1.10
+
+### Patch Changes
+
+- 5717cb9: 4xx bugs
+
 ## 1.1.9
 
 ### Patch Changes
