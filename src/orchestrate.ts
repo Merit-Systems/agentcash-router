@@ -495,14 +495,34 @@ export function createRequestHandler(
         deps.x402Accepts,
         deps.payeeAddress,
       );
-      const verify = await verifyX402Payment({
-        server: deps.x402Server,
-        request,
-        price,
-        accepts,
-      });
-      if (!verify?.valid)
+      let verify: Awaited<ReturnType<typeof verifyX402Payment>>;
+      try {
+        verify = await verifyX402Payment({
+          server: deps.x402Server,
+          request,
+          price,
+          accepts,
+        });
+      } catch (err) {
+        const message = `x402 payment verification failed: ${err instanceof Error ? err.message : String(err)}`;
+        console.error(`[router] ${routeEntry.key}: ${message}`);
+        firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+          level: 'critical' as const,
+          message,
+          route: routeEntry.key,
+        });
+        return fail(500, message, meta, pluginCtx, body.data);
+      }
+      if (!verify?.valid) {
+        if (verify?.reason) {
+          firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+            level: 'warn' as const,
+            message: `Payment verification rejected: ${verify.reason}`,
+            route: routeEntry.key,
+          });
+        }
         return await build402(request, routeEntry, deps, meta, pluginCtx, body.data);
+      }
 
       const { payload: verifyPayload, requirements: verifyRequirements } = verify;
       const matchedNetwork = getRequirementNetwork(verifyRequirements, deps.network);

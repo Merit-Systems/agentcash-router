@@ -80,7 +80,22 @@ export async function verifyX402Payment(opts: VerifyPaymentOptions) {
     return invalidPaymentVerification();
   }
 
-  const verify = await server.verifyPayment(payload, matching);
+  let verify: { isValid: boolean; payer?: unknown };
+  try {
+    verify = await server.verifyPayment(payload, matching);
+  } catch (err: unknown) {
+    // VerifyError from @x402/core carries a statusCode from the facilitator.
+    // 4xx (e.g. 400 insufficient_funds) = client payment issue → return
+    // invalid so the orchestrator sends a fresh 402 challenge.
+    // 5xx or unknown errors = actual server problem → re-throw so orchestrator
+    // returns 500.
+    const statusCode = (err as { statusCode?: number }).statusCode;
+    if (statusCode && statusCode >= 400 && statusCode < 500) {
+      const reason = (err as { invalidReason?: string }).invalidReason;
+      return invalidPaymentVerification(reason);
+    }
+    throw err;
+  }
   if (!verify.isValid) return invalidPaymentVerification();
 
   return {
@@ -315,8 +330,8 @@ async function readPaymentPayload(request: Request): Promise<PaymentPayload | nu
   return decodePaymentSignatureHeader(paymentHeader);
 }
 
-function invalidPaymentVerification() {
-  return { valid: false as const, payload: null, requirements: null, payer: null };
+function invalidPaymentVerification(reason?: string) {
+  return { valid: false as const, payload: null, requirements: null, payer: null, reason };
 }
 
 function decimalToAtomicUnits(amount: string, decimals: number): string {
