@@ -80,7 +80,16 @@ export async function verifyX402Payment(opts: VerifyPaymentOptions) {
     return invalidPaymentVerification();
   }
 
-  const verify = await server.verifyPayment(payload, matching);
+  let verify: { isValid: boolean; payer?: unknown };
+  try {
+    verify = await server.verifyPayment(payload, matching);
+  } catch (err: unknown) {
+    // VerifyError from @x402/core with 4xx statusCode (e.g. insufficient_funds)
+    // is a client payment issue → 402 challenge, not 500. 5xx/unknown re-throws.
+    const sc = (err as { statusCode?: number }).statusCode;
+    if (sc && sc >= 400 && sc < 500) return invalidPaymentVerification();
+    throw err;
+  }
   if (!verify.isValid) return invalidPaymentVerification();
 
   return {
