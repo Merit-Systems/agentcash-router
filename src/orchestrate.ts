@@ -724,7 +724,7 @@ async function resolveDynamicPrice(
       const calculated = parseFloat(price);
       const max = parseFloat(routeEntry.maxPrice);
 
-      if (calculated > max) {
+      if (!Number.isFinite(calculated) || calculated > max) {
         // Cap at maxPrice and fire warning
         firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
           level: 'warn' as const,
