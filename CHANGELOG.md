@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.2.1
+
+### Patch Changes
+
+- 039f301: partial mpp payment failure mode
+
 ## 1.2.0
 
 ### Minor Changes
