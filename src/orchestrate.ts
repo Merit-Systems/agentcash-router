@@ -318,7 +318,12 @@ export function createRequestHandler(
             wallet: mppSiwxResult.wallet,
             route: routeEntry.key,
           });
-          return handleAuth(mppSiwxResult.wallet, undefined);
+          const authResponse = await handleAuth(mppSiwxResult.wallet, undefined);
+          // Attach a $0 Payment-Receipt so tempo knows the credential was accepted.
+          if (authResponse.status < 400) {
+            return mppSiwxResult.withReceipt(authResponse) as NextResponse;
+          }
+          return authResponse;
         }
         // MPP verification failed — fall through to issue a fresh challenge
       }

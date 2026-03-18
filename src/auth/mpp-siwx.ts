@@ -31,7 +31,9 @@ type MppxInstance = {
   >;
 };
 
-export type MppSiwxResult = { valid: true; wallet: string } | { valid: false; challenge: Response };
+export type MppSiwxResult =
+  | { valid: true; wallet: string; withReceipt: (response: Response) => Response }
+  | { valid: false; challenge: Response };
 
 /**
  * Verify an MPP-SIWX request.
@@ -55,5 +57,5 @@ export async function verifyMppSiwx(request: Request, mppx: MppxInstance): Promi
   const lastPart = didParts[didParts.length - 1];
   const wallet = normalizeWalletAddress(isAddress(lastPart) ? getAddress(lastPart) : rawSource);
 
-  return { valid: true, wallet };
+  return { valid: true, wallet, withReceipt: result.withReceipt };
 }
