@@ -669,7 +669,13 @@ export function createRequestHandler(
               message: `MPP broadcast failed after handler: ${message}`,
               route: routeEntry.key,
             });
-            return fail(500, `MPP payment processing failed: ${message}`, meta, pluginCtx, body.data);
+            return fail(
+              500,
+              `MPP payment processing failed: ${message}`,
+              meta,
+              pluginCtx,
+              body.data,
+            );
           }
 
           if (mppResult.status === 402) {
