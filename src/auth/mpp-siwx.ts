@@ -21,15 +21,17 @@ import { isAddress, getAddress } from 'viem';
 import { normalizeWalletAddress } from './normalize-wallet.js';
 
 type MppxInstance = {
-  charge: (options: { amount: string }) => (request: Request) => Promise<
+  charge: (options: {
+    amount: string;
+  }) => (
+    request: Request,
+  ) => Promise<
     | { status: 402; challenge: Response }
     | { status: 200; withReceipt: (response: Response) => Response }
   >;
 };
 
-export type MppSiwxResult =
-  | { valid: true; wallet: string }
-  | { valid: false; challenge: Response };
+export type MppSiwxResult = { valid: true; wallet: string } | { valid: false; challenge: Response };
 
 /**
  * Verify an MPP-SIWX request.
@@ -38,10 +40,7 @@ export type MppSiwxResult =
  * or the raw MPP 402 challenge response when no/invalid credential is present
  * (caller should forward the WWW-Authenticate header to the client).
  */
-export async function verifyMppSiwx(
-  request: Request,
-  mppx: MppxInstance,
-): Promise<MppSiwxResult> {
+export async function verifyMppSiwx(request: Request, mppx: MppxInstance): Promise<MppSiwxResult> {
   const result = await mppx.charge({ amount: '0' })(request);
 
   if (result.status === 402) {
