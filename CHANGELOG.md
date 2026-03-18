@@ -1,5 +1,31 @@
 # @agentcash/router
 
+## 1.2.0
+
+### Minor Changes
+
+- d9c4bde: feat: MPP identity auth on SIWX routes
+
+  SIWX routes now accept MPP credentials as an alternative way to prove wallet identity.
+  Clients that implement MPP (like `tempo request`) but not SIWX can authenticate by
+  responding to a `$0` MPP challenge — no funds move, just a signed credential proving
+  wallet ownership.
+
+  **What changed:**
+  - `authMode: 'siwx'` routes now issue a `WWW-Authenticate: MPP` header alongside the
+    existing `PAYMENT-REQUIRED` / SIWX challenge when `mpp` is configured in the router
+  - Incoming `Authorization: Payment <credential>` on a SIWX route is verified at `$0` via
+    mppx; the wallet address is extracted from the `did:pkh` credential and passed to the
+    handler identically to a SIWX flow
+  - No API changes — existing `.siwx()` routes gain MPP identity support automatically when
+    the router is configured with `mpp: { secretKey, currency, recipient }`
+
+### Patch Changes
+
+- d0bd6b3: fix(pricing): fall back to maxPrice when dynamic pricing function returns NaN
+
+  Previously, if a dynamic pricing function returned `NaN` (e.g. due to missing body fields or a calculation error), the router would propagate `NaN` as the price, causing malformed 402 challenges. Now, when the resolved price is `NaN` and a `maxPrice` is configured, the router falls back to `maxPrice`. If no `maxPrice` is set, an error is thrown.
+
 ## 1.1.10
 
 ### Patch Changes
