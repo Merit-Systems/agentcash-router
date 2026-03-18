@@ -22,6 +22,7 @@ import { Credential } from 'mppx';
 import { isAddress, getAddress } from 'viem';
 import { buildX402Challenge, verifyX402Payment, settleX402Payment } from './protocols/x402.js';
 import { verifySIWX, buildSIWXExtension, SIWX_ERROR_MESSAGES } from './auth/siwx.js';
+import { verifyMppSiwx } from './auth/mpp-siwx.js';
 import { verifyApiKey } from './auth/api-key.js';
 import { resolveX402Accepts } from './x402-config.js';
 
@@ -293,6 +294,35 @@ export function createRequestHandler(
       }
 
       const siwxHeader = request.headers.get('SIGN-IN-WITH-X');
+
+      // MPP credential on a pure SIWX route — verify at $0 as identity proof.
+      // Tempo doesn't implement SIWX but does implement MPP signing; a $0 MPP
+      // credential proves the same wallet identity without moving any funds.
+      if (!siwxHeader && protocol === 'mpp' && routeEntry.authMode === 'siwx' && deps.mppx) {
+        let mppSiwxResult: Awaited<ReturnType<typeof verifyMppSiwx>>;
+        try {
+          mppSiwxResult = await verifyMppSiwx(request, deps.mppx);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+            level: 'critical' as const,
+            message: `MPP SIWX verification failed: ${message}`,
+            route: routeEntry.key,
+          });
+          return fail(500, `MPP SIWX verification failed: ${message}`, meta, pluginCtx);
+        }
+        if (mppSiwxResult.valid) {
+          pluginCtx.setVerifiedWallet(mppSiwxResult.wallet);
+          firePluginHook(deps.plugin, 'onAuthVerified', pluginCtx, {
+            authMode: 'siwx',
+            wallet: mppSiwxResult.wallet,
+            route: routeEntry.key,
+          });
+          return handleAuth(mppSiwxResult.wallet, undefined);
+        }
+        // MPP verification failed — fall through to issue a fresh challenge
+      }
+
       if (!siwxHeader && routeEntry.authMode === 'siwx') {
         // Uniform 402 challenge format: SIWX routes return the same x402v2
         // challenge structure as paid routes, with PAYMENT-REQUIRED header
@@ -361,6 +391,21 @@ export function createRequestHandler(
           headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
         });
         if (encoded) response.headers.set('PAYMENT-REQUIRED', encoded);
+
+        // If MPP is configured, also attach WWW-Authenticate so tempo clients
+        // can fulfill the challenge via $0 MPP signing instead of SIWX.
+        if (deps.mppx) {
+          try {
+            const mppChallenge = await deps.mppx.charge({ amount: '0' })(request);
+            if (mppChallenge.status === 402) {
+              const wwwAuth = mppChallenge.challenge.headers.get('WWW-Authenticate');
+              if (wwwAuth) response.headers.set('WWW-Authenticate', wwwAuth);
+            }
+          } catch {
+            // MPP challenge is optional enrichment — SIWX challenge still works without it
+          }
+        }
+
         firePluginResponse(deps, pluginCtx, meta, response);
         return response;
       }
