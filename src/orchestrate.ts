@@ -669,8 +669,7 @@ export function createRequestHandler(
               message: `MPP broadcast failed after handler: ${message}`,
               route: routeEntry.key,
             });
-            finalize(response, rawResult, meta, pluginCtx, body.data);
-            return response;
+            return fail(500, `MPP payment processing failed: ${message}`, meta, pluginCtx, body.data);
           }
 
           if (mppResult.status === 402) {
@@ -694,8 +693,7 @@ export function createRequestHandler(
               message: `MPP payment failed after handler: ${detail}`,
               route: routeEntry.key,
             });
-            finalize(response, rawResult, meta, pluginCtx, body.data);
-            return response;
+            return fail(500, `MPP payment failed: ${detail}`, meta, pluginCtx, body.data);
           }
 
           // Step 5: Confirmed on-chain — extract txhash and settle
