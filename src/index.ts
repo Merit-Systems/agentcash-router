@@ -150,6 +150,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     x402FacilitatorsByNetwork: undefined,
     x402Accepts,
     mppx: null,
+    tempoClient: null,
   };
 
   // Async init — dynamic imports avoid require() which breaks Turbopack.
@@ -179,11 +180,10 @@ export function createRouter<const P extends Record<string, string> = Record<nev
       try {
         const { Mppx, tempo } = await import('mppx/server');
         const rpcUrl = (config.mpp.rpcUrl ?? process.env.TEMPO_RPC_URL)!;
-        const getClient = async () => {
-          const { createClient, http } = await import('viem');
-          const { tempo: tempoChain } = await import('viem/chains');
-          return createClient({ chain: tempoChain, transport: http(rpcUrl) });
-        };
+        const { createClient, http } = await import('viem');
+        const { tempo: tempoChain } = await import('viem/chains');
+        deps.tempoClient = createClient({ chain: tempoChain, transport: http(rpcUrl) });
+        const getClient = async () => deps.tempoClient!;
 
         let feePayerAccount: unknown;
         if (config.mpp.feePayerKey) {

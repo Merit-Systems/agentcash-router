@@ -18,7 +18,9 @@ import { detectProtocol } from './protocols/detect.js';
 import { safeCallHandler } from './handler.js';
 import { bufferBody, validateBody } from './body.js';
 import { resolvePrice, resolveMaxPrice } from './pricing.js';
-import { Credential } from 'mppx';
+import { Credential, Receipt } from 'mppx';
+import { call as viemCall } from 'viem/actions';
+import { Transaction as TempoTransaction } from 'viem/tempo';
 import { isAddress, getAddress } from 'viem';
 import { buildX402Challenge, verifyX402Payment, settleX402Payment } from './protocols/x402.js';
 import { verifySIWX, buildSIWXExtension, SIWX_ERROR_MESSAGES } from './auth/siwx.js';
@@ -76,6 +78,7 @@ export interface OrchestrateDeps {
       | { status: 200; withReceipt: (response: Response) => Response }
     >;
   } | null;
+  tempoClient?: import('viem').Client | null;
 }
 
 export function createRequestHandler(
@@ -594,6 +597,149 @@ export function createRequestHandler(
         return fail(500, reason, meta, pluginCtx, body.data);
       }
 
+      // Extract wallet from credential source (DID) — idempotent header read
+      // MPP source format: "did:pkh:eip155:<chainId>:<address>"
+      const mppCredential = Credential.fromRequest(request);
+      const rawSource = mppCredential?.source ?? '';
+      const didParts = rawSource.split(':');
+      const lastPart = didParts[didParts.length - 1];
+      const wallet = normalizeWalletAddress(isAddress(lastPart) ? getAddress(lastPart) : rawSource);
+
+      const payloadType = (mppCredential?.payload as { type?: string } | null)?.type;
+
+      // ---- MPP transaction payload: simulate → invoke → broadcast + confirm ----
+      if (payloadType === 'transaction' && deps.tempoClient) {
+        // Step 1: Simulate — catch obvious reverts before invoking the handler.
+        // If simulation fails the user is never charged.
+        try {
+          const serializedTx = (mppCredential!.payload as { signature: `0x${string}` }).signature;
+          const transaction = TempoTransaction.deserialize(serializedTx) as {
+            from?: `0x${string}`;
+            calls?: unknown[];
+            [key: string]: unknown;
+          };
+          await viemCall(deps.tempoClient, {
+            ...transaction,
+            account: transaction.from,
+            calls: transaction.calls ?? [],
+          } as never);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(`[router] ${routeEntry.key}: MPP simulation failed — ${message}`);
+          firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+            level: 'warn' as const,
+            message: `MPP simulation failed: ${message}`,
+            route: routeEntry.key,
+          });
+          return await build402(request, routeEntry, deps, meta, pluginCtx, body.data);
+        }
+
+        // Step 2: Simulation passed — payment intent verified
+        pluginCtx.setVerifiedWallet(wallet);
+        firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
+          protocol: 'mpp',
+          payer: wallet,
+          amount: price,
+          network: 'tempo:4217',
+        });
+
+        // Step 3: Invoke handler
+        const { response, rawResult } = await invoke(
+          request,
+          meta,
+          pluginCtx,
+          wallet,
+          account,
+          body.data,
+        );
+
+        if (response.status < 400) {
+          // Step 4: Handler succeeded — broadcast and wait for on-chain confirmation.
+          // Merchant bears the risk if this fails after service was rendered.
+          let mppResult: Awaited<ReturnType<ReturnType<typeof deps.mppx.charge>>>;
+          try {
+            mppResult = await deps.mppx.charge({ amount: price })(request);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.error(
+              `[router] ${routeEntry.key}: MPP broadcast failed after handler: ${message}`,
+            );
+            firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+              level: 'critical' as const,
+              message: `MPP broadcast failed after handler: ${message}`,
+              route: routeEntry.key,
+            });
+            finalize(response, rawResult, meta, pluginCtx, body.data);
+            return response;
+          }
+
+          if (mppResult.status === 402) {
+            // Transaction reverted on-chain after handler ran.
+            let rejectReason = '';
+            try {
+              const problemBody = await mppResult.challenge.clone().text();
+              if (problemBody) {
+                const problem = JSON.parse(problemBody) as { detail?: string; title?: string };
+                rejectReason = problem.detail || problem.title || '';
+              }
+            } catch {
+              // Best-effort extraction
+            }
+            const detail = rejectReason || 'transaction reverted on-chain after handler execution';
+            console.error(
+              `[router] ${routeEntry.key}: MPP payment failed after handler — ${detail}`,
+            );
+            firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+              level: 'critical' as const,
+              message: `MPP payment failed after handler: ${detail}`,
+              route: routeEntry.key,
+            });
+            finalize(response, rawResult, meta, pluginCtx, body.data);
+            return response;
+          }
+
+          // Step 5: Confirmed on-chain — extract txhash and settle
+          const receiptResponse = mppResult.withReceipt(response) as NextResponse;
+          receiptResponse.headers.set('Cache-Control', 'private');
+
+          let txHash = '';
+          const receiptHeader = receiptResponse.headers.get('Payment-Receipt');
+          if (receiptHeader) {
+            try {
+              txHash = Receipt.deserialize(receiptHeader).reference;
+            } catch {
+              // Best-effort extraction
+            }
+          }
+
+          if (routeEntry.siwxEnabled) {
+            try {
+              await deps.entitlementStore.grant(routeEntry.key, wallet);
+            } catch (error) {
+              firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+                level: 'warn' as const,
+                message: `Entitlement grant failed: ${error instanceof Error ? error.message : String(error)}`,
+                route: routeEntry.key,
+              });
+            }
+          }
+
+          firePluginHook(deps.plugin, 'onPaymentSettled', pluginCtx, {
+            protocol: 'mpp',
+            payer: wallet,
+            transaction: txHash,
+            network: 'tempo:4217',
+          });
+          finalize(receiptResponse, rawResult, meta, pluginCtx, body.data);
+          return receiptResponse;
+        }
+
+        finalize(response, rawResult, meta, pluginCtx, body.data);
+        return response;
+      }
+
+      // ---- MPP hash payload (or fallback): verify first, then invoke ----
+      // The tx was pre-broadcast by the client — mppx just verifies the receipt.
       let mppResult: Awaited<ReturnType<ReturnType<typeof deps.mppx.charge>>>;
       try {
         mppResult = await deps.mppx.charge({ amount: price })(request);
@@ -609,8 +755,6 @@ export function createRequestHandler(
       }
 
       if (mppResult.status === 402) {
-        // Extract the actual rejection reason from the mppx challenge response.
-        // The body is application/problem+json with { type, title, detail }.
         let rejectReason = '';
         try {
           const problemBody = await mppResult.challenge.clone().text();
@@ -619,9 +763,8 @@ export function createRequestHandler(
             rejectReason = problem.detail || problem.title || '';
           }
         } catch {
-          // Best-effort extraction — challenge body may not be JSON
+          // Best-effort extraction
         }
-
         const detail =
           rejectReason || 'credential may be invalid, or check TEMPO_RPC_URL configuration';
         console.warn(`[router] ${routeEntry.key}: MPP credential rejected — ${detail}`);
@@ -633,14 +776,18 @@ export function createRequestHandler(
         return await build402(request, routeEntry, deps, meta, pluginCtx, body.data);
       }
 
-      // Payment verified — extract wallet from credential source (DID)
-      // MPP source format: "did:pkh:eip155:<chainId>:<address>"
-      // Normalize to plain address for consistency with x402/SIWX flows
-      const credential = Credential.fromRequest(request);
-      const rawSource = credential?.source ?? '';
-      const didParts = rawSource.split(':');
-      const lastPart = didParts[didParts.length - 1];
-      const wallet = normalizeWalletAddress(isAddress(lastPart) ? getAddress(lastPart) : rawSource);
+      // Payment verified — extract txhash for settlement event
+      let txHash = '';
+      const receiptHeader = (mppResult.withReceipt(new Response()) as Response).headers.get(
+        'Payment-Receipt',
+      );
+      if (receiptHeader) {
+        try {
+          txHash = Receipt.deserialize(receiptHeader).reference;
+        } catch {
+          // Best-effort extraction
+        }
+      }
 
       pluginCtx.setVerifiedWallet(wallet);
       firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
@@ -673,6 +820,12 @@ export function createRequestHandler(
         }
         const receiptResponse = mppResult.withReceipt(response) as NextResponse;
         receiptResponse.headers.set('Cache-Control', 'private');
+        firePluginHook(deps.plugin, 'onPaymentSettled', pluginCtx, {
+          protocol: 'mpp',
+          payer: wallet,
+          transaction: txHash,
+          network: 'tempo:4217',
+        });
         finalize(receiptResponse, rawResult, meta, pluginCtx, body.data);
         return receiptResponse;
       }
