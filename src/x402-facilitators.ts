@@ -3,7 +3,7 @@ import { isEvmNetwork } from './protocols/evm.js';
 import { isSolanaNetwork } from './protocols/solana.js';
 import type { RouterConfig, X402FacilitatorTarget, X402RouterFacilitatorConfig } from './types.js';
 
-export const DEFAULT_SOLANA_FACILITATOR_URL = 'https://facilitator.corbits.dev';
+export const DEFAULT_SOLANA_FACILITATOR_URL = 'https://facilitator.corbits.io';
 
 export type NetworkFamily = 'evm' | 'solana';
 

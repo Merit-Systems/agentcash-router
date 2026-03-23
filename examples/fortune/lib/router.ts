@@ -7,7 +7,7 @@ if (!payeeAddress) {
   throw new Error('X402_PAYEE_ADDRESS is required');
 }
 const SOLANA_MAINNET = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
-const CORBITS_FACILITATOR_URL = "https://facilitator.corbits.dev";
+const CORBITS_FACILITATOR_URL = "https://facilitator.corbits.io";
 
 
 // MPP config (optional - only for testing MPP protocol)
