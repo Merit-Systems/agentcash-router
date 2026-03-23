@@ -247,7 +247,9 @@ async function enrichChallengeRequirements(
       } catch (err) {
         const label = group.facilitator.url ?? group.facilitator.network;
         const reason = err instanceof Error ? err.message : String(err);
-        console.warn(`[router] ${label} /accepts failed, dropping ${group.items.length} requirement(s): ${reason}`);
+        console.warn(
+          `[router] ${label} /accepts failed, dropping ${group.items.length} requirement(s): ${reason}`,
+        );
         return { success: false, group };
       }
     }),
@@ -271,7 +273,9 @@ async function enrichChallengeRequirements(
 
   const remaining = enriched.filter((_, i) => !failedIndices.has(i));
   if (remaining.length === 0) {
-    throw new Error('All facilitator enrichments failed; no payment requirements remain for challenge');
+    throw new Error(
+      'All facilitator enrichments failed; no payment requirements remain for challenge',
+    );
   }
 
   return remaining;
