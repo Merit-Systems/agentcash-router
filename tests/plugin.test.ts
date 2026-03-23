@@ -8,9 +8,82 @@ import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js
 import { withX402Payment } from './fakes/request.js';
 import { createDefaultContext } from '../src/plugin.js';
 import type { RouterPlugin, RequestMeta, PluginContext } from '../src/plugin.js';
+import { Credential as MppCredential, Challenge as MppChallenge } from 'mppx';
 import type { RouteEntry } from '../src/types.js';
 
 const bodySchema = z.object({ query: z.string() });
+
+const KNOWN_MPP_PAYER = 'did:pkh:eip155:42431:0xMPP_PAYER_ADDRESS';
+
+function createFakeMppx() {
+  return {
+    charge: (_options: { amount: string }) => async (input: Request) => {
+      const auth = input.headers.get('Authorization');
+      if (!auth?.startsWith('Payment ')) {
+        return {
+          status: 402 as const,
+          challenge: new Response(null, { status: 402 }),
+        };
+      }
+      // Accept any Payment credential — the fake always succeeds
+      return {
+        status: 200 as const,
+        withReceipt: (response: Response) => {
+          const newResponse = new Response(response.body, {
+            status: response.status,
+            headers: response.headers,
+          });
+          const mockReceipt = Buffer.from(
+            JSON.stringify({
+              method: 'tempo',
+              reference: '0xMOCK_MPP_TX',
+              status: 'success',
+              timestamp: new Date().toISOString(),
+            }),
+          ).toString('base64url');
+          newResponse.headers.set('Payment-Receipt', mockReceipt);
+          return newResponse;
+        },
+      };
+    },
+  };
+}
+
+function makeMPPDeps(plugin?: RouterPlugin): OrchestrateDeps {
+  return {
+    x402Server: null,
+    initPromise: Promise.resolve(),
+    nonceStore: new MemoryNonceStore(),
+    entitlementStore: new MemoryEntitlementStore(),
+    payeeAddress: KNOWN_PAYEE,
+    network: 'tempo:42431',
+    x402Accepts: [],
+    mppx: createFakeMppx(),
+    plugin,
+  };
+}
+
+function withMPPPayment(body?: unknown): NextRequest {
+  const challenge = MppChallenge.from({
+    id: 'test-challenge',
+    realm: 'localhost',
+    method: 'tempo',
+    intent: 'charge',
+    request: { amount: '0.02', currency: '0xUSDC', recipient: '0xPAYEE' },
+  });
+  const header = MppCredential.serialize(
+    MppCredential.from({
+      challenge,
+      payload: { signature: '0x' },
+      source: KNOWN_MPP_PAYER,
+    }),
+  );
+  return new NextRequest('http://localhost:3000/api/test', {
+    method: 'POST',
+    headers: { Authorization: header },
+    ...(body && { body: JSON.stringify(body) }),
+  });
+}
 
 function makeSpyPlugin(): RouterPlugin & {
   calls: Record<string, unknown[][]>;
@@ -86,6 +159,32 @@ describe('plugin lifecycle', () => {
     const res = await handler(makePaymentRequest({ query: 'test' }));
     expect(res.status).toBe(200);
     expect(plugin.calls.onPaymentVerified).toHaveLength(1);
+  });
+
+  it('onPaymentSettled fires for MPP with tx hash', async () => {
+    const plugin = makeSpyPlugin();
+    const deps = makeMPPDeps(plugin);
+    const entry: RouteEntry = {
+      key: 'test/mpp',
+      authMode: 'paid',
+      pricing: '0.02',
+      protocols: ['mpp'],
+      method: 'POST',
+      bodySchema,
+    };
+    const handler = createRequestHandler(entry, async () => ({ ok: true }), deps);
+    const res = await handler(withMPPPayment({ query: 'test' }));
+    expect(res.status).toBe(200);
+    expect(plugin.calls.onPaymentVerified).toHaveLength(1);
+    expect(plugin.calls.onPaymentSettled).toHaveLength(1);
+    const settlement = plugin.calls.onPaymentSettled[0][1] as {
+      protocol: string;
+      transaction: string;
+      network: string;
+    };
+    expect(settlement.protocol).toBe('mpp');
+    expect(settlement.transaction).toBe('0xMOCK_MPP_TX');
+    expect(settlement.network).toBe('tempo:4217');
   });
 
   it('onResponse fires on every request (success)', async () => {

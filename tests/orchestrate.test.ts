@@ -229,7 +229,16 @@ function createFakeMppx() {
                 status: response.status,
                 headers: response.headers,
               });
-              newResponse.headers.set('Payment-Receipt', 'MOCK_MPP_RECEIPT');
+              const mockReceipt = Buffer.from(
+                JSON.stringify({
+                  method: 'tempo',
+                  reference: '0xMOCK_TX_HASH',
+                  status: 'success',
+                  timestamp: new Date().toISOString(),
+                }),
+              )
+                .toString('base64url');
+              newResponse.headers.set('Payment-Receipt', mockReceipt);
               return newResponse;
             },
           };

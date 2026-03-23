@@ -17,7 +17,7 @@ import { detectProtocol } from './protocols/detect.js';
 import { safeCallHandler } from './handler.js';
 import { bufferBody, validateBody } from './body.js';
 import { resolvePrice, resolveMaxPrice } from './pricing.js';
-import { Credential } from 'mppx';
+import { Credential, Receipt } from 'mppx';
 import { isAddress, getAddress } from 'viem';
 import { buildX402Challenge, verifyX402Payment, settleX402Payment } from './protocols/x402.js';
 import { verifySIWX, buildSIWXExtension, SIWX_ERROR_MESSAGES } from './auth/siwx.js';
@@ -630,6 +630,17 @@ export function createRequestHandler(
           }
         }
         const receiptResponse = mppResult.withReceipt(response);
+        try {
+          const receipt = Receipt.fromResponse(receiptResponse);
+          firePluginHook(deps.plugin, 'onPaymentSettled', pluginCtx, {
+            protocol: 'mpp',
+            payer: wallet,
+            transaction: receipt.reference,
+            network: 'tempo:4217',
+          });
+        } catch {
+          // Receipt extraction is best-effort — don't block response
+        }
         finalize(receiptResponse as NextResponse, rawResult, meta, pluginCtx, body.data);
         return receiptResponse as NextResponse;
       }
