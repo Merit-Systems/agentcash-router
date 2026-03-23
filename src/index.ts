@@ -198,6 +198,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
               recipient: (config.mpp.recipient ?? config.payeeAddress) as `0x${string}`,
               getClient,
               ...(feePayerAccount ? { feePayer: feePayerAccount } : {}),
+              ...(config.mpp.store ? { store: config.mpp.store } : {}),
             } as Parameters<typeof tempo.charge>[0]),
           ],
           secretKey: config.mpp.secretKey,

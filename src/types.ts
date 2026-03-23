@@ -279,6 +279,24 @@ export interface RouterConfig {
      * Must be a hex-encoded private key (e.g. `0xabc123...`).
      */
     feePayerKey?: string;
+    /**
+     * Persistent store for transaction hash replay protection.
+     *
+     * Defaults to `Store.memory()` which is wiped on every cold start — unsafe for
+     * Vercel/Cloudflare where instances are ephemeral or split across requests.
+     *
+     * Use `Store.upstash(redis)` (Vercel KV / Upstash Redis) or
+     * `Store.cloudflare(kv)` (Cloudflare KV) for production deployments.
+     *
+     * @example
+     * import { Store } from 'mppx'
+     * import { Redis } from '@upstash/redis'
+     * // Vercel KV / Upstash
+     * store: Store.upstash(new Redis({ url: '...', token: '...' }))
+     * // Cloudflare KV
+     * store: Store.cloudflare(env.MY_KV_NAMESPACE)
+     */
+    store?: import('mppx').Store.Store;
   };
   /**
    * Payment protocols to accept on auto-priced routes (those using the `prices` config).
