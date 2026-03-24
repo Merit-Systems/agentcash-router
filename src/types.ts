@@ -282,21 +282,19 @@ export interface RouterConfig {
     /**
      * Persistent store for transaction hash replay protection.
      *
-     * Defaults to `Store.memory()` which is wiped on every cold start — unsafe for
-     * Vercel/Cloudflare where instances are ephemeral or split across requests.
+     * Pass a `Store.Store` instance to use a custom store (e.g. `Store.cloudflare(kv)`).
      *
-     * Use `Store.upstash(redis)` (Vercel KV / Upstash Redis) or
-     * `Store.cloudflare(kv)` (Cloudflare KV) for production deployments.
-     *
-     * @example
-     * import { Store } from 'mppx'
-     * import { Redis } from '@upstash/redis'
-     * // Vercel KV / Upstash
-     * store: Store.upstash(new Redis({ url: '...', token: '...' }))
-     * // Cloudflare KV
-     * store: Store.cloudflare(env.MY_KV_NAMESPACE)
+     * @see `useDefaultStore` to auto-configure from Vercel KV environment variables.
      */
     store?: import('mppx').Store.Store;
+    /**
+     * When `true`, auto-configures an Upstash store from Vercel KV environment variables
+     * (`KV_REST_API_URL` + `KV_REST_API_TOKEN`). Required for replay protection on Vercel
+     * where `Store.memory()` (the mppx default) is wiped on every cold start.
+     *
+     * Has no effect if `store` is also provided (explicit store takes precedence).
+     */
+    useDefaultStore?: boolean;
   };
   /**
    * Payment protocols to accept on auto-priced routes (those using the `prices` config).
