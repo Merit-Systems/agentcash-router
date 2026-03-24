@@ -1,7 +1,7 @@
 import type { FacilitatorConfig } from '@x402/core/http';
 import type { NextRequest } from 'next/server';
 import type { ZodType } from 'zod';
-
+import type { Store } from 'mppx';
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
@@ -291,7 +291,7 @@ export interface RouterConfig {
      * store: Store.upstash({ get, set, del })
      * store: Store.cloudflare(env.MY_KV_NAMESPACE)
      */
-    store?: import('mppx').Store.Store;
+    store?: Store.Store;
   };
   /**
    * Payment protocols to accept on auto-priced routes (those using the `prices` config).
