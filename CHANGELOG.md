@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.2.3
+
+### Patch Changes
+
+- 4172367: Expose `info.x-guidance` alongside `info.guidance` in OpenAPI output. The `x-` prefix follows the OpenAPI extension naming convention for custom fields.
+
 ## 1.2.2
 
 ### Patch Changes
