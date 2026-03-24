@@ -282,19 +282,16 @@ export interface RouterConfig {
     /**
      * Persistent store for transaction hash replay protection.
      *
-     * Pass a `Store.Store` instance to use a custom store (e.g. `Store.cloudflare(kv)`).
+     * Without this, mppx defaults to `Store.memory()` which is wiped on every cold start —
+     * unsafe on Vercel or any multi-instance deployment. Pass `Store.upstash(redis)` or
+     * `Store.cloudflare(kv)` for a shared persistent store.
      *
-     * @see `useDefaultStore` to auto-configure from Vercel KV environment variables.
+     * @example
+     * import { Store } from 'mppx'
+     * store: Store.upstash({ get, set, del })
+     * store: Store.cloudflare(env.MY_KV_NAMESPACE)
      */
     store?: import('mppx').Store.Store;
-    /**
-     * When `true`, auto-configures an Upstash store from Vercel KV environment variables
-     * (`KV_REST_API_URL` + `KV_REST_API_TOKEN`). Required for replay protection on Vercel
-     * where `Store.memory()` (the mppx default) is wiped on every cold start.
-     *
-     * Has no effect if `store` is also provided (explicit store takes precedence).
-     */
-    useDefaultStore?: boolean;
   };
   /**
    * Payment protocols to accept on auto-priced routes (those using the `prices` config).

@@ -13,45 +13,6 @@ import { createLlmsTxtHandler } from './discovery/llms-txt.js';
 import { getConfiguredX402Accepts } from './x402-config.js';
 import { isEvmNetwork } from './protocols/evm.js';
 import { isSolanaNetwork } from './protocols/solana.js';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function resolveStore(
-  mpp: NonNullable<RouterConfig['mpp']>,
-): import('mppx').Store.Store | undefined {
-  if (mpp.store) return mpp.store;
-  if (mpp.useDefaultStore) {
-    const url = process.env.KV_REST_API_URL;
-    const token = process.env.KV_REST_API_TOKEN;
-    if (url && token) {
-      const headers = { Authorization: `Bearer ${token}` };
-      return {
-        get: async (key: string) => {
-          const res = await fetch(`${url}/get/${encodeURIComponent(key)}`, { headers });
-          const { result } = (await res.json()) as { result: unknown };
-          return result ?? null;
-        },
-        put: async (key: string, value: unknown) => {
-          await fetch(`${url}/set/${encodeURIComponent(key)}`, {
-            method: 'POST',
-            headers: { ...headers, 'Content-Type': 'application/json' },
-            body: JSON.stringify(value),
-          });
-        },
-        delete: async (key: string) => {
-          await fetch(`${url}/del/${encodeURIComponent(key)}`, { method: 'POST', headers });
-        },
-      };
-    }
-    console.warn(
-      '[router] mpp.useDefaultStore is true but KV_REST_API_URL / KV_REST_API_TOKEN are not set — falling back to Store.memory()',
-    );
-  }
-  return undefined;
-}
-
 // ---------------------------------------------------------------------------
 // ServiceRouter
 // ---------------------------------------------------------------------------
@@ -229,8 +190,6 @@ export function createRouter<const P extends Record<string, string> = Record<nev
           feePayerAccount = Account.fromSecp256k1(config.mpp.feePayerKey as `0x${string}`);
         }
 
-        const mppStore = resolveStore(config.mpp);
-
         deps.mppx = Mppx.create({
           methods: [
             tempo.charge({
@@ -238,7 +197,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
               recipient: (config.mpp.recipient ?? config.payeeAddress) as `0x${string}`,
               getClient,
               ...(feePayerAccount ? { feePayer: feePayerAccount } : {}),
-              ...(mppStore ? { store: mppStore } : {}),
+              ...(config.mpp.store ? { store: config.mpp.store } : {}),
             } as Parameters<typeof tempo.charge>[0]),
           ],
           secretKey: config.mpp.secretKey,
