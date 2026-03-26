@@ -1,5 +1,18 @@
 # @agentcash/router
 
+## 1.2.3
+
+### Patch Changes
+
+- 4172367: Expose `info.x-guidance` alongside `info.guidance` in OpenAPI output. The `x-` prefix follows the OpenAPI extension naming convention for custom fields.
+
+## 1.2.2
+
+### Patch Changes
+
+- 92eb537: Bump mppx from 0.4.2 to 0.4.8
+- 1bc60a9: Fix Base transactions failing when Solana facilitator is unavailable. Facilitator enrichments now resolve per-group — a Solana `/accepts` failure drops the Solana requirement from the challenge and logs a warning, leaving EVM requirements intact.
+
 ## 1.2.1
 
 ### Patch Changes

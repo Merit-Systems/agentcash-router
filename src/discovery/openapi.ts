@@ -74,6 +74,7 @@ export function createOpenAPIHandler(
         title: discovery.title,
         description: discovery.description,
         version: discovery.version,
+        ...(guidance !== undefined && { 'x-guidance': guidance }),
         guidance,
         ...(discovery.contact && { contact: discovery.contact }),
       },
