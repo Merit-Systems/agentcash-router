@@ -190,6 +190,21 @@ export function createRouter<const P extends Record<string, string> = Record<nev
           feePayerAccount = Account.fromSecp256k1(config.mpp.feePayerKey as `0x${string}`);
         }
 
+        let resolvedStore = config.mpp.store;
+        if (!resolvedStore && config.mpp.useDefaultStore) {
+          const kvUrl = process.env.KV_REST_API_URL;
+          const kvToken = process.env.KV_REST_API_TOKEN;
+          if (!kvUrl || !kvToken) {
+            throw new Error(
+              'mpp.useDefaultStore requires KV_REST_API_URL and KV_REST_API_TOKEN environment variables. ' +
+                'These are automatically set by Vercel KV.',
+            );
+          }
+          const { Store } = await import('mppx');
+          const { createUpstashRest } = await import('./upstash-rest.js');
+          resolvedStore = Store.upstash(createUpstashRest(kvUrl, kvToken));
+        }
+
         deps.mppx = Mppx.create({
           methods: [
             tempo.charge({
@@ -197,7 +212,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
               recipient: (config.mpp.recipient ?? config.payeeAddress) as `0x${string}`,
               getClient,
               ...(feePayerAccount ? { feePayer: feePayerAccount } : {}),
-              ...(config.mpp.store ? { store: config.mpp.store } : {}),
+              ...(resolvedStore ? { store: resolvedStore } : {}),
             } as Parameters<typeof tempo.charge>[0]),
           ],
           secretKey: config.mpp.secretKey,

@@ -292,6 +292,23 @@ export interface RouterConfig {
      * store: Store.cloudflare(env.MY_KV_NAMESPACE)
      */
     store?: Store.Store;
+    /**
+     * When `true`, auto-configures an Upstash-backed persistent store from Vercel KV
+     * environment variables (`KV_REST_API_URL` + `KV_REST_API_TOKEN`).
+     *
+     * Uses raw `fetch` against the Upstash REST API — no extra npm dependencies.
+     * Ignored when `store` is explicitly provided.
+     *
+     * @example
+     * createRouter({
+     *   mpp: {
+     *     secretKey: process.env.MPP_SECRET_KEY!,
+     *     currency: USDC,
+     *     useDefaultStore: true,
+     *   }
+     * })
+     */
+    useDefaultStore?: boolean;
   };
   /**
    * Payment protocols to accept on auto-priced routes (those using the `prices` config).
