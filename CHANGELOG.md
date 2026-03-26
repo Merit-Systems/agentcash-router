@@ -1,5 +1,15 @@
 # @agentcash/router
 
+## 1.2.4
+
+### Patch Changes
+
+- 17a25af: Bump mppx to 0.4.10
+- 1907135: Add `mpp.store` and `mpp.useDefaultStore` for persistent transaction hash replay protection.
+  - `mpp.store` — pass any `Store.Store` implementation (e.g. `Store.cloudflare(kv)`, `Store.upstash(redis)`)
+  - `mpp.useDefaultStore` — set to `true` to auto-configure an Upstash store from Vercel KV env vars (`KV_REST_API_URL` + `KV_REST_API_TOKEN`) with zero extra dependencies
+  - Without either, mppx defaults to `Store.memory()` (unchanged behavior)
+
 ## 1.2.3
 
 ### Patch Changes
