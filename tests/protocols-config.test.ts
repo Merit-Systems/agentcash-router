@@ -363,6 +363,62 @@ describe('RouterConfig.protocols', () => {
     });
   });
 
+  describe('useDefaultStore', () => {
+    const mppWithDefaultStore = {
+      secretKey: 'test-secret-key',
+      currency: 'USDC',
+      rpcUrl: 'https://rpc.example.com',
+      useDefaultStore: true,
+    };
+
+    it('logs error when KV env vars are missing', async () => {
+      const origUrl = process.env.KV_REST_API_URL;
+      const origToken = process.env.KV_REST_API_TOKEN;
+      delete process.env.KV_REST_API_URL;
+      delete process.env.KV_REST_API_TOKEN;
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const router = createRouter({
+          ...baseConfig,
+          protocols: ['mpp'],
+          mpp: mppWithDefaultStore,
+        });
+        const handler = router
+          .route('test/route')
+          .unprotected()
+          .handler(async () => ({ ok: true }));
+        await handler(new NextRequest('http://localhost/api/test'));
+        expect(spy).toHaveBeenCalledWith(expect.stringContaining('KV_REST_API_URL'));
+      } finally {
+        spy.mockRestore();
+        if (origUrl !== undefined) process.env.KV_REST_API_URL = origUrl;
+        else delete process.env.KV_REST_API_URL;
+        if (origToken !== undefined) process.env.KV_REST_API_TOKEN = origToken;
+        else delete process.env.KV_REST_API_TOKEN;
+      }
+    });
+
+    it('ignores useDefaultStore when explicit store is provided', () => {
+      const fakeStore = {
+        get: async () => null,
+        put: async () => {},
+        delete: async () => {},
+      };
+      // Should not throw even without KV env vars — explicit store takes priority
+      expect(() => {
+        createRouter({
+          ...baseConfig,
+          protocols: ['mpp'],
+          mpp: {
+            ...validMppConfig,
+            store: fakeStore,
+            useDefaultStore: true,
+          },
+        });
+      }).not.toThrow();
+    });
+  });
+
   describe('mpp config with recipient', () => {
     it('accepts mpp config with custom recipient', () => {
       const router = createRouter({

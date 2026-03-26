@@ -1,7 +1,7 @@
 import type { FacilitatorConfig } from '@x402/core/http';
 import type { NextRequest } from 'next/server';
 import type { ZodType } from 'zod';
-
+import type { Store } from 'mppx';
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
@@ -279,6 +279,36 @@ export interface RouterConfig {
      * Must be a hex-encoded private key (e.g. `0xabc123...`).
      */
     feePayerKey?: string;
+    /**
+     * Persistent store for transaction hash replay protection.
+     *
+     * Without this, mppx defaults to `Store.memory()` which is wiped on every cold start —
+     * unsafe on Vercel or any multi-instance deployment. Pass `Store.upstash(redis)` or
+     * `Store.cloudflare(kv)` for a shared persistent store.
+     *
+     * @example
+     * import { Store } from 'mppx'
+     * store: Store.upstash({ get, set, del })
+     * store: Store.cloudflare(env.MY_KV_NAMESPACE)
+     */
+    store?: Store.Store;
+    /**
+     * When `true`, auto-configures an Upstash-backed persistent store from Vercel KV
+     * environment variables (`KV_REST_API_URL` + `KV_REST_API_TOKEN`).
+     *
+     * Uses raw `fetch` against the Upstash REST API — no extra npm dependencies.
+     * Ignored when `store` is explicitly provided.
+     *
+     * @example
+     * createRouter({
+     *   mpp: {
+     *     secretKey: process.env.MPP_SECRET_KEY!,
+     *     currency: USDC,
+     *     useDefaultStore: true,
+     *   }
+     * })
+     */
+    useDefaultStore?: boolean;
   };
   /**
    * Payment protocols to accept on auto-priced routes (those using the `prices` config).

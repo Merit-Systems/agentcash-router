@@ -104,6 +104,7 @@ Response out
 | `src/server.ts` | x402 server initialization with retry |
 | `src/auth/siwx.ts` | SIWX verification |
 | `src/auth/api-key.ts` | API key verification |
+| `src/upstash-rest.ts` | Minimal fetch-only Upstash REST client for `useDefaultStore` |
 | `src/auth/nonce.ts` | `NonceStore` interface + `MemoryNonceStore` |
 | `src/discovery/well-known.ts` | `.well-known/x402` generation |
 | `src/discovery/openapi.ts` | OpenAPI 3.1 spec generation |
@@ -180,6 +181,7 @@ export const router = createRouter({
     currency: '0x20c0000000000000000000000000000000000000', // PathUSD on Tempo
     recipient: process.env.X402_PAYEE_ADDRESS!,
     rpcUrl: process.env.TEMPO_RPC_URL,  // falls back to TEMPO_RPC_URL env var
+    useDefaultStore: true,              // auto-configures Upstash from KV_REST_API_URL + KV_REST_API_TOKEN
   },
   siwx: { nonceStore },              // custom nonce store
 });
@@ -420,6 +422,48 @@ The type system (generic parameters `HasAuth`, `NeedsBody`, `HasBody`) prevents 
 - `.siwx()` is mutually exclusive with `.paid()`
 - `.apiKey()` CAN compose with `.paid()`
 
+## MPP Persistent Store
+
+mppx uses a key-value store for transaction hash replay protection. Without a persistent store, `Store.memory()` is used — which is wiped on every cold start. This is unsafe on Vercel or any multi-instance deployment.
+
+### Vercel (zero config)
+
+Set `useDefaultStore: true` to auto-configure an Upstash-backed store from Vercel KV environment variables (`KV_REST_API_URL` + `KV_REST_API_TOKEN`). Uses raw `fetch` — no extra npm dependencies.
+
+```typescript
+createRouter({
+  mpp: {
+    secretKey: process.env.MPP_SECRET_KEY!,
+    currency: USDC,
+    useDefaultStore: true, // reads KV_REST_API_URL + KV_REST_API_TOKEN automatically
+  }
+})
+```
+
+### Cloudflare / custom
+
+Pass any `Store.Store` implementation directly via `mpp.store`:
+
+```typescript
+import { Store } from 'mppx'
+
+createRouter({
+  mpp: {
+    secretKey: process.env.MPP_SECRET_KEY!,
+    currency: USDC,
+    store: Store.cloudflare(env.MY_KV_NAMESPACE),
+  }
+})
+```
+
+Available adapters from `mppx`: `Store.upstash(redis)`, `Store.cloudflare(kv)`, `Store.redis(client)`, `Store.memory()`, `Store.from(custom)`.
+
+### Resolution order
+
+1. Explicit `store` wins if provided
+2. `useDefaultStore: true` creates an Upstash store from env vars
+3. Neither → mppx defaults to `Store.memory()`
+
 ## MPP Internals
 
 The router uses `mppx`'s high-level `Mppx.create()` API, which encapsulates the entire challenge-credential-receipt lifecycle.
@@ -509,6 +553,7 @@ Barrel validation catches mismatches: keys in `prices` but not registered → er
 | MPP 401 `unauthorized: authentication required` | Using default unauthenticated Tempo RPC | Set `TEMPO_RPC_URL` env var or `mpp.rpcUrl` config with authenticated URL |
 | `route 'X' in prices map but not registered` | Discovery endpoint hit before route module loaded | Add barrel import to discovery route files |
 | `mppx package is required` | mppx not installed | `pnpm add mppx` — it's an optional peer dep |
+| `useDefaultStore requires KV_REST_API_URL` | Vercel KV env vars not set | Add Vercel KV integration or set `KV_REST_API_URL` + `KV_REST_API_TOKEN` manually |
 
 ## Maintaining This Skill
 
