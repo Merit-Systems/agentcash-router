@@ -72,8 +72,8 @@ importers:
         specifier: ^10.0.0
         version: 10.0.0
       mppx:
-        specifier: ^0.4.8
-        version: 0.4.8(@modelcontextprotocol/sdk@1.26.0(zod@4.3.6))(express@5.2.1)(hono@4.11.10)(openapi-types@12.1.3)(typescript@5.9.3)(viem@2.47.2(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
+        specifier: ^0.4.10
+        version: 0.4.10(@modelcontextprotocol/sdk@1.26.0(zod@4.3.6))(express@5.2.1)(hono@4.11.10)(openapi-types@12.1.3)(typescript@5.9.3)(viem@2.47.2(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
       next:
         specifier: ^15.0.0
         version: 15.5.12(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -2818,8 +2818,8 @@ packages:
   mlly@1.8.0:
     resolution: {integrity: sha512-l8D9ODSRWLe2KHJSifWGwBqpTZXIXTeo8mlKjY+E2HAakaTeNpqAyBZ8GSqLzHgw4XmHmC8whvpjJNMbFZN7/g==}
 
-  mppx@0.4.8:
-    resolution: {integrity: sha512-vZnf1EoL9YyEs+HSmV73jsS7iD//ePBR0Qtnev39wbuHz/De4GMy74flejL759i+6H5Uz26CKdzjVWZODYR5Yw==}
+  mppx@0.4.10:
+    resolution: {integrity: sha512-oWiR0ysXt/sYD98jMVq3k+sjk9i/GCYslQcfzUGAHFNdZ8WWPQwxbVhEpnkm0zyiGLrJKlpG4XPvwOATPwvi4Q==}
     hasBin: true
     peerDependencies:
       '@modelcontextprotocol/sdk': '>=1.25.0'
@@ -6741,7 +6741,7 @@ snapshots:
       pkg-types: 1.3.1
       ufo: 1.6.3
 
-  mppx@0.4.8(@modelcontextprotocol/sdk@1.26.0(zod@4.3.6))(express@5.2.1)(hono@4.11.10)(openapi-types@12.1.3)(typescript@5.9.3)(viem@2.47.2(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)):
+  mppx@0.4.10(@modelcontextprotocol/sdk@1.26.0(zod@4.3.6))(express@5.2.1)(hono@4.11.10)(openapi-types@12.1.3)(typescript@5.9.3)(viem@2.47.2(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)):
     dependencies:
       '@remix-run/fetch-proxy': 0.7.1
       '@remix-run/node-fetch-server': 0.13.0
