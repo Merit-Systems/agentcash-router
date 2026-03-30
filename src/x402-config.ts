@@ -10,10 +10,11 @@ async function resolvePayToValue(
   payTo: PayToConfig | undefined,
   request: Request,
   fallback: string,
+  body?: unknown,
 ): Promise<string> {
   if (!payTo) return fallback;
   if (typeof payTo === 'string') return payTo;
-  return payTo(request);
+  return payTo(request, body);
 }
 
 export function getConfiguredX402Accepts(config: RouterConfig): X402AcceptConfig[] {
@@ -39,12 +40,13 @@ export async function resolveX402Accepts(
   routeEntry: Pick<RouteEntry, 'payTo'>,
   accepts: readonly X402AcceptConfig[],
   fallbackPayTo: string,
+  body?: unknown,
 ): Promise<X402ResolvedAccept[]> {
   return Promise.all(
     accepts.map(async (accept) => ({
       network: accept.network,
       scheme: accept.scheme ?? 'exact',
-      payTo: await resolvePayToValue(accept.payTo ?? routeEntry.payTo, request, fallbackPayTo),
+      payTo: await resolvePayToValue(accept.payTo ?? routeEntry.payTo, request, fallbackPayTo, body),
       ...(accept.asset ? { asset: accept.asset } : {}),
       ...(accept.decimals !== undefined ? { decimals: accept.decimals } : {}),
       ...(accept.maxTimeoutSeconds !== undefined

@@ -547,6 +547,7 @@ export function createRequestHandler(
         routeEntry,
         deps.x402Accepts,
         deps.payeeAddress,
+        body.data,
       );
       const verify = await verifyX402Payment({
         server: deps.x402Server,
@@ -1111,6 +1112,7 @@ async function build402(
         routeEntry,
         deps.x402Accepts,
         deps.payeeAddress,
+        bodyData,
       );
       const { encoded } = await buildX402Challenge({
         server: deps.x402Server,
