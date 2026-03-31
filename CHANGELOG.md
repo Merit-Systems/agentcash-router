@@ -1,5 +1,12 @@
 # @agentcash/router
 
+## 1.2.5
+
+### Patch Changes
+
+- bd04b6d: fix: route-level payTo takes priority over global accepts config
+- a00a4c5: bump mppx
+
 ## 1.2.4
 
 ### Patch Changes
