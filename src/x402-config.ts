@@ -47,7 +47,7 @@ export async function resolveX402Accepts(
       network: accept.network,
       scheme: accept.scheme ?? 'exact',
       payTo: await resolvePayToValue(
-        accept.payTo ?? routeEntry.payTo,
+        routeEntry.payTo ?? accept.payTo,
         request,
         fallbackPayTo,
         body,
