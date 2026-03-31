@@ -200,7 +200,7 @@ function buildPricingInfo(entry: RouteEntry): Record<string, unknown> | undefine
 
   if (typeof entry.pricing === 'string') {
     return {
-      price: { mode: 'fixed', currency: 'USD', value: entry.pricing },
+      price: { mode: 'fixed', currency: 'USD', amount: entry.pricing },
     };
   }
 
@@ -223,7 +223,7 @@ function buildPricingInfo(entry: RouteEntry): Record<string, unknown> | undefine
     if (Number.isFinite(min) && Number.isFinite(max)) {
       if (min === max) {
         return {
-          price: { mode: 'fixed', currency: 'USD', value: String(min) },
+          price: { mode: 'fixed', currency: 'USD', amount: String(min) },
         };
       }
       return {

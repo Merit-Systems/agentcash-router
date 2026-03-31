@@ -40,7 +40,7 @@ describe('openapi discovery document', () => {
 
     const operation = doc.paths['/api/search'].post;
     expect(operation['x-payment-info']).toEqual({
-      price: { mode: 'fixed', currency: 'USD', value: '0.02' },
+      price: { mode: 'fixed', currency: 'USD', amount: '0.02' },
       protocols: [{ x402: {} }, { mpp: { method: '', intent: '', currency: '' } }],
     });
     expect(operation.responses['402']).toBeDefined();
@@ -107,7 +107,7 @@ describe('openapi discovery document', () => {
     expect(siwxPaidOperation.security).toEqual([{ siwx: [] }]);
     expect(siwxPaidOperation.responses['402']).toBeDefined();
     expect(siwxPaidOperation['x-payment-info']).toEqual({
-      price: { mode: 'fixed', currency: 'USD', value: '0.10' },
+      price: { mode: 'fixed', currency: 'USD', amount: '0.10' },
       protocols: [{ x402: {} }],
     });
 
@@ -116,7 +116,7 @@ describe('openapi discovery document', () => {
     expect(apiKeyPaidOperation.responses['401']).toBeDefined();
     expect(apiKeyPaidOperation.responses['402']).toBeDefined();
     expect(apiKeyPaidOperation['x-payment-info']).toEqual({
-      price: { mode: 'fixed', currency: 'USD', value: '0.10' },
+      price: { mode: 'fixed', currency: 'USD', amount: '0.10' },
       protocols: [{ x402: {} }],
     });
   });
