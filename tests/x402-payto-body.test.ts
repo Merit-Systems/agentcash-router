@@ -9,10 +9,12 @@ describe('resolveX402Accepts body forwarding', () => {
 
     const accepts = await resolveX402Accepts(
       fakeRequest,
-      { payTo: (_req: Request, body?: unknown) => {
-        receivedBody = body;
-        return (body as { address: string }).address;
-      }},
+      {
+        payTo: (_req: Request, body?: unknown) => {
+          receivedBody = body;
+          return (body as { address: string }).address;
+        },
+      },
       [{ network: 'eip155:8453', scheme: 'exact' }],
       '0xfallback',
       { address: '0xUserAddress', amount: 5 },

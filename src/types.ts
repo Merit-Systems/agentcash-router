@@ -109,9 +109,7 @@ export type PricingConfig<TBody = unknown> =
   | ((body: TBody) => string | Promise<string>)
   | { field: string; tiers: Record<string, TierConfig>; default?: string };
 
-export type PayToConfig =
-  | string
-  | ((request: Request, body?: unknown) => string | Promise<string>);
+export type PayToConfig = string | ((request: Request, body?: unknown) => string | Promise<string>);
 
 interface X402AcceptBase {
   network: string;

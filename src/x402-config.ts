@@ -46,7 +46,12 @@ export async function resolveX402Accepts(
     accepts.map(async (accept) => ({
       network: accept.network,
       scheme: accept.scheme ?? 'exact',
-      payTo: await resolvePayToValue(accept.payTo ?? routeEntry.payTo, request, fallbackPayTo, body),
+      payTo: await resolvePayToValue(
+        accept.payTo ?? routeEntry.payTo,
+        request,
+        fallbackPayTo,
+        body,
+      ),
       ...(accept.asset ? { asset: accept.asset } : {}),
       ...(accept.decimals !== undefined ? { decimals: accept.decimals } : {}),
       ...(accept.maxTimeoutSeconds !== undefined
