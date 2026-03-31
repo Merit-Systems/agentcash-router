@@ -120,8 +120,7 @@ function buildOperation(
   requiresSiwxScheme: boolean;
   requiresApiKeyScheme: boolean;
 } {
-  const protocols =
-    entry.protocols.length > 0 ? entry.protocols.map(toProtocolObject) : undefined;
+  const protocols = entry.protocols.length > 0 ? entry.protocols.map(toProtocolObject) : undefined;
   const paymentRequired = Boolean(entry.pricing) || entry.authMode === 'paid';
   const requiresSiwxScheme = entry.authMode === 'siwx' || Boolean(entry.siwxEnabled);
   const requiresApiKeyScheme = Boolean(entry.apiKeyResolver) && entry.authMode !== 'siwx';
