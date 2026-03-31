@@ -40,9 +40,8 @@ describe('openapi discovery document', () => {
 
     const operation = doc.paths['/api/search'].post;
     expect(operation['x-payment-info']).toEqual({
-      pricingMode: 'fixed',
-      price: '0.02',
-      protocols: ['x402', 'mpp'],
+      price: { mode: 'fixed', currency: 'USD', value: '0.02' },
+      protocols: [{ x402: {} }, { mpp: { method: '', intent: '', currency: '' } }],
     });
     expect(operation.responses['402']).toBeDefined();
     expect(operation.security).toBeUndefined();
@@ -108,9 +107,8 @@ describe('openapi discovery document', () => {
     expect(siwxPaidOperation.security).toEqual([{ siwx: [] }]);
     expect(siwxPaidOperation.responses['402']).toBeDefined();
     expect(siwxPaidOperation['x-payment-info']).toEqual({
-      pricingMode: 'fixed',
-      price: '0.10',
-      protocols: ['x402'],
+      price: { mode: 'fixed', currency: 'USD', value: '0.10' },
+      protocols: [{ x402: {} }],
     });
 
     const apiKeyPaidOperation = doc.paths['/api/apikey/data'].post;
@@ -118,9 +116,8 @@ describe('openapi discovery document', () => {
     expect(apiKeyPaidOperation.responses['401']).toBeDefined();
     expect(apiKeyPaidOperation.responses['402']).toBeDefined();
     expect(apiKeyPaidOperation['x-payment-info']).toEqual({
-      pricingMode: 'fixed',
-      price: '0.10',
-      protocols: ['x402'],
+      price: { mode: 'fixed', currency: 'USD', value: '0.10' },
+      protocols: [{ x402: {} }],
     });
   });
 
@@ -154,10 +151,8 @@ describe('openapi discovery document', () => {
 
     const operation = doc.paths['/api/dynamic/quote'].post;
     expect(operation['x-payment-info']).toEqual({
-      pricingMode: 'quote',
-      minPrice: '0.01',
-      maxPrice: '0.25',
-      protocols: ['x402'],
+      price: { mode: 'dynamic', currency: 'USD', min: '0.01', max: '0.25' },
+      protocols: [{ x402: {} }],
     });
   });
 });

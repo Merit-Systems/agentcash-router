@@ -120,7 +120,8 @@ function buildOperation(
   requiresSiwxScheme: boolean;
   requiresApiKeyScheme: boolean;
 } {
-  const protocols = entry.protocols.length > 0 ? entry.protocols : undefined;
+  const protocols =
+    entry.protocols.length > 0 ? entry.protocols.map(toProtocolObject) : undefined;
   const paymentRequired = Boolean(entry.pricing) || entry.authMode === 'paid';
   const requiresSiwxScheme = entry.authMode === 'siwx' || Boolean(entry.siwxEnabled);
   const requiresApiKeyScheme = Boolean(entry.apiKeyResolver) && entry.authMode !== 'siwx';
@@ -187,21 +188,30 @@ function buildOperation(
   };
 }
 
+function toProtocolObject(protocol: string): Record<string, unknown> {
+  if (protocol === 'mpp') {
+    return { mpp: { method: '', intent: '', currency: '' } };
+  }
+  return { [protocol]: {} };
+}
+
 function buildPricingInfo(entry: RouteEntry): Record<string, unknown> | undefined {
   if (!entry.pricing) return undefined;
 
   if (typeof entry.pricing === 'string') {
     return {
-      pricingMode: 'fixed',
-      price: entry.pricing,
+      price: { mode: 'fixed', currency: 'USD', value: entry.pricing },
     };
   }
 
   if (typeof entry.pricing === 'function') {
     return {
-      pricingMode: 'quote',
-      ...(entry.minPrice ? { minPrice: entry.minPrice } : {}),
-      ...(entry.maxPrice ? { maxPrice: entry.maxPrice } : {}),
+      price: {
+        mode: 'dynamic',
+        currency: 'USD',
+        min: entry.minPrice ?? '0',
+        max: entry.maxPrice ?? '0',
+      },
     };
   }
 
@@ -213,20 +223,21 @@ function buildPricingInfo(entry: RouteEntry): Record<string, unknown> | undefine
     if (Number.isFinite(min) && Number.isFinite(max)) {
       if (min === max) {
         return {
-          pricingMode: 'fixed',
-          price: String(min),
+          price: { mode: 'fixed', currency: 'USD', value: String(min) },
         };
       }
       return {
-        pricingMode: 'range',
-        minPrice: String(min),
-        maxPrice: String(max),
+        price: { mode: 'dynamic', currency: 'USD', min: String(min), max: String(max) },
       };
     }
 
     return {
-      pricingMode: 'quote',
-      ...(entry.maxPrice ? { maxPrice: entry.maxPrice } : {}),
+      price: {
+        mode: 'dynamic',
+        currency: 'USD',
+        min: '0',
+        max: entry.maxPrice ?? '0',
+      },
     };
   }
 
