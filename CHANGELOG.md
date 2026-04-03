@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.3.0
+
+### Minor Changes
+
+- 2bd5283: Set meaningful MPP defaults in x-payment-info (method: "tempo", intent: "charge", currency: Tempo USDC address) and add optional `mpp` override in PaidOptions
+
 ## 1.2.6
 
 ### Patch Changes
