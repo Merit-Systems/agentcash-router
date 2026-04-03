@@ -8,6 +8,7 @@ import type {
   AuthMode,
   ProtocolType,
   ProviderConfig,
+  MppProtocolInfo,
 } from './types.js';
 import type { RouteRegistry } from './registry.js';
 import type { OrchestrateDeps } from './orchestrate.js';
@@ -51,6 +52,7 @@ export class RouteBuilder<
   /** @internal */ _providerName: string | undefined;
   /** @internal */ _providerConfig: ProviderConfig | undefined;
   /** @internal */ _validateFn: ((body: TBody) => void | Promise<void>) | undefined;
+  /** @internal */ _mppInfo: MppProtocolInfo | undefined;
 
   constructor(key: string, registry: RouteRegistry, deps: OrchestrateDeps) {
     this._key = key;
@@ -98,6 +100,7 @@ export class RouteBuilder<
     if (options?.maxPrice) next._maxPrice = options.maxPrice;
     if (options?.minPrice) next._minPrice = options.minPrice;
     if (options?.payTo) next._payTo = options.payTo;
+    if (options?.mpp) next._mppInfo = options.mpp;
 
     // Registration-time validation
     if (typeof pricing === 'object' && 'tiers' in pricing) {
@@ -305,6 +308,7 @@ export class RouteBuilder<
       providerName: this._providerName,
       providerConfig: this._providerConfig,
       validateFn: this._validateFn as ((body: unknown) => void | Promise<void>) | undefined,
+      mppInfo: this._mppInfo,
     };
 
     // Register in registry

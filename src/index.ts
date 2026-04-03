@@ -322,6 +322,7 @@ export type {
   RouteEntry,
   PricingConfig,
   PaidOptions,
+  MppProtocolInfo,
   ProtocolType,
   AuthMode,
   AlertFn,
