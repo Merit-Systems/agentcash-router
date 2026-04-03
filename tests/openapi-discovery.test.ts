@@ -41,7 +41,7 @@ describe('openapi discovery document', () => {
     const operation = doc.paths['/api/search'].post;
     expect(operation['x-payment-info']).toEqual({
       price: { mode: 'fixed', currency: 'USD', amount: '0.02' },
-      protocols: [{ x402: {} }, { mpp: { method: '', intent: '', currency: '' } }],
+      protocols: [{ x402: {} }, { mpp: { method: 'tempo', intent: 'charge', currency: '0x20c0000000000000000000000000000000000001' } }],
     });
     expect(operation.responses['402']).toBeDefined();
     expect(operation.security).toBeUndefined();

@@ -120,7 +120,10 @@ function buildOperation(
   requiresSiwxScheme: boolean;
   requiresApiKeyScheme: boolean;
 } {
-  const protocols = entry.protocols.length > 0 ? entry.protocols.map(toProtocolObject) : undefined;
+  const protocols =
+    entry.protocols.length > 0
+      ? entry.protocols.map((p) => toProtocolObject(p, entry.mppInfo))
+      : undefined;
   const paymentRequired = Boolean(entry.pricing) || entry.authMode === 'paid';
   const requiresSiwxScheme = entry.authMode === 'siwx' || Boolean(entry.siwxEnabled);
   const requiresApiKeyScheme = Boolean(entry.apiKeyResolver) && entry.authMode !== 'siwx';
@@ -187,9 +190,18 @@ function buildOperation(
   };
 }
 
-function toProtocolObject(protocol: string): Record<string, unknown> {
+function toProtocolObject(
+  protocol: string,
+  mppInfo?: { method?: string; intent?: string; currency?: string },
+): Record<string, unknown> {
   if (protocol === 'mpp') {
-    return { mpp: { method: '', intent: '', currency: '' } };
+    return {
+      mpp: {
+        method: mppInfo?.method ?? 'tempo',
+        intent: mppInfo?.intent ?? 'charge',
+        currency: mppInfo?.currency ?? '0x20c0000000000000000000000000000000000001',
+      },
+    };
   }
   return { [protocol]: {} };
 }

@@ -140,12 +140,20 @@ export interface X402FacilitatorsConfig {
   solana?: X402FacilitatorTarget;
 }
 
+export interface MppProtocolInfo {
+  method?: string;
+  intent?: string;
+  currency?: string;
+}
+
 export interface PaidOptions {
   protocols?: ProtocolType[];
   maxPrice?: string;
   minPrice?: string;
   /** Override the payment recipient. String for static, function for dynamic (receives the Request). */
   payTo?: PayToConfig;
+  /** Override MPP protocol metadata in x-payment-info discovery. */
+  mpp?: MppProtocolInfo;
 }
 
 // ---------------------------------------------------------------------------
@@ -223,6 +231,7 @@ export interface RouteEntry {
   providerName?: string;
   providerConfig?: ProviderConfig;
   validateFn?: (body: unknown) => void | Promise<void>;
+  mppInfo?: MppProtocolInfo;
 }
 
 // ---------------------------------------------------------------------------
