@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.3.3
+
+### Patch Changes
+
+- 5b46274: Update type signature of upstash kv store
+
 ## 1.3.2
 
 ### Patch Changes
