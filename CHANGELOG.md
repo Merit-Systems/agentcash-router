@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.3.1
+
+### Patch Changes
+
+- 4404d20: bump versions, support upto
+
 ## 1.3.0
 
 ### Minor Changes
