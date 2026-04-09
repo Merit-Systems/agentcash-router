@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.3.2
+
+### Patch Changes
+
+- 2cff6ae: add update method to kv cache
+
 ## 1.3.1
 
 ### Patch Changes
