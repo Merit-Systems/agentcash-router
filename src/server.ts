@@ -33,6 +33,10 @@ export async function createX402Server(config: RouterConfig) {
 
   if (evmNetworks.length > 0) {
     registerExactEvmScheme(server, { networks: evmNetworks });
+    const { UptoEvmScheme } = await import('@x402/evm/upto/server');
+    for (const network of evmNetworks) {
+      server.register(network, new UptoEvmScheme());
+    }
   }
   if (svmNetworks.length > 0) {
     const { registerExactSvmScheme } = await import('@x402/svm/exact/server');
@@ -84,20 +88,26 @@ function createFacilitatorClients(
 
   return groups.map((group) => {
     const inner = new HTTPFacilitatorClient(group.config);
-    const kinds = group.networks.map((network) => ({
-      x402Version: 2 as const,
-      scheme: 'exact' as const,
-      network,
-      ...(group.family === 'solana'
-        ? {
-            extra: {
-              features: {
-                xSettlementAccountSupported: true,
+    const kinds = group.networks.flatMap((network) => {
+      const exactKind = {
+        x402Version: 2 as const,
+        scheme: 'exact' as const,
+        network,
+        ...(group.family === 'solana'
+          ? {
+              extra: {
+                features: {
+                  xSettlementAccountSupported: true,
+                },
               },
-            },
-          }
-        : {}),
-    }));
+            }
+          : {}),
+      };
+      if (group.family === 'evm') {
+        return [exactKind, { x402Version: 2 as const, scheme: 'upto' as const, network }];
+      }
+      return [exactKind];
+    });
     return cachedClient(inner, kinds);
   });
 }
