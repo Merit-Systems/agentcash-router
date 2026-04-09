@@ -41,10 +41,10 @@ export function createUpstashRest(url: string, token: string): Store.upstash.Par
     get,
     set,
     del,
-    async update(
+    async update<result>(
       key: string,
-      fn: (current: unknown) => { op: string; value?: unknown; result: unknown },
-    ): Promise<unknown> {
+      fn: (current: unknown) => Store.Change<unknown, result>,
+    ): Promise<result> {
       const current = await get(key);
       const change = fn(current);
       if (change.op === 'set') await set(key, change.value);
