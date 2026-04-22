@@ -30,8 +30,8 @@ export interface ServiceRouter<TPriceKeys extends string = never> {
   route<K extends string>(
     keyOrDefinition: K | RouteDefinition<K>,
   ): [K] extends [TPriceKeys]
-    ? RouteBuilder<undefined, undefined, true, false, false>
-    : RouteBuilder<undefined, undefined, false, false, false>;
+    ? RouteBuilder<undefined, undefined, undefined, true, false, false, false, false>
+    : RouteBuilder<undefined, undefined, undefined, false, false, false, false, false>;
   wellKnown(): (request: NextRequest) => Promise<NextResponse>;
   openapi(): (request: NextRequest) => Promise<NextResponse>;
   llmsTxt(): (request: NextRequest) => Promise<NextResponse>;

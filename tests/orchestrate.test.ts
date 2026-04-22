@@ -1204,6 +1204,63 @@ describe('Bazaar schema generation', () => {
     expect(bodyProps.properties?.value).toBeDefined();
   });
 
+  it('embeds routeEntry.method on the bazaar input declaration', async () => {
+    // Regression: previously `input.method` was omitted, which failed the bazaar
+    // discovery validator (QueryInput schema requires method ∈ {GET,HEAD,DELETE};
+    // BodyInput requires method ∈ {POST,PUT,PATCH}).
+    const entry = makeEntry({ bodySchema, method: 'POST' });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(makeProbeRequest());
+    expect(res.status).toBe(402);
+
+    const encoded = res.headers.get('PAYMENT-REQUIRED')!;
+    const challenge = JSON.parse(Buffer.from(encoded, 'base64').toString());
+    expect(challenge.extensions?.bazaar?.info?.input?.method).toBe('POST');
+  });
+
+  it('omits output block when no outputExample is registered', async () => {
+    // Regression: previously emitted `output.example: {}`, which failed validation
+    // when the outputSchema declared required fields. Without an example, the
+    // whole output block must be dropped from the declaration.
+    const outputSchemaWithRequired = z.object({ result: z.string() });
+    const entry = makeEntry({ bodySchema, outputSchema: outputSchemaWithRequired });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(makeProbeRequest());
+    expect(res.status).toBe(402);
+
+    const encoded = res.headers.get('PAYMENT-REQUIRED')!;
+    const challenge = JSON.parse(Buffer.from(encoded, 'base64').toString());
+    expect(challenge.extensions?.bazaar?.info?.output).toBeUndefined();
+    expect(challenge.extensions?.bazaar?.schema?.properties?.output).toBeUndefined();
+  });
+
+  it('emits output block with example when outputExample is registered', async () => {
+    const outputSchemaWithRequired = z.object({ result: z.string() });
+    const entry = makeEntry({
+      bodySchema,
+      outputSchema: outputSchemaWithRequired,
+      outputExample: { result: 'ok' },
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(makeProbeRequest());
+    expect(res.status).toBe(402);
+
+    const encoded = res.headers.get('PAYMENT-REQUIRED')!;
+    const challenge = JSON.parse(Buffer.from(encoded, 'base64').toString());
+    expect(challenge.extensions?.bazaar?.info?.output?.example).toEqual({ result: 'ok' });
+  });
+
+  it('populates input.body from inputExample for body routes', async () => {
+    const entry = makeEntry({ bodySchema, inputExample: { query: 'example-term' } });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(makeProbeRequest());
+    expect(res.status).toBe(402);
+
+    const encoded = res.headers.get('PAYMENT-REQUIRED')!;
+    const challenge = JSON.parse(Buffer.from(encoded, 'base64').toString());
+    expect(challenge.extensions?.bazaar?.info?.input?.body).toEqual({ query: 'example-term' });
+  });
+
   it('fires onAlert warn when Bazaar generation fails entirely', async () => {
     const alerts: Array<{ level: string; message: string }> = [];
     const entry = makeEntry({

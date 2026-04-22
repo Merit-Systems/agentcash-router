@@ -33,6 +33,7 @@ describe('fluent chain', () => {
     const handler = builder
       .paid('0.01')
       .body(bodySchema)
+      .inputExample({ query: 'hello' })
       .handler(async ({ body }) => ({ result: body.query }));
     expect(typeof handler).toBe('function');
   });
@@ -42,6 +43,7 @@ describe('fluent chain', () => {
     const handler = builder
       .siwx()
       .query(querySchema)
+      .inputExample({ page: '1' })
       .handler(async ({ query }) => ({ page: query.page }));
     expect(typeof handler).toBe('function');
   });
@@ -57,7 +59,9 @@ describe('fluent chain', () => {
     builder
       .paid('0.05')
       .body(bodySchema)
+      .inputExample({ query: 'hello' })
       .output(outputSchema)
+      .outputExample({ result: 'ok' })
       .description('Test route description')
       .handler(async ({ body }) => ({ result: body.query }));
 
@@ -67,6 +71,8 @@ describe('fluent chain', () => {
     expect(entry!.description).toBe('Test route description');
     expect(entry!.bodySchema).toBeDefined();
     expect(entry!.outputSchema).toBeDefined();
+    expect(entry!.inputExample).toEqual({ query: 'hello' });
+    expect(entry!.outputExample).toEqual({ result: 'ok' });
   });
 
   it('route key is stored in registry on construction', () => {
@@ -163,6 +169,7 @@ describe('registration-time safety', () => {
         .paid('0.01')
         .validate(() => {})
         .body(bodySchema)
+        .inputExample({ query: 'hello' })
         .handler(async () => ({})),
     ).not.toThrow();
   });
@@ -177,12 +184,66 @@ describe('registration-time safety', () => {
     const b2 = new RouteBuilder('fork/other', reg2, makeDeps());
     const chain2 = b2.paid('0.02', { protocols: ['x402', 'mpp'] });
 
-    chain1.body(bodySchema).handler(async () => ({}));
-    chain2.body(bodySchema).handler(async () => ({}));
+    chain1
+      .body(bodySchema)
+      .inputExample({ query: 'hello' })
+      .handler(async () => ({}));
+    chain2
+      .body(bodySchema)
+      .inputExample({ query: 'hello' })
+      .handler(async () => ({}));
 
     const e1 = reg.get('fork/base');
     const e2 = reg2.get('fork/other');
     expect(e1!.protocols).toEqual(['x402']);
     expect(e2!.protocols).toEqual(['x402', 'mpp']);
+  });
+
+  it('.body() without .inputExample() throws at registration', () => {
+    const { builder } = makeBuilder('no/input-example');
+    expect(() =>
+      builder
+        .paid('0.01')
+        .body(bodySchema)
+        .handler(async () => ({})),
+    ).toThrow('.body() requires a matching .inputExample()');
+  });
+
+  it('.output() without .outputExample() throws at registration', () => {
+    const { builder } = makeBuilder('no/output-example');
+    expect(() =>
+      builder
+        .paid('0.01')
+        .body(bodySchema)
+        .inputExample({ query: 'hello' })
+        .output(outputSchema)
+        .handler(async () => ({})),
+    ).toThrow('.output() requires a matching .outputExample()');
+  });
+
+  it('.inputExample() that does not match .body() schema throws at registration', () => {
+    const { builder } = makeBuilder('bad/input-example');
+    expect(() =>
+      builder
+        .paid('0.01')
+        .body(bodySchema)
+        // @ts-expect-error — wrong type, testing runtime validation
+        .inputExample({ query: 123 })
+        .handler(async () => ({})),
+    ).toThrow('.inputExample() does not satisfy .body() schema');
+  });
+
+  it('.outputExample() that does not match .output() schema throws at registration', () => {
+    const { builder } = makeBuilder('bad/output-example');
+    expect(() =>
+      builder
+        .paid('0.01')
+        .body(bodySchema)
+        .inputExample({ query: 'hello' })
+        .output(outputSchema)
+        // @ts-expect-error — wrong type, testing runtime validation
+        .outputExample({ result: 123 })
+        .handler(async () => ({})),
+    ).toThrow('.outputExample() does not satisfy .output() schema');
   });
 });

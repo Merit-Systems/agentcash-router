@@ -373,6 +373,7 @@ describe('.provider() builder method', () => {
         extractQuota: () => ({ remaining: 100, limit: null }),
       })
       .body(bodySchema)
+      .inputExample({ query: 'hello' })
       .handler(async ({ body }) => ({ result: body.query }));
 
     expect(typeof fn).toBe('function');
