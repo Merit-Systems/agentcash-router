@@ -241,10 +241,13 @@ export interface RouteEntry {
    * Conforming example for the response output. Required whenever `outputSchema` is set.
    * Must satisfy `outputSchema` — validated at route-registration time via the Zod schema.
    *
+   * Accepts any JSON value (object, array, or primitive) to support top-level array or
+   * primitive response schemas.
+   *
    * Emitted in the bazaar discovery extension. Without it the `output` block is dropped from
    * the declaration entirely (the output schema alone cannot be exposed in bazaar without an example).
    */
-  outputExample?: JsonObject;
+  outputExample?: JsonValue;
   description?: string;
   path?: string;
   method: RouteMethod;

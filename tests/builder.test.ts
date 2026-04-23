@@ -246,4 +246,30 @@ describe('registration-time safety', () => {
         .handler(async () => ({})),
     ).toThrow('.outputExample() does not satisfy .output() schema');
   });
+
+  it('.outputExample() accepts a top-level array (e.g. z.array(...))', () => {
+    const { builder, registry } = makeBuilder('array/output');
+    const arraySchema = z.array(z.record(z.string(), z.unknown()));
+    builder
+      .paid('0.01')
+      .output(arraySchema)
+      .outputExample([{ name: 'Ethereum' }, { name: 'Base' }])
+      .handler(async () => []);
+
+    const entry = registry.get('array/output');
+    expect(entry!.outputExample).toEqual([{ name: 'Ethereum' }, { name: 'Base' }]);
+  });
+
+  it('.outputExample() rejects an array that does not match the schema', () => {
+    const { builder } = makeBuilder('bad/array-output');
+    const arraySchema = z.array(z.object({ name: z.string() }));
+    expect(() =>
+      builder
+        .paid('0.01')
+        .output(arraySchema)
+        // @ts-expect-error — wrong element type, testing runtime validation
+        .outputExample([{ name: 123 }])
+        .handler(async () => []),
+    ).toThrow('.outputExample() does not satisfy .output() schema');
+  });
 });

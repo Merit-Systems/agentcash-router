@@ -10,6 +10,7 @@ import type {
   ProviderConfig,
   MppProtocolInfo,
   JsonObject,
+  JsonValue,
 } from './types.js';
 import type { RouteRegistry } from './registry.js';
 import type { OrchestrateDeps } from './orchestrate.js';
@@ -100,7 +101,7 @@ export class RouteBuilder<
   /** @internal */ _outputSchema: ZodType | undefined;
   /** @internal */ _inputExample: JsonObject | undefined = undefined;
   /** @internal */ _hasInputExample = false;
-  /** @internal */ _outputExample: JsonObject | undefined = undefined;
+  /** @internal */ _outputExample: JsonValue | undefined = undefined;
   /** @internal */ _hasOutputExample = false;
   /** @internal */ _description: string | undefined;
   /** @internal */ _path: string | undefined;
@@ -448,6 +449,10 @@ export class RouteBuilder<
    * the schema. The example is embedded in the bazaar discovery extension so indexers
    * can advertise the response shape.
    *
+   * Accepts any JSON value (objects, arrays, or primitives) — top-level array
+   * or primitive responses (e.g. `z.array(...)`) are supported alongside the
+   * common object case.
+   *
    * @example
    * ```ts
    * router.route('search')
@@ -455,10 +460,17 @@ export class RouteBuilder<
    *   .output(z.object({ results: z.array(z.string()) }))
    *   .outputExample({ results: ['a', 'b'] })
    *   .handler(async () => { ... });
+   *
+   * // Top-level array response
+   * router.route('chains')
+   *   .paid('0.01')
+   *   .output(z.array(z.object({ name: z.string() })))
+   *   .outputExample([{ name: 'Ethereum' }])
+   *   .handler(async () => { ... });
    * ```
    */
   outputExample(
-    example: TOutput & JsonObject,
+    example: TOutput & JsonValue,
   ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, NeedsInputExample, False> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
