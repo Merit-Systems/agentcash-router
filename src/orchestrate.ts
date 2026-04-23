@@ -1060,6 +1060,16 @@ async function build402(
   // challenge so discovery tools can tell callers what fields to send.
   // `unrepresentable: 'any'` handles .transform()/.refine() schemas gracefully
   // (emits `{}` for those fields instead of throwing).
+  //
+  // `method` must be set here: the bazaar validator requires `input.method`, and the
+  // resource-server `enrichDeclaration` hook only fires on discovery listings, not on
+  // 402-challenge embedding.
+  //
+  // `output` is only emitted when an `outputExample` is registered on the route — the
+  // bazaar schema gates the whole output block on example presence. Emitting `example: {}`
+  // would fail the user's outputSchema whenever it has required fields. `.outputExample()`
+  // is type-required by the builder whenever `.output()` is set, but defensive-guard here
+  // so routes declared without the builder (tests, etc.) don't regress to broken declarations.
   let extensions: Record<string, unknown> | undefined;
   try {
     const { z } = await import('zod');
@@ -1077,10 +1087,16 @@ async function build402(
     const outputSchema = routeEntry.outputSchema ? toJSON(routeEntry.outputSchema) : undefined;
     if (inputSchema) {
       const config: Record<string, unknown> = {
+        method: routeEntry.method,
         bodyType: routeEntry.bodySchema ? 'json' : undefined,
         inputSchema,
       };
-      if (outputSchema) config.output = { schema: outputSchema, example: {} };
+      if (routeEntry.inputExample !== undefined) {
+        config.input = routeEntry.inputExample;
+      }
+      if (outputSchema && routeEntry.outputExample !== undefined) {
+        config.output = { schema: outputSchema, example: routeEntry.outputExample };
+      }
       extensions = declareDiscoveryExtension(config);
     }
   } catch (err) {

@@ -14,6 +14,7 @@ describe('route definitions', () => {
       .route({ path: '/api/jobs/{id}/', method: 'DELETE' })
       .paid('0.01')
       .body(z.object({}))
+      .inputExample({})
       .handler(async () => ({ ok: true }));
 
     const entry = router.registry.get('jobs/{id}');
@@ -31,6 +32,7 @@ describe('route definitions', () => {
     router
       .route({ path: 'search/query' })
       .body(z.object({}))
+      .inputExample({})
       .handler(async () => ({ ok: true }));
 
     const entry = router.registry.get('search/query');
