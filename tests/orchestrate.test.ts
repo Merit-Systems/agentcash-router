@@ -361,9 +361,10 @@ describe('probe request (no auth header)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Discovery probe tests — match x402scan prober behavior
-// x402scan sends POST with body '{}' and no payment/auth headers.
-// The router MUST return 402 (not 400) so resources are discoverable.
+// Unpaid probe tests.
+// Valid body probes should still receive a 402 challenge with the quoted price.
+// Invalid body probes should fail before payment so invalid requests are not
+// presented as payable.
 // ---------------------------------------------------------------------------
 
 describe('discovery probe (x402scan prober)', () => {
@@ -377,7 +378,7 @@ describe('discovery probe (x402scan prober)', () => {
   }
 
   describe('x402 routes', () => {
-    it('returns 402 with dynamic pricing and empty probe body', async () => {
+    it('returns 400 with dynamic pricing and empty probe body', async () => {
       const entry = makeEntry({
         pricing: (_body: unknown) => '0.05',
         maxPrice: '5.00',
@@ -385,11 +386,11 @@ describe('discovery probe (x402scan prober)', () => {
       });
       const handler = createRequestHandler(entry, async () => ({}), makeDeps());
       const res = await handler(makeX402ScanProbe());
-      expect(res.status).toBe(402);
-      expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
+      expect(res.status).toBe(400);
+      expect(res.headers.get('PAYMENT-REQUIRED')).toBeNull();
     });
 
-    it('returns 402 with no body at all', async () => {
+    it('returns 400 with no body at all when dynamic pricing needs body data', async () => {
       const entry = makeEntry({
         pricing: (_body: unknown) => '0.05',
         maxPrice: '5.00',
@@ -399,10 +400,10 @@ describe('discovery probe (x402scan prober)', () => {
       // No body, no Content-Type — bare probe
       const req = new NextRequest('http://localhost:3000/api/test', { method: 'POST' });
       const res = await handler(req);
-      expect(res.status).toBe(402);
+      expect(res.status).toBe(400);
     });
 
-    it('uses maxPrice when probe body fails schema validation', async () => {
+    it('returns 400 when probe body fails schema validation', async () => {
       const pricingFn = vi.fn((_body: unknown) => '0.05');
       const entry = makeEntry({
         pricing: pricingFn,
@@ -411,8 +412,35 @@ describe('discovery probe (x402scan prober)', () => {
       });
       const handler = createRequestHandler(entry, async () => ({}), makeDeps());
       const res = await handler(makeX402ScanProbe());
-      expect(res.status).toBe(402);
+      expect(res.status).toBe(400);
+      expect(res.headers.get('PAYMENT-REQUIRED')).toBeNull();
       // Pricing function should NOT be called — body was invalid
+      expect(pricingFn).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 for schema-excluded enum values before payment challenge', async () => {
+      const pricingFn = vi.fn((body: unknown) => {
+        const tier = (body as { tier: string }).tier;
+        return tier === 'short-10mb' ? '0.005' : '2.00';
+      });
+      const entry = makeEntry({
+        pricing: pricingFn,
+        maxPrice: '2.00',
+        bodySchema: z.object({
+          tier: z.enum(['10mb', '100mb', '1gb', 'short-10mb']),
+        }),
+      });
+      const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+      const req = new NextRequest('http://localhost:3000/api/test', {
+        method: 'POST',
+        body: JSON.stringify({ tier: 'short-5gb' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const res = await handler(req);
+
+      expect(res.status).toBe(400);
+      expect(res.headers.get('PAYMENT-REQUIRED')).toBeNull();
       expect(pricingFn).not.toHaveBeenCalled();
     });
 
@@ -434,7 +462,7 @@ describe('discovery probe (x402scan prober)', () => {
       expect(pricingFn).toHaveBeenCalled();
     });
 
-    it('returns 402 when validateFn exists but body fails parse', async () => {
+    it('returns 400 when validateFn exists but body fails parse', async () => {
       const validateFn = vi.fn();
       const entry = makeEntry({
         pricing: (_body: unknown) => '0.05',
@@ -444,14 +472,14 @@ describe('discovery probe (x402scan prober)', () => {
       });
       const handler = createRequestHandler(entry, async () => ({}), makeDeps());
       const res = await handler(makeX402ScanProbe());
-      expect(res.status).toBe(402);
+      expect(res.status).toBe(400);
       // validateFn should NOT be called — body failed parse
       expect(validateFn).not.toHaveBeenCalled();
     });
   });
 
   describe('MPP routes', () => {
-    it('returns 402 with dynamic pricing and empty probe body', async () => {
+    it('returns 400 with dynamic pricing and empty probe body', async () => {
       const entry = makeMPPEntry({
         pricing: (_body: unknown) => '0.05',
         maxPrice: '5.00',
@@ -459,11 +487,11 @@ describe('discovery probe (x402scan prober)', () => {
       });
       const handler = createRequestHandler(entry, async () => ({}), makeMPPDeps());
       const res = await handler(makeX402ScanProbe());
-      expect(res.status).toBe(402);
-      expect(res.headers.get('WWW-Authenticate')).toBeTruthy();
+      expect(res.status).toBe(400);
+      expect(res.headers.get('WWW-Authenticate')).toBeNull();
     });
 
-    it('returns 402 with no body at all', async () => {
+    it('returns 400 with no body at all when dynamic pricing needs body data', async () => {
       const entry = makeMPPEntry({
         pricing: (_body: unknown) => '0.05',
         maxPrice: '5.00',
@@ -472,12 +500,12 @@ describe('discovery probe (x402scan prober)', () => {
       const handler = createRequestHandler(entry, async () => ({}), makeMPPDeps());
       const req = new NextRequest('http://localhost:3000/api/test', { method: 'POST' });
       const res = await handler(req);
-      expect(res.status).toBe(402);
+      expect(res.status).toBe(400);
     });
   });
 
   describe('dual-protocol routes', () => {
-    it('returns 402 with both x402 and MPP headers on probe', async () => {
+    it('returns 400 before x402 or MPP challenges when probe body is invalid', async () => {
       const entry = makeEntry({
         pricing: (_body: unknown) => '0.05',
         maxPrice: '5.00',
@@ -487,14 +515,14 @@ describe('discovery probe (x402scan prober)', () => {
       const deps = makeDeps({ mppx: createFakeMppx() });
       const handler = createRequestHandler(entry, async () => ({}), deps);
       const res = await handler(makeX402ScanProbe());
-      expect(res.status).toBe(402);
-      expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
-      expect(res.headers.get('WWW-Authenticate')).toBeTruthy();
+      expect(res.status).toBe(400);
+      expect(res.headers.get('PAYMENT-REQUIRED')).toBeNull();
+      expect(res.headers.get('WWW-Authenticate')).toBeNull();
     });
   });
 
   describe('SIWX routes', () => {
-    it('returns 402 challenge when body fails parse on SIWX route', async () => {
+    it('returns 400 when body fails parse before SIWX validation', async () => {
       const validateFn = vi.fn();
       const entry = makeEntry({
         authMode: 'siwx',
@@ -504,7 +532,7 @@ describe('discovery probe (x402scan prober)', () => {
       });
       const handler = createRequestHandler(entry, async () => ({}), makeDeps());
       const res = await handler(makeX402ScanProbe());
-      expect(res.status).toBe(402);
+      expect(res.status).toBe(400);
       // validateFn should NOT be called — body failed parse
       expect(validateFn).not.toHaveBeenCalled();
     });
