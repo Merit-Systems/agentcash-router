@@ -239,11 +239,9 @@ export function createRequestHandler(
       // with all properties intact. TypeScript doesn't track this through clone().
       const requestForPricing = request.clone() as NextRequest;
 
-      // Parse clone for pricing/validation.
-      // On failure, earlyBodyData stays undefined so build402 falls back to
-      // maxPrice. This ensures discovery probes (empty body, no payment header)
-      // still receive a 402 challenge. Real validation errors surface later
-      // when a payment IS present (line 374+).
+      // Parse clone for pricing/validation. If the route needs body data to
+      // quote or validate before payment, schema failures should stop before
+      // the 402 challenge so invalid requests are not presented as payable.
       const earlyBodyResult = await parseBody(requestForPricing, routeEntry);
 
       if (earlyBodyResult.ok) {
@@ -262,10 +260,10 @@ export function createRequestHandler(
             return fail(status, message, meta, pluginCtx, earlyBodyData);
           }
         }
+      } else {
+        firePluginResponse(deps, pluginCtx, meta, earlyBodyResult.response);
+        return earlyBodyResult.response;
       }
-      // Body parse failed — earlyBodyData stays undefined so build402 falls
-      // back to maxPrice. This ensures discovery probes (empty/invalid body,
-      // no payment header) still receive a 402 challenge.
     }
 
     // ---- SIWX ----
