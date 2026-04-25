@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.4.1
+
+### Patch Changes
+
+- 5487bd8: Return body validation errors before 402 challenges for unpaid dynamic-price routes that require the request body to quote or validate.
+
 ## 1.4.0
 
 ### Minor Changes
