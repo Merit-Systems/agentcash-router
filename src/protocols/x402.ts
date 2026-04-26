@@ -91,10 +91,13 @@ export async function verifyX402Payment(opts: VerifyPaymentOptions) {
     throw err;
   }
   if (!verify.isValid) return invalidPaymentVerification();
+  if (typeof verify.payer !== 'string' || verify.payer.length === 0) {
+    throw new Error('x402 verification succeeded without a payer address');
+  }
 
   return {
     valid: true as const,
-    payer: verify.payer as string,
+    payer: verify.payer,
     payload,
     requirements: matching,
   };

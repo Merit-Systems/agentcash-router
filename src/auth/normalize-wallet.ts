@@ -4,5 +4,5 @@
  * Solana base58 addresses are case-sensitive → preserve as-is.
  */
 export function normalizeWalletAddress(address: string): string {
-  return address.startsWith('0x') ? address.toLowerCase() : address;
+  return /^0x/i.test(address) ? address.toLowerCase() : address;
 }

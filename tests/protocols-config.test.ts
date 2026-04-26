@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { createRouter } from '../src/index.js';
+import { TEMPO_USDC_CURRENCY, createRouter } from '../src/index.js';
 import type { RouterConfig } from '../src/types.js';
 
 describe('RouterConfig.protocols', () => {
@@ -13,7 +13,7 @@ describe('RouterConfig.protocols', () => {
 
   const validMppConfig = {
     secretKey: 'test-secret-key',
-    currency: 'USDC',
+    currency: TEMPO_USDC_CURRENCY,
     rpcUrl: 'https://rpc.example.com',
   };
 
@@ -118,7 +118,7 @@ describe('RouterConfig.protocols', () => {
             ...baseConfig,
             baseUrl: 'https://test.example.com',
             protocols: ['mpp'],
-            mpp: { secretKey: 'test', currency: 'USDC' },
+            mpp: { secretKey: 'test', currency: TEMPO_USDC_CURRENCY },
           });
         }).toThrow(/Tempo RPC URL/);
       } finally {
@@ -200,7 +200,7 @@ describe('RouterConfig.protocols', () => {
       const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const router = createRouter({ ...baseConfig, protocols: ['mpp'] });
       const handler = router
-        .route('test/route')
+        .route('unpriced/route')
         .unprotected()
         .handler(async () => ({ ok: true }));
       // Await init to ensure console.error has fired
@@ -217,10 +217,10 @@ describe('RouterConfig.protocols', () => {
         const router = createRouter({
           ...baseConfig,
           protocols: ['mpp'],
-          mpp: { secretKey: 'test', currency: 'USDC' },
+          mpp: { secretKey: 'test', currency: TEMPO_USDC_CURRENCY },
         });
         const handler = router
-          .route('test/route')
+          .route('unpriced/route')
           .unprotected()
           .handler(async () => ({ ok: true }));
         await handler(new NextRequest('http://localhost/api/test'));
@@ -237,7 +237,11 @@ describe('RouterConfig.protocols', () => {
         baseUrl: 'http://localhost:3000',
         network: 'eip155:8453',
         protocols: ['mpp'],
-        mpp: { secretKey: 'test', currency: 'USDC', rpcUrl: 'https://rpc.example.com' },
+        mpp: {
+          secretKey: 'test',
+          currency: TEMPO_USDC_CURRENCY,
+          rpcUrl: 'https://rpc.example.com',
+        },
       } as RouterConfig);
       const handler = router
         .route('test/route')
@@ -262,7 +266,7 @@ describe('RouterConfig.protocols', () => {
         },
       });
       const handler = router
-        .route('test/route')
+        .route('unpriced/route')
         .unprotected()
         .handler(async () => ({ ok: true }));
       await handler(new NextRequest('http://localhost/api/test'));
@@ -279,7 +283,7 @@ describe('RouterConfig.protocols', () => {
         const router = createRouter({
           ...baseConfig,
           protocols: ['mpp'],
-          mpp: { secretKey: 'test', currency: 'USDC' },
+          mpp: { secretKey: 'test', currency: TEMPO_USDC_CURRENCY },
         });
         router.route('test/route').handler(async () => ({}));
         const entry = router.registry.get('test/route');
@@ -366,7 +370,7 @@ describe('RouterConfig.protocols', () => {
   describe('useDefaultStore', () => {
     const mppWithDefaultStore = {
       secretKey: 'test-secret-key',
-      currency: 'USDC',
+      currency: TEMPO_USDC_CURRENCY,
       rpcUrl: 'https://rpc.example.com',
       useDefaultStore: true,
     };
@@ -384,7 +388,7 @@ describe('RouterConfig.protocols', () => {
           mpp: mppWithDefaultStore,
         });
         const handler = router
-          .route('test/route')
+          .route('unpriced/route')
           .unprotected()
           .handler(async () => ({ ok: true }));
         await handler(new NextRequest('http://localhost/api/test'));
@@ -426,8 +430,8 @@ describe('RouterConfig.protocols', () => {
         protocols: ['mpp'],
         mpp: {
           secretKey: 'test',
-          currency: 'USDC',
-          recipient: '0xCustomRecipient',
+          currency: TEMPO_USDC_CURRENCY,
+          recipient: '0x9876543210987654321098765432109876543210',
           rpcUrl: 'https://rpc.example.com',
         },
       });

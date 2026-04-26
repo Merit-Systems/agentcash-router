@@ -46,7 +46,61 @@ export const env = createEnv({
 });
 ```
 
-Without these keys, x402 routes will fail to initialize (empty 402 responses, no payment header).
+Without these keys, x402 routes that use the default EVM facilitator will fail to initialize.
+`createRouter(config)` always validates the base URL and protocol list, throws protocol config
+errors in production, and keeps protocol-specific init errors as request-time JSON 500s in
+development. Call `validateRouterConfig(config)` before `createRouter(config)` when you want
+missing facilitator, MPP, or store configuration to throw immediately in every environment.
+
+### Recommended strict setup
+
+```typescript
+import {
+  createRouter,
+  mppFromEnv,
+  validateRouterConfig,
+  x402AcceptsFromEnv,
+  type ProtocolType,
+} from '@agentcash/router';
+
+const payeeAddress = process.env.X402_WALLET_ADDRESS ?? process.env.X402_PAYEE_ADDRESS;
+const accepts = x402AcceptsFromEnv(process.env, { payeeAddress });
+const protocols: ProtocolType[] = process.env.MPP_SECRET_KEY ? ['x402', 'mpp'] : ['x402'];
+
+const config = {
+  payeeAddress: payeeAddress!,
+  baseUrl: process.env.NEXT_PUBLIC_BASE_URL!,
+  strictRoutes: true,
+  protocols,
+  x402: { accepts },
+  mpp: mppFromEnv(process.env, {
+    recipient: payeeAddress,
+    useDefaultStore: true,
+  }),
+  discovery: {
+    title: 'My API',
+    version: '1.0.0',
+  },
+};
+
+validateRouterConfig(config);
+export const router = createRouter(config);
+```
+
+`x402AcceptsFromEnv()` always adds Base (`BASE_NETWORK`) and also adds Solana
+mainnet (`SOLANA_MAINNET_NETWORK`) when `SOLANA_PAYEE_ADDRESS` is set. Solana
+addresses are case-sensitive and are preserved as-is. It reads
+`X402_WALLET_ADDRESS` by default; older services that still use
+`X402_PAYEE_ADDRESS` can pass `{ payeeEnv: 'X402_PAYEE_ADDRESS' }`.
+
+`mppFromEnv()` returns `undefined` when no MPP env vars are present. If any MPP
+env var is present, the full trio is required: `MPP_SECRET_KEY`, `MPP_CURRENCY`,
+and `TEMPO_RPC_URL`. `MPP_CURRENCY` must be the Tempo currency address; for
+Tempo USDC use `TEMPO_USDC_CURRENCY`. Optional `MPP_FEE_PAYER_KEY` is included
+when present and validated as a 32-byte EVM private key. `mppFromEnv()` only
+builds config; call `validateRouterConfig(config)` before `createRouter(config)`
+to fail fast on `mpp.useDefaultStore` store env (`KV_REST_API_URL` and
+`KV_REST_API_TOKEN`) when you use the default store.
 
 ## Quick Start
 
@@ -57,7 +111,7 @@ Without these keys, x402 routes will fail to initialize (empty 402 responses, no
 import { createRouter } from '@agentcash/router';
 
 export const router = createRouter({
-  payeeAddress: process.env.X402_PAYEE_ADDRESS!,
+  payeeAddress: process.env.X402_WALLET_ADDRESS!,
   baseUrl: process.env.NEXT_PUBLIC_BASE_URL!,
   strictRoutes: true, // recommended
   discovery: {
@@ -143,8 +197,39 @@ Creates a `ServiceRouter` instance.
 | `plugin` | `RouterPlugin` | `undefined` | Observability plugin |
 | `prices` | `Record<string, string>` | `undefined` | Central pricing map (auto-applied) |
 | `siwx.nonceStore` | `NonceStore` | `MemoryNonceStore` | Custom nonce store |
-| `mpp` | `{ secretKey, currency, recipient? }` | `undefined` | MPP config |
+| `mpp` | `{ secretKey, currency, recipient?, rpcUrl?, feePayerKey?, useDefaultStore? }` | `undefined` | MPP config |
+| `protocols` | `('x402' \| 'mpp')[]` | `['x402']` | Default protocols for paid routes |
 | `strictRoutes` | `boolean` | `false` | Enforce `route({ path })` and prevent key/path divergence |
+
+### Config validation helpers
+
+```typescript
+import {
+  BASE_NETWORK,
+  SOLANA_MAINNET_NETWORK,
+  TEMPO_USDC_CURRENCY,
+  getRouterConfigIssues,
+  mppFromEnv,
+  paidOptionsForProtocols,
+  validateRouterConfig,
+  x402AcceptsFromEnv,
+} from '@agentcash/router';
+```
+
+- `validateRouterConfig(config)` throws `RouterConfigError` with structured
+  issues. Use it when you want invalid env/config to fail at startup in every
+  environment; `createRouter(config)` still performs its own validation and
+  keeps deferred protocol init errors in development for request-time feedback.
+- `getRouterConfigIssues(config)` returns the same structured issues without
+  throwing.
+- `x402AcceptsFromEnv(env)` builds Base and optional Solana x402 accepts from
+  `X402_WALLET_ADDRESS` and `SOLANA_PAYEE_ADDRESS`.
+- `mppFromEnv(env)` builds MPP config only when MPP env is present, and rejects
+  partial MPP env.
+- `paidOptionsForProtocols(protocols)` copies a protocol array into a
+  route-level `PaidOptions` object.
+- Manual `.paid(price)` routes inherit `createRouter({ protocols })` unless
+  the route passes its own `options.protocols`.
 
 ### Path-First Routing
 
@@ -170,11 +255,13 @@ The fluent builder ensures compile-time safety:
 - `.siwx()` - SIWX wallet auth
 - `.apiKey(resolver)` - API key auth (composable with `.paid()`)
 - `.unprotected()` - No auth
-- `.body(zodSchema)` - Request body validation
-- `.query(zodSchema)` - Query parameter validation
-- `.output(zodSchema)` - Response schema (for OpenAPI)
+- `.body(zodSchema, example?)` - Request body validation with optional discovery example
+- `.query(zodSchema, example?)` - Query parameter validation with optional discovery example
+- `.output(zodSchema, example?)` - Response schema with optional discovery example
+- `.inputExample(sample)` / `.outputExample(sample)` - Optional examples when a separate call reads better
 - `.description(text)` - Route description (for OpenAPI)
 - `.provider(name, config?)` - Provider monitoring (see [Provider Monitoring](#provider-monitoring))
+- `.settlement({ beforeSettle, afterSettle, onSettledHandlerError, onSettlementError })` - Payment lifecycle hooks
 - `.handler(fn)` - Terminal method, returns Next.js handler
 
 ### Pricing Modes
@@ -259,11 +346,50 @@ interface HandlerContext<TBody, TQuery> {
   query: TQuery;            // Parsed + validated
   request: NextRequest;     // Raw request
   wallet: string | null;    // Verified wallet address
+  payment: HandlerPaymentContext | null; // Payment metadata for this request
   account: unknown;         // From .apiKey() resolver
   alert: AlertFn;           // Fire observability alerts
   setVerifiedWallet: (addr: string) => void;
 }
 ```
+
+`payment` is `null` for unprotected, API-key-only, and SIWX-only requests. For
+paid requests it includes `protocol`, `status`, `payer`, `amount`, `network`,
+and best-effort recipient/transaction/receipt metadata when the protocol
+provides it. x402 handlers currently see `status: 'verified'` because settlement
+happens after a successful handler response.
+
+### Settlement Lifecycle
+
+For paid routes, use `.settlement()` when final checks belong after handler work
+but before router-controlled settlement:
+
+```typescript
+router.route('render')
+  .paid('0.10')
+  .body(schema, { prompt: 'city at dusk' })
+  .settlement({
+    beforeSettle: async ({ result }) => {
+      if (!isUsableResult(result)) {
+        throw Object.assign(new Error('Render failed validation'), { status: 502 });
+      }
+    },
+    afterSettle: async ({ payment, result }) => {
+      await ledger.record({ tx: payment.transaction, result });
+    },
+    onSettledHandlerError: async ({ payment, error }) => {
+      await compensationQueue.enqueue({ receipt: payment.receipt, error });
+    },
+  })
+  .handler(async ({ body }) => render(body));
+```
+
+`beforeSettle` can still prevent the charge for x402 and MPP
+transaction-payload flows. `afterSettle` is for durable ledgers, analytics, and
+post-settlement bookkeeping. `onSettledHandlerError` covers already-settled
+MPP requests whose handler returns an error response, which is the right place
+to enqueue app-owned refund or compensation work. The router cannot generically
+refund protocol payments because it does not hold merchant signing keys.
 
 ### RouterPlugin
 
@@ -283,8 +409,13 @@ const myPlugin: RouterPlugin = {
 };
 
 export const router = createRouter({
-  payeeAddress: process.env.X402_PAYEE_ADDRESS!,
+  payeeAddress: process.env.X402_WALLET_ADDRESS!,
+  baseUrl: process.env.NEXT_PUBLIC_BASE_URL!,
   plugin: myPlugin,
+  discovery: {
+    title: 'My API',
+    version: '1.0.0',
+  },
 });
 ```
 
@@ -294,8 +425,13 @@ Built-in `consolePlugin()` logs lifecycle events:
 import { createRouter, consolePlugin } from '@agentcash/router';
 
 export const router = createRouter({
-  payeeAddress: process.env.X402_PAYEE_ADDRESS!,
+  payeeAddress: process.env.X402_WALLET_ADDRESS!,
+  baseUrl: process.env.NEXT_PUBLIC_BASE_URL!,
   plugin: consolePlugin(),
+  discovery: {
+    title: 'My API',
+    version: '1.0.0',
+  },
 });
 ```
 
@@ -305,7 +441,12 @@ For services with many static-priced routes:
 
 ```typescript
 const router = createRouter({
-  payeeAddress: process.env.X402_PAYEE_ADDRESS!,
+  payeeAddress: process.env.X402_WALLET_ADDRESS!,
+  baseUrl: process.env.NEXT_PUBLIC_BASE_URL!,
+  discovery: {
+    title: 'My API',
+    version: '1.0.0',
+  },
   prices: {
     'search': '0.02',
     'lookup': '0.05',

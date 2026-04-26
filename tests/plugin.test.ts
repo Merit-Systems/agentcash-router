@@ -88,6 +88,21 @@ describe('plugin lifecycle', () => {
     expect(plugin.calls.onPaymentVerified).toHaveLength(1);
   });
 
+  it('onPaymentSettled receives canonical x402 payer', async () => {
+    const plugin = makeSpyPlugin();
+    const deps = makeDeps(plugin);
+    const entry = makeEntry();
+    const handler = createRequestHandler(entry, async () => ({ ok: true }), deps);
+
+    const res = await handler(makePaymentRequest({ query: 'test' }));
+
+    expect(res.status).toBe(200);
+    expect(plugin.calls.onPaymentSettled).toHaveLength(1);
+    expect((plugin.calls.onPaymentSettled[0][1] as { payer: string }).payer).toBe(
+      KNOWN_PAYER.toLowerCase(),
+    );
+  });
+
   it('onResponse fires on every request (success)', async () => {
     const plugin = makeSpyPlugin();
     const deps = makeDeps(plugin);

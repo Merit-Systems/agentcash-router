@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import type {
   RouteEntry,
   HandlerContext,
+  HandlerPaymentContext,
   QuotaLevel,
   ProviderQuotaEvent,
   X402Server,
@@ -31,6 +32,25 @@ import { resolveX402Accepts } from './x402-config.js';
 function getRequirementNetwork(requirements: unknown, fallback: string): string {
   const network = (requirements as { network?: unknown } | null)?.network;
   return typeof network === 'string' ? network : fallback;
+}
+
+function getRequirementRecipient(requirements: unknown): string | undefined {
+  const payTo = (requirements as { payTo?: unknown } | null)?.payTo;
+  return typeof payTo === 'string' ? payTo : undefined;
+}
+
+function errorStatus(error: unknown, fallback: number): number {
+  const status = (error as { status?: unknown } | null)?.status;
+  return typeof status === 'number' ? status : fallback;
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function handlerFailureError(response: Response): Error & { status: number } {
+  const message = response.statusText || `Handler returned HTTP ${response.status}`;
+  return Object.assign(new Error(message), { status: response.status });
 }
 
 /** Map a CAIP-2 network identifier to its SIWX signature type. */
@@ -66,6 +86,7 @@ export interface OrchestrateDeps {
   nonceStore: NonceStore;
   entitlementStore: EntitlementStore;
   payeeAddress: string;
+  mppRecipient?: string;
   network: string;
   x402FacilitatorsByNetwork?: Record<string, ResolvedX402Facilitator>;
   x402Accepts: X402AcceptConfig[];
@@ -80,6 +101,19 @@ export interface OrchestrateDeps {
     >;
   } | null;
   tempoClient?: import('viem').Client | null;
+}
+
+interface SettlementScope<TPayment extends HandlerPaymentContext = HandlerPaymentContext> {
+  request: NextRequest;
+  meta: RequestMeta;
+  pluginCtx: PluginContext;
+  wallet: string;
+  account: unknown;
+  parsedBody: unknown;
+  payment: TPayment;
+  response: NextResponse;
+  rawResult: unknown;
+  handlerError?: unknown;
 }
 
 export function createRequestHandler(
@@ -97,7 +131,8 @@ export function createRequestHandler(
     wallet: string | null,
     account: unknown,
     parsedBody: unknown,
-  ): Promise<{ response: NextResponse; rawResult: unknown }> {
+    payment: HandlerPaymentContext | null,
+  ): Promise<{ response: NextResponse; rawResult: unknown; handlerError?: unknown }> {
     const ctx: HandlerContext = {
       body: parsedBody as never,
       query: parseQuery(request, routeEntry) as never,
@@ -105,6 +140,7 @@ export function createRequestHandler(
       requestId: meta.requestId,
       route: routeEntry.key,
       wallet,
+      payment,
       account,
       alert(level, message, alertMeta) {
         firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
@@ -118,12 +154,21 @@ export function createRequestHandler(
     };
 
     let rawResult: unknown;
-    const response = await safeCallHandler(async (c) => {
-      rawResult = await handler(c as HandlerContext);
-      return rawResult;
-    }, ctx);
+    let handlerError: unknown;
+    const response = await safeCallHandler(
+      async (c) => {
+        rawResult = await handler(c as HandlerContext);
+        return rawResult;
+      },
+      ctx,
+      {
+        onError(error) {
+          handlerError = error;
+        },
+      },
+    );
 
-    return { response, rawResult };
+    return { response, rawResult, handlerError };
   }
 
   /** Post-handler finalization: quota extraction + plugin response hook. */
@@ -149,6 +194,107 @@ export function createRequestHandler(
     const response = NextResponse.json({ success: false, error: message }, { status });
     firePluginResponse(deps, pluginCtx, meta, response, requestBody);
     return response;
+  }
+
+  function settlementContext<TPayment extends HandlerPaymentContext>(
+    scope: SettlementScope<TPayment>,
+  ) {
+    return {
+      route: routeEntry.key,
+      request: scope.request,
+      body: scope.parsedBody,
+      wallet: scope.wallet,
+      account: scope.account,
+      payment: scope.payment,
+      response: scope.response,
+      result: scope.rawResult,
+    };
+  }
+
+  async function runBeforeSettle(scope: SettlementScope): Promise<NextResponse | null> {
+    const hook = routeEntry.settlement?.beforeSettle;
+    if (!hook) return null;
+
+    try {
+      await hook(settlementContext(scope));
+      return null;
+    } catch (error) {
+      return fail(
+        errorStatus(error, 500),
+        errorMessage(error, 'Pre-settlement validation failed'),
+        scope.meta,
+        scope.pluginCtx,
+        scope.parsedBody,
+      );
+    }
+  }
+
+  async function runSettlementError(
+    scope: SettlementScope,
+    error: unknown,
+    phase: 'settle' | 'afterSettle',
+  ): Promise<void> {
+    const hook = routeEntry.settlement?.onSettlementError;
+    if (!hook) return;
+
+    try {
+      await hook({
+        ...settlementContext(scope),
+        error,
+        phase,
+      });
+    } catch (hookError) {
+      const message = errorMessage(hookError, 'Settlement error hook failed');
+      console.error(`[router] ${routeEntry.key}: onSettlementError failed: ${message}`);
+      firePluginHook(deps.plugin, 'onAlert', scope.pluginCtx, {
+        level: 'error' as const,
+        message: `Settlement error hook failed: ${message}`,
+        route: routeEntry.key,
+      });
+    }
+  }
+
+  async function runAfterSettle(
+    scope: SettlementScope<HandlerPaymentContext & { status: 'settled' }>,
+  ): Promise<void> {
+    const hook = routeEntry.settlement?.afterSettle;
+    if (!hook) return;
+
+    try {
+      await hook(settlementContext(scope));
+    } catch (error) {
+      const message = errorMessage(error, 'Post-settlement hook failed');
+      console.error(`[router] ${routeEntry.key}: afterSettle failed: ${message}`);
+      firePluginHook(deps.plugin, 'onAlert', scope.pluginCtx, {
+        level: 'error' as const,
+        message: `Post-settlement hook failed: ${message}`,
+        route: routeEntry.key,
+      });
+      await runSettlementError(scope, error, 'afterSettle');
+    }
+  }
+
+  async function runSettledHandlerError(
+    scope: SettlementScope<HandlerPaymentContext & { status: 'settled' }>,
+    error: unknown = scope.handlerError ?? handlerFailureError(scope.response),
+  ): Promise<void> {
+    const hook = routeEntry.settlement?.onSettledHandlerError;
+    if (!hook) return;
+
+    try {
+      await hook({
+        ...settlementContext(scope),
+        error,
+      });
+    } catch (hookError) {
+      const message = errorMessage(hookError, 'Settled handler error hook failed');
+      console.error(`[router] ${routeEntry.key}: onSettledHandlerError failed: ${message}`);
+      firePluginHook(deps.plugin, 'onAlert', scope.pluginCtx, {
+        level: 'error' as const,
+        message: `Settled handler error hook failed: ${message}`,
+        route: routeEntry.key,
+      });
+    }
   }
 
   // -- Request handler --
@@ -187,6 +333,7 @@ export function createRequestHandler(
         wallet,
         account,
         body.data,
+        null,
       );
       finalize(response, rawResult, meta, pluginCtx, body.data);
       return response;
@@ -499,18 +646,9 @@ export function createRequestHandler(
       }
     }
 
-    let price: string;
-    try {
-      price = await resolvePrice(routeEntry.pricing!, body.data);
-    } catch (err: unknown) {
-      return fail(
-        (err as { status?: number }).status ?? 500,
-        err instanceof Error ? err.message : 'Price resolution failed',
-        meta,
-        pluginCtx,
-        body.data,
-      );
-    }
+    const priceResult = await resolveDynamicPrice(body.data, routeEntry, deps, pluginCtx, meta);
+    if ('error' in priceResult) return priceResult.error;
+    const price = priceResult.price;
 
     // ---- Protocol mismatch check ----
     // Client sent payment via a protocol this route doesn't accept.
@@ -558,8 +696,17 @@ export function createRequestHandler(
 
       const { payload: verifyPayload, requirements: verifyRequirements } = verify;
       const matchedNetwork = getRequirementNetwork(verifyRequirements, deps.network);
+      const matchedRecipient = getRequirementRecipient(verifyRequirements);
 
       const wallet = normalizeWalletAddress(verify.payer);
+      const payment: HandlerPaymentContext = {
+        protocol: 'x402',
+        status: 'verified',
+        payer: wallet,
+        amount: price,
+        network: matchedNetwork,
+        ...(matchedRecipient ? { recipient: matchedRecipient } : {}),
+      };
       pluginCtx.setVerifiedWallet(wallet);
       firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
         protocol: 'x402',
@@ -568,16 +715,32 @@ export function createRequestHandler(
         network: matchedNetwork,
       });
 
-      const { response, rawResult } = await invoke(
+      const { response, rawResult, handlerError } = await invoke(
         request,
         meta,
         pluginCtx,
         wallet,
         account,
         body.data,
+        payment,
       );
+      const settleScope = {
+        request,
+        meta,
+        pluginCtx,
+        wallet,
+        account,
+        parsedBody: body.data,
+        payment,
+        response,
+        rawResult,
+        handlerError,
+      };
 
       if (response.status < 400) {
+        const validationFailure = await runBeforeSettle(settleScope);
+        if (validationFailure) return validationFailure;
+
         try {
           const settle = await settleX402Payment(
             deps.x402Server,
@@ -603,13 +766,21 @@ export function createRequestHandler(
           }
           response.headers.set('PAYMENT-RESPONSE', settle.encoded);
           response.headers.set('Cache-Control', 'private');
+          const transaction = String(settle.result?.transaction ?? '');
+          const settledPayment: HandlerPaymentContext & { status: 'settled' } = {
+            ...payment,
+            status: 'settled',
+            ...(transaction ? { transaction } : {}),
+          };
           firePluginHook(deps.plugin, 'onPaymentSettled', pluginCtx, {
             protocol: 'x402',
-            payer: verify.payer,
-            transaction: String(settle.result?.transaction ?? ''),
+            payer: wallet,
+            transaction,
             network: matchedNetwork,
           });
+          await runAfterSettle({ ...settleScope, payment: settledPayment });
         } catch (err) {
+          await runSettlementError(settleScope, err, 'settle');
           const errObj = err as {
             message?: string;
             errorReason?: string;
@@ -693,22 +864,48 @@ export function createRequestHandler(
         });
 
         // Step 3: Invoke handler
-        const { response, rawResult } = await invoke(
+        const mppRecipient = deps.mppRecipient ?? deps.payeeAddress;
+        const payment: HandlerPaymentContext = {
+          protocol: 'mpp',
+          status: 'verified',
+          payer: wallet,
+          amount: price,
+          network: 'tempo:4217',
+          ...(mppRecipient ? { recipient: mppRecipient } : {}),
+        };
+        const { response, rawResult, handlerError } = await invoke(
           request,
           meta,
           pluginCtx,
           wallet,
           account,
           body.data,
+          payment,
         );
+        const settleScope = {
+          request,
+          meta,
+          pluginCtx,
+          wallet,
+          account,
+          parsedBody: body.data,
+          payment,
+          response,
+          rawResult,
+          handlerError,
+        };
 
         if (response.status < 400) {
+          const validationFailure = await runBeforeSettle(settleScope);
+          if (validationFailure) return validationFailure;
+
           // Step 4: Handler succeeded — broadcast and wait for on-chain confirmation.
           // Merchant bears the risk if this fails after service was rendered.
           let mppResult: Awaited<ReturnType<ReturnType<typeof deps.mppx.charge>>>;
           try {
             mppResult = await deps.mppx.charge({ amount: price })(request);
           } catch (err) {
+            await runSettlementError(settleScope, err, 'settle');
             const message = err instanceof Error ? err.message : String(err);
             console.error(
               `[router] ${routeEntry.key}: MPP broadcast failed after handler: ${message}`,
@@ -740,6 +937,13 @@ export function createRequestHandler(
               // Best-effort extraction
             }
             const detail = rejectReason || 'transaction reverted on-chain after handler execution';
+            const settlementError = Object.assign(new Error(detail), {
+              status: 402,
+              detail,
+              mppResult,
+              challenge: mppResult.challenge,
+            });
+            await runSettlementError(settleScope, settlementError, 'settle');
             console.error(
               `[router] ${routeEntry.key}: MPP payment failed after handler — ${detail}`,
             );
@@ -782,6 +986,17 @@ export function createRequestHandler(
             payer: wallet,
             transaction: txHash,
             network: 'tempo:4217',
+          });
+          const settledPayment: HandlerPaymentContext & { status: 'settled' } = {
+            ...payment,
+            status: 'settled',
+            ...(txHash ? { transaction: txHash } : {}),
+            ...(receiptHeader ? { receipt: receiptHeader } : {}),
+          };
+          await runAfterSettle({
+            ...settleScope,
+            payment: settledPayment,
+            response: receiptResponse,
           });
           finalize(receiptResponse, rawResult, meta, pluginCtx, body.data);
           return receiptResponse;
@@ -850,14 +1065,38 @@ export function createRequestHandler(
         network: 'tempo:4217',
       });
 
-      const { response, rawResult } = await invoke(
+      const mppRecipient = deps.mppRecipient ?? deps.payeeAddress;
+      const payment: HandlerPaymentContext & { status: 'settled' } = {
+        protocol: 'mpp',
+        status: 'settled',
+        payer: wallet,
+        amount: price,
+        network: 'tempo:4217',
+        ...(mppRecipient ? { recipient: mppRecipient } : {}),
+        ...(txHash ? { transaction: txHash } : {}),
+        ...(receiptHeader ? { receipt: receiptHeader } : {}),
+      };
+      const { response, rawResult, handlerError } = await invoke(
         request,
         meta,
         pluginCtx,
         wallet,
         account,
         body.data,
+        payment,
       );
+      const settleScope = {
+        request,
+        meta,
+        pluginCtx,
+        wallet,
+        account,
+        parsedBody: body.data,
+        payment,
+        response,
+        rawResult,
+        handlerError,
+      };
 
       if (response.status < 400) {
         if (routeEntry.siwxEnabled) {
@@ -879,10 +1118,12 @@ export function createRequestHandler(
           transaction: txHash,
           network: 'tempo:4217',
         });
+        await runAfterSettle({ ...settleScope, response: receiptResponse });
         finalize(receiptResponse, rawResult, meta, pluginCtx, body.data);
         return receiptResponse;
       }
 
+      await runSettledHandlerError(settleScope);
       finalize(response, rawResult, meta, pluginCtx, body.data);
       return response;
     }
@@ -995,9 +1236,10 @@ async function resolveDynamicPrice(
       return { price: routeEntry.maxPrice };
     } else {
       // No fallback available - fail fast
+      const message = errorMessage(err, 'Price calculation failed');
       const errorResponse = NextResponse.json(
-        { success: false, error: 'Price calculation failed' },
-        { status: 500 },
+        { success: false, error: message },
+        { status: errorStatus(err, 500) },
       );
       firePluginResponse(deps, pluginCtx, meta, errorResponse);
       return { error: errorResponse };
@@ -1065,9 +1307,8 @@ async function build402(
   //
   // `output` is only emitted when an `outputExample` is registered on the route — the
   // bazaar schema gates the whole output block on example presence. Emitting `example: {}`
-  // would fail the user's outputSchema whenever it has required fields. `.outputExample()`
-  // is type-required by the builder whenever `.output()` is set, but defensive-guard here
-  // so routes declared without the builder (tests, etc.) don't regress to broken declarations.
+  // would fail the user's outputSchema whenever it has required fields. Examples are optional,
+  // so routes without one still advertise the input schema without a broken output declaration.
   let extensions: Record<string, unknown> | undefined;
   try {
     const { z } = await import('zod');

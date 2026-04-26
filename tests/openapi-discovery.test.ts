@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NextRequest } from 'next/server';
 import { RouteRegistry } from '../src/registry.js';
 import { createOpenAPIHandler } from '../src/discovery/openapi.js';
+import { TEMPO_USDC_CURRENCY } from '../src/index.js';
 import type { RouteEntry } from '../src/types.js';
 
 function makeEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
@@ -47,7 +48,7 @@ describe('openapi discovery document', () => {
           mpp: {
             method: 'tempo',
             intent: 'charge',
-            currency: '0x20c0000000000000000000000000000000000001',
+            currency: TEMPO_USDC_CURRENCY,
           },
         },
       ],

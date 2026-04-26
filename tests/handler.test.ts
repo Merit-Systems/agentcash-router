@@ -52,6 +52,17 @@ describe('safeCallHandler', () => {
     expect(body.error).toBe('Not found');
   });
 
+  it('passes the original thrown error to onError', async () => {
+    const error = Object.assign(new Error('Need compensation'), { status: 503 });
+    let captured: unknown;
+    const handler = async () => {
+      throw error;
+    };
+    const res = await safeCallHandler(handler as never, {}, { onError: (err) => (captured = err) });
+    expect(res.status).toBe(503);
+    expect(captured).toBe(error);
+  });
+
   it('thrown Error with .status = 400 → 400', async () => {
     const handler = async () => {
       throw Object.assign(new Error('Bad request'), { status: 400 });

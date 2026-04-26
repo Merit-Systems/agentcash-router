@@ -6,7 +6,15 @@ import { MemoryNonceStore } from '../src/auth/nonce.js';
 import { MemoryEntitlementStore } from '../src/auth/entitlement.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
 import { withX402Payment } from './fakes/request.js';
-import type { RouteEntry, HandlerContext } from '../src/types.js';
+import type {
+  HandlerContext,
+  HandlerPaymentContext,
+  RouteEntry,
+  SettlementErrorContext,
+  SettlementLifecycleContext,
+  SettlementSettledContext,
+  SettledHandlerErrorContext,
+} from '../src/types.js';
 
 // ---------------------------------------------------------------------------
 // Mock the protocol modules to use our fakes
@@ -144,11 +152,24 @@ vi.mock('mppx', () => ({
       if (!auth?.startsWith('Payment ')) return null;
       try {
         const payload = JSON.parse(Buffer.from(auth.slice(8), 'base64').toString());
-        return { source: payload.payer, challenge: {}, payload: {} };
+        return { source: payload.payer, challenge: {}, payload: payload.payload ?? {} };
       } catch {
         return null;
       }
     },
+  },
+}));
+
+vi.mock('viem/actions', () => ({
+  call: vi.fn(async () => undefined),
+}));
+
+vi.mock('viem/tempo', () => ({
+  Transaction: {
+    deserialize: vi.fn(() => ({
+      from: '0x1234567890123456789012345678901234567890',
+      calls: [],
+    })),
   },
 }));
 
@@ -157,6 +178,7 @@ vi.mock('mppx', () => ({
 // ---------------------------------------------------------------------------
 
 const bodySchema = z.object({ query: z.string() });
+const ALT_MPP_RECIPIENT = '0x9999999999999999999999999999999999999999';
 
 function makeEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
   return {
@@ -276,9 +298,11 @@ function makeMPPEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
   };
 }
 
-function withMPPPayment(options: { payer?: string; body?: unknown } = {}): NextRequest {
+function withMPPPayment(
+  options: { payer?: string; body?: unknown; payload?: Record<string, unknown> } = {},
+): NextRequest {
   const credential = Buffer.from(
-    JSON.stringify({ payer: options.payer ?? KNOWN_MPP_PAYER }),
+    JSON.stringify({ payer: options.payer ?? KNOWN_MPP_PAYER, payload: options.payload }),
   ).toString('base64');
 
   return new NextRequest('http://localhost:3000/api/test', {
@@ -615,7 +639,15 @@ describe('x402 paid route', () => {
   });
 
   it('fails the request when x402 settlement returns success=false', async () => {
-    const entry = makeEntry({ bodySchema });
+    let capturedSettlementError: SettlementErrorContext | null = null;
+    const entry = makeEntry({
+      bodySchema,
+      settlement: {
+        onSettlementError: async (ctx) => {
+          capturedSettlementError = ctx;
+        },
+      },
+    });
     const deps = makeDeps();
     const server = deps.x402Server as unknown as FakeX402Server;
     server.settlePayment = async (payload: unknown, requirements: unknown) => {
@@ -640,6 +672,9 @@ describe('x402 paid route', () => {
     const body = await res.json();
     expect(body.success).toBe(false);
     expect(body.error).toBe('Settlement failed');
+    expect(capturedSettlementError?.phase).toBe('settle');
+    expect(capturedSettlementError?.payment.status).toBe('verified');
+    expect(capturedSettlementError?.error).toBeInstanceOf(Error);
   });
 
   it('skips settlement when handler throws', async () => {
@@ -671,8 +706,119 @@ describe('x402 paid route', () => {
       makeDeps(),
     );
     await handler(makePaymentRequest({ query: 'test' }));
-    // ctx.wallet is always lowercase (v0.5+)
+    // EVM ctx.wallet values are canonicalized to lowercase.
     expect(capturedWallet).toBe(KNOWN_PAYER.toLowerCase());
+  });
+
+  it('sets verified x402 payment metadata on handler context', async () => {
+    const entry = makeEntry({ bodySchema });
+    let capturedPayment: HandlerPaymentContext | null = null;
+    const handler = createRequestHandler(
+      entry,
+      async (ctx) => {
+        capturedPayment = ctx.payment;
+        return { ok: true };
+      },
+      makeDeps(),
+    );
+
+    await handler(makePaymentRequest({ query: 'test' }));
+
+    expect(capturedPayment).toEqual({
+      protocol: 'x402',
+      status: 'verified',
+      payer: KNOWN_PAYER.toLowerCase(),
+      amount: '0.02',
+      network: 'eip155:8453',
+      recipient: KNOWN_PAYEE,
+    });
+  });
+
+  it('uses capped maxPrice when verifying paid dynamic-price requests', async () => {
+    const entry = makeEntry({
+      bodySchema,
+      pricing: () => '15.00',
+      maxPrice: '10.00',
+    });
+    const deps = makeDeps();
+    const server = deps.x402Server as unknown as FakeX402Server;
+    let capturedPayment: HandlerPaymentContext | null = null;
+    const handler = createRequestHandler(
+      entry,
+      async (ctx) => {
+        capturedPayment = ctx.payment;
+        return { ok: true };
+      },
+      deps,
+    );
+
+    const res = await handler(makePaymentRequest({ query: 'test' }));
+
+    expect(res.status).toBe(200);
+    expect(capturedPayment?.amount).toBe('10.00');
+    expect(
+      (server.settledPayments[0].requirements as { amount?: string; maxAmountRequired?: string })
+        .amount,
+    ).toBe('10.00');
+  });
+
+  it('runs beforeSettle and skips x402 settlement when it rejects', async () => {
+    let captured: SettlementLifecycleContext | null = null;
+    const entry = makeEntry({
+      bodySchema,
+      settlement: {
+        beforeSettle: async (ctx) => {
+          captured = ctx;
+          throw Object.assign(new Error('Result failed final validation'), { status: 409 });
+        },
+      },
+    });
+    const deps = makeDeps();
+    const server = deps.x402Server as unknown as FakeX402Server;
+    const handler = createRequestHandler(entry, async () => ({ result: 'ok' }), deps);
+
+    const res = await handler(makePaymentRequest({ query: 'test' }));
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      success: false,
+      error: 'Result failed final validation',
+    });
+    expect(server.settledPayments).toHaveLength(0);
+    expect(captured?.body).toEqual({ query: 'test' });
+    expect(captured?.result).toEqual({ result: 'ok' });
+    expect(captured?.payment.status).toBe('verified');
+    expect(captured?.response.status).toBe(200);
+  });
+
+  it('runs afterSettle with settled x402 metadata', async () => {
+    let captured: SettlementSettledContext | null = null;
+    const entry = makeEntry({
+      bodySchema,
+      settlement: {
+        afterSettle: async (ctx) => {
+          captured = ctx;
+        },
+      },
+    });
+    const deps = makeDeps();
+    const server = deps.x402Server as unknown as FakeX402Server;
+    const handler = createRequestHandler(entry, async () => ({ result: 'ok' }), deps);
+
+    const res = await handler(makePaymentRequest({ query: 'test' }));
+
+    expect(res.status).toBe(200);
+    expect(server.settledPayments).toHaveLength(1);
+    expect(captured?.payment).toMatchObject({
+      protocol: 'x402',
+      status: 'settled',
+      payer: KNOWN_PAYER.toLowerCase(),
+      amount: '0.02',
+      network: 'eip155:8453',
+      recipient: KNOWN_PAYEE,
+    });
+    expect(captured?.payment.transaction).toMatch(/^0xTX_HASH_FAKE/);
+    expect(captured?.response.headers.get('PAYMENT-RESPONSE')).toBeTruthy();
   });
 
   it('returns 400 on Zod validation failure', async () => {
@@ -730,6 +876,40 @@ describe('MPP paid route', () => {
     expect(res.headers.get('Payment-Receipt')).toBeNull();
   });
 
+  it('runs onSettledHandlerError when an already-settled MPP request fails in the handler', async () => {
+    let captured: SettledHandlerErrorContext | null = null;
+    const entry = makeMPPEntry({
+      bodySchema,
+      settlement: {
+        onSettledHandlerError: async (ctx) => {
+          captured = ctx;
+        },
+      },
+    });
+    const handler = createRequestHandler(
+      entry,
+      async () => {
+        throw Object.assign(new Error('Handler boom'), { status: 503 });
+      },
+      makeMPPDeps(),
+    );
+
+    const res = await handler(withMPPPayment({ body: { query: 'test' } }));
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get('Payment-Receipt')).toBeNull();
+    expect(captured?.payment).toMatchObject({
+      protocol: 'mpp',
+      status: 'settled',
+      payer: KNOWN_MPP_PAYER.toLowerCase(),
+      amount: '0.02',
+      receipt: 'MOCK_MPP_RECEIPT',
+    });
+    expect(captured?.response.status).toBe(503);
+    expect((captured?.error as { status?: number }).status).toBe(503);
+    expect((captured?.error as Error).message).toBe('Handler boom');
+  });
+
   it('sets wallet on handler context from verified payer', async () => {
     const entry = makeMPPEntry({ bodySchema });
     let capturedWallet: string | null = null;
@@ -742,8 +922,128 @@ describe('MPP paid route', () => {
       makeMPPDeps(),
     );
     await handler(withMPPPayment({ body: { query: 'test' } }));
-    // ctx.wallet is always lowercase (v0.5+)
+    // EVM ctx.wallet values are canonicalized to lowercase.
     expect(capturedWallet).toBe(KNOWN_MPP_PAYER.toLowerCase());
+  });
+
+  it('sets settled MPP payment metadata on handler context', async () => {
+    const entry = makeMPPEntry({ bodySchema });
+    let capturedPayment: HandlerPaymentContext | null = null;
+    const handler = createRequestHandler(
+      entry,
+      async (ctx) => {
+        capturedPayment = ctx.payment;
+        return { ok: true };
+      },
+      makeMPPDeps(),
+    );
+
+    await handler(withMPPPayment({ body: { query: 'test' } }));
+
+    expect(capturedPayment).toEqual({
+      protocol: 'mpp',
+      status: 'settled',
+      payer: KNOWN_MPP_PAYER.toLowerCase(),
+      amount: '0.02',
+      network: 'tempo:4217',
+      recipient: KNOWN_PAYEE,
+      receipt: 'MOCK_MPP_RECEIPT',
+    });
+  });
+
+  it('uses the configured MPP recipient when router payeeAddress is absent', async () => {
+    const entry = makeMPPEntry({ bodySchema });
+    const deps = makeMPPDeps({ payeeAddress: '', mppRecipient: ALT_MPP_RECIPIENT });
+    let capturedPayment: HandlerPaymentContext | null = null;
+    const handler = createRequestHandler(
+      entry,
+      async (ctx) => {
+        capturedPayment = ctx.payment;
+        return { ok: true };
+      },
+      deps,
+    );
+
+    await handler(withMPPPayment({ body: { query: 'test' } }));
+
+    expect(capturedPayment?.recipient).toBe(ALT_MPP_RECIPIENT);
+  });
+
+  it('passes the original MPP rejection result to settlement error hooks', async () => {
+    let captured: SettlementErrorContext | null = null;
+    const challenge = new Response(JSON.stringify({ detail: 'tempo reverted' }), {
+      status: 402,
+    });
+    const rejected = { status: 402 as const, challenge };
+    const mppx = {
+      charge: () => async () => rejected,
+    };
+    const entry = makeMPPEntry({
+      bodySchema,
+      settlement: {
+        onSettlementError: async (ctx) => {
+          captured = ctx;
+        },
+      },
+    });
+    const handler = createRequestHandler(
+      entry,
+      async () => ({ ok: true }),
+      makeMPPDeps({
+        mppx,
+        tempoClient: {} as never,
+      }),
+    );
+
+    const res = await handler(
+      withMPPPayment({
+        body: { query: 'test' },
+        payload: { type: 'transaction', signature: '0xdeadbeef' },
+      }),
+    );
+
+    expect(res.status).toBe(500);
+    expect(captured?.phase).toBe('settle');
+    expect((captured?.error as { mppResult?: unknown }).mppResult).toBe(rejected);
+    expect((captured?.error as { challenge?: Response }).challenge).toBe(challenge);
+  });
+
+  it('runs onSettlementError when MPP transaction broadcast throws', async () => {
+    let captured: SettlementErrorContext | null = null;
+    const broadcastError = new Error('tempo rpc down');
+    const mppx = {
+      charge: () => async () => {
+        throw broadcastError;
+      },
+    };
+    const entry = makeMPPEntry({
+      bodySchema,
+      settlement: {
+        onSettlementError: async (ctx) => {
+          captured = ctx;
+        },
+      },
+    });
+    const handler = createRequestHandler(
+      entry,
+      async () => ({ ok: true }),
+      makeMPPDeps({
+        mppx,
+        tempoClient: {} as never,
+      }),
+    );
+
+    const res = await handler(
+      withMPPPayment({
+        body: { query: 'test' },
+        payload: { type: 'transaction', signature: '0xdeadbeef' },
+      }),
+    );
+
+    expect(res.status).toBe(500);
+    expect(captured?.phase).toBe('settle');
+    expect(captured?.error).toBe(broadcastError);
+    expect(captured?.payment.status).toBe('verified');
   });
 });
 
@@ -769,7 +1069,7 @@ describe('SIWX route', () => {
     );
     const res = await handler(makeSIWXRequest('0xMyWallet', 'nonce-1'));
     expect(res.status).toBe(200);
-    // ctx.wallet is always lowercase (v0.5+)
+    // EVM ctx.wallet values are canonicalized to lowercase.
     expect(capturedWallet).toBe('0xmywallet');
   });
 
@@ -852,10 +1152,12 @@ describe('unprotected route', () => {
   it('wallet is null on handler context', async () => {
     const entry = makeEntry({ authMode: 'unprotected', protocols: [] });
     let capturedWallet: string | null | undefined;
+    let capturedPayment: HandlerPaymentContext | null | undefined;
     const handler = createRequestHandler(
       entry,
       async (ctx) => {
         capturedWallet = ctx.wallet;
+        capturedPayment = ctx.payment;
         return {};
       },
       makeDeps(),
@@ -863,6 +1165,7 @@ describe('unprotected route', () => {
     const req = new NextRequest('http://localhost:3000/api/test', { method: 'GET' });
     await handler(req);
     expect(capturedWallet).toBeNull();
+    expect(capturedPayment).toBeNull();
   });
 });
 

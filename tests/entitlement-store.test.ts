@@ -19,6 +19,13 @@ describe('MemoryEntitlementStore', () => {
     expect(await store.has('route/a', solanaAddr)).toBe(true);
     expect(await store.has('route/a', solanaAddr.toLowerCase())).toBe(false);
   });
+
+  it('canonicalizes uppercase EVM prefixes without touching Solana casing', async () => {
+    const store = new MemoryEntitlementStore();
+    await store.grant('route/a', '0XABCDEFabcdefABCDEFabcdefABCDEFabcdefABCD');
+
+    expect(await store.has('route/a', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd')).toBe(true);
+  });
 });
 
 describe('createRedisEntitlementStore', () => {

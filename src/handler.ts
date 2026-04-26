@@ -4,12 +4,14 @@ import { HttpError } from './types.js';
 export async function safeCallHandler(
   handler: (ctx: unknown) => Promise<unknown>,
   ctx: unknown,
+  options: { onError?: (error: unknown) => void } = {},
 ): Promise<NextResponse> {
   try {
     const result = await handler(ctx);
     if (result instanceof Response) return result as unknown as NextResponse;
     return NextResponse.json(result);
   } catch (error) {
+    options.onError?.(error);
     // Framework tolerance: accept both HttpError and the universal
     // Object.assign(new Error(), { status }) pattern. Every Node.js
     // ecosystem (Express, Koa, Hono) respects .status on thrown errors.

@@ -11,6 +11,8 @@ import type {
   MppProtocolInfo,
   JsonObject,
   JsonValue,
+  SettlementLifecycle,
+  PayToConfig,
 } from './types.js';
 import type { RouteRegistry } from './registry.js';
 import type { OrchestrateDeps } from './orchestrate.js';
@@ -52,22 +54,12 @@ type HandlerArg<
   HasAuth extends boolean,
   NeedsBody extends boolean,
   HasBody extends boolean,
-  NeedsInputExample extends boolean,
-  NeedsOutputExample extends boolean,
 > = HasAuth extends true
   ? [NeedsBody, HasBody] extends [true, false]
     ? {
         __missing: 'Call .body(schema) — dynamic/tiered pricing requires a body schema to resolve the price against';
       }
-    : NeedsInputExample extends true
-      ? {
-          __missing: 'Call .inputExample(sample) — .body()/.query() routes must advertise a conforming request example for bazaar discovery';
-        }
-      : NeedsOutputExample extends true
-        ? {
-            __missing: 'Call .outputExample(sample) — .output() routes must advertise a conforming response example for bazaar discovery';
-          }
-        : (ctx: HandlerContext<TBody, TQuery>) => Promise<unknown>
+    : (ctx: HandlerContext<TBody, TQuery>) => Promise<unknown>
   : {
       __missing: 'Select an auth mode: .paid(pricing), .siwx(), .apiKey(resolver), or .unprotected()';
     };
@@ -83,8 +75,6 @@ export class RouteBuilder<
   HasAuth extends boolean = false,
   NeedsBody extends boolean = false,
   HasBody extends boolean = false,
-  NeedsInputExample extends boolean = false,
-  NeedsOutputExample extends boolean = false,
 > {
   /** @internal */ readonly _key: string;
   /** @internal */ readonly _registry: RouteRegistry;
@@ -95,7 +85,7 @@ export class RouteBuilder<
   /** @internal */ _protocols: ProtocolType[] = ['x402'];
   /** @internal */ _maxPrice: string | undefined;
   /** @internal */ _minPrice: string | undefined;
-  /** @internal */ _payTo: string | ((request: Request) => string | Promise<string>) | undefined;
+  /** @internal */ _payTo: PayToConfig | undefined;
   /** @internal */ _bodySchema: ZodType | undefined;
   /** @internal */ _querySchema: ZodType | undefined;
   /** @internal */ _outputSchema: ZodType | undefined;
@@ -110,6 +100,7 @@ export class RouteBuilder<
   /** @internal */ _providerName: string | undefined;
   /** @internal */ _providerConfig: ProviderConfig | undefined;
   /** @internal */ _validateFn: ((body: TBody) => void | Promise<void>) | undefined;
+  /** @internal */ _settlement: SettlementLifecycle<TBody> | undefined;
   /** @internal */ _mppInfo: MppProtocolInfo | undefined;
 
   constructor(key: string, registry: RouteRegistry, deps: OrchestrateDeps) {
@@ -133,29 +124,11 @@ export class RouteBuilder<
   paid(
     pricing: string,
     options?: PaidOptions,
-  ): RouteBuilder<
-    TBody,
-    TQuery,
-    TOutput,
-    True,
-    False,
-    HasBody,
-    NeedsInputExample,
-    NeedsOutputExample
-  >;
+  ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody>;
   paid<TBodyIn>(
     pricing: (body: TBodyIn) => string | Promise<string>,
     options?: PaidOptions & { maxPrice?: string },
-  ): RouteBuilder<
-    TBody,
-    TQuery,
-    TOutput,
-    True,
-    True,
-    HasBody,
-    NeedsInputExample,
-    NeedsOutputExample
-  >;
+  ): RouteBuilder<TBody, TQuery, TOutput, True, True, HasBody>;
   paid(
     pricing: {
       field: string;
@@ -163,43 +136,27 @@ export class RouteBuilder<
       default?: string;
     },
     options?: PaidOptions,
-  ): RouteBuilder<
-    TBody,
-    TQuery,
-    TOutput,
-    True,
-    True,
-    HasBody,
-    NeedsInputExample,
-    NeedsOutputExample
-  >;
+  ): RouteBuilder<TBody, TQuery, TOutput, True, True, HasBody>;
   paid(
     pricing: PricingConfig,
     options?: PaidOptions,
-  ): RouteBuilder<
-    TBody,
-    TQuery,
-    TOutput,
-    True,
-    boolean,
-    HasBody,
-    NeedsInputExample,
-    NeedsOutputExample
-  > {
-    const next = this.fork() as RouteBuilder<
-      TBody,
-      TQuery,
-      TOutput,
-      True,
-      boolean,
-      HasBody,
-      NeedsInputExample,
-      NeedsOutputExample
-    >;
+  ): RouteBuilder<TBody, TQuery, TOutput, True, boolean, HasBody> {
+    if (this._authMode === 'unprotected') {
+      throw new Error(
+        `route '${this._key}': Cannot combine .unprotected() and .paid() on the same route.`,
+      );
+    }
+    if (this._pricing !== undefined) {
+      throw new Error(
+        `route '${this._key}': Cannot call .paid() more than once on the same route.`,
+      );
+    }
+
+    const next = this.fork() as RouteBuilder<TBody, TQuery, TOutput, True, boolean, HasBody>;
     next._authMode = 'paid';
     next._pricing = pricing;
     if (options?.protocols) {
-      next._protocols = options.protocols;
+      next._protocols = [...options.protocols];
     } else if (next._protocols.length === 0) {
       next._protocols = ['x402'];
     }
@@ -234,16 +191,7 @@ export class RouteBuilder<
     return next;
   }
 
-  siwx(): RouteBuilder<
-    TBody,
-    TQuery,
-    TOutput,
-    True,
-    False,
-    HasBody,
-    NeedsInputExample,
-    NeedsOutputExample
-  > {
+  siwx(): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody> {
     if (this._authMode === 'unprotected') {
       throw new Error(
         `route '${this._key}': Cannot combine .unprotected() and .siwx() on the same route.`,
@@ -256,16 +204,7 @@ export class RouteBuilder<
       );
     }
 
-    const next = this.fork() as RouteBuilder<
-      TBody,
-      TQuery,
-      TOutput,
-      True,
-      False,
-      HasBody,
-      NeedsInputExample,
-      NeedsOutputExample
-    >;
+    const next = this.fork() as RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody>;
     next._siwxEnabled = true;
 
     // If route is paid (or already has pricing), SIWX is an acceleration capability.
@@ -283,57 +222,33 @@ export class RouteBuilder<
 
   apiKey(
     resolver: (key: string) => unknown | Promise<unknown>,
-  ): RouteBuilder<
-    TBody,
-    TQuery,
-    TOutput,
-    True,
-    NeedsBody,
-    HasBody,
-    NeedsInputExample,
-    NeedsOutputExample
-  > {
+  ): RouteBuilder<TBody, TQuery, TOutput, True, NeedsBody, HasBody> {
     if (this._siwxEnabled) {
       throw new Error(
         `route '${this._key}': Combining .apiKey() and .siwx() is not supported on the same route.`,
       );
     }
-    const next = this.fork() as RouteBuilder<
-      TBody,
-      TQuery,
-      TOutput,
-      True,
-      NeedsBody,
-      HasBody,
-      NeedsInputExample,
-      NeedsOutputExample
-    >;
+    const next = this.fork() as RouteBuilder<TBody, TQuery, TOutput, True, NeedsBody, HasBody>;
     next._authMode = 'apiKey';
     next._apiKeyResolver = resolver;
     // apiKey can compose with .paid() — auth mode will upgrade
     return next;
   }
 
-  unprotected(): RouteBuilder<
-    TBody,
-    TQuery,
-    TOutput,
-    True,
-    False,
-    HasBody,
-    NeedsInputExample,
-    NeedsOutputExample
-  > {
-    const next = this.fork() as RouteBuilder<
-      TBody,
-      TQuery,
-      TOutput,
-      True,
-      False,
-      HasBody,
-      NeedsInputExample,
-      NeedsOutputExample
-    >;
+  unprotected(): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody> {
+    if (this._authMode && this._authMode !== 'unprotected') {
+      throw new Error(
+        `route '${this._key}': Cannot combine .unprotected() and .${this._authMode}() on the same route.`,
+      );
+    }
+
+    if (this._pricing) {
+      throw new Error(
+        `route '${this._key}': Cannot combine .unprotected() and .paid() on the same route.`,
+      );
+    }
+
+    const next = this.fork() as RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody>;
     next._authMode = 'unprotected';
     next._protocols = [];
     return next;
@@ -354,65 +269,91 @@ export class RouteBuilder<
   // Schema methods
   // -------------------------------------------------------------------------
 
+  body<T>(schema: ZodType<T>): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True>;
   body<T>(
     schema: ZodType<T>,
-  ): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True, True, NeedsOutputExample> {
+    example: T & JsonObject,
+  ): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True>;
+  body<T>(
+    schema: ZodType<T>,
+    example?: T & JsonObject,
+  ): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True> {
     const next = this.fork() as unknown as RouteBuilder<
       T,
       TQuery,
       TOutput,
       HasAuth,
       NeedsBody,
-      True,
-      True,
-      NeedsOutputExample
+      True
     >;
     next._bodySchema = schema;
+    if (example !== undefined) {
+      next._inputExample = example;
+      next._hasInputExample = true;
+    }
     return next;
   }
 
+  query<T>(schema: ZodType<T>): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody>;
   query<T>(
     schema: ZodType<T>,
-  ): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody, True, NeedsOutputExample> {
+    example: T & JsonObject,
+  ): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody>;
+  query<T>(
+    schema: ZodType<T>,
+    example?: T & JsonObject,
+  ): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       T,
       TOutput,
       HasAuth,
       NeedsBody,
-      HasBody,
-      True,
-      NeedsOutputExample
+      HasBody
     >;
     next._querySchema = schema;
+    if (example !== undefined) {
+      next._inputExample = example;
+      next._hasInputExample = true;
+    }
     next._method = 'GET';
     return next;
   }
 
+  output<T>(schema: ZodType<T>): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody>;
   output<T>(
     schema: ZodType<T>,
-  ): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody, NeedsInputExample, True> {
+    example: T & JsonValue,
+  ): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody>;
+  output<T>(
+    schema: ZodType<T>,
+    example?: T & JsonValue,
+  ): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       TQuery,
       T,
       HasAuth,
       NeedsBody,
-      HasBody,
-      NeedsInputExample,
-      True
+      HasBody
     >;
     next._outputSchema = schema;
+    if (example !== undefined) {
+      next._outputExample = example;
+      next._hasOutputExample = true;
+    }
     return next;
   }
 
   /**
    * Provide a conforming example of the request input (body or query params).
    *
-   * **Required** whenever `.body()` or `.query()` is set — enforced at compile time via
-   * `.handler()` overloads, and at route-registration time via Zod validation of the
-   * example against the schema. The example is embedded in the bazaar discovery extension
-   * so indexers can advertise a working sample call.
+   * Optional. When provided, the example is validated against the request schema
+   * at route registration and embedded in the bazaar discovery extension so
+   * indexers can advertise a working sample call.
+   *
+   * For the common case, pass the example directly to `.body(schema, example)` or
+   * `.query(schema, example)` instead.
    *
    * @example
    * ```ts
@@ -425,16 +366,14 @@ export class RouteBuilder<
    */
   inputExample(
     example: InputTypeFor<TBody, TQuery> & JsonObject,
-  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, False, NeedsOutputExample> {
+  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       TQuery,
       TOutput,
       HasAuth,
       NeedsBody,
-      HasBody,
-      False,
-      NeedsOutputExample
+      HasBody
     >;
     next._inputExample = example;
     next._hasInputExample = true;
@@ -444,10 +383,11 @@ export class RouteBuilder<
   /**
    * Provide a conforming example of the response output.
    *
-   * **Required** whenever `.output()` is set — enforced at compile time via `.handler()`
-   * overloads, and at route-registration time via Zod validation of the example against
-   * the schema. The example is embedded in the bazaar discovery extension so indexers
-   * can advertise the response shape.
+   * Optional. When provided, the example is validated against the output schema
+   * at route registration and embedded in the bazaar discovery extension so
+   * indexers can advertise the response shape.
+   *
+   * For the common case, pass the example directly to `.output(schema, example)` instead.
    *
    * Accepts any JSON value (objects, arrays, or primitives) — top-level array
    * or primitive responses (e.g. `z.array(...)`) are supported alongside the
@@ -471,16 +411,14 @@ export class RouteBuilder<
    */
   outputExample(
     example: TOutput & JsonValue,
-  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, NeedsInputExample, False> {
+  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       TQuery,
       TOutput,
       HasAuth,
       NeedsBody,
-      HasBody,
-      NeedsInputExample,
-      False
+      HasBody
     >;
     next._outputExample = example;
     next._hasOutputExample = true;
@@ -532,28 +470,30 @@ export class RouteBuilder<
    */
   validate(
     fn: (body: TBody) => void | Promise<void>,
-  ): RouteBuilder<
-    TBody,
-    TQuery,
-    TOutput,
-    HasAuth,
-    NeedsBody,
-    HasBody,
-    NeedsInputExample,
-    NeedsOutputExample
-  > {
+  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody> {
     const next = this.fork();
     next._validateFn = fn;
-    return next as RouteBuilder<
-      TBody,
-      TQuery,
-      TOutput,
-      HasAuth,
-      NeedsBody,
-      HasBody,
-      NeedsInputExample,
-      NeedsOutputExample
-    >;
+    return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody>;
+  }
+
+  // -------------------------------------------------------------------------
+  // Settlement lifecycle
+  // -------------------------------------------------------------------------
+
+  /**
+   * Add route-specific settlement hooks.
+   *
+   * `beforeSettle` runs after a successful handler response but before
+   * router-controlled settlement/broadcast, so it can still prevent the charge
+   * for x402 and MPP transaction-payload flows. `afterSettle` runs after
+   * settlement and is intended for durable ledgers or app-owned refund queues.
+   */
+  settlement(
+    lifecycle: SettlementLifecycle<TBody>,
+  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody> {
+    const next = this.fork();
+    next._settlement = lifecycle;
+    return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody>;
   }
 
   // -------------------------------------------------------------------------
@@ -561,25 +501,25 @@ export class RouteBuilder<
   // -------------------------------------------------------------------------
 
   handler(
-    fn: HandlerArg<
-      TBody,
-      TQuery,
-      HasAuth,
-      NeedsBody,
-      HasBody,
-      NeedsInputExample,
-      NeedsOutputExample
-    >,
+    fn: HandlerArg<TBody, TQuery, HasAuth, NeedsBody, HasBody>,
   ): (request: NextRequest) => Promise<Response> {
     // The conditional `HandlerArg` type forces `fn` to be a function when state
     // is valid; the error-object branches block invalid calls at compile time,
     // so at runtime `fn` is always a handler function.
     const handlerFn = fn as unknown as (ctx: HandlerContext<TBody, TQuery>) => Promise<unknown>;
     // Registration-time validation
+    if (!this._authMode) {
+      throw new Error(
+        `route '${this._key}': Select an auth mode: .paid(pricing), .siwx(), .apiKey(resolver), or .unprotected()`,
+      );
+    }
     if (this._validateFn && !this._bodySchema) {
       throw new Error(
         `route '${this._key}': .validate() requires .body() — validation runs on parsed body`,
       );
+    }
+    if (this._settlement && !this._pricing) {
+      throw new Error(`route '${this._key}': .settlement() requires a paid route`);
     }
 
     validateExamples(
@@ -615,6 +555,7 @@ export class RouteBuilder<
       providerName: this._providerName,
       providerConfig: this._providerConfig,
       validateFn: this._validateFn as ((body: unknown) => void | Promise<void>) | undefined,
+      settlement: this._settlement as SettlementLifecycle | undefined,
       mppInfo: this._mppInfo,
     };
 
