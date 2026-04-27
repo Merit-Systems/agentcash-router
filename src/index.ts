@@ -11,8 +11,8 @@ import { createWellKnownHandler } from './discovery/well-known.js';
 import { createOpenAPIHandler } from './discovery/openapi.js';
 import { createLlmsTxtHandler } from './discovery/llms-txt.js';
 import { getConfiguredX402Accepts } from './x402-config.js';
-import { isEvmNetwork } from './protocols/evm.js';
-import { isSolanaNetwork } from './protocols/solana.js';
+import { BASE_NETWORK } from './constants.js';
+import { RouterConfigError, formatRouterConfigIssues, getRouterConfigIssues } from './config.js';
 // ---------------------------------------------------------------------------
 // ServiceRouter
 // ---------------------------------------------------------------------------
@@ -30,8 +30,8 @@ export interface ServiceRouter<TPriceKeys extends string = never> {
   route<K extends string>(
     keyOrDefinition: K | RouteDefinition<K>,
   ): [K] extends [TPriceKeys]
-    ? RouteBuilder<undefined, undefined, undefined, true, false, false, false, false>
-    : RouteBuilder<undefined, undefined, undefined, false, false, false, false, false>;
+    ? RouteBuilder<undefined, undefined, undefined, true, false, false>
+    : RouteBuilder<undefined, undefined, undefined, false, false, false>;
   wellKnown(): (request: NextRequest) => Promise<NextResponse>;
   openapi(): (request: NextRequest) => Promise<NextResponse>;
   llmsTxt(): (request: NextRequest) => Promise<NextResponse>;
@@ -49,81 +49,37 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   const registry = new RouteRegistry();
   const nonceStore = config.siwx?.nonceStore ?? new MemoryNonceStore();
   const entitlementStore = config.siwx?.entitlementStore ?? new MemoryEntitlementStore();
-  const network = config.network ?? 'eip155:8453';
+  const network = config.network ?? BASE_NETWORK;
   const x402Accepts = getConfiguredX402Accepts(config);
-  // baseUrl is required — the realm is load-bearing for payment matching and MPP indexing.
-  // No auto-detection; consuming apps must explicitly set it.
-  if (!config.baseUrl) {
-    throw new Error(
-      '[router] baseUrl is required in RouterConfig. ' +
-        'Set it to your production domain (e.g., "https://api.example.com"). ' +
-        'The realm is used for payment matching and must be correct.',
-    );
-  }
+  const configIssues = getRouterConfigIssues(config, {
+    requireCdpKeys: process.env.NODE_ENV === 'production',
+  });
+  const baseUrlIssue = configIssues.find((issue) => issue.code === 'missing_base_url');
+  if (baseUrlIssue) throw new RouterConfigError([baseUrlIssue]);
 
-  // Empty protocols is a programming error — always throw.
-  if (config.protocols && config.protocols.length === 0) {
-    throw new Error(
-      "RouterConfig.protocols cannot be empty. Omit the field to use default ['x402'] or specify protocols explicitly.",
-    );
-  }
+  const emptyProtocolsIssue = configIssues.find((issue) => issue.code === 'empty_protocols');
+  if (emptyProtocolsIssue) throw new RouterConfigError([emptyProtocolsIssue]);
 
-  const resolvedBaseUrl = config.baseUrl.replace(/\/+$/, '');
+  const protocolConfigIssues = configIssues.filter(
+    (issue) => issue.code !== 'missing_base_url' && issue.code !== 'empty_protocols',
+  );
+  const x402ConfigIssues = protocolConfigIssues.filter((issue) => issue.protocol === 'x402');
+  const mppConfigIssues = protocolConfigIssues.filter((issue) => issue.protocol === 'mpp');
+  const x402ConfigError =
+    x402ConfigIssues.length > 0 ? formatRouterConfigIssues(x402ConfigIssues) : undefined;
+  const mppConfigError =
+    mppConfigIssues.length > 0 ? formatRouterConfigIssues(mppConfigIssues) : undefined;
 
-  // Validate per-protocol config synchronously.
-  let x402ConfigError: string | undefined;
-  let mppConfigError: string | undefined;
-
-  if (!config.protocols || config.protocols.includes('x402')) {
-    if (x402Accepts.length === 0) {
-      x402ConfigError = 'x402 requires at least one accept configuration.';
-    } else if (x402Accepts.some((accept) => !accept.network)) {
-      x402ConfigError = 'x402 accepts require a network.';
-    } else if (x402Accepts.some((accept) => !isSupportedX402Network(accept.network))) {
-      const unsupported = x402Accepts.find((accept) => !isSupportedX402Network(accept.network));
-      x402ConfigError = `unsupported x402 network '${unsupported?.network}'. Use eip155:* or solana:*.`;
-    } else if (
-      x402Accepts.some((accept) => (accept.scheme ?? 'exact') !== 'exact' && !accept.asset)
-    ) {
-      x402ConfigError = 'non-exact x402 accepts require an asset.';
-    } else if (
-      x402Accepts.some(
-        (accept) =>
-          accept.decimals !== undefined &&
-          (!Number.isInteger(accept.decimals) || accept.decimals < 0),
-      )
-    ) {
-      x402ConfigError = 'x402 accept decimals must be a non-negative integer.';
-    } else if (x402Accepts.some((accept) => !accept.payTo) && !config.payeeAddress) {
-      x402ConfigError =
-        'x402 requires payeeAddress in router config or payTo on every x402 accept.';
-    }
-  }
-
-  if (config.protocols?.includes('mpp')) {
-    if (!config.mpp) {
-      mppConfigError =
-        'protocols includes "mpp" but mpp config is missing. ' +
-        'Add mpp: { secretKey, currency, recipient } to your router config.';
-    } else if (!config.mpp.recipient && !config.payeeAddress) {
-      mppConfigError =
-        'MPP requires a recipient address. Set mpp.recipient or payeeAddress in your router config.';
-    } else if (!(config.mpp.rpcUrl ?? process.env.TEMPO_RPC_URL)) {
-      mppConfigError =
-        'MPP requires an authenticated Tempo RPC URL. ' +
-        'Set TEMPO_RPC_URL env var or pass rpcUrl in the mpp config object.';
-    }
-  }
-
-  const allConfigErrors = [x402ConfigError, mppConfigError].filter(Boolean);
-  if (allConfigErrors.length > 0) {
-    for (const err of allConfigErrors) console.error(`[router] ${err}`);
+  if (protocolConfigIssues.length > 0) {
+    for (const issue of protocolConfigIssues) console.error(`[router] ${issue.message}`);
     // Throw in production to fail `next build`. In development, errors are
     // stored per-protocol and surfaced as clean JSON 500s at request time.
     if (process.env.NODE_ENV === 'production') {
-      throw new Error(allConfigErrors.join('\n'));
+      throw new RouterConfigError(protocolConfigIssues);
     }
   }
+
+  const resolvedBaseUrl = config.baseUrl.replace(/\/+$/, '');
 
   // Plugin init: non-fatal, but properly handle async rejections.
   // RouterPlugin.init may return void or Promise<void>.
@@ -145,6 +101,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     nonceStore,
     entitlementStore,
     payeeAddress: config.payeeAddress ?? '',
+    mppRecipient: config.mpp?.recipient ?? config.payeeAddress,
     network,
     x402FacilitatorsByNetwork: undefined,
     x402Accepts,
@@ -299,10 +256,6 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   };
 }
 
-function isSupportedX402Network(network: string): boolean {
-  return isEvmNetwork(network) || isSolanaNetwork(network);
-}
-
 function normalizePath(path: string): string {
   let normalized = path.trim();
   normalized = normalized.replace(/^\/+/, '');
@@ -315,6 +268,27 @@ function normalizePath(path: string): string {
 // ---------------------------------------------------------------------------
 
 export { HttpError } from './types.js';
+export {
+  BASE_NETWORK,
+  SOLANA_MAINNET_NETWORK,
+  TEMPO_USDC_CURRENCY,
+  ZERO_EVM_ADDRESS,
+} from './constants.js';
+export {
+  RouterConfigError,
+  formatRouterConfigIssues,
+  getRouterConfigIssues,
+  mppFromEnv,
+  paidOptionsForProtocols,
+  validateRouterConfig,
+  x402AcceptsFromEnv,
+} from './config.js';
+export type {
+  RouterConfigIssue,
+  RouterConfigIssueCode,
+  RouterConfigValidationOptions,
+  RouterEnv,
+} from './config.js';
 export type {
   HandlerContext,
   RouterConfig,
@@ -328,7 +302,14 @@ export type {
   AlertFn,
   AlertLevel,
   AlertEvent,
+  HandlerPaymentContext,
+  SettlementLifecycle,
+  SettlementLifecycleContext,
+  SettlementSettledContext,
+  SettledHandlerErrorContext,
+  SettlementErrorContext,
   TierConfig,
+  PaymentStatus,
   ProviderConfig,
   ProviderQuotaEvent,
   QuotaInfo,

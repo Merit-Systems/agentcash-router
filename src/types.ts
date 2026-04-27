@@ -1,5 +1,5 @@
 import type { FacilitatorConfig } from '@x402/core/http';
-import type { NextRequest } from 'next/server';
+import type { NextRequest, NextResponse } from 'next/server';
 import type { ZodType } from 'zod';
 import type { Store } from 'mppx';
 // ---------------------------------------------------------------------------
@@ -168,6 +168,70 @@ export interface PaidOptions {
 // Handler context
 // ---------------------------------------------------------------------------
 
+export type PaymentStatus = 'verified' | 'settled';
+
+export interface HandlerPaymentContext {
+  protocol: ProtocolType;
+  status: PaymentStatus;
+  payer: string;
+  amount: string;
+  network: string;
+  recipient?: string;
+  transaction?: string;
+  receipt?: string;
+}
+
+export interface SettlementLifecycleContext<TBody = unknown> {
+  route: string;
+  request: NextRequest;
+  body: TBody;
+  wallet: string;
+  account: unknown;
+  payment: HandlerPaymentContext;
+  response: NextResponse;
+  result: unknown;
+}
+
+export interface SettlementSettledContext<TBody = unknown> extends Omit<
+  SettlementLifecycleContext<TBody>,
+  'payment'
+> {
+  payment: HandlerPaymentContext & { status: 'settled' };
+}
+
+export interface SettlementErrorContext<TBody = unknown> extends SettlementLifecycleContext<TBody> {
+  error: unknown;
+  phase: 'settle' | 'afterSettle';
+}
+
+export interface SettledHandlerErrorContext<
+  TBody = unknown,
+> extends SettlementSettledContext<TBody> {
+  error: unknown;
+}
+
+export interface SettlementLifecycle<TBody = unknown> {
+  /**
+   * Runs after the handler returns a successful response, before router-controlled
+   * settlement/broadcast. Throw with `.status` to return a specific error and
+   * skip settlement when the protocol flow has not already settled.
+   */
+  beforeSettle?: (ctx: SettlementLifecycleContext<TBody>) => void | Promise<void>;
+  /**
+   * Runs after successful settlement. Use for durable ledgers and audit rows.
+   * Errors are alerted and do not change the already-settled response.
+   */
+  afterSettle?: (ctx: SettlementSettledContext<TBody>) => void | Promise<void>;
+  /**
+   * Runs when the router has already observed a settled payment, then the
+   * handler returns an error response. Use for app-owned refund or
+   * compensation queues.
+   */
+  onSettledHandlerError?: (ctx: SettledHandlerErrorContext<TBody>) => void | Promise<void>;
+  /** Runs when router-controlled settlement fails after the handler succeeded. */
+  onSettlementError?: (ctx: SettlementErrorContext<TBody>) => void | Promise<void>;
+}
+
 export interface HandlerContext<TBody = undefined, TQuery = undefined> {
   body: TBody;
   query: TQuery;
@@ -175,6 +239,7 @@ export interface HandlerContext<TBody = undefined, TQuery = undefined> {
   requestId: string;
   route: string;
   wallet: string | null;
+  payment: HandlerPaymentContext | null;
   account: unknown;
   alert: AlertFn;
   setVerifiedWallet: (addr: string) => void;
@@ -230,22 +295,22 @@ export interface RouteEntry {
   querySchema?: ZodType;
   outputSchema?: ZodType;
   /**
-   * Conforming example for the request input (body for body routes, query params for query routes).
-   * Required whenever `bodySchema` or `querySchema` is set. Must satisfy the corresponding schema —
-   * validated at route-registration time via the Zod schema.
+   * Optional conforming example for the request input (body for body routes, query params for query routes).
+   * When present, it must satisfy the corresponding schema and is validated at route registration.
    *
    * Emitted in the bazaar discovery extension so indexers can advertise a working sample call.
    */
   inputExample?: JsonObject;
   /**
-   * Conforming example for the response output. Required whenever `outputSchema` is set.
-   * Must satisfy `outputSchema` — validated at route-registration time via the Zod schema.
+   * Optional conforming example for the response output. When present, it must
+   * satisfy `outputSchema` and is validated at route registration.
    *
    * Accepts any JSON value (object, array, or primitive) to support top-level array or
    * primitive response schemas.
    *
-   * Emitted in the bazaar discovery extension. Without it the `output` block is dropped from
-   * the declaration entirely (the output schema alone cannot be exposed in bazaar without an example).
+   * Emitted in the bazaar discovery extension. Without it the `output` block is
+   * dropped from the declaration entirely (the output schema alone cannot be
+   * exposed in bazaar without an example).
    */
   outputExample?: JsonValue;
   description?: string;
@@ -258,6 +323,7 @@ export interface RouteEntry {
   providerName?: string;
   providerConfig?: ProviderConfig;
   validateFn?: (body: unknown) => void | Promise<void>;
+  settlement?: SettlementLifecycle;
   mppInfo?: MppProtocolInfo;
 }
 
@@ -339,7 +405,7 @@ export interface RouterConfig {
      * createRouter({
      *   mpp: {
      *     secretKey: process.env.MPP_SECRET_KEY!,
-     *     currency: USDC,
+     *     currency: TEMPO_USDC_CURRENCY,
      *     useDefaultStore: true,
      *   }
      * })
@@ -347,7 +413,7 @@ export interface RouterConfig {
     useDefaultStore?: boolean;
   };
   /**
-   * Payment protocols to accept on auto-priced routes (those using the `prices` config).
+   * Payment protocols to accept on paid routes unless a route overrides them.
    *
    * @default ['x402']
    *
@@ -355,7 +421,7 @@ export interface RouterConfig {
    * // Accept both x402 and MPP payments
    * createRouter({
    *   protocols: ['x402', 'mpp'],
-   *   mpp: { secretKey, currency, recipient },
+   *   mpp: { secretKey, currency: TEMPO_USDC_CURRENCY, recipient },
    *   prices: { 'exa/search': '0.01' }
    * })
    */

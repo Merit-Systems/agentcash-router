@@ -75,6 +75,46 @@ describe('fluent chain', () => {
     expect(entry!.outputExample).toEqual({ result: 'ok' });
   });
 
+  it('accepts inline body, query, and output examples', () => {
+    const { builder: bodyBuilder, registry: bodyRegistry } = makeBuilder('inline/body');
+    bodyBuilder
+      .paid('0.01')
+      .body(bodySchema, { query: 'hello' })
+      .output(outputSchema, { result: 'ok' })
+      .handler(async ({ body }) => ({ result: body.query }));
+
+    const bodyEntry = bodyRegistry.get('inline/body');
+    expect(bodyEntry!.inputExample).toEqual({ query: 'hello' });
+    expect(bodyEntry!.outputExample).toEqual({ result: 'ok' });
+
+    const { builder: queryBuilder, registry: queryRegistry } = makeBuilder('inline/query');
+    queryBuilder
+      .siwx()
+      .query(querySchema, { page: '1' })
+      .handler(async ({ query }) => ({ page: query.page }));
+
+    const queryEntry = queryRegistry.get('inline/query');
+    expect(queryEntry!.method).toBe('GET');
+    expect(queryEntry!.inputExample).toEqual({ page: '1' });
+  });
+
+  it('.settlement() preserves route-level settlement hooks', () => {
+    const { builder, registry } = makeBuilder('settlement/test');
+    const beforeSettle = async () => {};
+    const afterSettle = async () => {};
+
+    builder
+      .paid('0.05')
+      .body(bodySchema)
+      .inputExample({ query: 'hello' })
+      .settlement({ beforeSettle, afterSettle })
+      .handler(async ({ body }) => ({ result: body.query }));
+
+    const entry = registry.get('settlement/test');
+    expect(entry?.settlement?.beforeSettle).toBe(beforeSettle);
+    expect(entry?.settlement?.afterSettle).toBe(afterSettle);
+  });
+
   it('route key is stored in registry on construction', () => {
     const { builder, registry } = makeBuilder('stored/key');
     builder.unprotected().handler(async () => ({ ok: true }));
@@ -101,6 +141,41 @@ describe('registration-time safety', () => {
     const { builder } = makeBuilder();
     // maxPrice is now optional for dynamic pricing (v0.3.1+)
     expect(() => builder.paid((body: unknown) => '0.01')).not.toThrow();
+  });
+
+  it('.handler() without an auth mode throws at registration for JS callers', () => {
+    const { builder } = makeBuilder('missing/auth');
+    expect(() =>
+      // @ts-expect-error — runtime guard for JavaScript consumers
+      builder.handler(async () => ({})),
+    ).toThrow('Select an auth mode');
+  });
+
+  it('rejects .unprotected() after payment or identity auth', () => {
+    const { builder: paid } = makeBuilder('paid/unprotected');
+    expect(() => paid.paid('0.01').unprotected()).toThrow(
+      'Cannot combine .unprotected() and .paid()',
+    );
+
+    const { builder: siwx } = makeBuilder('siwx/unprotected');
+    expect(() => siwx.siwx().unprotected()).toThrow('Cannot combine .unprotected() and .siwx()');
+
+    const { builder: apiKey } = makeBuilder('apikey/unprotected');
+    expect(() => apiKey.apiKey(() => ({})).unprotected()).toThrow(
+      'Cannot combine .unprotected() and .apiKey()',
+    );
+  });
+
+  it('rejects .paid() after .unprotected()', () => {
+    const { builder } = makeBuilder('unprotected/paid');
+    expect(() => builder.unprotected().paid('0.01')).toThrow(
+      'Cannot combine .unprotected() and .paid()',
+    );
+  });
+
+  it('rejects repeated .paid() calls on the same route', () => {
+    const { builder } = makeBuilder('paid/twice');
+    expect(() => builder.paid('0.01').paid('0.02')).toThrow('Cannot call .paid() more than once');
   });
 
   it('duplicate route key overwrites silently', () => {
@@ -174,6 +249,27 @@ describe('registration-time safety', () => {
     ).not.toThrow();
   });
 
+  it('.settlement() without .paid() throws at registration', () => {
+    const { builder } = makeBuilder('settlement/not-paid');
+    expect(() =>
+      builder
+        .unprotected()
+        .settlement({ beforeSettle: async () => {} })
+        .handler(async () => ({})),
+    ).toThrow('.settlement() requires a paid route');
+  });
+
+  it('.settlement() works on paid routes that also require API keys', () => {
+    const { builder } = makeBuilder('settlement/apikey');
+    expect(() =>
+      builder
+        .paid('0.01')
+        .apiKey(() => ({ id: 'account' }))
+        .settlement({ afterSettle: async () => {} })
+        .handler(async () => ({})),
+    ).not.toThrow();
+  });
+
   it('fork() does not leak protocol array mutations', () => {
     const reg = new RouteRegistry();
     const b1 = new RouteBuilder('fork/base', reg, makeDeps());
@@ -199,26 +295,68 @@ describe('registration-time safety', () => {
     expect(e2!.protocols).toEqual(['x402', 'mpp']);
   });
 
-  it('.body() without .inputExample() throws at registration', () => {
-    const { builder } = makeBuilder('no/input-example');
-    expect(() =>
-      builder
-        .paid('0.01')
-        .body(bodySchema)
-        .handler(async () => ({})),
-    ).toThrow('.body() requires a matching .inputExample()');
+  it('.paid() copies protocol arrays from options', () => {
+    const { builder, registry } = makeBuilder('protocols/copy');
+    const protocols: Array<'x402' | 'mpp'> = ['x402'];
+
+    builder.paid('0.01', { protocols }).handler(async () => ({}));
+    protocols.push('mpp');
+
+    expect(registry.get('protocols/copy')!.protocols).toEqual(['x402']);
   });
 
-  it('.output() without .outputExample() throws at registration', () => {
-    const { builder } = makeBuilder('no/output-example');
+  it('.body() and .query() allow omitted examples', () => {
+    const { builder: bodyBuilder, registry: bodyRegistry } = makeBuilder('no/input-example');
+    expect(() =>
+      bodyBuilder
+        .paid('0.01')
+        .body(bodySchema)
+        .handler(async () => ({})),
+    ).not.toThrow();
+    expect(bodyRegistry.get('no/input-example')!.inputExample).toBeUndefined();
+
+    const { builder: queryBuilder, registry: queryRegistry } = makeBuilder('no/query-example');
+    expect(() =>
+      queryBuilder
+        .siwx()
+        .query(querySchema)
+        .handler(async () => ({})),
+    ).not.toThrow();
+    expect(queryRegistry.get('no/query-example')!.inputExample).toBeUndefined();
+  });
+
+  it('.output() allows omitted examples', () => {
+    const { builder, registry } = makeBuilder('no/output-example');
     expect(() =>
       builder
         .paid('0.01')
         .body(bodySchema)
-        .inputExample({ query: 'hello' })
         .output(outputSchema)
         .handler(async () => ({})),
-    ).toThrow('.output() requires a matching .outputExample()');
+    ).not.toThrow();
+    expect(registry.get('no/output-example')!.outputExample).toBeUndefined();
+  });
+
+  it('.inputExample() requires a request schema for JavaScript callers', () => {
+    const { builder } = makeBuilder('example/no-input-schema');
+    expect(() =>
+      builder
+        .unprotected()
+        // @ts-expect-error — runtime guard for JavaScript consumers
+        .inputExample({ query: 'hello' })
+        .handler(async () => ({})),
+    ).toThrow('.inputExample() requires .body() or .query()');
+  });
+
+  it('.outputExample() requires an output schema for JavaScript callers', () => {
+    const { builder } = makeBuilder('example/no-output-schema');
+    expect(() =>
+      builder
+        .unprotected()
+        // @ts-expect-error — runtime guard for JavaScript consumers
+        .outputExample({ result: 'ok' })
+        .handler(async () => ({})),
+    ).toThrow('.outputExample() requires .output()');
   });
 
   it('.inputExample() that does not match .body() schema throws at registration', () => {
@@ -233,6 +371,17 @@ describe('registration-time safety', () => {
     ).toThrow('.inputExample() does not satisfy .body() schema');
   });
 
+  it('inline body example that does not match .body() schema throws at registration', () => {
+    const { builder } = makeBuilder('bad/inline-input-example');
+    expect(() =>
+      builder
+        .paid('0.01')
+        // @ts-expect-error — wrong type, testing runtime validation
+        .body(bodySchema, { query: 123 })
+        .handler(async () => ({})),
+    ).toThrow('.inputExample() does not satisfy .body() schema');
+  });
+
   it('.outputExample() that does not match .output() schema throws at registration', () => {
     const { builder } = makeBuilder('bad/output-example');
     expect(() =>
@@ -243,6 +392,17 @@ describe('registration-time safety', () => {
         .output(outputSchema)
         // @ts-expect-error — wrong type, testing runtime validation
         .outputExample({ result: 123 })
+        .handler(async () => ({})),
+    ).toThrow('.outputExample() does not satisfy .output() schema');
+  });
+
+  it('inline output example that does not match .output() schema throws at registration', () => {
+    const { builder } = makeBuilder('bad/inline-output-example');
+    expect(() =>
+      builder
+        .paid('0.01')
+        // @ts-expect-error — wrong type, testing runtime validation
+        .output(outputSchema, { result: 123 })
         .handler(async () => ({})),
     ).toThrow('.outputExample() does not satisfy .output() schema');
   });

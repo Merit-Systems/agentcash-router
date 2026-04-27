@@ -1,5 +1,15 @@
 # @agentcash/router
 
+## 1.5.0
+
+### Minor Changes
+
+- d06a164: Add config validation helpers, shared network/currency constants, env builders for x402 and MPP setup, explicit handler payment metadata, and route-level settlement lifecycle hooks.
+  - Adds `.settlement({ beforeSettle, afterSettle, onSettledHandlerError, onSettlementError })` for pre-settlement validation, post-settlement bookkeeping, and app-owned compensation queues when already-settled MPP work fails in the handler.
+  - Adds inline example shorthand on `.body(schema, example)`, `.query(schema, example)`, and `.output(schema, example)`, while keeping schema examples optional. This intentionally removes the 1.4.0 compile-time requirement to call `.inputExample()` / `.outputExample()` before `.handler()`; supplied examples still validate at registration.
+  - Fixes dynamic paid requests to verify against the capped `maxPrice`, preserves original MPP settlement rejection details for lifecycle hooks, and rejects repeated `.paid()` calls on the same route.
+  - `createRouter()` now throws `RouterConfigError` for protocol config errors in production. Development keeps protocol init failures deferred to request-time JSON errors so local debugging remains incremental.
+
 ## 1.4.1
 
 ### Patch Changes

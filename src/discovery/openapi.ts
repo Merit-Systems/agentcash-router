@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import type { RouteRegistry } from '../registry.js';
 import type { RouteEntry, DiscoveryConfig } from '../types.js';
+import { TEMPO_USDC_CURRENCY } from '../constants.js';
 import { resolveGuidance } from './utils/guidance.js';
 
 export function createOpenAPIHandler(
@@ -199,7 +200,7 @@ function toProtocolObject(
       mpp: {
         method: mppInfo?.method ?? 'tempo',
         intent: mppInfo?.intent ?? 'charge',
-        currency: mppInfo?.currency ?? '0x20c0000000000000000000000000000000000001',
+        currency: mppInfo?.currency ?? TEMPO_USDC_CURRENCY,
       },
     };
   }

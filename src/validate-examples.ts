@@ -10,26 +10,14 @@ export function validateExamples(
   outputExample: unknown,
   hasOutputExample: boolean,
 ): void {
-  if (bodySchema && !hasInputExample) {
-    throw new Error(
-      `route '${key}': .body() requires a matching .inputExample() — ` +
-        `the bazaar discovery extension needs a conforming sample body to advertise.`,
-    );
+  const inputSchema = bodySchema ?? querySchema;
+  if (hasInputExample && !inputSchema) {
+    throw new Error(`route '${key}': .inputExample() requires .body() or .query()`);
   }
-  if (querySchema && !hasInputExample) {
-    throw new Error(
-      `route '${key}': .query() requires a matching .inputExample() — ` +
-        `the bazaar discovery extension needs a conforming sample query to advertise.`,
-    );
-  }
-  if (outputSchema && !hasOutputExample) {
-    throw new Error(
-      `route '${key}': .output() requires a matching .outputExample() — ` +
-        `the bazaar discovery extension needs a conforming sample response to advertise.`,
-    );
+  if (hasOutputExample && !outputSchema) {
+    throw new Error(`route '${key}': .outputExample() requires .output()`);
   }
 
-  const inputSchema = bodySchema ?? querySchema;
   if (inputSchema && hasInputExample) {
     const result = inputSchema.safeParse(inputExample);
     if (!result.success) {

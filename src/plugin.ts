@@ -63,7 +63,7 @@ export interface ErrorEvent {
 export interface AuthEvent {
   /** Authentication mode that was verified */
   authMode: 'siwx' | 'apiKey';
-  /** Verified wallet address (lowercase) */
+  /** Verified canonical wallet address (EVM lowercase, non-EVM preserved) */
   wallet: string | null;
   /** Route key */
   route: string;
