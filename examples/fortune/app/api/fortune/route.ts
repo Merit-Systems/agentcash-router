@@ -15,7 +15,6 @@ const fortunes = [
 
 export const POST = router
   .route('fortune')
-  .paid('0.001')
   .handler(async () => {
     const randomFortune = fortunes[Math.floor(Math.random() * fortunes.length)];
 

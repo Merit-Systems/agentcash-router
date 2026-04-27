@@ -47,7 +47,6 @@ const premiumFortunes: Record<string, string[]> = {
  */
 export const POST = router
   .route('fortune/premium')
-  .paid('0.005')
   .body(PremiumSchema)
   .validate(async (body) => {
     const count = categoryUsage.get(body.category) ?? 0;
