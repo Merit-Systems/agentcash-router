@@ -16,6 +16,9 @@ Design docs, decision records, and bug analyses for `@agentcash/router`. These d
 |------|-------------|
 | `20_dual-network-x402-solana-plan-2026-03-11.md` | Proposed plan for adding Solana mainnet USDC alongside Base USDC with one route, zero breaking changes, separate per-chain recipients, and likely Faremeter-backed downstream wallet compatibility. |
 | `18_facilitator-429-cold-start-fix.md` | P0 bug: facilitator `/supported` 429 rate limits on Vercel cold starts cause bare 402 pass-through on all paid routes. Root cause (2 bugs), full timeline of prior fix attempts across enrichx402/x402/router, upstream npm gap, solution (hardcode getSupported for EVM exact + 500 safety net), testing methodology. |
+| `21_x402-upto-research.md` | Reference notes on how upstream `x402` implements the `upto` scheme — spec MUSTs, three-layer TS implementation (`UptoEvmScheme`, `settlePayment` overrides, HTTP `Settlement-Overrides` header), pointers to source. Companion to plan 22. |
+| `22_post-work-pricing-plan.md` | Implementation plan for post-work pricing. Phase 1: `.paid({ variable, maxPrice })` + `payment.setAmount()` for x402 `upto` and MPP charge. Phase 2 (future): `.session({ perUnit })` + `payment.tick()` for MPP sessions/streaming. API designed so the two phases share the `payment` context cleanly. |
+| `23_post-work-pricing-handoff.md` | Session-resume doc for the post-work-pricing work. Captures the the-stables backward-compat analysis, the MPP push-vs-pull narrowing, the mppx-bump-first sequencing, and a flat implementation checklist. Read this before resuming work on docs 21/22. |
 
 ## Research (protocol reference)
 

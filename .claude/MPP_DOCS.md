@@ -6,6 +6,7 @@ MPP (Machine Payments Protocol) is the open standard for machine-to-machine paym
 Sitemap:
 - [MPP — Machine Payments Protocol](/index): MPP (Machine Payments Protocol) is the open standard for machine-to-machine payments—co-developed by Tempo and Stripe. Charge for API requests, tool calls, and content via HTTP 402.
 - [Page Not Found](/404)
+- [Blog](/blog/): Updates from the MPP team on protocol development, integrations, and the future of machine payments.
 - [Brand assets and guidelines](/brand): Download official MPP logos, wordmarks, and brand assets. Guidelines for using the Machine Payments Protocol brand in your project or integration.
 - [Extensions](/extensions): Community-built tools and integrations for MPP
 - [Frequently asked questions](/faq): Answers to common questions about MPP—payment methods, settlement, pricing, security, and how the protocol compares to API keys and subscriptions.
@@ -13,48 +14,76 @@ Sitemap:
 - [Payment methods](/payment-methods/): Available methods and how to choose one
 - [Protocol overview](/protocol/): The Machine Payments Protocol standardizes HTTP 402 with an extensible challenge–credential–receipt flow that works with any payment network.
 - [Quickstart](/quickstart/): Get started with MPP in minutes. Protect your API with payments, connect your agent, or integrate your app with MPP-enabled services.
-- [SDKs and client libraries](/sdk/): Official MPP SDK implementations in TypeScript, Python, and Rust. Libraries for building MPP clients and servers with full protocol support.
+- [SDKs and client libraries](/sdk/): Official MPP SDKs in TypeScript, Python, Rust, Go, and Ruby, plus community SDKs in other languages.
+- [Discovery](/advanced/discovery): Advertise your API's payment terms with an OpenAPI discovery document so clients and agents know what endpoints cost before making requests.
+- [Identity](/advanced/identity): Use MPP Credentials for access control, rate limiting, and multi-step workflows—without requiring payment.
+- [Refunds](/advanced/refunds): Return funds to clients after a charge, or let sessions refund unused deposits automatically.
+- [Security](/advanced/security): Protect MPP server secrets and payment credentials. Keep MPP_SECRET_KEY server-side, never log it, and rotate it safely.
+- [Accept card payments](/guides/accept-card-payments): Accept card payments via Stripe on your MPP-enabled API. Charge Visa, Mastercard, and other card networks—no stablecoin wallet required.
 - [Build with an LLM](/guides/building-with-an-llm): Use llms-full.txt to give your agent complete MPP context.
+- [Monetize your MCP server](/guides/monetize-mcp-server): Add payments to your MCP server. Charge per tool call with stablecoins—no API keys or billing portals required
 - [Accept multiple payment methods](/guides/multiple-payment-methods): Accept Tempo stablecoins, Stripe cards, and Lightning Bitcoin on a single API endpoint. Serve a multi-method 402 Challenge and let clients choose.
-- [Accept one-time payments](/guides/one-time-payments): Charge per request with a payment-gated API
+- [Accept one-time payments](/guides/one-time-payments): Charge per API call with MPP. Accept pay-per-request payments from agents, apps, and users—no API keys or subscriptions required.
 - [Accept pay-as-you-go payments](/guides/pay-as-you-go): Build a payment-gated API with session-based billing using mppx payment channels. Charge per request with near-zero latency overhead.
+- [Create a payment link](/guides/payment-links): Create a payment link for any API endpoint. Share it anywhere—users pay directly from the page, no integration required.
+- [Proxy an existing service](/guides/proxy-existing-service): Put a payment gate in front of any API without changing its code. Use the mppx Proxy SDK to charge for upstream access.
+- [Accept split payments](/guides/split-payments): Split a single charge across multiple recipients in one atomic transaction. Route platform fees, referral bounties, and revenue shares with mppx.
 - [Accept streamed payments](/guides/streamed-payments): Accept streamed payments over Server-Sent Events with mppx. Bill per token in real time using Tempo payment channels for LLM inference APIs.
+- [Upgrade your x402 server to MPP](/guides/upgrade-x402): Upgrade from the x402 protocol to MPP for multi-method payments, sessions, and IETF standardization. Migration guide with side-by-side comparison.
 - [Charge intent for one-time payments](/intents/charge): Immediate one-time payments
 - [Card payment method](/payment-methods/card/): Card payments via encrypted network tokens
 - [Custom payment methods](/payment-methods/custom): Build your own payment method
 - [Lightning](/payment-methods/lightning/): Bitcoin payments over the Lightning Network
+- [Monad](/payment-methods/monad/): ERC-20 token payments on Monad
 - [Solana](/payment-methods/solana/): Native SOL and SPL token payments
+- [Stellar SEP-41 token payments](/payment-methods/stellar/): SEP-41 token payments on the Stellar network
 - [Stripe payment method](/payment-methods/stripe/): Cards, wallets, and other Stripe supported payment methods
 - [Tempo stablecoin payments](/payment-methods/tempo/): Stablecoin payments on the Tempo blockchain
 - [Challenges](/protocol/challenges): Server-issued payment requirements
 - [Credentials](/protocol/credentials): Client-submitted payment proofs
-- [Discovery](/protocol/discovery): Advertise your API's payment terms with an OpenAPI discovery document so clients and agents know what endpoints cost before making requests.
-- [HTTP 402 payment required](/protocol/http-402): HTTP 402 Payment Required signals that a resource requires payment. Learn when and how MPP servers return 402 with a WWW-Authenticate Challenge.
+- [HTTP 402 Payment Required](/protocol/http-402): HTTP 402 Payment Required signals that a resource requires payment. Learn when and how MPP servers return 402 with a WWW-Authenticate Challenge.
 - [Payment receipts and verification](/protocol/receipts): Receipts confirm successful payment in MPP. Return them in the Payment-Receipt header so clients can verify that the server accepted their Credential.
-- [Transports](/protocol/transports/): MPP defines transport bindings for HTTP and MCP. Learn how Challenges, Credentials, and Receipts map to headers and JSON-RPC messages.
-- [Use with agents](/quickstart/agent): Connect your coding agent to MPP-enabled services. Set up Tempo Wallet or the mppx SDK to handle 402 payment flows automatically.
+- [Transports](/protocol/transports/): MPP defines transport bindings for HTTP, MCP, and WebSocket. Learn how Challenges, Credentials, and Receipts map to headers, JSON-RPC messages, and WebSocket frames.
+- [Use with agents](/quickstart/agent): Connect your coding agent to MPP-enabled services. Set up a wallet to handle payment flows automatically.
 - [Use with your app](/quickstart/client): Handle payment-gated resources in your app. Use the mppx client SDK to intercept 402 responses, pay, and retry—all automatically.
 - [Add payments to your API](/quickstart/server): Add payment-gated access to your API with mppx. Accept stablecoins, cards, and Bitcoin in a few lines of code using the MPP server SDK.
-- [SDK features](/sdk/features): Feature parity across TypeScript, Python, and Rust MPP SDKs.
+- [SDK features](/sdk/features): Feature parity across TypeScript, Python, Rust, and Ruby MPP SDKs.
+- [Go SDK](/sdk/go/): The mpp-go library
 - [Python SDK](/sdk/python/): The pympp Python library
+- [Ruby SDK](/sdk/ruby/): The mpp-rb library
 - [Rust SDK for MPP](/sdk/rust/): The mpp Rust library
 - [Getting started](/sdk/typescript/): The mppx TypeScript library
+- [Wallets](/tools/wallet): Agent wallets for MPP -- enable your agent to pay for services.
+- [Agentic payments](/use-cases/agentic-payments): Learn how coding agents pay for APIs autonomously with MPP. No API keys, no signup forms—agents handle payments inline via HTTP 402.
+- [API monetization](/use-cases/api-monetization): Monetize your API with per-request payments using HTTP 402. No API keys, subscriptions, or billing dashboards required.
+- [Micropayments](/use-cases/micropayments): MPP makes micropayments viable with stablecoin settlement and off-chain payment sessions—no minimum transaction size, no fixed per-transaction fees.
 - [Card charge](/payment-methods/card/charge): One-time payments using encrypted network tokens
 - [Lightning charge](/payment-methods/lightning/charge): One-time payments using BOLT11 invoices
 - [Lightning session](/payment-methods/lightning/session): Pay-as-you-go payments over Lightning
+- [Monad charge](/payment-methods/monad/charge): One-time payments on Monad
 - [Solana charge](/payment-methods/solana/charge): One-time payments on Solana
+- [Stellar charge](/payment-methods/stellar/charge): One-time SEP-41 token transfers
+- [Channel](/payment-methods/stellar/session): High-frequency off-chain payments
 - [Stripe charge](/payment-methods/stripe/charge): One-time payments using Shared Payment Tokens
 - [Tempo charge](/payment-methods/tempo/charge): One-time TIP-20 token transfers
 - [Session](/payment-methods/tempo/session): Low-cost high-throughput payments
 - [HTTP transport](/protocol/transports/http): The HTTP transport maps MPP payment flows to standard HTTP headers—WWW-Authenticate for Challenges, Authorization for Credentials, and Payment-Receipt.
 - [MCP and JSON-RPC transport](/protocol/transports/mcp): Payment flows for AI tool calls
+- [WebSocket transport](/protocol/transports/websocket): The WebSocket transport streams paid data over a persistent connection, with in-band voucher top-ups and JSON message framing.
+- [Client](/sdk/go/client): Handle 402 responses automatically
+- [Core types](/sdk/go/core): Challenge, Credential, and Receipt primitives
+- [Server](/sdk/go/server): Protect endpoints with payment requirements
 - [Python MPP client](/sdk/python/client): Handle 402 responses automatically
 - [Core Types](/sdk/python/core): Challenge, Credential, and Receipt primitives
 - [Server](/sdk/python/server): Protect endpoints with payment requirements
+- [Client](/sdk/ruby/client): Handle 402 responses automatically
+- [Core Types](/sdk/ruby/core): Challenge, Credential, and Receipt primitives
+- [Server](/sdk/ruby/server): Protect endpoints with payment requirements
 - [Client](/sdk/rust/client): Handle 402 responses automatically
 - [Core types](/sdk/rust/core): Challenge, Credential, and Receipt primitives
 - [Server](/sdk/rust/server): Protect endpoints with payment requirements
 - [CLI Reference](/sdk/typescript/cli): Built-in command-line tool for paid HTTP requests
+- [Html.init](/sdk/typescript/Html.init): Build custom payment UIs for browser-based 402 flows
 - [Method.from](/sdk/typescript/Method.from): Create a payment method from a definition
 - [Paid API proxy server](/sdk/typescript/proxy): Paid API proxy
 - [McpClient.wrap](/sdk/typescript/client/McpClient.wrap): Payment-aware MCP client
@@ -94,6 +123,7 @@ Sitemap:
 - [Receipt.from](/sdk/typescript/core/Receipt.from): Create a new Receipt
 - [Receipt.fromResponse](/sdk/typescript/core/Receipt.fromResponse): Extract a Receipt from a Response
 - [Receipt.serialize](/sdk/typescript/core/Receipt.serialize): Serialize a Receipt to a string
+- [Custom HTML](/sdk/typescript/html/custom): Add payment link support to a custom payment method with Html.init and Method.toServer
 - [Elysia payment middleware](/sdk/typescript/middlewares/elysia): Payment middleware for Elysia
 - [Express payment middleware](/sdk/typescript/middlewares/express): Payment middleware for Express
 - [Hono payment middleware](/sdk/typescript/middlewares/hono): Payment middleware for Hono
@@ -112,6 +142,7 @@ Sitemap:
 - [Transport.http](/sdk/typescript/server/Transport.http): HTTP server-side transport
 - [Transport.mcp](/sdk/typescript/server/Transport.mcp): Raw JSON-RPC MCP transport
 - [Transport.mcpSdk](/sdk/typescript/server/Transport.mcpSdk): MCP SDK server-side transport
+- [Session.Ws.serve](/sdk/typescript/server/Ws.serve): WebSocket session payments
 -->
 
 <h1 style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>MPP — Machine Payments Protocol</h1>
@@ -119,6 +150,25 @@ Sitemap:
 <LandingPage />
 
 <NotFoundPage />
+
+# Blog \[Updates on the Machine Payments Protocol]
+
+<BlogPostList
+  posts={[
+{
+  date: "Apr 27, 2026",
+  title: "Multi-method discovery",
+  description: <>MPP's discovery schema now supports multiple payment offers per route—declare every method, currency, and intent ahead of time.</>,
+  to: "/blog/multi-method-discovery",
+},
+{
+  date: "Apr 21, 2026",
+  title: "Go and Ruby SDKs",
+  description: <>Two new MPP SDKs: <code>mpp-go</code> maintained by Tempo Labs and <code>mpp-rb</code> maintained by Stripe.</>,
+  to: "/blog/go-and-ruby-sdks",
+},
+]}
+/>
 
 # Brand \[MPP brand assets and guidelines]
 
@@ -423,9 +473,11 @@ Sitemap:
 
 Third-party packages that extend MPP with new payment methods, middleware, and utilities.
 
-| Name | Description | Link |
-|---|---|---|
-| `@insumermodel/mppx-token-gate` | Token-gate mppx routes—free access for NFT/token holders across 32 chains | [npm](https://www.npmjs.com/package/@insumermodel/mppx-token-gate) |
+| Name | Languages | Description | Link |
+|---|---|---|---|
+| `@insumermodel/mppx-token-gate` | TypeScript, JavaScript | Token-gate mppx routes—free access for NFT/token holders across 32 chains | [npm](https://www.npmjs.com/package/@insumermodel/mppx-token-gate) |
+| `mpp-inspector` | TypeScript, JavaScript | CLI toolkit to inspect, debug, and test HTTP 402 MPP endpoints—parse challenges, verify receipts, compare pricing, and dry-run payment flows | [npm](https://www.npmjs.com/package/mpp-inspector) · [GitHub](https://github.com/amgb20/MPP-Inspector) |
+| `x402-proxy` | TypeScript, JavaScript | `curl` for MPP and x402 paid APIs—auto-pays one-shot charges and session-based streaming (per-token voucher cycling), with built-in wallet management (EVM + Solana), spend limits, and MCP stdio proxy for AI agents | [npm](https://www.npmjs.com/package/x402-proxy) · [GitHub](https://github.com/cascade-protocol/x402-proxy) |
 
 Want to build your own? See [Custom payment methods](/payment-methods/custom).
 
@@ -466,13 +518,13 @@ That said, high-throughput, low-value transactions benefit from specific propert
 * **Fast, deterministic finality**—Certainty that a payment has settled, not probabilistic confirmation.
 * **Low, predictable cost**—Transaction fees stay stable regardless of global network congestion.
 * **Payment lanes**—Dedicated transaction routing for payment traffic, ensuring reliability even under heavy load.
-* **Stablecoin-native**—TIP-20 stablecoins (USDC, USDT) are first-class citizens, so payments are denominated in familiar currency.
+* **Stablecoin-native**—TIP-20 stablecoins (USDC.e, USDT) are first-class citizens, so payments are denominated in familiar currency.
 
 These properties make Tempo well-suited as a settlement layer for machine payments where speed, cost, and reliability matter.
 
 ## What are sessions?
 
-Sessions are a Tempo-specific payment intent that enables streaming, pay-as-you-go payments. Instead of paying per request, a client opens a session (depositing funds into an escrow contract), then makes many requests by issuing signed vouchers off-chain. The server periodically settles the accumulated vouchers on-chain. See the [session documentation](/payment-methods/tempo/session) for details.
+Sessions are a Tempo-specific payment intent that enables streaming, pay-as-you-go payments. Instead of paying per request, a client opens a session (depositing funds into an escrow contract), then makes many requests by issuing signed vouchers off-chain. The server periodically settles the accumulated vouchers on-chain. Sessions are the mechanism that makes [micropayments](/use-cases/micropayments) viable—sub-cent transactions cost nothing individually because only net settlement hits the chain. See the [session documentation](/payment-methods/tempo/session) for details.
 
 Because sessions bypass consensus for individual interactions, they achieve client-to-server latency (low double-digit milliseconds), near-zero per-request fees, and horizontally scalable throughput. The bottleneck is CPU, not blockchain TPS.
 
@@ -488,13 +540,19 @@ MPP requires TLS 1.2+ for all connections. Challenge IDs are cryptographically b
 
 Payments use the same security model as the underlying payment method. For Tempo, that means cryptographic signatures over every transaction. For Stripe, it means Stripe's existing fraud and dispute infrastructure.
 
+For operational guidance on `MPP_SECRET_KEY`, logging, and rotation, see [Security](/advanced/security).
+
+## How do I handle `MPP_SECRET_KEY`?
+
+Treat `MPP_SECRET_KEY` as root-of-trust material for server-side Challenge binding. Store it in a secrets manager, keep it server-side, never log it, rotate it immediately if it is exposed, and use overlapping current-and-previous key verification during rollovers so in-flight Challenges keep working. See [Security](/advanced/security) for the full guidance.
+
 ## What happens if a payment fails?
 
 The service returns an error with details following [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) (Problem Details for HTTP APIs). Your client can retry with a different payment method or surface the error. No money is deducted for failed requests.
 
 ## Can I accept MPP payments for my own service?
 
-Yes. See the [server quickstart](/quickstart/server) to start accepting payments in a few lines of code. The TypeScript SDK includes middleware for popular frameworks including Hono, Express, Next.js, and Elysia.
+Yes. See the [server quickstart](/quickstart/server) to start accepting payments in a few lines of code, or read more about [API monetization with MPP](/use-cases/api-monetization). The TypeScript SDK includes middleware for popular frameworks including Hono, Express, Next.js, and Elysia.
 
 ## Is MPP an IETF standard?
 
@@ -517,7 +575,7 @@ MPP is built around a simple, extensible core and is neutral to the implementati
 * **Open standard built for the internet**—Built on an [open specification proposed to the IETF](https://paymentauth.org), not a proprietary API
 * **Designed for payments**—Idempotency, security, and receipts are first-class primitives
 * **Works with stablecoins, cards, and bank transfers**—All payment methods can be supported through one protocol and flexible control flow
-* **Any currency**—Transact in USD, EUR, BRL, USDC, BTC, or any other asset
+* **Any currency**—Transact in USD, EUR, BRL, USDC.e, BTC, or any other asset
 * **Composable and designed for extension**—A flexible core allows advanced flows like disputes or additional primitives like identity to be gradually introduced
 
 ## Who is MPP for?
@@ -540,7 +598,7 @@ The Machine Payments Protocol addresses this gap by providing a payment interfac
 
 ## Try it out
 
-See the full payment flow in action. The terminal creates an ephemeral wallet, funds it with testnet USDC, and makes a paid request.
+See the full payment flow in action. The terminal creates an ephemeral wallet, funds it with testnet USDC.e, and makes a paid request.
 
 <div style={{ height: 420 }}>
   <TerminalPing />
@@ -548,10 +606,9 @@ See the full payment flow in action. The terminal creates an ephemeral wallet, f
 
 ## Use cases
 
-* **Pay for LLM usage**—Your agent calls LLM providers through MPP, paying per token over a Tempo session. No API key management needed.
-* **Generate an image**—Request image generation from fal.ai, paying per request with a Tempo charge. The agent gets the result in the same response.
-* **Search the web**—Query Parallel for real-time search results, paying per query over a Tempo session. Results flow back in the same HTTP response.
-* **Accept payments for your API**—Accept payments from any client—agents, apps, or humans—without requiring signups, billing accounts, or API keys.
+* **[Agentic payments](/use-cases/agentic-payments)**—Your agent calls LLM providers, search APIs, and image generators through MPP, paying per request without API keys or human intervention.
+* **[API monetization](/use-cases/api-monetization)**—Accept payments from any client—agents, apps, or humans—without requiring signups, billing accounts, or API keys.
+* **[Micropayments](/use-cases/micropayments)**—Charge sub-cent amounts per token, per query, or per request using off-chain payment sessions with on-chain settlement.
 
 ## Payment flow
 
@@ -569,6 +626,8 @@ MPP comes with a suite of official SDKs maintained by [Tempo Labs](https://tempo
   <PythonSdkCard />
 
   <RustSdkCard />
+
+  <GoSdkCard />
 </Cards>
 
 ## Next steps
@@ -624,6 +683,20 @@ When a server responds with `402` Payment Required, the `WWW-Authenticate` heade
     WWW-Authenticate: Payment method="solana", intent="charge", ...
     ```
   </Tab>
+
+  <Tab title="Stellar">
+    ```http
+    HTTP/1.1 402 Payment Required
+    WWW-Authenticate: Payment method="stellar", intent="charge", ...
+    ```
+  </Tab>
+
+  <Tab title="Monad">
+    ```http
+    HTTP/1.1 402 Payment Required
+    WWW-Authenticate: Payment method="monad", intent="charge", ...
+    ```
+  </Tab>
 </Tabs>
 
 ## Available methods
@@ -638,6 +711,10 @@ When a server responds with `402` Payment Required, the `WWW-Authenticate` heade
   <LightningMethodCard />
 
   <SolanaMethodCard />
+
+  <StellarMethodCard />
+
+  <MonadMethodCard />
 
   <CustomMethodCard />
 </Cards>
@@ -885,7 +962,1010 @@ Pick a starting point based on your role:
   <PythonSdkCard />
 
   <RustSdkCard />
+
+  <GoSdkCard />
+
+  <RubySdkCard />
 </Cards>
+
+## Capabilities
+
+| Capability | TypeScript | Python | Rust | Go | Ruby |
+|---|---|---|---|---|---|
+| **Client** | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> |
+| **Server** | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> |
+| **Core types** | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> |
+| **Charge intent** | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> |
+| **Session intent** | <Badge variant="success">✓</Badge> | <Badge variant="warning">—</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="warning">—</Badge> | <Badge variant="warning">—</Badge> |
+| **Stripe method** | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="warning">—</Badge> | <Badge variant="success">✓</Badge> |
+| **Fee sponsorship** | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> |
+| **Proof credentials** | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> |
+| **MCP support** | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="success">✓</Badge> | <Badge variant="warning">—</Badge> | <Badge variant="success">✓</Badge> |
+| **Framework middleware** | Next.js, Hono, Express, Elysia | FastAPI | Axum, Tower | net/http, Gin, Echo, Chi | Rack |
+| **HTTP transport** | fetch polyfill | httpx transport | reqwest-middleware | http.RoundTripper | async-http |
+
+## Other languages
+
+Community-maintained SDKs extend MPP to more language ecosystems.
+
+| Language | SDK | Maintainer | Status | Links |
+|---|---|---|---|---|
+| Elixir | `mpp` | ZenHive | <Badge variant="note">Community</Badge> | [GitHub](https://github.com/ZenHive/mpp) · [hex.pm](https://hex.pm/packages/mpp) · [Docs](https://hexdocs.pm/mpp/) |
+| Go | `mppx` | cp0x | <Badge variant="note">Community</Badge> | [GitHub](https://github.com/cp0x-org/mppx) · [Docs](https://pkg.go.dev/github.com/cp0x-org/mppx) |
+
+Want to add another SDK? Open a PR and we can list it here.
+
+# Discovery \[Let clients automatically discover your API's pricing]
+
+## Overview
+
+MPP's discovery system lets clients and agents learn what your endpoints cost before making a request. You serve a standard [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) document at `/openapi.json` with `x-payment-info` extensions that advertise one or more payment offers for each paid operation. Registries aggregate these documents so agents can find paid APIs automatically, and provide value-added services like reputation, search, and analytics.
+
+<EcosystemDiagram />
+
+:::info\[Discovery is advisory]
+Discovery documents are informational hints. The runtime `402` Challenge remains the authoritative source of payment terms. Clients use discovery for display and planning, but defer to the Challenge for actual payment.
+:::
+
+## Registries
+
+Registries aggregate discovery documents from multiple services, making it easy for clients and agents to find paid APIs.
+
+| Registry | Description | How to add |
+|----------|-------------|------------|
+| [MPPScan](https://mppscan.com) | Public registry of MPP-enabled services with search and analytics | [Manually register](https://www.mppscan.com/register) in one click |
+| [MPP Services directory](https://mpp.dev/services) | Curated list of live services on mpp.dev | [Submit a PR](https://github.com/tempoxyz/mpp) to add your service |
+
+## Quick start
+
+The `mppx` SDK generates discovery documents from your route configuration. Add `discovery()` to your server and it serves `/openapi.json` automatically.
+
+```ts [server.ts]
+import { Hono } from 'hono'
+import { Mppx, discovery } from 'mppx/hono'
+import { tempo } from 'mppx/server'
+
+const app = new Hono()
+
+const mppx = Mppx.create({
+  methods: [
+    tempo({
+      currency: '0x20c0000000000000000000000000000000000000',
+      recipient: '0x...',
+      testnet: true,
+    }),
+  ],
+  secretKey: process.env.MPP_SECRET_KEY,
+})
+
+app.get('/v1/fortune', mppx.charge({ amount: '0.01' }), (c) => c.json({ fortune: 'You will be rich' }))
+
+// [!code hl:start]
+discovery(app, mppx, {
+  auto: true,
+  info: { title: 'Fortune API', version: '1.0.0' },
+})
+// [!code hl:end]
+```
+
+This generates a `GET /openapi.json` endpoint with canonical `x-payment-info.offers[]` entries on each paid route.
+
+### Express
+
+```ts [server.ts]
+import express from 'express'
+import { Mppx, discovery } from 'mppx/express'
+import { tempo } from 'mppx/server'
+
+const app = express()
+
+const mppx = Mppx.create({
+  methods: [
+    tempo({
+      currency: '0x20c0000000000000000000000000000000000000',
+      recipient: '0x...',
+      testnet: true,
+    }),
+  ],
+  secretKey: process.env.MPP_SECRET_KEY,
+})
+
+const pay = mppx.charge({ amount: '0.01' })
+app.get('/v1/fortune', pay, (req, res) => res.json({ fortune: 'You will be rich' }))
+
+// [!code hl:start]
+discovery(app, mppx, {
+  info: { title: 'Fortune API', version: '1.0.0' },
+  routes: [{ handler: pay, method: 'get', path: '/v1/fortune' }],
+})
+// [!code hl:end]
+```
+
+### Next.js
+
+In Next.js, `discovery()` returns a route handler you export from an API route.
+
+```ts [app/openapi.json/route.ts]
+import { discovery } from 'mppx/nextjs'
+import { mppx, pay } from '../fortune/route'
+
+// [!code hl:start]
+export const GET = discovery(mppx, {
+  info: { title: 'Fortune API', version: '1.0.0' },
+  routes: [{ handler: pay, method: 'get', path: '/api/fortune' }],
+})
+// [!code hl:end]
+```
+
+## How it works
+
+Your server exposes a `GET /openapi.json` endpoint that returns an OpenAPI document. Paid operations include an `x-payment-info` extension with one or more payment offers, and the document root can include `x-service-info` for service-level metadata.
+
+```json [/openapi.json]
+{
+  "openapi": "3.1.0",
+  "info": { "title": "My API", "version": "1.0.0" },
+  "x-service-info": {
+    "categories": ["ai"],
+    "docs": {
+      "homepage": "https://example.com",
+      "apiReference": "https://example.com/docs",
+      "llms": "/llms.txt"
+    }
+  },
+  "paths": {
+    "/v1/generate": {
+      "post": {
+        // [!code hl:start]
+        "x-payment-info": {
+          "offers": [
+            {
+              "amount": "1000000",
+              "currency": "0x20c0000000000000000000000000000000000001",
+              "description": "Generate text with Tempo",
+              "intent": "charge",
+              "method": "tempo"
+            },
+            {
+              "amount": "100",
+              "currency": "usd",
+              "description": "Generate text with Stripe",
+              "intent": "charge",
+              "method": "stripe"
+            }
+          ]
+        },
+        // [!code hl:end]
+        "responses": {
+          "200": { "description": "Successful response" },
+          "402": { "description": "Payment Required" }
+        }
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "responses": {
+          "200": { "description": "Successful response" }
+        }
+      }
+    }
+  }
+}
+```
+
+### `x-payment-info`
+
+Add this extension to any operation that requires payment. Prefer the canonical multi-offer shape:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `offers` | `Offer[]` | Ordered list of payment offers the client can choose from |
+
+#### `offers[]`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `amount` | `string \| null` | Payment amount in base units |
+| `currency` | `string` | Currency code or token address |
+| `description` | `string` | Human-readable description of the charge |
+| `intent` | `string` | Payment intent (`charge` or `session`) |
+| `method` | `string` | Payment method identifier (`tempo`, `stripe`) |
+
+:::note\[Compatibility shorthand]
+The flat single-offer form is still valid as shorthand for older emitters, but use it only for backward compatibility. New documents should write the same data under `offers[]`.
+
+```json [openapi.json]
+{
+  // [!code hl:start]
+  "x-payment-info": {
+    "amount": "1000000",
+    "currency": "0x20c0000000000000000000000000000000000001",
+    "description": "Generate text with Tempo",
+    "intent": "charge",
+    "method": "tempo"
+  }
+  // [!code hl:end]
+}
+```
+
+:::
+
+### `x-service-info`
+
+Optional root-level metadata about the service:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `categories` | `string[]` | Free-form service categories (for example, `ai`, `payments`) |
+| `docs.homepage` | `string` | Link to the service homepage |
+| `docs.apiReference` | `string` | Link to API documentation |
+| `docs.llms` | `string` | Link to an `llms.txt` file for AI consumption |
+
+## Build manually
+
+You can author a discovery document by hand following the [discovery specification](https://paymentauth.org/draft-payment-discovery-00.html). The document is a standard OpenAPI 3.1 file with two extensions:
+
+::::steps
+
+#### Create the OpenAPI skeleton
+
+Start with a standard OpenAPI 3.1 document:
+
+```json [openapi.json]
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "My API",
+    "version": "1.0.0"
+  },
+  "paths": {}
+}
+```
+
+#### Add `x-payment-info` to paid operations
+
+For each endpoint that requires payment, add the `x-payment-info` extension with an `offers` array. Add more objects to `offers[]` when the client can choose between alternative payment methods or currencies. Amounts are in base units (for example, `1000000` for $1.00 with 6 decimals).
+
+```json [openapi.json]
+{
+  "paths": {
+    "/v1/generate": {
+      "post": {
+        "summary": "Generate text",
+        // [!code hl:start]
+        "x-payment-info": {
+          "offers": [
+            {
+              "amount": "1000000",
+              "currency": "0x20c0000000000000000000000000000000000001",
+              "intent": "charge",
+              "method": "tempo"
+            }
+          ]
+        },
+        // [!code hl:end]
+        "responses": {
+          "200": { "description": "Successful response" },
+          "402": { "description": "Payment Required" }
+        }
+      }
+    }
+  }
+}
+```
+
+:::warning\[Include a 402 response]
+Operations with `x-payment-info` must include a `402` response in the `responses` object. Validators flag this as an error if missing.
+:::
+
+#### Add `x-service-info` (optional)
+
+Add service-level metadata to the document root:
+
+```json [openapi.json]
+{
+  // [!code hl:start]
+  "x-service-info": {
+    "categories": ["ai", "text-generation"],
+    "docs": {
+      "homepage": "https://example.com",
+      "apiReference": "https://example.com/docs/api",
+      "llms": "https://example.com/llms.txt"
+    }
+  }
+  // [!code hl:end]
+}
+```
+
+#### Serve at `/openapi.json`
+
+Serve the document at `GET /openapi.json` with appropriate caching:
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+Cache-Control: public, max-age=300
+```
+
+::::
+
+## CLI
+
+Generate a static discovery document from a config module:
+
+```bash [terminal]
+$ npx mppx discover generate ./discovery.config.ts
+```
+
+Validate an existing discovery document from a file or URL:
+
+```bash [terminal]
+$ npx mppx discover validate https://example.com/openapi.json
+```
+
+## Validation
+
+Common validation issues:
+
+| Issue | Severity | Description |
+|-------|----------|-------------|
+| Missing `402` response | Error | Operations with `x-payment-info` must include a `402` response |
+| Invalid amount format | Error | Each `offers[].amount` value must be a non-negative integer string |
+| Missing `requestBody` | Warning | `POST`/`PUT`/`PATCH` operations without a `requestBody` definition |
+| Invalid URI in docs | Error | `docs` links must be valid URIs or absolute paths |
+
+## Specification
+
+<Cards>
+  <SpecCard to="https://paymentauth.org/draft-payment-discovery-00" />
+</Cards>
+
+# Identity \[Verify clients without payment]
+
+Every MPP Credential carries a cryptographic identity—the client's public key in the `source` field. Your server gets a verified identity on every request, whether the client pays or not. This page covers how to use that identity for access control, gating, and multi-step workflows.
+
+## Overview
+
+The Credential already proves the client controls a specific public key. The `source` field is the same regardless of the payment amount, which means you can use the MPP flow purely for identity when payment isn't needed.
+
+Extract the client's identity from any verified request using `Credential.fromRequest`:
+
+```ts twoslash [server.ts]
+// @noEmit
+declare const request: Request
+// ---cut---
+import { Credential } from 'mppx'
+
+const credential = Credential.fromRequest(request)
+const clientIdentity = credential.source
+// @log: "did:pkh:eip155:4217:0x1234..."
+```
+
+Backends key workloads, sessions, and access control on this public key. The payment flow is orthogonal to identity, and can be used in combination with other methods.
+
+### Methods
+
+| Method | Payment methods | Description |
+|--------|-----------------|-------------|
+| [**Zero-dollar auth**](#zero-dollar-auth) | Tempo, Lightning, Solana, Custom | Proves key ownership with no funds transfer |
+
+:::info\[More methods coming]
+Additional identity methods are in development. Check back for updates.
+:::
+
+## Zero-dollar auth
+
+Zero-dollar auth uses the standard Challenge → Credential flow with the amount set to `0`. The client signs the Challenge to prove key ownership. No funds move on-chain, and no additional protocol extensions are required.
+
+For Tempo charge, zero-dollar auth now uses a `proof` Credential payload instead of a real transaction. The client signs a proof message over the Challenge ID, and the server verifies that signature against the `source` DID.
+
+:::warning\[Replay protection]
+By default, a valid zero-dollar proof remains reusable until the Challenge expires. Pass a `store` to `tempo.charge()` when you want single-use proof auth. In a multi-instance deployment, use a shared store so every instance sees consumed proofs.
+:::
+
+<MermaidDiagram
+  chart={`sequenceDiagram
+  participant Client
+  participant Server
+  Client->>Server: (1) GET /resource
+  Server-->>Client: (2) 402 + Challenge (amount: 0)
+  Note over Client: (3) Sign proof message
+  Client->>Server: (4) GET /resource + Credential
+  Note over Server: (5) Verify proof
+  Server-->>Client: (6) 200 OK
+`}
+/>
+
+The Credential contains the client's public key and a valid signature, giving the server a verified identity to associate with the request.
+
+For Tempo, the server rejects `transaction` and `hash` payloads for zero-amount Challenges and requires `proof`.
+
+### Case study: long-running jobs
+
+A service accepts a paid request to start work, then lets the client poll for results using zero-dollar auth. The server keys workloads on the client's public key.
+
+::::steps
+
+#### Client submits a job (paid)
+
+The client sends a request with payment to create a new job. The Credential includes both payment proof and the client's public key.
+
+```ts twoslash [client.ts]
+// @noEmit
+declare const fetch: (url: string) => Promise<{ json(): Promise<any> }>
+// ---cut---
+const response = await fetch('https://api.example.com/v1/jobs')
+const { jobId } = await response.json()
+// @log: { jobId: "abc123" }
+```
+
+The server records the job and associates it with the client's public key from the Credential.
+
+#### Server stores the public key
+
+After the payment middleware verifies the Credential, extract the client's identity from the request:
+
+```ts [server.ts]
+import { Credential } from 'mppx'
+
+export async function handler(request: Request) {
+  const result = await mppx.charge({ amount: '1.00' })(request)
+  if (result.status === 402) return result.challenge
+
+  const credential = Credential.fromRequest(request)
+  const pubkey = credential.source // [!code hl]
+  const jobId = createJob({ owner: pubkey }) // [!code hl]
+
+  return result.withReceipt(Response.json({ jobId }))
+}
+```
+
+#### Client polls for status (zero-dollar auth)
+
+The client polls the job endpoint. The server issues a zero-dollar Challenge—the client signs it to prove they own the same key.
+
+```ts [server.ts]
+export async function statusHandler(request: Request) {
+  const result = await mppx.charge({ amount: '0' })(request) // [!code hl]
+  if (result.status === 402) return result.challenge
+
+  const credential = Credential.fromRequest(request)
+  const job = getJob(jobIdFromUrl(request))
+
+  if (job.owner !== credential.source) {
+    return Response.json({ error: 'Not your job' }, { status: 403 })
+  }
+
+  return result.withReceipt(Response.json({ result: job.result, status: job.status }))
+}
+```
+
+::::
+
+### Case study: paid unlock with free access
+
+A service charges once to unlock a resource, then grants repeated free access tied to the client's identity. This replaces API keys with cryptographic ownership.
+
+::::steps
+
+#### Client pays to unlock
+
+The client pays once to gain access. The server records the public key as an authorized user.
+
+```ts [server.ts]
+export async function unlockHandler(request: Request) {
+  const result = await mppx.charge({ amount: '50.00' })(request)
+  if (result.status === 402) return result.challenge
+
+  const credential = Credential.fromRequest(request)
+  grantAccess({ dataset: 'premium', owner: credential.source }) // [!code hl]
+
+  return result.withReceipt(Response.json({ status: 'unlocked' }))
+}
+```
+
+#### Client accesses the resource (zero-dollar auth)
+
+Subsequent requests use zero-dollar auth. The server checks the client's identity against the access list.
+
+```ts [server.ts]
+export async function accessHandler(request: Request) {
+  const result = await mppx.charge({ amount: '0' })(request) // [!code hl]
+  if (result.status === 402) return result.challenge
+
+  const credential = Credential.fromRequest(request)
+  if (!hasAccess({ dataset: 'premium', owner: credential.source })) {
+    return Response.json({ error: 'Not unlocked' }, { status: 403 })
+  }
+
+  return result.withReceipt(Response.json({ data: getDataset('premium') }))
+}
+```
+
+::::
+
+### Case study: multi-step agent workflow
+
+An agent orchestrates a pipeline where one paid step kicks off several follow-up steps that only need identity. Each step verifies the same public key to maintain continuity across the workflow.
+
+::::steps
+
+#### Agent starts the pipeline (paid)
+
+The agent pays to kick off generation. The server returns a pipeline ID tied to the agent's public key.
+
+```ts [server.ts]
+export async function createPipelineHandler(request: Request) {
+  const result = await mppx.charge({ amount: '5.00' })(request)
+  if (result.status === 402) return result.challenge
+
+  const credential = Credential.fromRequest(request)
+  const pipelineId = createPipeline({ owner: credential.source }) // [!code hl]
+
+  return result.withReceipt(Response.json({ pipelineId }))
+}
+```
+
+#### Agent retrieves intermediate results (zero-dollar auth)
+
+The agent polls each stage of the pipeline. Every request proves the same identity without additional payment.
+
+```ts [server.ts]
+export async function stageHandler(request: Request) {
+  const result = await mppx.charge({ amount: '0' })(request) // [!code hl]
+  if (result.status === 402) return result.challenge
+
+  const credential = Credential.fromRequest(request)
+  const pipeline = getPipeline(pipelineIdFromUrl(request))
+
+  if (pipeline.owner !== credential.source) {
+    return Response.json({ error: 'Not your pipeline' }, { status: 403 })
+  }
+
+  const stage = pipeline.stages[stageFromUrl(request)]
+  return result.withReceipt(Response.json({ output: stage.output, status: stage.status }))
+}
+```
+
+#### Agent downloads the final artifact (zero-dollar auth)
+
+The final download also uses zero-dollar auth—the server already collected payment at the start.
+
+```ts [server.ts]
+export async function resultHandler(request: Request) {
+  const result = await mppx.charge({ amount: '0' })(request) // [!code hl]
+  if (result.status === 402) return result.challenge
+
+  const credential = Credential.fromRequest(request)
+  const pipeline = getPipeline(pipelineIdFromUrl(request))
+
+  if (pipeline.owner !== credential.source) {
+    return Response.json({ error: 'Not your pipeline' }, { status: 403 })
+  }
+
+  return result.withReceipt(Response.json({ result: pipeline.finalResult }))
+}
+```
+
+::::
+
+# Refunds \[Return funds to clients]
+
+## Overview
+
+MPP does not define a dedicated refund protocol. How refunds work depends on the payment flow your service uses.
+
+## Charge flow
+
+In the charge flow, funds transfer to the server immediately when the client pays. Refunds are **out-of-protocol**—the server sends funds back to the client's address directly.
+
+<MermaidDiagram
+  chart={`sequenceDiagram
+  participant Client
+  participant Server
+  Client->>Server: Request + Credential
+  Note over Server: Funds transfer
+  Server-->>Client: 200 OK + Receipt
+  Note over Server: Refund triggered
+  Server->>Client: Direct transfer back
+`}
+/>
+
+The server knows the client's address from the Credential's `source` field and can return funds at any time using a standard on-chain transfer.
+
+### Implementation
+
+To refund a charge, send the refund amount back to the client's public key:
+
+```ts twoslash [server.ts]
+// @noEmit
+declare const credential: { source: string }
+declare function sendTransfer(params: { amount: string; to: string }): Promise<void>
+// ---cut---
+async function refundCharge(credential: { source: string }, amount: string) {
+  const clientAddress = credential.source
+  await sendTransfer({ amount, to: clientAddress })
+}
+```
+
+Refund decisions are up to your service. Common triggers include failed processing, service errors, or customer support requests.
+
+## Session flow
+
+In the session flow, funds are locked but not immediately claimed. If the server never claims the locked funds, they automatically return to the client after the session expires.
+
+This gives sessions a **built-in refund mechanism**—unclaimed funds are refunded by default.
+
+<MermaidDiagram
+  chart={`sequenceDiagram
+  participant Client
+  participant Server
+  participant Tempo
+  Client->>Tempo: Deposit tokens
+  Tempo-->>Client: Channel created
+  Client->>Server: Open credential
+  Server-->>Client: 200 OK (session established)
+  loop Per request
+      Client->>Server: Request + voucher
+      Server-->>Client: 200 OK + Receipt
+  end
+  Note over Server: Close channel with last voucher
+  Server->>Tempo: close(channelId, voucher)
+  Note over Tempo: Settle claimed amount to server
+  Tempo-->>Client: Refund unclaimed deposit
+`}
+/>
+
+| Scenario | Outcome |
+|----------|---------|
+| Server claims funds | Payment completes, no refund |
+| Server never claims | Funds return to client after session expiry |
+| Server claims partial amount | Remaining funds return to client |
+
+### Refunding via channel close
+
+To refund a session, close the channel with the last settled voucher. Any unclaimed deposit returns to the client automatically.
+
+```ts twoslash [server.ts]
+// @noEmit
+declare const session: { close(): Promise<{ txHash: string; refundedToPayer: string }> }
+// ---cut---
+const receipt = await session.close()
+// @log: { txHash: "0xabc...", refundedToPayer: "8500000" }
+```
+
+On the client side, calling `requestClose` followed by `withdraw` after the grace period achieves the same result if the server is unresponsive:
+
+```ts twoslash [client.ts]
+// @noEmit
+declare const escrow: { write: { requestClose(args: [`0x${string}`]): Promise<void>; withdraw(args: [`0x${string}`]): Promise<void> } }
+declare const channelId: `0x${string}`
+// ---cut---
+await escrow.write.requestClose([channelId])
+await escrow.write.withdraw([channelId])
+```
+
+## Best practices
+
+* **Track refunds by Credential** — Use the Challenge `id` and Credential `source` to associate refunds with the original payment.
+* **Refund to the same address** — Always return funds to the `source` address from the Credential. Don't ask the client for a separate refund address.
+* **Treat refunds as a feedback mechanism** — Like traditional payment systems, refunds avoid costly disputes. Handle them promptly through your service's support process.
+* **Log refund transactions** — Keep a record of the original payment and the refund transaction for reconciliation.
+
+# Security \[Protect server secrets and payment credentials]
+
+The core Payment HTTP Authentication Scheme already requires TLS and treats payment Credentials and Receipts as sensitive data. This page covers the operational practices around `MPP_SECRET_KEY` and server deployments.
+
+## Treat `MPP_SECRET_KEY` as root-of-trust material
+
+`MPP_SECRET_KEY` binds HMAC-backed Challenge IDs to your server configuration. If an attacker gets the key, they can mint Challenges that appear server-issued for your `realm`.
+
+* Keep it on trusted servers only.
+* Never ship it to browsers, mobile apps, MCP clients, or frontend bundles.
+* Use a different key for each environment.
+* Never commit it to git or bake it into container images.
+
+## Store it in a secrets manager
+
+Use your platform's secret store as the system of record—AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, HashiCorp Vault, or an equivalent service.
+
+Environment variables are a good delivery mechanism at runtime, but they are not a secrets management strategy by themselves. Inject `MPP_SECRET_KEY` into your process from a managed secret store instead of treating `.env` files or deployment manifests as the source of truth.
+
+## Never log secrets or payment credentials
+
+Do not log:
+
+* `MPP_SECRET_KEY`
+* `Authorization: Payment` headers
+* `Payment-Receipt` headers
+
+Keep them out of error messages, debugging output, analytics, traces, and support logs. If you need observability, log stable metadata such as request IDs, challenge IDs, status codes, or payment method names instead.
+
+## Handle proxies and caches safely
+
+Treat reverse proxies, CDNs, API gateways, and observability pipelines as part of your threat surface.
+
+* Send `Cache-Control: no-store` with `402` responses so intermediaries do not cache Challenges.
+* Send `Cache-Control: private` on successful responses that include `Payment-Receipt`.
+* Redact `Authorization: Payment` and `Payment-Receipt` headers in proxy logs, trace exporters, and edge analytics.
+* Do not rely on intermediary-specific `402` handling—verify that your deployment forwards `WWW-Authenticate` headers correctly.
+
+## Bind paid requests to the actual request
+
+Use Challenge binding to make sure the paid request matches what your server intended to charge for.
+
+* Include a `digest` parameter for `POST`, `PUT`, and `PATCH` requests so clients cannot change the request body after receiving a Challenge.
+* Verify the expected amount, currency, recipient, and route-level business context when checking a Credential.
+* Do not use `description` as an authorization input. It is display text, not a security control.
+
+## Rotate with overlap
+
+When you rotate `MPP_SECRET_KEY`, use a staged rollout so in-flight Challenges keep working:
+
+1. Start issuing new Challenges with the new key.
+2. Continue verifying the previous key during a short overlap window.
+3. Remove the old key after outstanding Challenges have expired.
+
+If your deployment does not support current-and-previous-key verification yet, do a coordinated rollout and wait for the old Challenge TTL window to pass before invalidating the previous key.
+
+## Respond to exposure immediately
+
+If `MPP_SECRET_KEY` is exposed:
+
+1. Rotate it immediately.
+2. Remove the old key after your overlap window ends.
+3. Scrub logs, traces, and crash reports if the secret landed there.
+4. Review issuance and verification telemetry for suspicious activity.
+5. Replace the key in every environment where it was reused.
+
+## Prevent replay in production
+
+Replay protection must survive concurrency and multi-instance deployments.
+
+* Use a shared atomic store when your server runs on more than one instance.
+* Do not rely on process-local memory for replay protection in distributed deployments.
+* Check that zero-amount proof flows have explicit replay protection before you use them for production identity or access control.
+
+## Keep local development separate
+
+A local `.env` file is fine for development if it stays local and out of git. Commit only `.env.example` with placeholders, use a separate development key, and never reuse production secrets in staging or local environments.
+
+## Related security topics
+
+* [Protocol overview](/protocol)
+* [HTTP 402](/protocol/http-402)
+* [Tempo charge replay protection](/sdk/typescript/server/Method.tempo.charge)
+
+## Read the underlying guidance
+
+* [Payment HTTP Authentication Scheme](/protocol/http-402)
+* [Frequently asked questions](/faq)
+* [OWASP Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html)
+
+# Accept card payments \[Charge Visa and Mastercard via Stripe]
+
+Accept card payments on your MPP-enabled API using [Stripe](/payment-methods/stripe). Clients pay with Visa, Mastercard, and other card networks—no stablecoin wallet required. The server uses Stripe's [Shared Payment Tokens (SPTs)](https://docs.stripe.com/agentic-commerce/concepts/shared-payment-tokens) to process payments through Stripe's existing rails.
+
+::::info\[Stripe account setup]
+Machine payments must be enabled on your Stripe account before you can accept MPP payments. [Request access](https://docs.stripe.com/payments/machine#sign-up) through the Stripe Dashboard.
+::::
+
+## How it works
+
+<MermaidDiagram
+  chart={`sequenceDiagram
+  participant Client
+  participant Server
+  participant Stripe
+  Client->>Server: (1) GET /resource
+  Server-->>Client: (2) 402 + Challenge (Stripe method)
+  Client->>Stripe: (3) Create SPT from Challenge
+  Stripe-->>Client: (4) spt_...
+  Client->>Server: (5) GET /resource + Credential (SPT)
+  Server->>Stripe: (6) Create PaymentIntent
+  Stripe-->>Server: (7) pi_...
+  Server-->>Client: (8) 200 OK + Receipt
+`}
+/>
+
+1. **Client** requests a paid resource.
+2. **Server** responds with `402` and a Challenge containing the price, currency, and Stripe method details.
+3. **Client** creates a Shared Payment Token (SPT) through the Stripe API.
+4. **Client** retries the request with a Credential containing the SPT.
+5. **Server** creates a Stripe `PaymentIntent` using the SPT, verifies payment, and returns the resource with a Receipt.
+
+Settlement, refunds, and reporting all happen through your Stripe Dashboard—the same tools you use for any other Stripe payment.
+
+## Prompt mode
+
+Paste this into your coding agent to build the entire guide in one prompt:
+
+<PromptBlock>
+  {`Use https://mpp.dev/guides/accept-card-payments.md as reference.
+    Add mppx to my app with a payment-gated endpoint that accepts
+    card payments via Stripe. Charge $1.00 per request using the
+    Stripe payment method. When payment is verified, return a JSON response.`}
+</PromptBlock>
+
+## Server setup
+
+::::steps
+
+#### Install dependencies
+
+:::code-group
+
+```bash [npm]
+npm install mppx stripe viem
+```
+
+```bash [pnpm]
+pnpm add mppx stripe viem
+```
+
+```bash [bun]
+bun add mppx stripe viem
+```
+
+:::
+
+#### Set environment variables
+
+Set your Stripe secret key and [Business Network](https://docs.stripe.com/get-started/account/profile) profile ID.
+
+```bash [.env]
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_NETWORK_ID=your_network_id
+```
+
+#### Create the server with Stripe payments
+
+Set up an `Mppx` instance with the `stripe.charge` method. The `networkId` is your Stripe Business Network profile ID, and `paymentMethodTypes` controls which card types you accept.
+
+```ts twoslash
+import Stripe from 'stripe'
+import { Mppx, stripe } from 'mppx/server'
+
+const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!)
+
+const mppx = Mppx.create({
+  methods: [
+    stripe.charge({
+      client: stripeClient,
+      networkId: process.env.STRIPE_NETWORK_ID!,
+      paymentMethodTypes: ['card'],
+    }),
+  ],
+})
+```
+
+#### Add a paid endpoint
+
+Use `mppx.charge` to gate your endpoint. Set the `amount` in the smallest currency unit (cents for USD), and specify `currency` and `decimals`.
+
+```ts twoslash
+import Stripe from 'stripe'
+import { Mppx, stripe } from 'mppx/server'
+
+const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!)
+
+const mppx = Mppx.create({
+  methods: [
+    stripe.charge({
+      client: stripeClient,
+      networkId: process.env.STRIPE_NETWORK_ID!,
+      paymentMethodTypes: ['card'],
+    }),
+  ],
+})
+
+// ---cut---
+export async function handler(request: Request) {
+  const result = await mppx.charge({
+    amount: '100',
+    currency: 'usd',
+    decimals: 2,
+    description: 'Premium API access',
+  })(request)
+
+  if (result.status === 402) return result.challenge
+
+  return result.withReceipt(Response.json({ data: 'your response here' }))
+}
+```
+
+::::
+
+## Client setup
+
+Use `stripe` with `Mppx.create` to handle `402` responses automatically. The client parses the Challenge, creates an SPT through the `createToken` callback, and retries with the Credential.
+
+```ts twoslash
+import { Mppx, stripe } from 'mppx/client'
+
+Mppx.create({
+  methods: [
+    stripe({
+      createToken: async (params) => {
+        const res = await fetch('/api/create-spt', {
+          body: JSON.stringify(params),
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+        })
+        if (!res.ok) throw new Error('Failed to create SPT')
+        return (await res.json()).spt
+      },
+      paymentMethod: 'pm_card_visa',
+    }),
+  ],
+})
+
+const response = await fetch('https://api.example.com/resource')
+// @log: Response { status: 200, ... }
+```
+
+:::warning\[Security: server-side authorization]
+The `createToken` callback proxies through your own server because SPT creation requires a Stripe secret key. The server **must** derive SPT parameters (amount, currency, expiry) itself—never accept them from the client. See the [SPT creation proxy endpoint](/payment-methods/stripe/charge#spt-creation-proxy-endpoint) for a secure implementation.
+:::
+
+## Accept cards and stablecoins together
+
+Stripe works alongside other payment methods. Add `tempo` to accept both cards and stablecoins on the same endpoint—clients pay with whichever rail they support.
+
+```ts twoslash
+import Stripe from 'stripe'
+import { Mppx, stripe, tempo } from 'mppx/server'
+
+const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!)
+
+const mppx = Mppx.create({
+  methods: [
+    stripe.charge({
+      client: stripeClient,
+      networkId: process.env.STRIPE_NETWORK_ID!,
+      paymentMethodTypes: ['card'],
+    }),
+    tempo.charge({
+      currency: '0x20c0000000000000000000000000000000000000',
+      recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+      testnet: true,
+    }),
+  ],
+})
+```
+
+The server returns both methods in the `402` Challenge. See [Accept multiple payment methods](/guides/multiple-payment-methods) for a full walkthrough.
+
+## Add a browser payment page
+
+Set `html` on the Stripe method to render a Stripe Elements card form when a browser visits the endpoint. Programmatic clients with `Authorization` headers are unaffected.
+
+```ts twoslash
+import Stripe from 'stripe'
+import { Mppx, stripe } from 'mppx/server'
+
+const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!)
+
+const mppx = Mppx.create({
+  methods: [
+    stripe.charge({
+      client: stripeClient,
+      // [!code hl:start]
+      html: {
+        createTokenUrl: '/api/create-spt',
+        publishableKey: process.env.STRIPE_PUBLISHABLE_KEY!,
+      },
+      // [!code hl:end]
+      networkId: process.env.STRIPE_NETWORK_ID!,
+      paymentMethodTypes: ['card'],
+    }),
+  ],
+})
+```
+
+See [Create a payment link](/guides/payment-links) for a full walkthrough and live demo.
+
+## Next steps
 
 # Build with an LLM \[Give your agent MPP context]
 
@@ -967,6 +2047,276 @@ amp mcp add --transport http mpp https://mpp.dev/api/mcp
 | `get_file_tree` | Get a recursive file tree |
 | `search_source` | Search source code for a pattern |
 
+# Monetize your MCP server \[Charge for tool calls with MPP]
+
+Add per-call payments to any [MCP](https://modelcontextprotocol.io) server. When an agent calls a paid tool, the server issues a Challenge, the agent pays, and the tool executes—all within the MCP protocol. No API keys or billing portals required.
+
+## How it works
+
+<MermaidDiagram
+  chart={`sequenceDiagram
+  participant A as Agent
+  participant S as MCP Server
+  participant N as Payment Network
+  A->>S: (1) tools/call
+  S-->>A: (2) {"error":{"code":-32042}} + Challenge
+  Note over A: (3) Create Credential
+  A->>S: (4) tools/call + {"_meta":{"credential"}}
+  S->>N: (5) Settle payment
+  N-->>S: (6) Confirmed
+  S-->>A: (7) {"result":{}} + Receipt
+`}
+/>
+
+1. **Agent** calls a tool on the MCP server
+2. **Server** responds with JSON-RPC error code `-32042` and a Challenge specifying the price
+3. **Agent** creates a Credential (payment proof) from the Challenge
+4. **Agent** retries the tool call with the Credential in `_meta`
+5. **Server** verifies the Credential and settles the payment on-chain
+6. **Network** confirms the payment
+7. **Server** returns the tool result with a Receipt in `_meta`
+
+This maps directly to the standard MPP challenge → credential → receipt flow, encoded as JSON-RPC instead of HTTP headers. See the [MCP transport spec](/protocol/transports/mcp) for the full encoding.
+
+:::info
+This guide uses the MCP transport, so Challenge, Credential, and Receipt data travel as native JSON in `error.data` and `_meta`. The base64url-encoded `request` and `opaque` auth-params apply to the HTTP transport.
+:::
+
+## Prompt mode
+
+Paste this into your coding agent to build a paid MCP server in one prompt:
+
+<PromptBlock>
+  {`Use https://mpp.dev/guides/monetize-mcp-server.md as reference.
+    Build an MCP server with mppx that charges $0.01 per tool call 
+    using the Tempo payment method. Use @modelcontextprotocol/sdk 
+    for the MCP server and Transport.mcpSdk() for the payment transport.`}
+</PromptBlock>
+
+## Manual mode
+
+::::steps
+
+### Install dependencies
+
+:::code-group
+
+```bash [npm]
+npm install mppx @modelcontextprotocol/sdk viem
+```
+
+```bash [pnpm]
+pnpm add mppx @modelcontextprotocol/sdk viem
+```
+
+```bash [bun]
+bun add mppx @modelcontextprotocol/sdk viem
+```
+
+:::
+
+### Create the MCP server
+
+Set up a standard MCP server with a tool. This tool is **currently free**.
+
+```ts [server.ts]
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio'
+
+const server = new McpServer({ name: 'my-service', version: '1.0.0' })
+
+// [!code focus:start]
+server.registerTool(
+  'search',
+  { description: 'Search the web' },
+  async ({ query }) => ({
+    content: [{ type: 'text', text: `Results for: ${query}` }],
+  }),
+)
+// [!code focus:end]
+
+const transport = new StdioServerTransport()
+await server.connect(transport)
+```
+
+### Add `mppx` with the MCP transport
+
+Create an `Mppx` instance with `Transport.mcpSdk()`. This tells `mppx` to encode Challenges and Receipts as JSON-RPC messages instead of HTTP headers.
+
+```ts [server.ts]
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio'
+import { Mppx, tempo, Transport } from 'mppx/server' // [!code ++]
+
+// [!code focus:start]
+const mppx = Mppx.create({
+  methods: [tempo({
+    testnet: true,
+    currency: '0x20c0000000000000000000000000000000000000',
+    recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+  })],
+  transport: Transport.mcpSdk(), // [!code hl]
+})
+// [!code focus:end]
+
+const server = new McpServer({ name: 'my-service', version: '1.0.0' })
+
+server.registerTool(
+  'search',
+  { description: 'Search the web' },
+  async ({ query }) => ({
+    content: [{ type: 'text', text: `Results for: ${query}` }],
+  }),
+)
+
+const transport = new StdioServerTransport()
+await server.connect(transport)
+```
+
+### Add `.charge` to the tool handler
+
+Call `mppx.charge` inside the tool handler. If the agent hasn't paid, throw the Challenge. Otherwise, attach a Receipt to the result.
+
+```ts [server.ts]
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio'
+import { Mppx, tempo, Transport } from 'mppx/server'
+
+const mppx = Mppx.create({
+  methods: [tempo({
+    testnet: true,
+    currency: '0x20c0000000000000000000000000000000000000',
+    recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+  })],
+  transport: Transport.mcpSdk(),
+})
+
+const server = new McpServer({ name: 'my-service', version: '1.0.0' })
+
+// [!code focus:start]
+server.registerTool(
+  'search',
+  { description: 'Search the web' },
+  async ({ query }, extra) => {
+    const result = await mppx.charge({ // [!code ++]
+      amount: '0.01', // [!code ++]
+      description: 'Web search query', // [!code ++]
+    })(extra) // [!code ++]
+
+    if (result.status === 402) throw result.challenge // [!code ++]
+
+    return result.withReceipt({ // [!code ++]
+      content: [{ type: 'text', text: `Results for: ${query}` }],
+    })
+  },
+)
+// [!code focus:end]
+
+const mcpTransport = new StdioServerTransport()
+await server.connect(mcpTransport)
+```
+
+Three lines turn a free tool into a paid one:
+
+* **`mppx.charge()`** checks for a valid Credential in the tool call's `_meta`
+* **`throw result.challenge`** sends a `-32042` error with the payment requirements
+* **`result.withReceipt()`** attaches a Receipt to the tool result
+
+### Test with the `mppx` CLI
+
+```bash [terminal]
+# Create account funded with testnet tokens
+$ npx mppx account create
+
+# Start the server and call the tool
+$ echo '{"method":"tools/call","params":{"name":"search","arguments":{"query":"hello"}}}' | node server.ts
+```
+
+::::
+
+## Multiple tools with different prices
+
+Set different prices per tool. Free tools don't need `mppx.charge` at all.
+
+```ts [server.ts]
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio'
+import { Mppx, tempo, Transport } from 'mppx/server'
+
+const mppx = Mppx.create({
+  methods: [tempo({
+    testnet: true,
+    currency: '0x20c0000000000000000000000000000000000000',
+    recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+  })],
+  transport: Transport.mcpSdk(),
+})
+
+const server = new McpServer({ name: 'my-service', version: '1.0.0' })
+
+// [!code focus:start]
+// Free tool — no payment required
+server.registerTool(
+  'status',
+  { description: 'Check service status' },
+  async () => ({
+    content: [{ type: 'text', text: 'OK' }],
+  }),
+)
+
+// $0.01 per call
+server.registerTool(
+  'search',
+  { description: 'Search the web' },
+  async ({ query }, extra) => {
+    const result = await mppx.charge({ amount: '0.01' })(extra)
+    if (result.status === 402) throw result.challenge
+    return result.withReceipt({
+      content: [{ type: 'text', text: `Results for: ${query}` }],
+    })
+  },
+)
+
+// $0.10 per call
+server.registerTool(
+  'generate-image',
+  { description: 'Generate an image from a prompt' },
+  async ({ prompt }, extra) => {
+    const result = await mppx.charge({ amount: '0.10' })(extra)
+    if (result.status === 402) throw result.challenge
+    return result.withReceipt({
+      content: [{ type: 'text', text: `Image generated for: ${prompt}` }],
+    })
+  },
+)
+// [!code focus:end]
+
+const transport = new StdioServerTransport()
+await server.connect(transport)
+```
+
+## What the agent sees
+
+Under the hood, the MCP transport encodes MPP Challenges, Credentials, and Receipts as JSON-RPC fields:
+
+| MPP concept | MCP encoding |
+|---|---|
+| Challenge | Error code `-32042` with challenges in `error.data` |
+| Credential | `_meta["org.paymentauth/credential"]` on the tool call |
+| Receipt | `_meta["org.paymentauth/receipt"]` on the tool result |
+
+A payment-aware MCP client like [`McpClient.wrap`](/sdk/typescript/client/McpClient.wrap) handles this automatically—the agent doesn't need to know the encoding details.
+
+## Specification
+
+<Cards>
+  <SpecCard to="https://paymentauth.org/draft-payment-transport-mcp-00" title="MCP Transport" description="JSON-RPC encoding for Challenges, Credentials, and Receipts" />
+
+  <SpecCard to="https://paymentauth.org/draft-payment-intent-charge-00" title="Charge Intent" description="One-time payment request schema" />
+</Cards>
+
+## Next steps
+
 # Accept multiple payment methods \[Stablecoins, cards, and Bitcoin on a single endpoint]
 
 Build a payment-gated API that accepts [Tempo](/payment-methods/tempo) stablecoins, [Stripe](/payment-methods/stripe) cards, and [Lightning](/payment-methods/lightning) Bitcoin—all on the same endpoint. The server returns a `402` Challenge advertising every available method, and the client pays with whichever rail it supports.
@@ -990,7 +2340,7 @@ Paste this into your coding agent to build the entire guide in one prompt:
 
 When multiple methods are registered, the `402` response includes a `WWW-Authenticate` header for each one. The client picks the method it supports and sends the appropriate Credential.
 
-```
+```http
 HTTP/1.1 402 Payment Required
 WWW-Authenticate: Payment method="tempo", intent="charge", ...
 WWW-Authenticate: Payment method="stripe", intent="charge", ...
@@ -1232,6 +2582,43 @@ export const GET =
 ## Method-specific configuration
 
 Each payment method has its own parameters. Refer to the individual method docs for the full configuration reference:
+
+## Client preferences
+
+Clients can declare which payment methods they prefer by passing `paymentPreferences` to `Mppx.create`. This sends an `Accept-Payment` header on every request, and the server uses it to filter Challenges down to the methods the client supports.
+
+```ts twoslash
+import { Mppx, stripe, tempo } from 'mppx/client'
+import { privateKeyToAccount } from 'viem/accounts'
+
+const account = privateKeyToAccount('0x...')
+
+Mppx.create({
+  methods: [
+    tempo({ account }),
+    stripe.charge({
+      createToken: async (opts) => {
+        const res = await fetch('/api/create-spt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(opts),
+        })
+        const { spt } = await res.json() as { spt: string }
+        return spt
+      },
+    }),
+  ],
+  // [!code hl:start]
+  paymentPreferences: ({ tempo, stripe }) => ({
+    [tempo.charge]: 1,
+    [stripe.charge]: 0.5,
+    [tempo.session]: 0.2,
+  }),
+  // [!code hl:end]
+})
+```
+
+See the [`paymentPreferences` parameter reference](/sdk/typescript/client/Mppx.create#paymentpreferences-optional) for the full configuration options.
 
 ## Next steps
 
@@ -1846,38 +3233,7 @@ Select your framework to follow a step-by-step guide. If your framework isn't li
 
 ## With Stripe
 
-Create a dynamic recipient address to link each transaction to a backing Payment Intent in Stripe.
-
-```ts twoslash
-// @noErrors
-import { Mppx, tempo } from "mppx/server";
-
-function async createPayToAddress(request: Request) {
-  // Create Stripe PaymentIntent
-}
-
-export async function handler(request: Request) {
-  const recipientAddress = await createPayToAddress(request)
-  const mppx = Mppx.create({
-    secretKey: process.env.MPP_SECRET_KEY || crypto.randomBytes(32).toString('base64'),
-    methods: [
-      tempo.charge({
-        testnet: true,
-        currency: "0x20c0000000000000000000000000000000000000",
-        recipient: recipientAddress,
-      }),
-    ],
-  });
-
-  const result = await mppx.charge({ amount: "0.01" })(request);
-
-  if (result.status === 402) return result.challenge;
-
-  return result.withReceipt(Response.json({ data: "..." }));
-}
-```
-
-Refunds, reporting, and multi-currency payouts work the same as any other payment in Stripe. Read the [Stripe documentation](https://docs.stripe.com/payments/machine/mpp) on accepting MPP.
+Accept MPP payments through Stripe for refunds, reporting, and multi-currency payouts. Read the [Stripe documentation](https://docs.stripe.com/payments/machine/mpp) for the full integration walkthrough.
 
 ## Next steps
 
@@ -1889,7 +3245,7 @@ but you could imagine generating images with an AI model instead like [OpenAI Im
 
 :::info
 Unlike [one-time payments](/guides/one-time-payments), sessions open a payment channel once and
-use offchain vouchers for each subsequent request—vouchers are **not bottlenecked by blockchain throughput**, they are processed in pure CPU-bound signature checks.
+use off-chain vouchers for each subsequent request—vouchers are **not bottlenecked by blockchain throughput**, they are processed in pure CPU-bound signature checks.
 :::
 
 ## Demo
@@ -2069,6 +3425,10 @@ Select your framework to follow a step-by-step guide. If your framework isn't li
       })],
     })
     ```
+
+    #### Create the `/api/sessions/photo` route
+
+    Create the gallery route. This route is **currently unpaid**.
 
     ```ts [server.ts]
     import crypto from 'crypto'
@@ -2544,6 +3904,758 @@ Channels remain open for reuse. Closing is not required between individual reque
 :::
 
 ## Next steps
+
+# Create a payment link \[Share a link. Get paid.]
+
+Create a full payment page for any API endpoint—no frontend required. Share the link anywhere and users pay directly from the page.
+
+## Supported methods
+
+| Method | `html` type | What renders |
+| --- | --- | --- |
+| [`tempo`](/sdk/typescript/server/Method.tempo) | `boolean` or config object | "Continue with Tempo" wallet UI |
+| [`stripe`](/sdk/typescript/server/Method.stripe) | Config object | Full Stripe Elements card form |
+| [`solana.charge`](/payment-methods/solana/charge#payment-links) | `boolean` | "Continue with Solana" wallet UI |
+
+For Tempo and Stripe, `html` also accepts an object so you can customize page text and theme without building a frontend.
+
+## Demo
+
+This is a live payment link. Click "Continue with Tempo" to pay $0.01 and receive a random photo from [Picsum](https://picsum.photos).
+
+<PaymentLinkDemo />
+
+## Prompt mode
+
+Paste this into your coding agent to create a payment link in one prompt:
+
+<PromptBlock>
+  {`Use https://mpp.dev/guides/payment-links.md as reference.
+    Add mppx to my app with a payment-gated photo endpoint
+    that charges $0.01 per request using the Tempo payment method with
+    PathUSD. Enable payment links so browsers can pay directly
+    from the page by setting html: true on the tempo() method config.
+    When payment is verified, fetch a random photo from
+    https://picsum.photos/1024/1024 and return the URL as JSON.`}
+</PromptBlock>
+
+## Manual mode
+
+Select your framework to follow a step-by-step guide. If your framework isn't listed, choose **Other** for a generic [Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API) approach compatible with most TypeScript server frameworks.
+
+<Tabs>
+  <Tab title="Next.js">
+    ::::steps
+
+    #### Install `mppx`
+
+    :::code-group
+
+    ```bash [npm]
+    npm install mppx viem
+    ```
+
+    ```bash [pnpm]
+    pnpm add mppx viem
+    ```
+
+    ```bash [bun]
+    bun add mppx viem
+    ```
+
+    :::
+
+    #### Set up `Mppx` instance with `html: true`
+
+    ```ts [app/api/photo/route.ts]
+    import crypto from 'crypto'
+    import { Mppx, tempo } from 'mppx/nextjs'
+
+    export const mppx = Mppx.create({
+      methods: [tempo({
+        currency: '0x20c0000000000000000000000000000000000000',
+        html: true, // [!code hl]
+        recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+        testnet: true,
+      })],
+      secretKey: process.env.MPP_SECRET_KEY || crypto.randomBytes(32).toString('base64'),
+    })
+    ```
+
+    #### Create the `/api/photo` route
+
+    Create the photo route with `mppx.charge`. Browsers see a payment page; programmatic clients get the standard `402` flow.
+
+    ```ts [app/api/photo/route.ts]
+    import crypto from 'crypto'
+    import { Mppx, tempo } from 'mppx/nextjs'
+
+    export const mppx = Mppx.create({
+      methods: [tempo({
+        currency: '0x20c0000000000000000000000000000000000000',
+        html: true,
+        recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+        testnet: true,
+      })],
+      secretKey: process.env.MPP_SECRET_KEY || crypto.randomBytes(32).toString('base64'),
+    })
+
+    // [!code focus:start]
+    export const GET =
+      mppx.charge({ amount: '0.01', description: 'Random stock photo' })
+      (async () => {
+        const res = await fetch('https://picsum.photos/1024/1024')
+        return Response.json({ url: res.url })
+      })
+    // [!code focus:end]
+    ```
+
+    #### Test in the browser
+
+    Open `http://localhost:3000/api/photo` in your browser. The server returns a payment page with a "Continue with Tempo" button. After payment, the page reloads with the photo URL.
+
+    Programmatic clients work the same way:
+
+    ```bash [terminal]
+    $ npx mppx http://localhost:3000/api/photo
+    ```
+
+    ::::
+  </Tab>
+
+  <Tab title="Hono">
+    ::::steps
+
+    #### Install `mppx` and `hono`
+
+    :::code-group
+
+    ```bash [npm]
+    npm install mppx hono viem
+    ```
+
+    ```bash [pnpm]
+    pnpm add mppx hono viem
+    ```
+
+    ```bash [bun]
+    bun add mppx hono viem
+    ```
+
+    :::
+
+    #### Set up `Mppx` instance with `html: true`
+
+    ```ts [server.ts]
+    import crypto from 'crypto'
+    import { Hono } from 'hono'
+    import { Mppx, tempo } from 'mppx/hono'
+
+    const app = new Hono()
+
+    const mppx = Mppx.create({
+      methods: [tempo({
+        currency: '0x20c0000000000000000000000000000000000000',
+        html: true, // [!code hl]
+        recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+        testnet: true,
+      })],
+      secretKey: process.env.MPP_SECRET_KEY || crypto.randomBytes(32).toString('base64'),
+    })
+    ```
+
+    #### Create the `/api/photo` route
+
+    ```ts [server.ts]
+    import crypto from 'crypto'
+    import { Hono } from 'hono'
+    import { Mppx, tempo } from 'mppx/hono'
+
+    const app = new Hono()
+
+    const mppx = Mppx.create({
+      methods: [tempo({
+        currency: '0x20c0000000000000000000000000000000000000',
+        html: true,
+        recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+        testnet: true,
+      })],
+      secretKey: process.env.MPP_SECRET_KEY || crypto.randomBytes(32).toString('base64'),
+    })
+
+    // [!code focus:start]
+    app.get(
+      '/api/photo',
+      mppx.charge({ amount: '0.01', description: 'Random stock photo' }),
+      async (c) => {
+        const res = await fetch('https://picsum.photos/1024/1024')
+        return c.json({ url: res.url })
+      },
+    )
+    // [!code focus:end]
+    ```
+
+    #### Test in the browser
+
+    Open `http://localhost:3000/api/photo` in your browser.
+
+    ```bash [terminal]
+    $ npx mppx http://localhost:3000/api/photo
+    ```
+
+    ::::
+  </Tab>
+
+  <Tab title="Express">
+    ::::steps
+
+    #### Install `mppx` and `express`
+
+    :::code-group
+
+    ```bash [npm]
+    npm install mppx express viem
+    ```
+
+    ```bash [pnpm]
+    pnpm add mppx express viem
+    ```
+
+    ```bash [bun]
+    bun add mppx express viem
+    ```
+
+    :::
+
+    #### Set up `Mppx` instance with `html: true`
+
+    ```ts [server.ts]
+    import crypto from 'crypto'
+    import express from 'express'
+    import { Mppx, tempo } from 'mppx/express'
+
+    const app = express()
+
+    const mppx = Mppx.create({
+      methods: [tempo({
+        currency: '0x20c0000000000000000000000000000000000000',
+        html: true, // [!code hl]
+        recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+        testnet: true,
+      })],
+      secretKey: process.env.MPP_SECRET_KEY || crypto.randomBytes(32).toString('base64'),
+    })
+    ```
+
+    #### Create the `/api/photo` route
+
+    ```ts [server.ts]
+    import crypto from 'crypto'
+    import express from 'express'
+    import { Mppx, tempo } from 'mppx/express'
+
+    const app = express()
+
+    const mppx = Mppx.create({
+      methods: [tempo({
+        currency: '0x20c0000000000000000000000000000000000000',
+        html: true,
+        recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+        testnet: true,
+      })],
+      secretKey: process.env.MPP_SECRET_KEY || crypto.randomBytes(32).toString('base64'),
+    })
+
+    // [!code focus:start]
+    app.get(
+      '/api/photo',
+      mppx.charge({ amount: '0.01', description: 'Random stock photo' }),
+      async (req, res) => {
+        const response = await fetch('https://picsum.photos/1024/1024')
+        res.json({ url: response.url })
+      },
+    )
+    // [!code focus:end]
+    ```
+
+    #### Test in the browser
+
+    Open `http://localhost:3000/api/photo` in your browser.
+
+    ```bash [terminal]
+    $ npx mppx http://localhost:3000/api/photo
+    ```
+
+    ::::
+  </Tab>
+
+  <Tab title="Other">
+    This guide walks through using `mppx/server` directly with any [Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API)-compatible framework: [Bun](https://bun.sh), [Deno](https://deno.com), [Cloudflare Workers](https://workers.dev), and others.
+
+    <div className="h-6" />
+
+    ::::steps
+
+    #### Install `mppx`
+
+    :::code-group
+
+    ```bash [npm]
+    npm install mppx viem
+    ```
+
+    ```bash [pnpm]
+    pnpm add mppx viem
+    ```
+
+    ```bash [bun]
+    bun add mppx viem
+    ```
+
+    :::
+
+    #### Set up `Mppx` instance with `html: true`
+
+    ```ts [server.ts]
+    import crypto from 'crypto'
+    import { Mppx, tempo } from 'mppx/server'
+
+    const mppx = Mppx.create({
+      methods: [tempo({
+        currency: '0x20c0000000000000000000000000000000000000',
+        html: true, // [!code hl]
+        recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+        testnet: true,
+      })],
+      secretKey: process.env.MPP_SECRET_KEY || crypto.randomBytes(32).toString('base64'),
+    })
+    ```
+
+    #### Create the handler
+
+    The server detects the `Accept` header and returns a payment page for browsers. Programmatic clients get the standard `402` flow.
+
+    ```ts [server.ts]
+    import crypto from 'crypto'
+    import { Mppx, tempo } from 'mppx/server'
+
+    const mppx = Mppx.create({
+      methods: [tempo({
+        currency: '0x20c0000000000000000000000000000000000000',
+        html: true,
+        recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+        testnet: true,
+      })],
+      secretKey: process.env.MPP_SECRET_KEY || crypto.randomBytes(32).toString('base64'),
+    })
+
+    // [!code focus:start]
+    Bun.serve({
+      async fetch(request) {
+        const result = await mppx.charge({
+          amount: '0.01',
+          description: 'Random stock photo',
+        })(request)
+
+        if (result.status === 402) return result.challenge
+
+        const res = await fetch('https://picsum.photos/1024/1024')
+        return result.withReceipt(Response.json({ url: res.url }))
+      },
+    })
+    // [!code focus:end]
+    ```
+
+    #### Test in the browser
+
+    Open `http://localhost:3000` in your browser.
+
+    ```bash [terminal]
+    $ npx mppx http://localhost:3000
+    ```
+
+    ::::
+  </Tab>
+</Tabs>
+
+## Next steps
+
+# Proxy an existing service \[Add payments to any API without changing its code]
+
+Put a payment gate in front of an existing API without modifying it. The proxy sits between clients and the origin, handles the `402` flow, injects upstream credentials, and forwards paid requests.
+
+## How it works
+
+<MermaidDiagram
+  chart={`sequenceDiagram
+  participant C as Client
+  participant P as Proxy
+  participant O as Origin API
+  C->>P: GET /my-api/v1/data
+  P-->>C: 402 + WWW-Authenticate: Payment
+  C->>P: GET /my-api/v1/data + Authorization: Payment
+  P->>P: Verify Credential
+  P->>O: GET /v1/data + Authorization: Bearer sk-...
+  O-->>P: 200 + response body
+  P-->>C: 200 + Payment-Receipt + response body
+`}
+/>
+
+The proxy verifies the client's payment Credential, then forwards the request to the origin with the real API key injected. The client never sees the upstream credentials.
+
+## Prompt mode
+
+Paste this into your coding agent to build the entire guide in one prompt:
+
+<PromptBlock>
+  {`Use https://mpp.dev/guides/proxy-existing-service.md as reference.
+    Create an mppx proxy server that gates an upstream REST API
+    behind MPP payments. Use Service.from with a bearer token for
+    upstream auth. Charge $0.01 for the forecast endpoint and allow
+    the status endpoint for free. Use the Tempo payment method.`}
+</PromptBlock>
+
+## Manual mode
+
+::::steps
+
+### Install `mppx`
+
+:::code-group
+
+```bash [npm]
+npm install mppx viem
+```
+
+```bash [pnpm]
+pnpm add mppx viem
+```
+
+```bash [bun]
+bun add mppx viem
+```
+
+:::
+
+### Define the upstream service
+
+Use `Service.from` to describe the API you want to proxy. The proxy injects upstream credentials so clients never see them.
+
+```ts [server.ts]
+import { Proxy, Service } from 'mppx/proxy'
+import { Mppx, tempo } from 'mppx/server'
+
+const mppx = Mppx.create({ methods: [tempo()] })
+
+const proxy = Proxy.create({
+  services: [
+// [!code focus:start]
+    Service.from('weather', {
+      baseUrl: 'https://api.weather.example.com',
+      bearer: process.env.WEATHER_API_KEY!, // [!code hl]
+      description: 'Weather forecast API',
+      routes: {
+        'GET /v1/forecast': mppx.charge({ amount: '0.01' }),
+        'GET /v1/status': true, // [!code hl]
+      },
+      title: 'Weather API',
+    }),
+// [!code focus:end]
+  ],
+})
+```
+
+* **`bearer`** injects `Authorization: Bearer` on upstream requests. Use `headers` for APIs that expect a custom header like `X-API-Key`.
+* **`true`** marks a route as free passthrough—no payment required, but upstream credentials are still injected.
+
+### Set pricing per route
+
+Each route maps a `"METHOD /pattern"` to a payment intent or `true` for free passthrough. Set different prices per endpoint.
+
+```ts [server.ts]
+import { Proxy, Service } from 'mppx/proxy'
+import { Mppx, tempo } from 'mppx/server'
+
+const mppx = Mppx.create({ methods: [tempo()] })
+
+const proxy = Proxy.create({
+  services: [
+    Service.from('weather', {
+      baseUrl: 'https://api.weather.example.com',
+      bearer: process.env.WEATHER_API_KEY!,
+      description: 'Weather forecast API',
+      routes: {
+        'GET /v1/forecast': mppx.charge({ amount: '0.01' }), // [!code focus]
+        'GET /v1/historical/:date': mppx.charge({ amount: '0.05' }), // [!code focus]
+        'GET /v1/status': true, // [!code focus]
+      },
+      title: 'Weather API',
+    }),
+  ],
+})
+```
+
+Requests to routes not listed in the map receive `404`.
+
+### Start the proxy
+
+The proxy returns two handlers for different runtimes.
+
+```ts [server.ts]
+import { Proxy, Service } from 'mppx/proxy'
+import { Mppx, tempo } from 'mppx/server'
+
+const mppx = Mppx.create({ methods: [tempo()] })
+
+const proxy = Proxy.create({
+  description: 'Payment-gated weather data', // [!code hl]
+  services: [
+    Service.from('weather', {
+      baseUrl: 'https://api.weather.example.com',
+      bearer: process.env.WEATHER_API_KEY!,
+      description: 'Weather forecast API',
+      routes: {
+        'GET /v1/forecast': mppx.charge({ amount: '0.01' }),
+        'GET /v1/historical/:date': mppx.charge({ amount: '0.05' }),
+        'GET /v1/status': true,
+      },
+      title: 'Weather API',
+    }),
+  ],
+  title: 'Weather Proxy', // [!code hl]
+})
+
+// [!code focus:start]
+// Bun / Deno
+export default { fetch: proxy.fetch }
+
+// Node.js
+// import { createServer } from 'node:http'
+// createServer(proxy.listener).listen(3000)
+// [!code focus:end]
+```
+
+### Test via the `mppx` CLI
+
+```bash [terminal]
+# Create account funded with testnet tokens
+$ npx mppx account create
+
+# Free route — no payment required
+$ npx mppx http://localhost:3000/weather/v1/status
+
+# Paid route — handles 402 automatically
+$ npx mppx http://localhost:3000/weather/v1/forecast
+```
+
+Requests route to `/{serviceId}/`—for example, `/weather/v1/forecast` proxies to `https://api.weather.example.com/v1/forecast`.
+
+::::
+
+## Multiple upstream services
+
+Gate several APIs behind a single proxy by passing multiple services. Each mounts at its own path prefix.
+
+```ts [server.ts]
+import { Proxy, Service, openai } from 'mppx/proxy'
+import { Mppx, tempo } from 'mppx/server'
+
+const mppx = Mppx.create({ methods: [tempo()] })
+
+const proxy = Proxy.create({
+  description: 'Multi-service paid API proxy',
+  services: [
+// [!code focus:start]
+    openai({ // [!code hl]
+      apiKey: process.env.OPENAI_API_KEY!,
+      routes: {
+        'GET /v1/models': true,
+        'POST /v1/chat/completions': mppx.charge({ amount: '0.05' }),
+      },
+    }),
+    Service.from('internal', { // [!code hl]
+      baseUrl: 'https://api.internal.example.com',
+      headers: { 'X-API-Key': process.env.INTERNAL_API_KEY! }, // [!code hl]
+      routes: {
+        'POST /v1/analyze': mppx.charge({ amount: '0.10' }),
+      },
+    }),
+// [!code focus:end]
+  ],
+  title: 'My Proxy',
+})
+```
+
+* `/openai/v1/chat/completions` → `https://api.openai.com/v1/chat/completions`
+* `/internal/v1/analyze` → `https://api.internal.example.com/v1/analyze`
+
+Built-in service presets (`openai`, `anthropic`, `stripe`) handle upstream auth conventions automatically. Use `Service.from` for everything else.
+
+## Discovery
+
+The proxy auto-generates discovery endpoints so coding agents and CLI tools can find available services and pricing.
+
+```bash [terminal]
+# Human-readable overview
+$ curl http://localhost:3000/llms.txt
+
+# JSON service list
+$ curl http://localhost:3000/discover
+
+# Single service details
+$ curl http://localhost:3000/discover/weather
+```
+
+See the [Proxy reference](/sdk/typescript/proxy#discovery-endpoints) for the full list of discovery endpoints.
+
+## Next steps
+
+# Accept split payments \[Distribute a charge across multiple recipients]
+
+Split a single charge across multiple recipients in one atomic transaction. The primary recipient receives the remainder after all splits are deducted.
+
+Split payments are useful for:
+
+* **Marketplaces** — route a platform fee to yourself and the rest to the seller
+* **Referral programs** — pay a bounty to the referrer on every purchase
+* **Revenue sharing** — distribute earnings across partners or contributors
+
+## How it works
+
+When you add `splits` to a charge, the SDK constructs multiple on-chain transfers in a single transaction:
+
+1. Each split recipient receives their declared amount
+2. The primary `recipient` receives `amount - sum(splits)`
+3. The server verifies all transfers atomically
+
+:::info
+Split amounts are in human-readable units, the same as the top-level `amount`. The primary recipient's share is always implicit — you only declare the splits.
+:::
+
+## Server
+
+Add a `splits` array to any `mppx.charge` call. Each entry specifies a `recipient` and `amount`.
+
+```ts twoslash
+import { Mppx, tempo } from 'mppx/server'
+
+const mppx = Mppx.create({ methods: [tempo()] })
+// ---cut---
+export async function handler(request: Request) {
+  const result = await mppx.charge({
+    amount: '1.00',
+    currency: '0x20c0000000000000000000000000000000000000', // pathUSD
+    recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', // seller
+    splits: [ // [!code hl]
+      { // [!code hl]
+        amount: '0.10', // [!code hl]
+        recipient: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', // platform fee // [!code hl]
+      }, // [!code hl]
+    ], // [!code hl]
+  })(request)
+
+  // seller receives $0.90, platform receives $0.10
+  if (result.status === 402) return result.challenge
+  return result.withReceipt(Response.json({ data: '...' }))
+}
+```
+
+### With per-split memos
+
+Each split can carry its own on-chain memo for reconciliation:
+
+```ts twoslash
+import { Mppx, tempo } from 'mppx/server'
+
+const mppx = Mppx.create({ methods: [tempo()] })
+
+declare const request: Request
+// ---cut---
+const result = await mppx.charge({
+  amount: '1.00',
+  currency: '0x20c0000000000000000000000000000000000000', // pathUSD
+  memo: '0x6f726465722d313233', // order-123
+  recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', // seller
+  splits: [
+    {
+      amount: '0.10',
+      memo: '0x706c6174666f726d2d666565', // platform-fee // [!code hl]
+      recipient: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', // platform
+    },
+  ],
+})(request)
+```
+
+### With fee sponsorship
+
+Split payments work with [fee sponsorship](/payment-methods/tempo#fee-sponsorship). The server co-signs the multi-transfer transaction so the client doesn't need gas tokens.
+
+```ts twoslash
+import { Mppx, tempo } from 'mppx/server'
+
+const mppx = Mppx.create({ methods: [tempo()] })
+
+declare const request: Request
+// ---cut---
+const result = await mppx.charge({
+  amount: '1.00',
+  currency: '0x20c0000000000000000000000000000000000000', // pathUSD
+  feePayer: true, // [!code hl]
+  recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', // seller
+  splits: [
+    { amount: '0.05', recipient: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC' }, // referrer
+    { amount: '0.10', recipient: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8' }, // platform
+  ],
+})(request)
+```
+
+## Client
+
+The client SDK handles split payments automatically — no client-side configuration is needed. When the server includes `splits` in the Challenge, the client constructs the matching multi-transfer transaction.
+
+### Validating split recipients
+
+Use `expectedRecipients` to restrict which split recipients the client will sign for. This prevents a compromised server from redirecting funds to unexpected addresses.
+
+```ts twoslash
+import { Mppx, tempo } from 'mppx/client'
+import { privateKeyToAccount } from 'viem/accounts'
+
+const account = privateKeyToAccount('0xabc…123')
+// ---cut---
+Mppx.create({
+  methods: [
+    tempo.charge({
+      account,
+      expectedRecipients: [ // [!code hl]
+        '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', // platform // [!code hl]
+        '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC', // referrer // [!code hl]
+      ], // [!code hl]
+    }),
+  ],
+})
+```
+
+If the server sends a Challenge with a split recipient not in the allowlist, the client throws an error instead of signing.
+
+## Constraints
+
+| Rule | Limit |
+|------|-------|
+| Splits per charge | 1–10 |
+| Each split amount | Must be > 0 |
+| Sum of all splits | Must be strictly less than `amount` |
+| Split memo | Optional, 32-byte hex hash |
+
+## Next steps
+
+<Cards>
+  <OneTimePaymentsCard />
+
+  <PayAsYouGoCard />
+
+  <ServerQuickstartCard />
+</Cards>
 
 # Accept streamed payments \[Per-token billing over Server-Sent Events]
 
@@ -3175,6 +5287,258 @@ for await (const word of stream) {
 const receipt = await session.close()
 ```
 
+## WebSocket alternative
+
+The examples above use Server-Sent Events (SSE) for streaming. If your use case benefits from a persistent bidirectional connection — for example, interactive chat or real-time sessions — you can stream over WebSocket instead. The session payment flow is the same (channel open, voucher signing, close), but vouchers and content travel over a single socket rather than separate HTTP requests.
+
+On the server, use [`tempo.Ws.serve()`](/sdk/typescript/server/Ws.serve) to bridge a WebSocket to the session payment flow. On the client, use [`session.ws()`](/sdk/typescript/client/Method.tempo.session-manager#sessionwsinput-init) instead of `session.sse()`.
+
+## Next steps
+
+# Upgrade your x402 server to MPP \[Migrate from x402 in minutes]
+
+MPP plugs into your existing x402 server. Both protocols use HTTP `402` to gate API access behind payment, and x402's "exact" charge flow maps directly onto MPP's `charge` intent. Adding MPP gives you standard `WWW-Authenticate` / `Authorization` headers, multi-method support (stablecoins, cards, Lightning), sessions for streaming payments, and an [IETF standards track](https://paymentauth.org) foundation—all without changing your business logic.
+
+## What MPP adds
+
+MPP builds on the same `402` pattern that x402 established, and extends it with standardized headers and new capabilities.
+
+| | x402 | MPP |
+|---|---|---|
+| **Challenge** | `X-PAYMENT-REQUIRED` header | `WWW-Authenticate: Payment` header |
+| **Credential** | `X-PAYMENT` header | `Authorization: Payment` header |
+| **Receipt** | `X-PAYMENT-RESPONSE` header | `Payment-Receipt` header |
+| **Payment methods** | Stablecoins only | Stablecoins, cards, digital wallets, and many other methods |
+| **Sessions** | No | Yes—off-chain vouchers for sub-cent streaming |
+| **Error format** | Custom | [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) Problem Details |
+| **Idempotency** | No | Built-in Challenge binding |
+
+:::info
+MPP is compatible with x402. The x402 "exact" charge flow maps directly onto MPP's `charge` intent. MPP extends beyond x402 with idempotency, Receipts, request binding, multiple payment methods, and efficient payment sessions.
+:::
+
+## Protocol flow
+
+The request lifecycle is the same—only the header names and encoding change.
+
+**x402**
+
+<MermaidDiagram
+  chart={`sequenceDiagram
+  participant Client
+  participant Server
+  Client->>Server: GET /resource
+  Server-->>Client: 402 + X-PAYMENT-REQUIRED
+  Client->>Server: GET /resource + X-PAYMENT
+  Server-->>Client: 200 + X-PAYMENT-RESPONSE
+`}
+/>
+
+**MPP**
+
+<MermaidDiagram
+  chart={`sequenceDiagram
+  participant Client
+  participant Server
+  Client->>Server: GET /resource
+  Server-->>Client: 402 + WWW-Authenticate: Payment
+  Client->>Server: GET /resource + Authorization: Payment
+  Server-->>Client: 200 + Payment-Receipt
+`}
+/>
+
+## Key concepts
+
+MPP uses three protocol objects in every payment flow—the same lifecycle x402 uses, with standardized names:
+
+* **Challenge** — The server's `402` response advertising what payment is required. Sent in the `WWW-Authenticate: Payment` header. Equivalent to x402's `X-PAYMENT-REQUIRED`.
+* **Credential** — The client's signed payment authorization. Sent in the `Authorization: Payment` header. Equivalent to x402's `X-PAYMENT`.
+* **Receipt** — The server's confirmation that payment settled. Sent in the `Payment-Receipt` header. Equivalent to x402's `X-PAYMENT-RESPONSE`.
+
+## Running MPP and x402 side by side
+
+MPP and x402 use completely different HTTP headers (see [comparison above](#what-mpp-adds)), so they coexist on the same server without conflict. This lets you adopt MPP incrementally—add it to new endpoints while existing x402 clients continue working.
+
+A single `402` response can include **both** sets of headers simultaneously. x402 clients read `X-PAYMENT-REQUIRED` and ignore `WWW-Authenticate`, while MPP clients read `WWW-Authenticate: Payment` and ignore the `X-` headers.
+
+```http
+HTTP/1.1 402 Payment Required
+WWW-Authenticate: Payment id="abc", realm="api.example.com",
+  method="tempo", intent="charge", request="eyJ..."
+X-PAYMENT-REQUIRED: {"scheme":"exact","network":"base-sepolia",
+  "maxAmountRequired":"10000","resource":"..."}
+```
+
+On the return trip, MPP clients send `Authorization: Payment <credential>` while x402 clients send `X-PAYMENT: <payload>`. Your server checks which header is present and verifies accordingly:
+
+```ts [server.ts]
+app.get('/api/data', (req, res, next) => {
+  const hasPayment = req.headers['authorization']?.startsWith('Payment ')
+  const hasX402 = !!req.headers['x-payment']
+
+  if (hasPayment) {
+    return mppx.charge({ amount: '0.01' })(req, res, next)
+  }
+  if (hasX402) {
+    return handleX402Payment(req, res, next)
+  }
+
+  // No credential — advertise both protocols
+  res.setHeader('X-PAYMENT-REQUIRED', JSON.stringify(x402Challenge))
+  mppx.charge({ amount: '0.01' })(req, res, () => {})
+}, (req, res) => {
+  res.json({ data: 'premium content' })
+})
+```
+
+:::tip
+Because MPP uses the standard `WWW-Authenticate` scheme, it works with HTTP intermediaries (proxies, CDNs, API gateways) that understand [RFC 7235](https://www.rfc-editor.org/rfc/rfc7235) authentication. x402's custom `X-` headers are opaque to these intermediaries.
+:::
+
+## Prompt mode
+
+Paste this into your coding agent to add MPP in one prompt:
+
+<PromptBlock>
+  {`Use https://mpp.dev/guides/upgrade-x402.md as reference.
+    Add mppx to my existing x402 server. Use the Tempo payment
+    method with USDC. Keep the same pricing and route structure.
+    Add mppx.charge to each paid endpoint. Point out areas where I could benefit from adding sessions.`}
+</PromptBlock>
+
+## Add MPP to your server
+
+::::steps
+
+### Install `mppx`
+
+:::code-group
+
+```bash [npm]
+npm install mppx viem
+```
+
+```bash [pnpm]
+pnpm add mppx viem
+```
+
+```bash [bun]
+bun add mppx viem
+```
+
+:::
+
+### Add `mppx` alongside your existing routes
+
+Here's a typical x402 server with MPP applied. Your business logic stays the same—you swap the payment middleware.
+
+```ts [server.ts]
+import crypto from 'crypto'
+import express from 'express'
+import { Mppx, tempo } from 'mppx/express' // [!code hl]
+
+const app = express()
+
+const mppx = Mppx.create({ // [!code hl]
+  secretKey: process.env.MPP_SECRET_KEY || crypto.randomBytes(32).toString('base64'), // [!code hl]
+  methods: [ // [!code hl]
+    tempo({ // [!code hl]
+      currency: '0x20c0000000000000000000000000000000000000', // [!code hl]
+      recipient: '0xYourAddress', // [!code hl]
+    }), // [!code hl]
+  ], // [!code hl]
+}) // [!code hl]
+
+app.get(
+  '/api/data',
+  mppx.charge({ amount: '0.01', description: 'Premium data access' }), // [!code hl]
+  (req, res) => {
+    res.json({ data: 'premium content' })
+  },
+)
+```
+
+Key differences:
+
+* **Per-route pricing.** `mppx.charge` is route middleware instead of a global config map.
+* **Amount in dollars, not atomic units.** `'0.01'` instead of `'10000'`.
+* **No header parsing.** The SDK handles `WWW-Authenticate`, `Authorization`, and `Payment-Receipt` headers automatically.
+
+### Simplify verification and settlement
+
+x402 servers typically call a facilitator service for `POST /verify` and `POST /settle`. The `mppx` SDK handles verification and settlement internally, so you don't need a separate facilitator client.
+
+```ts [server.ts]
+// x402 — external facilitator
+import { createFacilitator } from '@x402/server'
+const facilitator = createFacilitator('https://facilitator.x402.org')
+
+// MPP — built into the SDK
+const mppx = Mppx.create({
+  methods: [tempo({ /* ... */ })],
+})
+```
+
+### Add more payment methods
+
+This is where MPP goes beyond x402. You can accept stablecoins, cards, and Lightning on the same endpoint by registering additional methods. The `402` response advertises all of them, and the client picks one.
+
+```ts [server.ts]
+import crypto from 'crypto'
+import express from 'express'
+import Stripe from 'stripe'
+import { Mppx, tempo, stripe } from 'mppx/express'
+
+const app = express()
+const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!)
+
+const mppx = Mppx.create({
+  secretKey: process.env.MPP_SECRET_KEY || crypto.randomBytes(32).toString('base64'),
+  methods: [
+    tempo({
+      currency: '0x20c0000000000000000000000000000000000000',
+      recipient: '0xYourAddress',
+      testnet: true,
+    }),
+    stripe.charge({ // [!code hl]
+      client: stripeClient, // [!code hl]
+      networkId: 'internal', // [!code hl]
+      paymentMethodTypes: ['card'], // [!code hl]
+    }), // [!code hl]
+  ],
+})
+
+app.get(
+  '/api/data',
+  mppx.charge({ amount: '0.01', description: 'Premium data access' }),
+  (req, res) => {
+    res.json({ data: 'premium content' })
+  },
+)
+```
+
+No changes to the route handler—`mppx.charge` advertises both methods and verifies whichever Credential the client presents.
+
+### Test via the `mppx` CLI
+
+```bash [terminal]
+# Create account funded with testnet tokens
+$ npx mppx account create
+
+# Make a paid request
+$ npx mppx http://localhost:3000/api/data
+```
+
+::::
+
+## What you gain
+
+* **Multi-method payments.** Accept stablecoins, cards, and Lightning on the same endpoint—your x402 stablecoin flow continues to work, and new rails are additive.
+* **Sessions.** Stream sub-cent payments with off-chain vouchers instead of one on-chain transaction per request.
+* **IETF standards track.** MPP's [Payment HTTP Authentication Scheme](https://paymentauth.org) follows the IETF standards process—building on a standard that browsers, proxies, and CDNs already understand.
+* **Production primitives.** Idempotency, expiration, request-body binding, and RFC 9457 error responses are built into the protocol.
+* **Permissionless extensibility.** Anyone can author and publish a new payment method without approval from a foundation.
+
 ## Next steps
 
 # Charge \[Immediate one-time payments]
@@ -3244,6 +5608,8 @@ Each payment method defines how charge is fulfilled, verified, and settled on it
   <LightningMethodCard />
 
   <SolanaChargeCard />
+
+  <MonadChargeCard />
 
   <CardMethodCard />
 </Cards>
@@ -3891,6 +6257,7 @@ export function charge(parameters: charge.Parameters) {
 * [`Method.from`](/sdk/typescript/Method.from) — Define a payment method with schemas
 * [`Method.toClient`](/sdk/typescript/core/Method.toClient) — Extend a method with client-side Credential creation logic
 * [`Method.toServer`](/sdk/typescript/core/Method.toServer) — Extend a method with server-side verification logic
+* [Custom HTML](/sdk/typescript/html/custom) — Add payment link support to your method
 
 # Lightning \[Bitcoin payments over the Lightning Network]
 
@@ -3965,6 +6332,45 @@ Lightning brings a distinct set of properties to MPP:
   </a>
 </div>
 
+# Monad \[ERC-20 token payments on Monad]
+
+The Monad payment method enables MPP payments on Monad using ERC-20 tokens. Monad supports the **charge** intent for one-time payments with two settlement modes: **push** where the client broadcasts the transfer, and **pull** where the client signs an ERC-3009 authorization for the server to broadcast.
+
+The reference implementation is provided by [`@monad-crypto/mpp`](https://github.com/monad-crypto/monad-ts), which extends [`mppx`](https://github.com/tempoxyz/mpp) with Monad-native client and server handlers.
+
+## Installation
+
+:::code-group
+
+```bash [npm]
+npm install @monad-crypto/mpp mppx viem
+```
+
+```bash [pnpm]
+pnpm add @monad-crypto/mpp mppx viem
+```
+
+```bash [bun]
+bun add @monad-crypto/mpp mppx viem
+```
+
+:::
+
+## Intents
+
+<div className="vocs:grid vocs:grid-cols-1 vocs:md:grid-cols-2 vocs:gap-4">
+  <a href="/payment-methods/monad/charge" className="vocs:relative vocs:flex vocs:flex-col vocs:space-y-2 vocs:rounded-md vocs:bg-surfaceTint/70 vocs:border vocs:border-primary vocs:p-4 vocs:no-underline vocs:transition-colors vocs:hover:bg-surfaceTint">
+    <div className="vocs:size-8 vocs:flex vocs:items-center vocs:justify-center vocs:rounded-lg vocs:border vocs:border-primary vocs:bg-surface vocs:text-accent">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 105 105" fill="currentColor">
+        <path d="M52.02 0C37 0 0 37.34 0 52.5S37 105 52.02 105c15.02 0 52.02-37.34 52.02-52.5S67.04 0 52.02 0Zm-8.1 82.52c-6.34-1.74-23.37-31.81-21.64-38.2 1.73-6.39 31.52-23.58 37.85-21.84 6.34 1.74 23.37 31.81 21.64 38.2-1.73 6.39-31.52 23.58-37.85 21.84Z" />
+      </svg>
+    </div>
+
+    <div className="vocs:text-[15px] vocs:font-medium vocs:text-heading">Monad charge</div>
+    <div className="vocs:text-sm vocs:leading-relaxed vocs:text-secondary">One-time payments with ERC-20 transfers or ERC-3009 authorizations</div>
+  </a>
+</div>
+
 # Solana \[Native SOL and SPL token payments]
 
 The Solana payment method enables MPP payments on Solana using native SOL, SPL tokens, and Token-2022 assets. Solana supports two intents: **charge** for one-time payments and **session** for escrowed, pay-as-you-go billing.
@@ -4035,6 +6441,115 @@ Solana enables several useful capabilities for MPP:
     <div className="vocs:text-sm vocs:leading-relaxed vocs:text-secondary">Coming soon: Solana sessions with off-chain vouchers and on-chain settlement</div>
   </a>
 </div>
+
+# Stellar \[SEP-41 token payments on the Stellar network]
+
+The [Stellar](https://stellar.org) payment method enables payments using SEP-41-compliant tokens on the Stellar network. Stellar supports two intents – **charge** for one-time on-chain transfers and **channel** for high-frequency off-chain payment channels – covering everything from single API calls to metered billing at token-level granularity.
+
+The reference implementation is provided by [`@stellar/mpp`](https://github.com/stellar/stellar-mpp-sdk), which extends [`mppx`](https://github.com/wevm/mppx) with Stellar-native client and server handlers.
+
+## Installation
+
+:::code-group
+
+```bash [npm]
+npm install @stellar/mpp mppx @stellar/stellar-sdk
+```
+
+```bash [pnpm]
+pnpm add @stellar/mpp mppx @stellar/stellar-sdk
+```
+
+```bash [bun]
+bun add @stellar/mpp mppx @stellar/stellar-sdk
+```
+
+:::
+
+## Why Stellar
+
+Stellar enables several useful capabilities for MPP:
+
+* **5-second finality**: Transactions settle with deterministic confirmation, no probabilistic waiting
+* **Sub-cent fees**: Transaction costs low enough for micropayments and per-request billing
+* **Fee sponsorship**: Servers can pay transaction fees on behalf of clients, removing wallet friction entirely
+* **Stellar smart contracts**: Payment channels run as auditable on-chain contracts for secure escrow and settlement
+* **Flexible token support**: Any SEP-41 compliant token is supported, which includes smart contract transfers and classic assets (via SAC).
+* **Payment channels**: Off-chain cumulative commitments enable high-frequency metered billing without per-request on-chain cost
+
+## Choosing an intent
+
+| | **Charge** | **Channel** |
+|---|---|---|
+| **Pattern** | One-time payment per request | Deposit once, pay incrementally with commitments |
+| **Latency overhead** | ~5s (on-chain confirmation) | Near-zero after channel open |
+| **Throughput** | One transaction per request | Many commitments per second per channel |
+| **Best for** | Single API calls, content access, one-off purchases | LLM APIs, metered services, usage-based billing |
+| **On-chain cost** | Per request | Amortized across many requests |
+| **Settlement** | Immediate on-chain token transfer | Off-chain commitments, on-chain close |
+
+## Intents
+
+<div className="vocs:grid vocs:grid-cols-1 vocs:md:grid-cols-2 vocs:gap-4">
+  <a href="/payment-methods/stellar/charge" className="vocs:relative vocs:flex vocs:flex-col vocs:space-y-2 vocs:rounded-md vocs:bg-surfaceTint/70 vocs:border vocs:border-primary vocs:p-4 vocs:no-underline vocs:transition-colors vocs:hover:bg-surfaceTint">
+    <div className="vocs:size-8 vocs:flex vocs:items-center vocs:justify-center vocs:rounded-lg vocs:border vocs:border-primary vocs:bg-surface vocs:text-accent">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12.003 1.716c-1.37 0-2.7.27-3.948.78A10.18 10.18 0 0 0 2.66 7.901a10.136 10.136 0 0 0-.797 3.954c0 .258.01.516.027.775a1.942 1.942 0 0 1-1.055 1.88L0 14.934v1.902l2.463-1.26.072-.032v.005l.77-.39.758-.385.066-.039 14.807-7.56 1.666-.847 3.392-1.732V2.694L17.792 5.86 3.744 13.025l-.104.055-.017-.115a8.286 8.286 0 0 1-.071-1.105c0-2.255.88-4.377 2.474-5.977a8.462 8.462 0 0 1 2.71-1.82 8.513 8.513 0 0 1 3.2-.654h.067a8.41 8.41 0 0 1 4.09 1.055l1.628-.83.126-.066a10.11 10.11 0 0 0-5.845-1.853zM24 7.143 5.047 16.808l-1.666.847L0 19.382v1.902l3.282-1.671 2.91-1.485 14.058-7.153.105-.055.016.115c.05.369.072.743.072 1.11 0 2.255-.88 4.383-2.475 5.978a8.461 8.461 0 0 1-2.71 1.82 8.305 8.305 0 0 1-3.2.654h-.06c-1.441 0-2.86-.369-4.102-1.061l-.066.033-1.683.857c.594.418 1.232.776 1.903 1.062a10.11 10.11 0 0 0 3.947.797 10.09 10.09 0 0 0 7.17-2.975 10.136 10.136 0 0 0 2.969-7.18c0-.259-.005-.523-.027-.781a1.942 1.942 0 0 1 1.055-1.88L24 9.044z" />
+      </svg>
+    </div>
+
+    <div className="vocs:text-[15px] vocs:font-medium vocs:text-heading">Stellar charge</div>
+    <div className="vocs:text-sm vocs:leading-relaxed vocs:text-secondary">One-time smart contract token transfers settled on-chain</div>
+  </a>
+
+  <a href="/payment-methods/stellar/session" className="vocs:relative vocs:flex vocs:flex-col vocs:space-y-2 vocs:rounded-md vocs:bg-surfaceTint/70 vocs:border vocs:border-primary vocs:p-4 vocs:no-underline vocs:transition-colors vocs:hover:bg-surfaceTint">
+    <div className="vocs:size-8 vocs:flex vocs:items-center vocs:justify-center vocs:rounded-lg vocs:border vocs:border-primary vocs:bg-surface vocs:text-accent">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12.003 1.716c-1.37 0-2.7.27-3.948.78A10.18 10.18 0 0 0 2.66 7.901a10.136 10.136 0 0 0-.797 3.954c0 .258.01.516.027.775a1.942 1.942 0 0 1-1.055 1.88L0 14.934v1.902l2.463-1.26.072-.032v.005l.77-.39.758-.385.066-.039 14.807-7.56 1.666-.847 3.392-1.732V2.694L17.792 5.86 3.744 13.025l-.104.055-.017-.115a8.286 8.286 0 0 1-.071-1.105c0-2.255.88-4.377 2.474-5.977a8.462 8.462 0 0 1 2.71-1.82 8.513 8.513 0 0 1 3.2-.654h.067a8.41 8.41 0 0 1 4.09 1.055l1.628-.83.126-.066a10.11 10.11 0 0 0-5.845-1.853zM24 7.143 5.047 16.808l-1.666.847L0 19.382v1.902l3.282-1.671 2.91-1.485 14.058-7.153.105-.055.016.115c.05.369.072.743.072 1.11 0 2.255-.88 4.383-2.475 5.978a8.461 8.461 0 0 1-2.71 1.82 8.305 8.305 0 0 1-3.2.654h-.06c-1.441 0-2.86-.369-4.102-1.061l-.066.033-1.683.857c.594.418 1.232.776 1.903 1.062a10.11 10.11 0 0 0 3.947.797 10.09 10.09 0 0 0 7.17-2.975 10.136 10.136 0 0 0 2.969-7.18c0-.259-.005-.523-.027-.781a1.942 1.942 0 0 1 1.055-1.88L24 9.044z" />
+      </svg>
+    </div>
+
+    <div className="vocs:text-[15px] vocs:font-medium vocs:text-heading">Stellar channel</div>
+    <div className="vocs:text-sm vocs:leading-relaxed vocs:text-secondary">Pay-as-you-go payments over one-way payment channels</div>
+  </a>
+</div>
+
+## Fee sponsorship
+
+Stellar supports server-paid transaction fees for charge intents. When enabled, the server rebuilds the transaction with its own source account and optionally wraps it in a fee bump. The client signs only the Stellar auth entries – no need to hold XLM for gas.
+
+Pass a `feePayer` configuration to `stellar.charge()` to enable this:
+
+```ts
+import { Mppx } from 'mppx/server'
+import { stellar } from '@stellar/mpp/charge/server'
+import { USDC_SAC_TESTNET } from '@stellar/mpp'
+import { Keypair } from '@stellar/stellar-sdk'
+
+const mppx = Mppx.create({
+  secretKey: process.env.MPP_SECRET_KEY,
+  methods: [
+    stellar.charge({
+      recipient: process.env.STELLAR_RECIPIENT,
+      currency: USDC_SAC_TESTNET,
+      network: 'stellar:testnet',
+      feePayer: { // [!code hl]
+        envelopeSigner: Keypair.fromSecret('S...'), // [!code hl]
+      }, // [!code hl]
+    }),
+  ],
+})
+```
+
+## Supported assets
+
+Any [SEP-41](https://stellar.org/protocol/sep-41) compliant token is supported. This includes classic Stellar assets wrapped via SAC, as well as custom smart contract tokens that implement the SEP-41 interface. A few common examples:
+
+* **USDC** – Circle's USD stablecoin on Stellar
+* **XLM** – Stellar's native asset, wrapped as a SEP-41 token via SAC
+* **Any custom SEP-41 token** – smart contracts implementing the SEP-41 token interface
+
+The `@stellar/mpp` package exports constants for commonly used token addresses (`USDC_SAC_MAINNET`, `USDC_SAC_TESTNET`, `XLM_SAC_MAINNET`, `XLM_SAC_TESTNET`).
 
 # Stripe \[Cards, wallets, and other Stripe supported payment methods]
 
@@ -4177,6 +6692,7 @@ WWW-Authenticate: Payment id="qB3wErTyU7iOpAsD9fGhJk",
     method="tempo",
     intent="charge",
     expires="2025-01-15T12:05:00Z",
+    opaque="eyJyb3V0ZSI6Ii92MS9zZWFyY2gifQ",
     request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJ1c2QifQ"
 ```
 
@@ -4188,7 +6704,7 @@ WWW-Authenticate: Payment id="qB3wErTyU7iOpAsD9fGhJk",
 | `realm` | Protection space identifier (typically the API domain) |
 | `method` | Payment method identifier (such as `tempo` or `stripe`) |
 | `intent` | Payment intent type (such as `charge` or `session`) |
-| `request` | Base64url-encoded JSON with payment details |
+| `request` | Base64url-encoded JCS JSON with payment details |
 
 ### Optional parameters
 
@@ -4196,10 +6712,15 @@ WWW-Authenticate: Payment id="qB3wErTyU7iOpAsD9fGhJk",
 |-----------|-------------|
 | `expires` | ISO 8601 timestamp when the challenge expires |
 | `description` | Human-readable description of what's being paid for |
+| `opaque` | Base64url-encoded JCS JSON for server-defined correlation data |
+
+## `request` and `opaque` encoding
+
+In HTTP headers, both `request` and `opaque` use base64url-encoded [JCS](https://www.rfc-editor.org/rfc/rfc8785) JSON strings. Parse them after header processing to recover the structured values.
 
 ## `request` object
 
-The `request` parameter contains method-specific payment details encoded as base64url JSON:
+The `request` parameter contains method-specific payment details encoded as base64url JCS JSON:
 
 ```json [Decoded request object]
 {
@@ -4208,6 +6729,16 @@ The `request` parameter contains method-specific payment details encoded as base
   "recipient": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 }
 ```
+
+Servers can also attach correlation data in `opaque`:
+
+```json [Decoded opaque object]
+{
+  "route": "/v1/search"
+}
+```
+
+Clients must echo `opaque` back unchanged when they submit a Credential.
 
 Common fields across payment methods:
 
@@ -4238,8 +6769,12 @@ Challenges must be cryptographically bound to their parameters through the `id` 
 Typical binding includes:
 
 * `realm`, `method`, `intent`
-* Hash of the `request` object
-* `expires` timestamp
+* `request`
+* `expires`
+* `digest`
+* `opaque`
+
+For HMAC-bound IDs, the canonical input sequence is `realm | method | intent | request | expires | digest | opaque`. When `expires`, `digest`, or `opaque` is absent, use an empty string for that slot.
 
 Use an [HMAC-bound](https://en.wikipedia.org/wiki/HMAC) challenge ID to prevent clients from reusing a challenge ID with modified payment terms.
 
@@ -4266,19 +6801,23 @@ The credential is a base64url-encoded JSON object:
 ```json
 {
   "challenge": {
+    "expires": "2025-01-15T12:05:00Z",
     "id": "qB3wErTyU7iOpAsD9fGhJk",
-    "realm": "mpp.dev",
-    "method": "tempo",
     "intent": "charge",
+    "method": "tempo",
+    "opaque": "eyJyb3V0ZSI6Ii92MS9zZWFyY2gifQ",
+    "realm": "mpp.dev",
     "request": "eyJhbW91bnQiOiIxMDAwIi4uLn0",
-    "expires": "2025-01-15T12:05:00Z"
   },
-  "source": "0x1234567890abcdef...",
   "payload": {
-    "signature": "0xabc123..."
-  }
+    "signature": "0xabc123...",
+    "type": "transaction"
+  },
+  "source": "did:pkh:eip155:4217:0x1234567890abcdef..."
 }
 ```
+
+The echoed Challenge keeps the original HTTP wire values. In a Credential, `challenge.request` and `challenge.opaque` remain the same base64url-encoded JCS JSON strings from the `WWW-Authenticate` header.
 
 ### Fields
 
@@ -4294,8 +6833,18 @@ Each credential is valid for exactly one request. When processing a credential:
 
 1. Verify the `challenge.id` matches an outstanding challenge
 2. Verify the challenge has not expired
-3. Verify the payment proof using method-specific procedures
+3. Verify the payment or proof using method-specific procedures
 4. Reject any replayed credentials
+
+## Tempo charge payload types
+
+Tempo charge currently uses three Credential payload shapes:
+
+| `payload.type` | When the client uses it | What the server verifies |
+|----------------|-------------------------|--------------------------|
+| `transaction` | Non-zero charge in pull mode | Signed Tempo transaction before broadcast |
+| `hash` | Non-zero charge in push mode | On-chain receipt for the submitted transaction |
+| `proof` | Zero-amount identity flow | Signed proof message over the Challenge ID with no on-chain transfer |
 
 ## Example
 
@@ -4305,19 +6854,23 @@ Each credential is valid for exactly one request. When processing a credential:
 {
   "challenge": {
     "id": "zL4xCvBnM6kJhGfD8sAaWe",
-    "realm": "mpp.dev",
-    "method": "tempo",
     "intent": "charge",
+    "method": "tempo",
+    "opaque": "eyJyb3V0ZSI6Ii92MS9zZWFyY2gifQ",
+    "realm": "mpp.dev",
     "request": "eyJhbW91bnQiOiI1MDAwIiwiY3VycmVuY3kiOiJ1c2QiLCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAifQ"
   },
-  "source": "0x1234567890abcdef1234567890abcdef12345678",
   "payload": {
-    "signature": "0x1b2c3d4e5f6a7b8c9d0e..."
-  }
+    "signature": "0x1b2c3d4e5f6a7b8c9d0e...",
+    "type": "transaction"
+  },
+  "source": "did:pkh:eip155:4217:0x1234567890abcdef1234567890abcdef12345678"
 }
 ```
 
 The server verifies the signature authorizes a transfer matching the challenge parameters, then submits the payment on-chain.
+
+For zero-amount Tempo Challenges, the payload becomes `{"type":"proof","signature":"0x..."}`. The server verifies the proof against the `source` identity instead of broadcasting a transfer.
 
 ## Learn more
 
@@ -4327,288 +6880,9 @@ The server verifies the signature authorizes a transfer matching the challenge p
   <PaymentMethodsCard />
 </Cards>
 
-# Discovery \[Advertise your service's payment terms]
+# HTTP 402 Payment Required \[The status code for payments on the web]
 
-MPPs discovery system lets clients learn what your endpoints cost before making a request. You serve a standard [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) document at `/openapi.json` with `x-payment-info` extensions on each paid operation.
-
-:::info\[IETF Specification]
-This page is a developer-friendly overview. For the full normative spec, see [draft-payment-discovery-00](https://paymentauth.org/draft-payment-discovery-00.html) on [paymentauth.org](https://paymentauth.org).
-:::
-
-## How it works
-
-Your server exposes a `GET /openapi.json` endpoint that returns an OpenAPI document. Paid operations include an `x-payment-info` extension with the payment terms, and the document root can include `x-service-info` for service-level metadata.
-
-```json [/openapi.json]
-{
-  "openapi": "3.1.0",
-  "info": { "title": "My API", "version": "1.0.0" },
-  "x-service-info": {
-    "categories": ["ai"],
-    "docs": {
-      "homepage": "https://example.com",
-      "apiReference": "https://example.com/docs",
-      "llms": "/llms.txt"
-    }
-  },
-  "paths": {
-    "/v1/generate": {
-      "post": {
-        "x-payment-info": { // [!code highlight]
-          "amount": "1000000", // [!code highlight]
-          "currency": "0x20c0000000000000000000000000000000000001", // [!code highlight]
-          "description": "Generate text", // [!code highlight]
-          "intent": "charge", // [!code highlight]
-          "method": "tempo" // [!code highlight]
-        }, // [!code highlight]
-        "responses": {
-          "200": { "description": "Successful response" },
-          "402": { "description": "Payment Required" }
-        }
-      }
-    },
-    "/v1/models": {
-      "get": {
-        "responses": {
-          "200": { "description": "Successful response" }
-        }
-      }
-    }
-  }
-}
-```
-
-:::info\[Discovery is advisory]
-Discovery documents are informational hints. The runtime `402` Challenge remains the authoritative source of payment terms. Clients use discovery for display and planning, but defer to the Challenge for actual payment.
-:::
-
-### `x-payment-info`
-
-Added to any operation that requires payment:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `amount` | `string` | Payment amount in base units |
-| `currency` | `string` | Currency code or token address |
-| `description` | `string` | Human-readable description of the charge |
-| `intent` | `string` | Payment intent (`charge` or `session`) |
-| `method` | `string` | Payment method identifier (`tempo`, `stripe`) |
-
-### `x-service-info`
-
-Optional root-level metadata about the service:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `categories` | `string[]` | Free-form service categories (for example, `ai`, `payments`) |
-| `docs.homepage` | `string` | Link to the service homepage |
-| `docs.apiReference` | `string` | Link to API documentation |
-| `docs.llms` | `string` | Link to an `llms.txt` file for AI consumption |
-
-## Generate with `mppx`
-
-The `mppx` SDK generates discovery documents from your route configuration. Each framework integration includes a `discovery()` helper.
-
-### Hono
-
-Hono supports automatic route introspection. Set `auto: true` and `mppx` reads payment metadata directly from your registered routes.
-
-```ts [server.ts]
-import { Hono } from 'hono'
-import { Mppx, discovery } from 'mppx/hono'
-import { tempo } from 'mppx/server'
-
-const app = new Hono()
-
-const mppx = Mppx.create({
-  methods: [
-    tempo({ // [!code hl]
-      currency: '0x20c0000000000000000000000000000000000000', // [!code hl]
-      recipient: '0x...', // [!code hl]
-      testnet: true, // [!code hl]
-    }), // [!code hl]
-  ],
-  secretKey: process.env.MPP_SECRET_KEY,
-})
-
-app.get('/v1/fortune', mppx.charge({ amount: '0.01' }), (c) => c.json({ fortune: 'You will be rich' }))
-
-discovery(app, mppx, { // [!code hl]
-  auto: true, // [!code hl]
-  info: { title: 'Fortune API', version: '1.0.0' }, // [!code hl]
-}) // [!code hl]
-```
-
-### Express
-
-```ts [server.ts]
-import express from 'express'
-import { Mppx, discovery } from 'mppx/express'
-import { tempo } from 'mppx/server'
-
-const app = express()
-
-const mppx = Mppx.create({
-  methods: [
-    tempo({
-      currency: '0x20c0000000000000000000000000000000000000',
-      recipient: '0x...',
-      testnet: true,
-    }),
-  ],
-  secretKey: process.env.MPP_SECRET_KEY,
-})
-
-const pay = mppx.charge({ amount: '0.01' })
-app.get('/v1/fortune', pay, (req, res) => res.json({ fortune: 'You will be rich' }))
-
-discovery(app, mppx, { // [!code hl]
-  info: { title: 'Fortune API', version: '1.0.0' }, // [!code hl]
-  routes: [{ handler: pay, method: 'get', path: '/v1/fortune' }], // [!code hl]
-}) // [!code hl]
-```
-
-### Next.js
-
-In Next.js, `discovery()` returns a route handler you export from an API route.
-
-```ts [app/openapi.json/route.ts]
-import { discovery } from 'mppx/nextjs'
-import { mppx, pay } from '../fortune/route'
-
-export const GET = discovery(mppx, { // [!code hl]
-  info: { title: 'Fortune API', version: '1.0.0' }, // [!code hl]
-  routes: [{ handler: pay, method: 'get', path: '/api/fortune' }], // [!code hl]
-}) // [!code hl]
-```
-
-### CLI
-
-Generate a static discovery document from a config module:
-
-```bash [terminal]
-$ npx mppx discover generate ./discovery.config.ts
-```
-
-Validate an existing discovery document from a file or URL:
-
-```bash [terminal]
-$ npx mppx discover validate https://example.com/openapi.json
-```
-
-## Build manually
-
-You can author a discovery document by hand following the [discovery specification](https://paymentauth.org/draft-payment-discovery-00.html). The document is a standard OpenAPI 3.1 file with two extensions:
-
-::::steps
-
-#### Create the OpenAPI skeleton
-
-Start with a standard OpenAPI 3.1 document:
-
-```json [openapi.json]
-{
-  "openapi": "3.1.0",
-  "info": {
-    "title": "My API",
-    "version": "1.0.0"
-  },
-  "paths": {}
-}
-```
-
-#### Add `x-payment-info` to paid operations
-
-For each endpoint that requires payment, add the `x-payment-info` extension. Amounts are in base units (for example, `1000000` for $1.00 with 6 decimals).
-
-```json [openapi.json]
-{
-  "paths": {
-    "/v1/generate": {
-      "post": {
-        "summary": "Generate text",
-        "x-payment-info": { // [!code highlight]
-          "amount": "1000000", // [!code highlight]
-          "currency": "0x20c0000000000000000000000000000000000001", // [!code highlight]
-          "intent": "charge", // [!code highlight]
-          "method": "tempo" // [!code highlight]
-        }, // [!code highlight]
-        "responses": {
-          "200": { "description": "Successful response" },
-          "402": { "description": "Payment Required" }
-        }
-      }
-    }
-  }
-}
-```
-
-:::warning\[Include a 402 response]
-Operations with `x-payment-info` must include a `402` response in the `responses` object. Validators flag this as an error if missing.
-:::
-
-#### Add `x-service-info` (optional)
-
-Add service-level metadata to the document root:
-
-```json [openapi.json]
-{
-  "x-service-info": { // [!code highlight]
-    "categories": ["ai", "text-generation"], // [!code highlight]
-    "docs": { // [!code highlight]
-      "homepage": "https://example.com", // [!code highlight]
-      "apiReference": "https://example.com/docs/api", // [!code highlight]
-      "llms": "https://example.com/llms.txt" // [!code highlight]
-    } // [!code highlight]
-  } // [!code highlight]
-}
-```
-
-#### Serve at `/openapi.json`
-
-Serve the document at `GET /openapi.json` with appropriate caching:
-
-```http
-HTTP/1.1 200 OK
-Content-Type: application/json
-Cache-Control: public, max-age=300
-```
-
-::::
-
-## Registries
-
-Registries aggregate discovery documents from multiple services, making it easy for clients and agents to find paid APIs.
-
-| Registry | Description |
-|----------|-------------|
-| [MPPScan](https://mppscan.com) | Public registry of MPP-enabled services with search and analytics |
-| [MPP Services directory](https://mpp.dev/services) | Curated list of live services on mpp.dev |
-
-## Validation
-
-Use the `mppx` CLI to validate discovery documents before deploying:
-
-```bash [terminal]
-# Validate a remote endpoint
-$ npx mppx discover validate https://your-api.com/openapi.json
-
-# Validate a local file
-$ npx mppx discover validate ./openapi.json
-```
-
-Common validation issues:
-
-| Issue | Severity | Description |
-|-------|----------|-------------|
-| Missing `402` response | Error | Operations with `x-payment-info` must include a `402` response |
-| Invalid amount format | Error | `amount` must be a non-negative integer string |
-| Missing `requestBody` | Warning | `POST`/`PUT`/`PATCH` operations without a `requestBody` definition |
-| Invalid URI in docs | Error | `docs` links must be valid URIs or absolute paths |
-
-# HTTP 402 payment required \[The status code that signals payment is required]
-
-MPP services return HTTP `402` Payment Required to indicate that a resource requires payment for access.
+MPP services return HTTP `402` Payment Required to indicate that a resource requires payment for access. This is the foundation that enables [API monetization](/use-cases/api-monetization) and [micropayments](/use-cases/micropayments) at the protocol level.
 
 ## Overview
 
@@ -4754,7 +7028,7 @@ Receipts enable:
   <SpecCard to="https://paymentauth.org" />
 </Cards>
 
-# Transports \[HTTP and MCP bindings for payment flows]
+# Transports \[HTTP, MCP, and WebSocket bindings for payment flows]
 
 MPP defines how the Payment authentication scheme operates over different transport protocols. The core protocol targets HTTP, with extensions for other transports like MCP and JSON-RPC.
 
@@ -4764,6 +7038,7 @@ MPP defines how the Payment authentication scheme operates over different transp
 |-----------|----------|------|
 | [HTTP](/protocol/transports/http) | REST APIs, web resources | [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110#section-11) |
 | [MCP](/protocol/transports/mcp) | AI tool calls using Model Context Protocol | [MCP Transport Spec](https://paymentauth.org) |
+| [WebSocket](/protocol/transports/websocket) | Bidirectional payment streams | [RFC 6455](https://www.rfc-editor.org/rfc/rfc6455) |
 | JSON-RPC | Non-MCP JSON-RPC services | [JSON-RPC 2.0](https://www.jsonrpc.org/specification) |
 
 ## Transport-agnostic design
@@ -4772,16 +7047,24 @@ MPP's core concepts—Challenges, Credentials, and Receipts—remain the same ac
 
 * **HTTP** uses standard headers (`WWW-Authenticate`, `Authorization`, `Payment-Receipt`)
 * **MCP** uses JSON-RPC error codes and `_meta` fields
+* **WebSocket** uses JSON message framing with an `mpp` discriminator
 
-Choose the transport that matches your protocol. HTTP for REST APIs, MCP for AI agent tool calls, or JSON-RPC for non-MCP JSON-RPC services.
+Choose the transport that matches your protocol. HTTP for REST APIs, MCP for AI agent tool calls, WebSocket for bidirectional payment streams, or JSON-RPC for non-MCP JSON-RPC services.
 
 # Use with agents \[Connect your agent to MPP-enabled services]
 
-Agents can automatically interact with MPP-enabled services. Here's how to get started.
+Agents can automatically interact with MPP-enabled services, paying for API calls without human intervention. Learn more about [agentic payments](/use-cases/agentic-payments) or get started below.
+
+| Tool | Best for | Setup |
+|------|----------|-------|
+| [Tempo Wallet](#tempo-wallet) | MPP services with spend controls and service discovery | `tempo wallet login` |
+| [Privy Agent CLI](#privy-agent-cli) | Multi-chain agent wallets with browser-based funding | `privy-agent-wallets login` |
+| [AgentCash](#agentcash) | Discover and use 300+ premium APIs via MPP | `npx agentcash onboard` |
+| [`mppx` CLI](#mppx) | Development and debugging | `mppx account create` |
 
 ## Tempo Wallet <Badge variant="info" data-toc-exclude>Recommended</Badge>
 
-The [Tempo Wallet](https://wallet.tempo.xyz) is a managed MPP client with built in spend controls and service discovery. Agents can use `tempo wallet` to pay for powerful new capabilities on demand.
+The [Tempo Wallet](https://wallet.tempo.xyz) is a managed MPP client with built in spend controls and service discovery. Agents can use `tempo wallet` to discovery and pay for MPP-enabled services on demand.
 
 <Tabs>
   <Tab title="Agent">
@@ -4831,6 +7114,108 @@ The [Tempo Wallet](https://wallet.tempo.xyz) is a managed MPP client with built 
   </Tab>
 </Tabs>
 
+## Privy Agent CLI
+
+[Privy Agent CLI](https://docs.privy.io/recipes/agent-integrations/agent-cli) gives agents a CLI-first way to create, fund, and manage wallets with no integration code. It pairs with the [Agent Sandbox](https://agents.privy.io/) where users track agent spending, manage funds, and revoke access.
+
+The agent never holds the wallet private key—each CLI session generates a P-256 keypair used to sign authorization payloads.
+
+<Tabs>
+  <Tab title="Agent">
+    Paste this into your agent to set up Privy Agent CLI:
+
+    ```
+    Set up https://agents.privy.io/skill.md
+    ```
+  </Tab>
+
+  <Tab title="Human">
+    ::::steps
+
+    #### Install
+
+    ```bash
+    npm install -g @privy-io/agent-wallet-cli
+    ```
+
+    #### Log in
+
+    ```bash
+    privy-agent-wallets login
+    ```
+
+    This opens a browser flow—complete Privy auth, approve signer access, then paste the credential back into the terminal.
+
+    #### Fund wallets
+
+    ```bash
+    privy-agent-wallets fund
+    ```
+
+    #### List wallets
+
+    ```bash
+    privy-agent-wallets list-wallets
+    ```
+
+    #### Send a transaction
+
+    ```bash
+    privy-agent-wallets rpc --json '{"method": "eth_sendTransaction", "params": {"to": "0xRecipient", "value": "0.01"}}'
+    ```
+
+    ::::
+  </Tab>
+</Tabs>
+
+## AgentCash
+
+[AgentCash](https://agentcash.dev) gives agents instant access to 300+ premium APIs for data enrichment, social data, image generation, web scraping, email, and much more, all through one USDC balance.
+
+<Tabs>
+  <Tab title="Agent">
+    Paste this into your agent to set up AgentCash:
+
+    ```
+    Set up agentcash.dev/skill.md
+    ```
+  </Tab>
+
+  <Tab title="Human">
+    ::::steps
+
+    #### Onboard and get free credits
+
+    Visit [agentcash.dev/onboard](https://agentcash.dev/onboard) to claim a sign-up bonus, then redeem in your terminal:
+
+    ```bash
+    npx agentcash onboard <CODE>
+    ```
+
+    #### Search for services
+
+    ```bash
+    npx agentcash search "image generation"
+    ```
+
+    #### Use a service
+
+    ```bash
+    npx agentcash fetch https://stableenrich.dev/api/exa/search \
+        --method POST \
+        --body '{"query":"agentcash.dev"}'
+    ```
+
+    #### Install as MCP server (optional)
+
+    ```bash
+    claude mcp add agentcash --scope user -- npx -y agentcash@latest
+    ```
+
+    ::::
+  </Tab>
+</Tabs>
+
 ## mppx
 
 The [`mppx`](/sdk/typescript/cli) CLI is a lightweight MPP client bundled with the `mppx` package. It is designed for simple use cases and debugging during development.
@@ -4873,6 +7258,8 @@ mppx https://mpp.dev/api/ping/paid
 
 <Cards>
   <Card description="Browse available MPP services and their endpoints" icon="lucide:list" title="Services" to="/services" />
+
+  <Card description="Agent wallets, funding, and spend controls" icon="lucide:wallet" title="Wallets" to="/tools/wallet" />
 </Cards>
 
 # Use with your app \[Handle payment-gated resources automatically]
@@ -5112,6 +7499,10 @@ Paste this into your coding agent to set up a server with `mppx` in one prompt:
 
 <ServerPrompt />
 
+:::warning\[Set `MPP_SECRET_KEY` before you start]
+`Mppx.create()` reads `MPP_SECRET_KEY` by default. Store it in your platform secret manager, keep it server-side, and never log it. See [Security](/advanced/security).
+:::
+
 ## Framework mode
 
 Use the framework-specific middleware from `mppx` to integrate payment into your server. Each middleware handles the `402` Challenge/Credential flow and attaches receipts automatically.
@@ -5300,12 +7691,12 @@ export async function handler(req: IncomingMessage, res: ServerResponse) {
 
 ## Push & pull modes
 
-Tempo charges support two transaction submission modes, determined by the client:
+Non-zero Tempo charges support two transaction submission modes, determined by the client. Zero-amount charges skip transaction submission entirely and use a `proof` Credential payload instead.
 
 * **`pull` mode (default)**: the client signs the transaction and sends the serialized transaction to the server. The server broadcasts it and verifies on-chain. This enables the server to sponsor gas fees via a `feePayer`.
 * **`push` mode**: the client builds, signs, and broadcasts the transaction itself (for example, via a browser wallet). It sends the transaction hash to the server, which verifies the payment by fetching the receipt.
 
-Your server handles both modes automatically—no configuration required. The server inspects the credential payload type (`transaction` for pull, `hash` for push) and verifies accordingly.
+Your server handles all three payload types automatically—no configuration required. The server inspects the credential payload type (`proof` for zero-amount Challenges, `transaction` for pull, `hash` for push) and verifies accordingly.
 
 If you would like to force a specific mode, you can set the `mode` parameter to `'pull'` or `'push'`.
 
@@ -5320,6 +7711,8 @@ const mppx = Mppx.create({
   })],
 })
 ```
+
+The `mode` parameter only affects non-zero charges. When `amount` is `0`, the client always returns a `proof` payload and `feePayer` is irrelevant.
 
 ### Fee sponsorship
 
@@ -5352,7 +7745,7 @@ const mppx = Mppx.create({
 })
 ```
 
-When a pull-mode client submits a signed transaction, the server co-signs with the fee payer account (or delegates to the relay) before broadcasting. Push-mode clients pay their own gas, so `feePayer` is ignored for those requests.
+When a pull-mode client submits a signed transaction, the server co-signs with the fee payer account (or delegates to the relay) before broadcasting. Push-mode clients pay their own gas, so `feePayer` is ignored for those requests. Zero-amount proof flows do not create a transaction at all.
 
 ### Optimistic verification
 
@@ -5371,6 +7764,38 @@ const mppx = Mppx.create({
 :::warning
 Optimistic verification simulates the transaction but does not wait for inclusion. If the transaction reverts onchain after broadcast, the Receipt does not reflect the failure. Only use this when latency matters more than guaranteed confirmation.
 :::
+
+## Discovery
+
+After your server is running, add [discovery](/advanced/discovery) so agents can find your API and its payment terms automatically. The `discovery()` helper generates a `GET /openapi.json` endpoint from your route configuration:
+
+```ts [server.ts]
+import { Hono } from 'hono'
+import { Mppx, discovery } from 'mppx/hono'
+import { tempo } from 'mppx/server'
+
+const app = new Hono()
+
+const mppx = Mppx.create({
+  methods: [tempo({
+    currency: '0x20c0000000000000000000000000000000000000',
+    recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+  })],
+})
+
+app.get('/resource', mppx.charge({ amount: '0.1' }), (c) => c.json({ data: '...' }))
+
+// [!code hl:start]
+discovery(app, mppx, {
+  auto: true,
+  info: { title: 'My API', version: '1.0.0' },
+})
+// [!code hl:end]
+```
+
+The generated document advertises each paid route with canonical `x-payment-info.offers[]` entries. See [Discovery](/advanced/discovery) for the full document shape, multi-offer examples, and flat-shorthand compatibility notes.
+
+Register your service on [MPPScan](https://mppscan.com) or the [MPP Services directory](/services) so agents and registries can discover it.
 
 ## Testing your server
 
@@ -5396,67 +7821,190 @@ Use `npx mppx --inspect` to debug your server's Challenge response without makin
   <MppxCreateReferenceCard to="/sdk/typescript/server/Mppx.create" />
 </Cards>
 
-# SDK features \[Parity across TypeScript, Python, and Rust]
+# SDK features \[Parity across TypeScript, Python, Rust, and Ruby]
 
 This page tracks which features are implemented in each official SDK.
 
 ## Core
 
-| Component | [TypeScript](https://github.com/wevm/mppx) | [Rust](https://github.com/tempoxyz/mpp-rs) | [Python](https://github.com/tempoxyz/pympp) |
-|---|---|---|---|
-| Client | ✓ | ✓ | ✓ |
-| Server | ✓ | ✓ | ✓ |
-| Proxy | ✓ | ✓ | — |
+| Component | [TypeScript](https://github.com/wevm/mppx) | [Rust](https://github.com/tempoxyz/mpp-rs) | [Python](https://github.com/tempoxyz/pympp) | [Ruby](https://github.com/stripe/mpp-rb) |
+|---|---|---|---|---|
+| Client | ✓ | ✓ | ✓ | ✓ |
+| Server | ✓ | ✓ | ✓ | ✓ |
+| Proxy | ✓ | ✓ | — | — |
 
 ## Payment methods
 
-| Method | TypeScript | Rust | Python |
-|---|---|---|---|
-| [Tempo](/payment-methods/tempo) | ✓ | ✓ | ✓ |
-| [Stripe](/payment-methods/stripe) | ✓ | — | — |
+| Method | TypeScript | Rust | Python | Ruby |
+|---|---|---|---|---|
+| [Tempo](/payment-methods/tempo) | ✓ | ✓ | ✓ | ✓ |
+| [Stripe](/payment-methods/stripe) | ✓ | — | — | ✓ |
 
 Additional payment methods implement their own SDKs. Refer to the maintaining organizations for support and availability.
 
 ## Intents
 
-| Intent | TypeScript | Rust | Python |
-|---|---|---|---|
-| [Charge](/intents/charge) | ✓ | ✓ | ✓ |
-| [Session](/payment-methods/tempo/session) | ✓ | ✓ | — |
+| Intent | TypeScript | Rust | Python | Ruby |
+|---|---|---|---|---|
+| [Charge](/intents/charge) | ✓ | ✓ | ✓ | ✓ |
+| [Session](/payment-methods/tempo/session) | ✓ | ✓ | — | — |
 
 ## Transports
 
-| Transport | TypeScript | Rust | Python |
-|---|---|---|---|
-| [HTTP](/protocol/transports/http) | ✓ | ✓ | ✓ |
-| [MCP](/protocol/transports/mcp) | ✓ | ✓ | ✓ |
+| Transport | TypeScript | Rust | Python | Ruby |
+|---|---|---|---|---|
+| [HTTP](/protocol/transports/http) | ✓ | ✓ | ✓ | ✓ |
+| [MCP](/protocol/transports/mcp) | ✓ | ✓ | ✓ | ✓ |
 
 ### HTTP framework integrations
 
-| Role | TypeScript | Rust | Python |
-|---|---|---|---|
-| **Client** | fetch | reqwest | httpx |
-| **Server** | Elysia, Express, Hono, Next.js | Axum, Tower | Decorator (`@server.pay`) |
+| Role | TypeScript | Rust | Python | Ruby |
+|---|---|---|---|---|
+| **Client** | fetch | reqwest | httpx | async-http |
+| **Server** | Elysia, Express, Hono, Next.js | Axum, Tower | Decorator (`@server.pay`) | Rack |
 
 ### MCP framework integrations
 
-| Role | TypeScript | Rust | Python |
-|---|---|---|---|
-| **Client** | MCP SDK transport | — | MCP SDK transport |
-| **Server** | MCP SDK transport | — | FastMCP (`@pay` decorator) |
+| Role | TypeScript | Rust | Python | Ruby |
+|---|---|---|---|---|
+| **Client** | MCP SDK transport | — | MCP SDK transport | — |
+| **Server** | MCP SDK transport | — | FastMCP (`@pay` decorator) | — |
 
 ## Tempo features
 
-| Feature | TypeScript | Rust | Python |
-|---|---|---|---|
-| Charge verification (server) | ✓ | ✓ | ✓ |
-| Credential creation (client) | ✓ | ✓ | ✓ |
-| `transaction` payload type | ✓ | ✓ | ✓ |
-| `hash` payload type | ✓ | ✓ | ✓ |
-| Fee payer co-signing | ✓ | ✓ | ✓ |
-| Session channels (open/voucher/topUp/close) | ✓ | ✓ | — |
-| SSE metered streaming | ✓ | ✓ | — |
-| Attribution memo | ✓ | ✓ | ✓ |
+| Feature | TypeScript | Rust | Python | Ruby |
+|---|---|---|---|---|
+| Charge verification (server) | ✓ | ✓ | ✓ | ✓ |
+| Credential creation (client) | ✓ | ✓ | ✓ | ✓ |
+| `transaction` payload type | ✓ | ✓ | ✓ | ✓ |
+| `hash` payload type | ✓ | ✓ | ✓ | ✓ |
+| `proof` payload type | ✓ | — | — | ✓ |
+| Fee payer co-signing | ✓ | ✓ | ✓ | ✓ |
+| Session channels (open/voucher/topUp/close) | ✓ | ✓ | — | — |
+| SSE metered streaming | ✓ | ✓ | — | — |
+| Attribution memo | ✓ | ✓ | ✓ | ✓ |
+
+# Go SDK \[The mpp-go library]
+
+## Overview
+
+The `mpp-go` library provides a typed interface over the Machine Payments Protocol, from high-level abstractions to low-level primitives and building blocks.
+
+<div className="flex gap-2">
+  <SdkBadge.GitHub repo="tempoxyz/mpp-go" />
+
+  <SdkBadge.Maintainer name="Tempo" href="https://github.com/tempoxyz" />
+</div>
+
+## Install
+
+```bash [install.sh]
+$ go get github.com/tempoxyz/mpp-go
+```
+
+## Requirements
+
+* Go 1.21+
+* `go-ethereum` for Tempo signing
+
+## Quick start
+
+### Server
+
+```go [server.go]
+package main
+
+import (
+	"encoding/json"
+	"log"
+	"net/http"
+	"os"
+
+	"github.com/tempoxyz/mpp-go/pkg/server"
+	charge "github.com/tempoxyz/mpp-go/pkg/tempo/server"
+)
+
+func main() {
+	intent, _ := charge.NewIntent(charge.IntentConfig{
+		RPCURL: "https://rpc.tempo.xyz",
+	})
+	method := charge.NewMethod(charge.MethodConfig{
+		Intent:    intent,
+		Recipient: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+	})
+	payment := server.New(method, "api.example.com", os.Getenv("MPP_SECRET_KEY"))
+
+	mux := http.NewServeMux()
+	mux.Handle("/resource", server.ChargeMiddleware(payment, server.ChargeParams{
+		Amount:      "0.50",
+		Description: "Paid resource",
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		credential := server.CredentialFromContext(r.Context())
+		json.NewEncoder(w).Encode(map[string]any{
+			"data":  "paid content",
+			"payer": credential.Source,
+		})
+	})))
+
+	log.Fatal(http.ListenAndServe(":3000", mux))
+}
+```
+
+### Client
+
+```go [client.go]
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+
+	"github.com/tempoxyz/mpp-go/pkg/client"
+	charge "github.com/tempoxyz/mpp-go/pkg/tempo/client"
+)
+
+func main() {
+	method, err := charge.New(charge.Config{
+		PrivateKey: os.Getenv("MPP_PRIVATE_KEY"),
+		RPCURL:     "https://rpc.tempo.xyz",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	c := client.New([]client.Method{method})
+
+	resp, err := c.Get(context.Background(), "https://api.example.com/resource")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+	fmt.Println("Status:", resp.StatusCode)
+}
+```
+
+## Package layout
+
+| Package | Description |
+|---------|-------------|
+| `pkg/client` | HTTP client with automatic `402` handling |
+| `pkg/mpp` | Core protocol primitives (Challenge, Credential, Receipt) |
+| `pkg/server` | Server-side payment handler and middleware |
+| `pkg/server/echo` | Echo framework middleware |
+| `pkg/server/gin` | Gin framework middleware |
+| `pkg/tempo/client` | Tempo charge client method |
+| `pkg/tempo/server` | Tempo charge server method |
+
+## Next steps
+
+<Cards>
+  <GoCoreTypesCard />
+
+  <GoClientCard />
+
+  <GoServerCard />
+</Cards>
 
 # Python SDK \[The pympp Python library]
 
@@ -5493,6 +8041,7 @@ $ pip install "pympp[tempo]"
 ### Server
 
 ```python [server.py]
+import os
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from mpp import Challenge
@@ -5504,9 +8053,10 @@ app = FastAPI()
 mpp = Mpp.create(
     method=tempo(
         currency="0x20c0000000000000000000000000000000000000",
-        recipient="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
         intents={"charge": ChargeIntent()},
+        recipient="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
     ),
+    secret_key=os.environ["MPP_SECRET_KEY"],
 )
 
 @app.get("/resource")
@@ -5526,6 +8076,8 @@ async def get_resource(request: Request):
     credential, receipt = result
     return {"data": "paid content", "payer": credential.source}
 ```
+
+Set `MPP_SECRET_KEY` in your environment before you start the server, or pass `secret_key` explicitly to `Mpp.create()`.
 
 ### Client
 
@@ -5552,6 +8104,108 @@ asyncio.run(main())
   <PythonClientCard />
 
   <PythonServerCard />
+</Cards>
+
+# Ruby SDK \[The mpp-rb library]
+
+## Overview
+
+The `mpp-rb` Ruby gem provides a typed interface over the Machine Payments Protocol, from high-level abstractions to low-level primitives and building blocks.
+
+<div className="flex gap-2">
+  <SdkBadge.GitHub repo="stripe/mpp-rb" />
+
+  <SdkBadge.Maintainer name="Stripe" href="https://github.com/stripe" />
+</div>
+
+## Install
+
+```bash [install.sh]
+$ gem install mpp-rb
+```
+
+Or add to your Gemfile:
+
+```ruby [Gemfile]
+gem "mpp-rb"
+```
+
+## Requirements
+
+* Ruby 3.3+
+* `eth` for Tempo signing (optional)
+* `stripe` for Stripe method (optional)
+* `async` + `async-http` for async HTTP (optional)
+
+## Quick start
+
+### Server
+
+```ruby [server.rb]
+require "mpp-rb"
+
+server = Mpp.create(
+  method: Mpp::Methods::Tempo.tempo(
+    currency: "0x20c0000000000000000000000000000000000000",
+    intents: { "charge" => Mpp::Methods::Tempo::ChargeIntent.new },
+    recipient: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  ),
+  secret_key: ENV["MPP_SECRET_KEY"],
+)
+
+# In your request handler
+result = server.charge(
+  request.get_header("HTTP_AUTHORIZATION"),
+  "0.50",
+  description: "Paid resource",
+)
+
+if result.is_a?(Mpp::Challenge)
+  resp = Mpp::Server::Decorator.make_challenge_response(result, server.realm)
+  [resp["status"], resp["headers"], [resp["body"]]]
+else
+  credential, receipt = result
+  [200, { "Payment-Receipt" => receipt.to_payment_receipt }, [{ data: "paid content", payer: credential.source }.to_json]]
+end
+```
+
+Set `MPP_SECRET_KEY` in your environment before you start the server, or pass `secret_key` explicitly to `Mpp.create()`.
+
+### Client
+
+```ruby [client.rb]
+require "mpp-rb"
+
+account = Mpp::Methods::Tempo::Account.from_env
+
+transport = Mpp::Client::Transport.new(
+  methods: [Mpp::Methods::Tempo.tempo(account: account)],
+)
+
+response = transport.get("https://mpp.dev/api/ping/paid")
+puts response.body
+```
+
+## Module layout
+
+| Module | Description |
+|--------|-------------|
+| `Mpp::Challenge` | Challenge parsed from `WWW-Authenticate` |
+| `Mpp::Credential` | Credential for the `Authorization` header |
+| `Mpp::Receipt` | Receipt parsed from `Payment-Receipt` |
+| `Mpp::Client::Transport` | HTTP client with automatic `402` handling |
+| `Mpp::Server::Middleware` | Rack middleware for payment-gated endpoints |
+| `Mpp::Methods::Tempo` | Tempo payment method (client and server) |
+| `Mpp::Methods::Stripe` | Stripe payment method (client and server) |
+
+## Next steps
+
+<Cards>
+  <RubyCoreTypesCard />
+
+  <RubyClientCard />
+
+  <RubyServerCard />
 </Cards>
 
 # Rust SDK \[The mpp Rust library]
@@ -6024,6 +8678,360 @@ You can apply the same patterns to [other payment methods](/payment-methods).
     </div>
   </Tab>
 </Tabs>
+
+# Wallets \[Give your agent a wallet]
+
+Agents need a wallet to pay for MPP-enabled services. Choose the wallet that fits your use case best.
+
+| Wallet | Best for | Supported methods | Setup |
+|--------|----------|-------------------|-------|
+| [Tempo Wallet](#tempo-wallet) | Tempo MPP services with spend controls and service discovery | `tempo` | `tempo wallet login` |
+| [Privy Agent CLI](#privy-agent-cli) | Multi-chain agent wallets with browser-based funding | `tempo`, `solana` | `privy-agent-wallets login` |
+| [AgentCash](#agentcash) | Discover and use 300+ premium APIs via MPP | `tempo` | `npx agentcash onboard` |
+| [`mppx` CLI](#mppx) | Development and debugging | All | `mppx account create` |
+
+## Tempo Wallet
+
+The [Tempo Wallet](https://wallet.tempo.xyz) is a managed MPP client with built-in spend controls and service discovery. Agents use `tempo wallet` to discovery and pay for MPP-enabled services on demand.
+
+<Tabs>
+  <Tab title="Agent">
+    Paste this into your agent:
+
+    ```
+    Read https://tempo.xyz/SKILL.md and set up tempo
+    ```
+  </Tab>
+
+  <Tab title="Human">
+    ::::steps
+
+    ### Install the CLI
+
+    ```bash
+    curl -fsSL https://tempo.xyz/install | bash
+    ```
+
+    ### Connect your wallet
+
+    ```bash
+    tempo wallet login
+    ```
+
+    ### Verify setup
+
+    ```bash
+    tempo wallet whoami
+    ```
+
+    ### List available services
+
+    ```bash
+    tempo wallet services
+    ```
+
+    ### Make a paid request
+
+    ```bash
+    tempo request -X POST \
+      --json '{"prompt": "a sunset over the ocean"}' \
+      https://fal.mpp.tempo.xyz/fal-ai/flux/dev
+    ```
+
+    ::::
+  </Tab>
+</Tabs>
+
+**Supported methods:** <Badge variant="info">tempo.charge</Badge> <Badge variant="info">tempo.session</Badge>
+
+**Key features:**
+
+* **Service discovery**—`tempo wallet services` lists endpoints, pricing, and request schemas
+* **Spend controls**—scoped access keys enforce per-key spending limits
+* **Dry-run previews**—`tempo request --dry-run` validates cost before committing funds
+* **Efficient output**—`-t` flag gives compact, machine-readable output for agent tooling
+
+## Privy Agent CLI
+
+[Privy Agent CLI](https://docs.privy.io/recipes/agent-integrations/agent-cli) gives agents a CLI-first way to create, fund, and manage wallets with no integration code. It pairs with the [Privy Agent Sandbox](https://agents.privy.io/) where users track spending, manage funds, and revoke access.
+
+The agent never holds the wallet private key—each session generates a P-256 keypair used to sign authorization payloads.
+
+<Tabs>
+  <Tab title="Agent">
+    Paste this into your agent:
+
+    ```
+    Set up https://agents.privy.io/skill.md
+    ```
+  </Tab>
+
+  <Tab title="Human">
+    ::::steps
+
+    ### Install
+
+    ```bash
+    npm install -g @privy-io/agent-wallet-cli
+    ```
+
+    ### Log in
+
+    ```bash
+    privy-agent-wallets login
+    ```
+
+    This opens a browser flow—complete Privy auth, approve signer access, then paste the credential back into the terminal.
+
+    ### Fund wallets
+
+    ```bash
+    privy-agent-wallets fund
+    ```
+
+    ### List wallets
+
+    ```bash
+    privy-agent-wallets list-wallets
+    ```
+
+    ### Send a transaction
+
+    ```bash
+    privy-agent-wallets rpc --json '{"method": "eth_sendTransaction", "params": {"to": "0xRecipient", "value": "0.01"}}'
+    ```
+
+    ::::
+  </Tab>
+</Tabs>
+
+**Supported methods:** <Badge variant="info">tempo.charge</Badge> <Badge variant="info">tempo.session</Badge> <Badge variant="info">solana.charge</Badge>
+
+**Key features:**
+
+* **No private key exposure**—each session generates a P-256 keypair; the agent signs authorization payloads, never holds the wallet key
+* **Browser-based funding**—the human owner retains a visual dashboard to check balances, view history, and onramp funds
+* **Session management**—sessions stored in the OS credential manager, expire after seven days, revocable from [agents.privy.io/manage](https://agents.privy.io/manage)
+
+## AgentCash
+
+[AgentCash](https://agentcash.dev) gives agents instant access to 300+ premium APIs for data enrichment, social data, image generation, web scraping, email, and much more, all through one USDC balance.
+
+<Tabs>
+  <Tab title="Agent">
+    Paste this into your agent:
+
+    ```
+    Set up agentcash.dev/skill.md
+    ```
+  </Tab>
+
+  <Tab title="Human">
+    ::::steps
+
+    ### Onboard and get free credits
+
+    Visit [agentcash.dev/onboard](https://agentcash.dev/onboard) to claim a sign-up bonus, then redeem in your terminal:
+
+    ```bash
+    npx agentcash onboard <CODE>
+    ```
+
+    ### Search for services
+
+    ```bash
+    npx agentcash search "image generation"
+    ```
+
+    ### Use a service
+
+    ```bash
+    npx agentcash fetch https://stableenrich.dev/api/exa/search \
+        --method POST \
+        --body '{"query":"agentcash.dev"}'
+    ```
+
+    ### Install as MCP server (optional)
+
+    ```bash
+    claude mcp add agentcash --scope user -- npx -y agentcash@latest
+    ```
+
+    ::::
+  </Tab>
+</Tabs>
+
+**Supported methods:** <Badge variant="info">tempo.charge</Badge>
+
+**Key features:**
+
+* **300+ premium APIs** - enrichment, social data, image generation, web scraping, email, all accessible instantly
+* **No human required** - pay per request with USDC, no subscriptions or manual sign-up flows
+* **API and tool discovery** - any service that implements MPP is automatically discoverable and usable
+* **MPPScan integration** — easily discover and use services via [mppscan.com](https://www.mppscan.com/)
+
+## `mppx`
+
+The [`mppx`](/sdk/typescript/cli) CLI is a lightweight MPP client bundled with the `mppx` package. It handles `402` responses automatically using a local keychain account—ideal for development, testing, and debugging.
+
+::::steps
+
+### Install
+
+:::code-group
+
+```bash [npm]
+npm install -g mppx
+```
+
+```bash [pnpm]
+pnpm add -g mppx
+```
+
+```bash [bun]
+bun add -g mppx
+```
+
+:::
+
+### Create an account
+
+```bash
+mppx account create
+```
+
+### Make a paid request
+
+```bash
+mppx https://mpp.dev/api/ping/paid
+```
+
+::::
+
+**Supported methods:** <Badge variant="info">tempo.charge</Badge> <Badge variant="info">tempo.session</Badge> <Badge variant="info">stripe.charge</Badge> <Badge variant="info">solana.charge</Badge>
+
+**Key features:**
+
+* **Zero config**—create an account and start making paid requests immediately
+* **All payment methods**—supports every payment method implemented in the `mppx` SDK
+* **Local keychain**—private keys stored in the OS keychain, configurable via `MPPX_PRIVATE_KEY` env var
+* **Development-first**—designed for testing and debugging MPP integrations
+
+## Next steps
+
+<Cards>
+  <Card description="Connect your agent to MPP-enabled services" icon="lucide:bot" title="Use with agents" to="/quickstart/agent" />
+
+  <Card description="Browse available MPP services and their endpoints" icon="lucide:list" title="Services" to="/services" />
+</Cards>
+
+# Agentic payments \[Let agents pay for services autonomously]
+
+Agentic payments are transactions initiated and completed by software agents without human intervention. As coding agents take on more complex tasks—calling LLM APIs, running web searches, generating images—they need a way to pay for these services on the fly. MPP gives them that capability.
+
+## Why agents need a payment protocol
+
+Traditional payment flows are designed for humans. They involve checkout forms, CAPTCHAs, browser redirects, and manual API key provisioning. None of these work for an autonomous agent.
+
+When an agent encounters a paid service today, it has two options: fail, or wait for a human to set up credentials. Both break the autonomous workflow. Agents need a payment interface that's native to HTTP—one they can negotiate and complete programmatically in a single request cycle.
+
+## How MPP enables agentic payments
+
+MPP uses [HTTP `402`](/protocol/http-402) to create a three-step payment flow built for machines:
+
+1. **Challenge**—The agent requests a resource. The server responds with `402 Payment Required` and a Challenge describing the price and accepted payment methods.
+2. **Credential**—The agent selects a payment method—stablecoins, card, or Lightning—and constructs a Credential proving payment.
+3. **Receipt**—The server verifies the Credential, fulfills the request, and returns a Receipt confirming the transaction.
+
+This all happens in a single HTTP round-trip. The agent doesn't need pre-provisioned API keys, an account, or a human in the loop.
+
+## Use cases
+
+* **LLM inference**—Pay per token for access to language models from any provider. Sessions enable [micropayments](/use-cases/micropayments) as small as $0.0001 per token.
+* **Web search**—Pay per query for real-time search results without rate-limited free tiers.
+* **Image generation**—Pay per image across multiple providers without separate accounts.
+* **Data APIs**—Access market data, geospatial data, or analytics on a per-request basis.
+* **Compute**—Rent GPU time or serverless execution and pay only for what you use.
+
+## Next steps
+
+<Cards>
+  <Card title="Add payments to your API" description="Charge for API access" to="/quickstart/server" />
+
+  <Card title="Use with agents" description="Connect your agent to paid APIs" to="/quickstart/agent" />
+
+  <Card title="Protocol overview" description="Learn how MPP works" to="/overview" />
+</Cards>
+
+# API monetization \[Per-request payments at the protocol level]
+
+MPP replaces API keys, subscription tiers, and billing dashboards with a single protocol-level primitive: [HTTP `402`](/protocol/http-402). You set a price on your endpoint, and any client—human, app, or coding agent—pays per request. No signup, no plan selection, no payment form.
+
+## The problem with API keys and subscriptions
+
+Traditional API monetization requires developers to create an account, generate API keys, pick a pricing tier, and enter payment details before making a single request. Each step adds friction and increases drop-off.
+
+For coding agents, this model breaks entirely. Agents can't fill out signup forms, navigate billing dashboards, or manage API key rotation. They need a payment interface that works at the HTTP level—not the browser level. See [agentic payments](/use-cases/agentic-payments) for more on how MPP solves this.
+
+## Monetize your API with MPP
+
+Add a few lines of middleware to your API, set a price per endpoint, and start accepting payments. When a client hits a paid endpoint, your server returns a `402` Challenge with the price and accepted payment methods. The client pays and retries—your server verifies the Credential and returns the response with a Receipt.
+
+There's no billing dashboard to build, no user database to manage, no API key infrastructure to maintain. MPP supports stablecoins, cards, and Lightning—clients pay with whatever rail they have.
+
+## Pricing models
+
+MPP supports multiple pricing strategies out of the box:
+
+* **Per-request charges**—Set a fixed price per endpoint. Each request is a standalone payment.
+* **Pay-as-you-go sessions**—Open a session for streaming or high-frequency APIs. Clients pay incrementally via off-chain vouchers with on-chain settlement. This is what makes [micropayments](/use-cases/micropayments) viable.
+* **Split payments**—Route portions of each payment to multiple recipients, enabling marketplace and referral models.
+
+## Next steps
+
+<Cards>
+  <Card title="Add payments to your API" description="Start charging in minutes" to="/quickstart/server" />
+
+  <Card title="Accept pay-as-you-go payments" description="Session-based billing for high-frequency APIs" to="/guides/pay-as-you-go" />
+
+  <Card title="Proxy an existing service" description="Add payments without changing your API code" to="/guides/proxy-existing-service" />
+</Cards>
+
+# Micropayments \[Sub-cent payments without the fee problem]
+
+Micropayments have been impractical because traditional payment rails charge fixed fees that exceed the transaction value. MPP makes sub-cent payments viable through stablecoin settlement and off-chain payment sessions. Clients—including autonomous [agents](/use-cases/agentic-payments)—pay per request or per token without subscriptions or minimums.
+
+## Why micropayments failed before
+
+Credit card processing charges a fixed fee per transaction—typically $0.30 plus 2.9%. That fee structure makes anything under ~$1 uneconomical for the merchant, and anything under ~$0.50 a net loss.
+
+Subscription bundling became the workaround. Instead of charging $0.001 per article or $0.0001 per query, services charge $10–20/month for unlimited access. Users overpay for access they don't fully use, and services lose potential customers who'd pay for occasional use but won't commit to a subscription.
+
+## How MPP enables micropayments
+
+MPP provides two mechanisms depending on the transaction size:
+
+* **One-time charges**—For per-request payments above a few cents, MPP uses on-chain stablecoin transfers on [Tempo](/payment-methods/tempo). Transaction fees on Tempo are sub-cent, so a $0.05 charge remains economical. The client pays and receives the resource in the same HTTP request.
+
+* **[Sessions](/payment-methods/tempo/session)**—For sub-cent payments (per-token LLM billing, per-query search), MPP uses off-chain payment channels. The client deposits funds into a session once, and subsequent requests use signed vouchers—no on-chain transaction per request. Settlement happens periodically, so thousands of $0.0001 interactions cost a single transaction fee.
+
+## Use cases
+
+* **Per-token LLM inference**—Pay for the tokens you generate, not a monthly seat
+* **Per-query web search**—Charge fractions of a cent per search result
+* **Per-pixel image generation**—Bill based on resolution and compute used
+* **Metered data access**—Price API calls by the row, record, or byte returned
+* **Pay-per-article content**—Readers pay cents per article instead of subscribing
+
+## Next steps
+
+<Cards>
+  <Card title="Accept one-time payments" description="Charge per request with on-chain settlement" to="/guides/one-time-payments" />
+
+  <Card title="Accept pay-as-you-go payments" description="Sub-cent billing with payment sessions" to="/guides/pay-as-you-go" />
+
+  <Card title="Accept streamed payments" description="Bill per token in real time" to="/guides/streamed-payments" />
+</Cards>
 
 # Card charge \[One-time payments using encrypted network tokens]
 
@@ -6508,6 +9516,82 @@ Lightning has properties that make it a natural fit for session-based billing:
   <SpecCard to="https://paymentauth.org/draft-lightning-session-00" />
 </Cards>
 
+# Monad charge \[One-time payments on Monad]
+
+The Monad implementation of the [charge](/intents/charge) intent.
+
+The server issues a charge challenge describing the expected amount, currency, and recipient. The client either broadcasts an ERC-20 `transfer` and returns the transaction hash (**push** mode), or signs an ERC-3009 `transferWithAuthorization` for the server to broadcast (**pull** mode). The server verifies the transfer on-chain and returns the resource with a receipt.
+
+This method is best for fixed-price API calls, digital goods, and payments that should settle directly on Monad.
+
+## Server
+
+Use `monad.charge` to gate any endpoint behind a one-time ERC-20 payment. The method handles Challenge generation, Credential verification, on-chain settlement, and Receipt creation.
+
+```ts
+import { Mppx } from "mppx/server";
+import { monad } from "@monad-crypto/mpp/server";
+
+const mppx = Mppx.create({
+  methods: [monad()],
+});
+
+export async function handler(request: Request) {
+  const result = await mppx.charge({
+    amount: "0.1",
+    currency: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603", // USDC
+    recipient: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  })(request);
+
+  if (result.status === 402) return result.challenge;
+
+  return result.withReceipt(Response.json({ data: "..." }));
+}
+```
+
+### With pull mode (ERC-3009)
+
+To accept pull mode credentials, provide an `account` so the server can broadcast `transferWithAuthorization` and pay gas:
+
+```ts
+import { Mppx } from "mppx/server";
+import { monad } from "@monad-crypto/mpp/server";
+import { privateKeyToAccount } from "viem/accounts";
+
+const account = privateKeyToAccount(process.env.SERVER_PRIVATE_KEY as `0x${string}`);
+
+const mppx = Mppx.create({
+  methods: [monad.charge({
+    account, // [!code hl]
+  })],
+});
+```
+
+## Client
+
+Use `monad.charge` with `Mppx.create` to automatically handle `402` responses. The client parses the Challenge, creates a credential (either a signed transfer or an ERC-3009 authorization), and retries with the Credential.
+
+```ts
+import { Mppx } from "mppx/client";
+import { monad } from "@monad-crypto/mpp/client";
+import { privateKeyToAccount } from "viem/accounts";
+
+const account = privateKeyToAccount("0xabc…123");
+
+const mppx = Mppx.create({
+  methods: [monad.charge({ account })],
+});
+
+const response = await mppx.fetch("https://api.example.com/resource");
+```
+
+## Settlement modes
+
+Monad charge supports two settlement modes:
+
+* **Push** — the client broadcasts an ERC-20 `transfer(recipient, amount)` transaction on-chain and includes the transaction hash in the credential. The server verifies the transfer by reading `Transfer` event logs.
+* **Pull** — the client signs an ERC-3009 `transferWithAuthorization` off-chain. The server broadcasts the authorization on-chain via `transferWithAuthorization`, paying the gas. The server account does not need to match the recipient address.
+
 # Solana charge \[One-time payments on Solana]
 
 The Solana implementation of the [charge](/intents/charge) intent.
@@ -6527,7 +9611,7 @@ import { solana } from '@solana/mpp/server'
 const mppx = Mppx.create({
   methods: [solana.charge({
     recipient: '9xAXssX9j7vuK99c7cFwqbixzL3bFrzPy9PUhCtDPAYJ',
-    network: 'devnet',
+    network: 'localnet',
   })],
   secretKey: process.env.MPP_SECRET_KEY!,
 })
@@ -6545,6 +9629,37 @@ const mppx = Mppx.create({
   methods: [solana.charge()],
 })
 ```
+
+## Payment links
+
+Enable `html: true` on `solana.charge()` to turn any endpoint into a shareable payment link. Browsers see a payment page with a "Continue with Solana" button; programmatic clients get the standard `402` flow.
+
+```ts
+import { Mppx } from 'mppx/server'
+import { solana } from '@solana/mpp/server'
+
+const mppx = Mppx.create({
+  methods: [solana.charge({
+    recipient: '9xAXssX9j7vuK99c7cFwqbixzL3bFrzPy9PUhCtDPAYJ',
+    currency: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
+    decimals: 6,
+    network: 'localnet',
+    html: true, // [!code hl]
+  })],
+  secretKey: process.env.MPP_SECRET_KEY!,
+})
+```
+
+The `html` option accepts:
+
+| Type | Behavior |
+| --- | --- |
+| `true` | Default Solana-branded payment page with "Continue with Solana" button |
+| `false` / omitted | No payment page — standard JSON `402` only |
+
+On devnet and localnet, the payment page shows a network badge on the button and uses [Surfpool](https://surfpool.run) cheatcodes to fund test accounts automatically.
+
+See the [Payment links guide](/guides/payment-links) for framework-specific setup.
 
 ## Solana-specific request fields
 
@@ -6564,6 +9679,499 @@ These fields let the server describe whether payment is in SOL or an SPL asset, 
 <Cards>
   <SpecCard to="https://paymentauth.org/draft-solana-charge-00" />
 </Cards>
+
+# Stellar charge \[One-time SEP-41 token transfers]
+
+The Stellar implementation of the [charge](/intents/charge) intent.
+
+The client signs a SEP-41 `transfer` invocation, and the server verifies and broadcasts the transaction on-chain. Settlement completes in ~5 seconds with deterministic finality.
+
+Stellar charge supports two credential modes:
+
+* **Pull mode** (default): The client signs Stellar auth entries and sends the transaction XDR. The server broadcasts it. Two variants: sponsored (server holds an envelope signer and optionally wraps with a fee bump) or unsponsored (server broadcasts the transaction as-is, without modification).
+* **Push mode**: The client builds, signs, and broadcasts the transaction itself, then sends the transaction hash. The server polls for confirmation.
+
+This method is best for single API calls, content access, or one-off purchases.
+
+## How it works
+
+<MermaidDiagram
+  chart={`sequenceDiagram
+  participant Client
+  participant Server
+  participant Stellar
+  Client->>Server: (1) GET /resource
+  Server-->>Client: 402 + Challenge (amount, currency, recipient)
+  Client->>Client: (2) Build SEP-41 transfer, sign auth entries
+  Client->>Server: (3) Retry with Credential (signed XDR)
+  Server->>Stellar: (4) Simulate + broadcast transaction
+  Stellar-->>Server: Transaction confirmed
+  Server-->>Client: 200 OK + Receipt
+`}
+/>
+
+## Server
+
+Use `stellar.charge` to gate any endpoint behind a one-time SEP-41 token payment. The method handles Challenge generation, Credential verification, transaction broadcast, and Receipt creation.
+
+```ts
+import express from 'express'
+import { Mppx } from 'mppx/server'
+import { stellar } from '@stellar/mpp/charge/server'
+import { USDC_SAC_TESTNET } from '@stellar/mpp'
+
+const mppx = Mppx.create({
+  secretKey: process.env.MPP_SECRET_KEY,
+  methods: [
+    stellar.charge({
+      recipient: process.env.STELLAR_RECIPIENT,
+      currency: USDC_SAC_TESTNET,
+      network: 'stellar:testnet',
+    }),
+  ],
+})
+
+const app = express()
+
+app.get('/my-service', async (req, res) => {
+  const webReq = new Request(`http://localhost:3000${req.url}`, {
+    method: req.method,
+    headers: new Headers(req.headers as Record<string, string>),
+  })
+
+  const result = await mppx.charge({
+    amount: '0.01',
+    description: 'Premium API access',
+  })(webReq)
+
+  if (result.status === 402) {
+    const challenge = result.challenge
+    challenge.headers.forEach((value, key) => res.setHeader(key, value))
+    return res.status(402).send(await challenge.text())
+  }
+
+  const response = result.withReceipt(
+    Response.json({ message: 'Payment verified' }),
+  )
+  response.headers.forEach((value, key) => res.setHeader(key, value))
+  return res.status(response.status).send(await response.text())
+})
+
+app.listen(3000)
+```
+
+### With fee sponsorship
+
+When `feePayer` is configured, the server adds its own source account and optionally wraps the transaction in a fee bump before broadcasting. The client doesn't need XLM for gas – it signs only the Stellar auth entries.
+
+```ts
+import { Mppx } from 'mppx/server'
+import { stellar } from '@stellar/mpp/charge/server'
+import { USDC_SAC_TESTNET } from '@stellar/mpp'
+import { Keypair } from '@stellar/stellar-sdk'
+
+const mppx = Mppx.create({
+  secretKey: process.env.MPP_SECRET_KEY,
+  methods: [
+    stellar.charge({
+      recipient: process.env.STELLAR_RECIPIENT,
+      currency: USDC_SAC_TESTNET,
+      network: 'stellar:testnet',
+      feePayer: { // [!code hl]
+        envelopeSigner: Keypair.fromSecret(process.env.FEE_PAYER_SECRET), // [!code hl]
+        feeBumpSigner: Keypair.fromSecret(process.env.FEE_BUMP_SECRET), // optional // [!code hl]
+      }, // [!code hl]
+    }),
+  ],
+})
+```
+
+### Server configuration
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `currency` | `string` | – | SEP-41 token contract address |
+| `decimals` | `number` | `7` | Token decimal precision |
+| `feePayer` | `object` | – | Fee sponsorship configuration |
+| `maxFeeBumpStroops` | `number` | `10,000,000` | Maximum fee bump amount in stroops |
+| `network` | `string` | – | `'stellar:testnet'` or `'stellar:pubnet'` |
+| `pollDelayMs` | `number` | `1,000` | Delay between transaction poll attempts |
+| `pollMaxAttempts` | `number` | `30` | Maximum transaction poll attempts |
+| `pollTimeoutMs` | `number` | `30,000` | Total poll timeout |
+| `recipient` | `string` | – | Stellar public key (`G...`) or contract (`C...`) |
+| `rpcUrl` | `string` | – | Stellar RPC endpoint |
+| `simulationTimeoutMs` | `number` | `10,000` | Simulation timeout |
+| `store` | `Store` | – | State store for replay protection |
+
+## Client
+
+Use `stellar.charge` with `Mppx.create` to automatically handle `402` responses. The client signs SEP-41 transfer auth entries and retries with the Credential.
+
+```ts
+import { Keypair } from '@stellar/stellar-sdk'
+import { Mppx } from 'mppx/client'
+import { stellar } from '@stellar/mpp/charge/client'
+
+Mppx.create({
+  methods: [
+    stellar.charge({
+      keypair: Keypair.fromSecret('S...'),
+      mode: 'pull',
+      onProgress(event) {
+        console.log(event.type) // challenge → signing → signed → paying → confirming → paid
+      },
+    }),
+  ],
+})
+
+const response = await fetch('http://localhost:3000/my-service')
+const data = await response.json()
+```
+
+### Push mode
+
+In push mode, the client broadcasts the transaction and sends the hash for server verification:
+
+```ts
+import { Keypair } from '@stellar/stellar-sdk'
+import { Mppx } from 'mppx/client'
+import { stellar } from '@stellar/mpp/charge/client'
+
+Mppx.create({
+  methods: [
+    stellar.charge({
+      keypair: Keypair.fromSecret('S...'),
+      mode: 'push', // [!code hl]
+    }),
+  ],
+})
+```
+
+### Without polyfill
+
+If you don't want to patch `globalThis.fetch`, use `mppx.fetch` directly:
+
+```ts
+import { Keypair } from '@stellar/stellar-sdk'
+import { Mppx } from 'mppx/client'
+import { stellar } from '@stellar/mpp/charge/client'
+
+const mppx = Mppx.create({
+  methods: [
+    stellar.charge({
+      keypair: Keypair.fromSecret('S...'),
+    }),
+  ],
+  polyfill: false,
+})
+
+const response = await mppx.fetch('http://localhost:3000/my-service')
+```
+
+### Client configuration
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `decimals` | `number` | `7` | Token decimal precision |
+| `keypair` | `Keypair` | – | Stellar keypair for signing |
+| `mode` | `'pull' \| 'push'` | `'pull'` | Credential mode |
+| `onProgress` | `function` | – | Lifecycle event callback |
+| `pollDelayMs` | `number` | `1,000` | Delay between poll attempts (push mode) |
+| `pollMaxAttempts` | `number` | `30` | Maximum poll attempts (push mode) |
+| `pollTimeoutMs` | `number` | `30,000` | Total poll timeout (push mode) |
+| `rpcUrl` | `string` | – | Stellar RPC endpoint |
+| `secretKey` | `string` | – | Stellar secret key (alternative to `keypair`) |
+| `simulationTimeoutMs` | `number` | `10,000` | Simulation timeout |
+| `timeout` | `number` | `180` | Transaction timeout in seconds |
+
+### Progress events
+
+The `onProgress` callback fires at each stage of the charge flow:
+
+| Event | Description |
+|---|---|
+| `challenge` | Challenge received from server |
+| `signing` | Building and signing SEP-41 transfer |
+| `signed` | Transaction signed |
+| `paying` | Sending Credential to server |
+| `confirming` | Waiting for on-chain confirmation (push mode) |
+| `paid` | Payment confirmed, Receipt received |
+
+# Channel \[High-frequency off-chain payments]
+
+:::info
+Stellar uses the term "channel" for its streaming payment intent. This corresponds to the MPP [session](/payment-methods/tempo/session) concept used by other payment methods.
+:::
+
+:::warning\[Spec in progress]
+The formal specification for the Stellar channel intent is still being drafted. An initial implementation is available in [`@stellar/mpp`](https://github.com/stellar/stellar-mpp-sdk) and this documentation reflects that implementation. Details may change as the spec is finalized.
+:::
+
+The `channel` intent enables high-frequency, pay-as-you-go payments over unidirectional payment channels on Stellar. Clients deposit tokens into an on-chain smart contract escrow and sign off-chain cumulative commitments as they consume resources. The server verifies commitments via contract simulation–no per-request on-chain transactions–and closes the channel to settle the final balance.
+
+Payment channels reduce payment verification to a single contract simulation per request, making it possible to meter and bill at the granularity of individual LLM tokens, API calls, or bytes transferred.
+
+## How it works
+
+<MermaidDiagram
+  chart={`sequenceDiagram
+  participant Client
+  participant Server
+  participant Stellar
+  Client->>Stellar: (1) Deploy channel + deposit tokens
+  Stellar-->>Client: Channel contract created
+  Client->>Server: (2) Open credential (channel address)
+  Note over Server: Verify on-chain deposit
+  Server-->>Client: 200 OK (session established)
+  loop Per request
+      Client->>Server: (3) Request + commitment signature
+      Note over Server: Verify via prepare_commitment simulation
+      Server-->>Client: 200 OK + Receipt
+  end
+  Server->>Stellar: (4) Close channel with highest commitment
+  Stellar-->>Client: Refund remaining deposit
+`}
+/>
+
+A payment channel has four phases:
+
+::::steps
+
+### Open
+
+The client deploys a one-way-channel smart contract with a commitment key and an `asset` deposit. This creates a payment channel between the client (funder) and server (recipient). The channel contract holds the deposited tokens on-chain.
+
+### Session
+
+The client signs ed25519 cumulative commitment amounts as service is consumed. Each commitment authorizes "I have now consumed up to X total." The server verifies the commitment signature by simulating `prepare_commitment` on the channel contract and checks that the cumulative amount is higher than the previous commitment.
+
+Commitment verification requires a single contract simulation per request. This is what enables per-token LLM billing without significant latency overhead.
+
+### Top up
+
+If the channel runs low on funds, the client deposits additional tokens via the `top_up` function without closing the channel. The session continues uninterrupted.
+
+### Close
+
+Either party can close the channel. The server calls `close()` on the channel contract with the highest commitment amount and signature, settling the final balance on-chain and refunding any unused deposit to the funder.
+
+::::
+
+## Integration
+
+<Tabs stateKey="platform">
+  <Tab title="Server">
+    <div className="space-y-4">
+      Use `stellar.channel` to accept payment channels. The server needs the channel contract address, commitment public key, and a storage backend for channel state.
+
+      ```ts
+      import { Mppx, Store } from 'mppx/server'
+      import { stellar } from '@stellar/mpp/channel/server'
+
+      const mppx = Mppx.create({
+        secretKey: process.env.MPP_SECRET_KEY,
+        methods: [
+          stellar.channel({
+            channel: process.env.CHANNEL_CONTRACT, // C... address
+            commitmentKey: process.env.COMMITMENT_PUBLIC_KEY,
+            network: 'stellar:testnet',
+            store: Store.memory(),
+          }),
+        ],
+      })
+      ```
+
+      During a session, the server verifies each commitment by simulating `prepare_commitment` on the channel contract. On-chain interaction only happens during open and close.
+
+      Use `mppx.session` in your request handler to meter access:
+
+      ```ts
+      import { Mppx, Store } from 'mppx/server'
+      import { stellar } from '@stellar/mpp/channel/server'
+
+      const mppx = Mppx.create({
+        secretKey: process.env.MPP_SECRET_KEY,
+        methods: [
+          stellar.channel({
+            channel: process.env.CHANNEL_CONTRACT,
+            commitmentKey: process.env.COMMITMENT_PUBLIC_KEY,
+            network: 'stellar:testnet',
+            store: Store.memory(),
+          }),
+        ],
+      })
+
+      export async function handler(request: Request) {
+        const result = await mppx.session({
+          amount: '0.01',
+          description: 'API access',
+        })(request)
+
+        if (result.status === 402) return result.challenge
+
+        return result.withReceipt(Response.json({ data: '...' }))
+      }
+      ```
+
+      ### Server configuration
+
+      | Parameter | Type | Default | Description |
+      |---|---|---|---|
+      | `channel` | `string` | – | On-chain channel contract address (`C...`) |
+      | `checkOnChainState` | `boolean` | `false` | Verify on-chain state during voucher verification |
+      | `commitmentKey` | `string \| Keypair` | – | Commitment verification public key |
+      | `decimals` | `number` | `7` | Token decimal precision |
+      | `feePayer` | `object` | – | Fee sponsorship configuration for close transactions |
+      | `feePayer.envelopeSigner` | `Keypair \| string` | – | Signer for close transaction envelopes |
+      | `feePayer.feeBumpSigner` | `Keypair \| string` | – | Optional fee bump signer for close transactions |
+      | `maxFeeBumpStroops` | `number` | `10,000,000` | Maximum fee bump amount |
+      | `network` | `string` | – | `'stellar:testnet'` or `'stellar:pubnet'` |
+      | `onDisputeDetected` | `function` | – | Callback when on-chain dispute is detected |
+      | `pollDelayMs` | `number` | `1,000` | Delay between poll attempts |
+      | `pollMaxAttempts` | `number` | `30` | Maximum poll attempts |
+      | `pollTimeoutMs` | `number` | `30,000` | Total poll timeout |
+      | `rpcUrl` | `string` | – | Stellar RPC endpoint |
+      | `simulationTimeoutMs` | `number` | `10,000` | Simulation timeout |
+      | `sourceAccount` | `string` | – | Source account for transactions |
+      | `store` | `Store` | – | State store for channel data |
+    </div>
+  </Tab>
+
+  <Tab title="Client">
+    <div className="space-y-4">
+      Use `stellar.channel` with `Mppx.create` to sign commitment amounts automatically when the server requests payment channels.
+
+      ```ts
+      import { Keypair } from '@stellar/stellar-sdk'
+      import { Mppx } from 'mppx/client'
+      import { stellar } from '@stellar/mpp/channel/client'
+
+      Mppx.create({
+        methods: [
+          stellar.channel({
+            commitmentKey: Keypair.fromSecret('S...'),
+            onProgress(event) {
+              console.log(event.type) // challenge → signing → signed
+            },
+          }),
+        ],
+      })
+
+      const response = await fetch('http://localhost:3000/my-service')
+      // Automatically signs cumulative commitments per request
+      ```
+
+      ### Without polyfill
+
+      If you don't want to patch `globalThis.fetch`, use `mppx.fetch` directly:
+
+      ```ts
+      import { Keypair } from '@stellar/stellar-sdk'
+      import { Mppx } from 'mppx/client'
+      import { stellar } from '@stellar/mpp/channel/client'
+
+      const mppx = Mppx.create({
+        methods: [
+          stellar.channel({
+            commitmentKey: Keypair.fromSecret('S...'),
+          }),
+        ],
+        polyfill: false,
+      })
+
+      const response = await mppx.fetch('http://localhost:3000/my-service')
+      ```
+
+      ### With multiple methods
+
+      Register both charge and channel methods so the client can handle servers that offer either:
+
+      ```ts
+      import { Keypair } from '@stellar/stellar-sdk'
+      import { Mppx } from 'mppx/client'
+      import { stellar } from '@stellar/mpp/charge/client'
+      import { stellar as stellarChannel } from '@stellar/mpp/channel/client'
+
+      Mppx.create({
+        methods: [
+          stellar.charge({ keypair: Keypair.fromSecret('S...') }),
+          stellarChannel.channel({ commitmentKey: Keypair.fromSecret('S...') }),
+        ],
+      })
+      ```
+
+      ### Client configuration
+
+      | Parameter | Type | Default | Description |
+      |---|---|---|---|
+      | `commitmentKey` | `Keypair` | – | Ed25519 keypair for signing commitments |
+      | `commitmentSecret` | `string` | – | Secret key (alternative to `commitmentKey`) |
+      | `onProgress` | `function` | – | Lifecycle event callback |
+      | `rpcUrl` | `string` | – | Stellar RPC endpoint |
+      | `simulationTimeoutMs` | `number` | `10,000` | Simulation timeout |
+      | `sourceAccount` | `string` | – | Source account for transactions |
+    </div>
+  </Tab>
+</Tabs>
+
+## Closing the channel
+
+The server closes the channel by submitting the highest cumulative commitment amount and signature on-chain. The `close` function is exported from the server package:
+
+```ts
+import { close } from '@stellar/mpp/channel/server'
+import { Keypair } from '@stellar/stellar-sdk'
+
+const txHash = await close({
+  channel: 'CABC...', // channel contract address
+  amount: 2000000n, // cumulative amount in base units (bigint)
+  signature: lastCommitmentSignature, // Uint8Array
+  feePayer: { envelopeSigner: Keypair.fromSecret('S...') },
+  network: 'stellar:testnet',
+})
+```
+
+:::warning
+Channels do not close automatically. If you don't call `close()`, the deposit stays locked in the channel contract until the funder initiates a refund after the waiting period expires.
+:::
+
+## Monitoring channels
+
+Use `getChannelState` to query the on-chain state of a channel, and `watchChannel` to poll for contract events:
+
+```ts
+import { getChannelState, watchChannel } from '@stellar/mpp/channel/server'
+
+// Query current state
+const state = await getChannelState({
+  channel: 'CABC...',
+  rpcUrl: 'https://soroban-testnet.stellar.org',
+})
+
+// Watch for events (close, refund, top_up)
+const stop = watchChannel({
+  channel: 'CABC...',
+  rpcUrl: 'https://soroban-testnet.stellar.org',
+  onEvent(event) {
+    console.log(event.type, event.data)
+  },
+})
+
+// Stop watching
+stop()
+```
+
+## Channel contract
+
+Payment channels use the [one-way-channel](https://github.com/stellar-experimental/one-way-channel) smart contract for on-chain deposits, commitment verification, and settlement.
+
+The contract lifecycle: **Open** (deploy + deposit) -> **Off-chain payments** (signed commitments) -> **Settle** (partial withdrawal) -> **Close** (final settlement) or **Close Start** -> **Refund** (funder reclaims after waiting period).
+
+Commitment signatures use ed25519 over XDR-encoded `ScVal::Map` containing the amount, channel address, domain separator (`chancmmt`), and network ID–preventing replay across channels and networks.
+
+:::info
+The one-way-channel contract is experimental and has not been audited. See the [repository](https://github.com/stellar-experimental/one-way-channel) for the latest status.
+:::
 
 # Stripe charge \[One-time payments using Shared Payment Tokens]
 
@@ -6651,18 +10259,6 @@ const mppx = Mppx.create({
     }),
   ],
 })
-
-export async function handler(request: Request) {
-  const result = await mppx.charge({
-    amount: '1',
-    currency: 'usd',
-    decimals: 2,
-  })(request)
-
-  if (result.status === 402) return result.challenge
-
-  return result.withReceipt(Response.json({ data: '...' }))
-}
 ```
 
 ### With multiple payment method types
@@ -6686,6 +10282,48 @@ const mppx = Mppx.create({
   ],
 })
 ```
+
+### Payment links
+
+Set `html` on the method to render a Stripe Elements payment form when a browser visits the endpoint.
+
+```ts twoslash
+
+import Stripe from 'stripe'
+import { Mppx, stripe } from 'mppx/server'
+
+const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!)
+
+const mppx = Mppx.create({
+  methods: [
+    stripe.charge({
+      client: stripeClient,
+      html: { // [!code hl]
+        createTokenUrl: '/api/create-spt', // [!code hl]
+        publishableKey: process.env.STRIPE_PUBLISHABLE_KEY!, // [!code hl]
+      }, // [!code hl]
+      networkId: 'internal',
+      paymentMethodTypes: ['card'],
+    }),
+  ],
+})
+```
+
+#### html.createTokenUrl
+
+* **Type:** `string`
+
+A same-origin URL on your server that accepts a `POST` with `{ paymentMethod, amount, currency, expiresAt }` and returns `{ spt: string }`. This is the same endpoint used by the [client-side `createToken` callback](#client).
+
+#### html.publishableKey
+
+* **Type:** `string`
+
+Your Stripe publishable key (`pk_live_...` or `pk_test_...`), embedded in the payment page for Stripe.js initialization.
+
+Programmatic clients with `Authorization` headers are unaffected.
+
+See the [payment links guide](/guides/payment-links) for a full walkthrough and live demo.
 
 ### Server parameters
 
@@ -6798,100 +10436,46 @@ const response = await mppx.fetch('/api/resource')
 const receipt = Receipt.fromResponse(response)
 ```
 
-### Manual flow (without Mppx.create)
-
-For full control over each step, use `stripe.charge()` directly with `Challenge.fromResponse`:
-
-```ts twoslash
-import { Challenge } from 'mppx'
-import { stripe } from 'mppx/client'
-
-declare const stripeClient: {
-  createPaymentMethod(opts: any): Promise<{ paymentMethod: { id: string } | null; error: any }>
-}
-declare const elements: any
-// ---cut---
-const charge = stripe.charge({
-  createToken: async (params) => {
-    const res = await fetch('/api/create-spt', {
-      body: JSON.stringify(params),
-      headers: { 'Content-Type': 'application/json' },
-      method: 'POST',
-    })
-    return (await res.json()).spt
-  },
-})
-
-// 1. Get the 402 challenge
-const response = await fetch('/api/resource')
-const challenge = Challenge.fromResponse(response, { methods: [charge] })
-
-// 2. Collect payment method from Stripe Elements
-const { paymentMethod } = await stripeClient.createPaymentMethod({ elements })
-
-// 3. Create credential with the collected payment method
-const credential = await charge.createCredential({
-  challenge,
-  context: { paymentMethod: paymentMethod!.id },
-})
-
-// 4. Retry with credential
-const paid = await fetch('/api/resource', {
-  headers: { Authorization: credential },
-})
-```
-
-### Without polyfill
-
-If you don't want to patch `globalThis.fetch`, use `mppx.fetch` directly:
-
-```ts twoslash
-
-import { loadStripe } from '@stripe/stripe-js'
-import { Mppx, stripe } from 'mppx/client'
-
-const stripeJs = (await loadStripe('pk_test_...'))!
-
-const mppx = Mppx.create({
-  methods: [
-    stripe({
-      client: stripeJs,
-      createToken: async (params) => {
-        const res = await fetch('/api/create-spt', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(params),
-        })
-        return (await res.json()).spt
-      },
-    }),
-  ],
-  polyfill: false,
-})
-
-const response = await mppx.fetch('https://api.example.com/resource')
-```
-
 ## SPT creation proxy endpoint
 
-The `createToken` callback proxies through your own server because SPT creation requires a Stripe secret key. Here's a minimal implementation:
+The `createToken` callback proxies through your own server because SPT creation requires a Stripe secret key.
+
+:::warning\[Security: server-side authorization]
+The server **must** derive SPT parameters (amount, currency, expiry, limits) itself rather than accepting them from the client. A thin proxy that forwards client-supplied parameters effectively delegates payment authorization to an untrusted client.
+
+The client should send only:
+
+* An authenticated session (cookie or bearer token)
+* A server-known resource identifier (e.g., `orderId`, `quoteId`, `toolCallId`)
+
+The server then looks up the approved amount, currency, recipient, expiry, and rate/spend limits from its own records.
+:::
 
 ```ts
+// Example: server derives all SPT parameters from a known order
 export async function POST(request: Request) {
-  const { paymentMethod, amount, currency, expiresAt, networkId, metadata } =
-    await request.json()
+  // 1. Authenticate the caller (session cookie, bearer token, etc.)
+  const session = await getSession(request)
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // 2. Accept only a server-known resource identifier from the client
+  const { orderId, paymentMethod } = await request.json()
+
+  // 3. Look up the authorized payment parameters server-side
+  const order = await db.orders.get(orderId)
+  if (!order) return Response.json({ error: 'Order not found' }, { status: 404 })
+  if (order.userId !== session.userId)
+    return Response.json({ error: 'Forbidden' }, { status: 403 })
+
+  // 4. Server derives SPT parameters — the client never specifies amount/currency/expiry
   const body = new URLSearchParams({
     payment_method: paymentMethod,
-    'usage_limits[currency]': currency,
-    'usage_limits[max_amount]': amount,
-    'usage_limits[expires_at]': expiresAt.toString(),
+    'usage_limits[currency]': order.currency,
+    'usage_limits[max_amount]': order.amount.toString(),
+    'usage_limits[expires_at]': Math.floor(
+      (Date.now() + 5 * 60 * 1000) / 1000,
+    ).toString(),
   })
-  if (metadata) {
-    for (const [key, value] of Object.entries(metadata)) {
-      body.set(`metadata[${key}]`, value)
-    }
-  }
 
   const response = await fetch(
     'https://api.stripe.com/v1/test_helpers/shared_payment/granted_tokens',
@@ -6978,13 +10562,15 @@ The Credential payload contains the SPT and an optional client reference ID.
 
 The Tempo implementation of the [charge](/intents/charge) intent.
 
-The client signs a TIP-20 `transfer` transaction, the server broadcasts it to Tempo, and settlement completes in ~500ms with deterministic finality.
+For non-zero charges, the client signs a TIP-20 `transfer` transaction, the server broadcasts it to Tempo, and settlement completes in ~500ms with deterministic finality.
+
+For zero-amount identity flows, the client sends a `proof` Credential payload instead of a real transaction. The server verifies the signed proof message against the client's `source` identity and returns a Receipt without broadcasting anything on-chain.
 
 This method is best for single API calls, content access, or one-off purchases.
 
 ## Server
 
-Use [`mppx.charge`](/sdk/typescript/server/Method.tempo.charge) to gate any endpoint behind a one-time payment. The method handles Challenge generation, Credential verification, transaction broadcast, and Receipt creation.
+Use [`mppx.charge`](/sdk/typescript/server/Method.tempo.charge) to gate any endpoint behind a one-time payment. The method handles Challenge generation, Credential verification, transaction broadcast for paid requests, and Receipt creation.
 
 ```ts twoslash
 import { Mppx, tempo } from "mppx/server";
@@ -7047,6 +10633,80 @@ const result = await mppx.charge({
 
 When `feePayer` is `true`, the server adds a fee payer signature (domain `0x78`) before broadcasting. The client doesn't need gas tokens. See [fee sponsorship](/payment-methods/tempo#fee-sponsorship) for details.
 
+### Zero-dollar auth
+
+Set `amount: "0"` to issue an identity-only Challenge. The client returns a `proof` payload instead of `transaction` or `hash`, and the server verifies the signature against the `source` DID.
+
+```ts twoslash
+import { Mppx, tempo } from "mppx/server";
+
+const mppx = Mppx.create({ methods: [tempo()] });
+
+declare const request: Request;
+// ---cut---
+const result = await mppx.charge({
+  amount: "0", // [!code hl]
+  currency: "0x20c0000000000000000000000000000000000000",
+  recipient: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+})(request);
+```
+
+Use this for polling, free follow-up requests, and unlock flows after an initial payment.
+
+Pass `store` to `tempo.charge()` when you want single-use proofs.
+
+### With split payments
+
+Split a charge across multiple recipients in a single transaction. The primary `recipient` receives `amount` minus the sum of all splits.
+
+```ts twoslash
+import { Mppx, tempo } from "mppx/server";
+
+const mppx = Mppx.create({ methods: [tempo()] });
+
+declare const request: Request;
+// ---cut---
+const result = await mppx.charge({
+  amount: "1.00",
+  currency: "0x20c0000000000000000000000000000000000000", // pathUSD
+  recipient: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", // seller
+  splits: [ // [!code hl]
+    { // [!code hl]
+      amount: "0.10", // [!code hl]
+      recipient: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", // platform fee // [!code hl]
+    }, // [!code hl]
+  ], // [!code hl]
+})(request);
+```
+
+Up to 10 splits per charge. Each split must have a positive amount, and the sum of all splits must be less than the total `amount`. See the [split payments guide](/guides/split-payments) for more details.
+
+### Payment links
+
+Set `html: true` on the method to render a payment page when a browser navigates to the endpoint. The page shows a "Continue with Tempo" button—after the user pays, the page reloads with the paid resource. Programmatic clients with `Authorization` headers are unaffected.
+
+```ts twoslash
+import { Mppx, tempo } from "mppx/server";
+
+const mppx = Mppx.create({
+  methods: [
+    tempo.charge({
+      html: true, // [!code hl]
+    }),
+  ],
+});
+
+declare const request: Request;
+// ---cut---
+const result = await mppx.charge({
+  amount: "0.1",
+  currency: "0x20c0000000000000000000000000000000000000",
+  recipient: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+})(request);
+```
+
+See the [payment links guide](/guides/payment-links) for a full walkthrough with framework examples and a live demo.
+
 ### With Stripe
 
 ```ts twoslash
@@ -7084,7 +10744,7 @@ See [`tempo.charge` server reference](/sdk/typescript/server/Method.tempo.charge
 
 ## Client
 
-Use [`tempo.charge`](/sdk/typescript/client/Method.tempo.charge) with `Mppx.create` to automatically handle `402` responses. The client parses the Challenge, signs a TIP-20 transfer, and retries with the Credential.
+Use [`tempo.charge`](/sdk/typescript/client/Method.tempo.charge) with `Mppx.create` to automatically handle `402` responses. For non-zero amounts, the client signs a TIP-20 transfer and retries with the Credential. For zero-amount Challenges, it signs a proof message and retries with a `proof` payload instead.
 
 ```ts twoslash
 import { Mppx, tempo } from "mppx/client";
@@ -7254,9 +10914,9 @@ Payment sessions match the billing model that high-volume APIs need: pay stablec
 
 A typical flow for a high-volume large language model API:
 
-1. **Client:** opens a channel with a 10 USDC deposit
+1. **Client:** opens a channel with a 10 USDC.e deposit
 2. **Client:** sends a prompt to the API
-3. **Server:** issues Challenges requesting payment for each chunk (for example, 0.000025 USDC per token)
+3. **Server:** issues Challenges requesting payment for each chunk (for example, 0.000025 USDC.e per token)
 4. **Client:** signs a voucher for each chunk—the cumulative amount increases by the cost of tokens received
 5. **Server:** verifies the voucher signature (~microseconds) and sends the next chunk
 6. **Server:** settles on-chain and the client gets the unused deposit back
@@ -7278,7 +10938,7 @@ Tempo handles payments at scale and has properties that make it a uniquely good 
 <Tabs stateKey="platform">
   <Tab title="Server">
     <div className="space-y-4">
-      Use [`tempo`](/sdk/typescript/server/Method.tempo.session) to accept payment sessions. The server needs an RPC URL for on-chain verification during channel open/close, and a storage backend for channel state.
+      Use [`tempo`](/sdk/typescript/server/Method.tempo.session) to accept payment sessions. The server needs an RPC URL for on-chain verification during channel open/close, and a store backend for channel state.
 
       ```ts twoslash
       import { Mppx, Store, tempo } from 'mppx/server'
@@ -7292,6 +10952,8 @@ Tempo handles payments at scale and has properties that make it a uniquely good 
         ],
       })
       ```
+
+      `Store.memory()` works for local development. For multi-instance deployments, use `Store.redis()`, `Store.upstash()`, or `Store.cloudflare()` so channel state is shared across processes.
 
       During a session, the server verifies each voucher with a single `ecrecover`—no RPC calls, no database writes in the hot path. On-chain interaction only happens during open, settlement, and close.
 
@@ -7465,7 +11127,7 @@ Content-Type: application/json
 
 ## Header encoding
 
-Challenges are encoded as [auth-params](https://www.rfc-editor.org/rfc/rfc9110#section-11.2) in `WWW-Authenticate`. Credentials and receipts use base64url-encoded JSON.
+Challenges are encoded as [auth-params](https://www.rfc-editor.org/rfc/rfc9110#section-11.2) in `WWW-Authenticate`. The `request` and `opaque` auth-params use base64url-encoded JCS JSON strings. Credentials echo those same challenge values inside the base64url-encoded `Authorization` payload, and receipts use base64url-encoded JSON in `Payment-Receipt`.
 
 ## Full specification
 
@@ -7647,6 +11309,616 @@ Include the credential in `_meta`:
   <SpecCard to="https://paymentauth.org" />
 </Cards>
 
+# WebSocket transport \[Bidirectional payment streams over WebSocket]
+
+The WebSocket transport binds MPP payment flows to a persistent WebSocket connection using JSON message framing. Unlike the HTTP transport, the client and server exchange payment messages in-band—no separate requests needed for voucher top-ups.
+
+## Message protocol
+
+All messages are JSON objects with an `mpp` field as a discriminator:
+
+| Direction | `mpp` value | Payload | Purpose |
+|-----------|-------------|---------|---------|
+| Client → Server | `authorization` | `authorization: string` | Send Credential or top-up voucher |
+| Server → Client | `message` | `data: string` | Application data |
+| Client → Server | `payment-close-request` | — | Request session close |
+| Server → Client | `payment-close-ready` | `data: SessionReceipt` | Acknowledge close with final Receipt |
+| Server → Client | `payment-error` | `status: number, message: string` | Report error |
+| Server → Client | `payment-need-voucher` | `data: NeedVoucherEvent` | Request more funds |
+| Server → Client | `payment-receipt` | `data: SessionReceipt` | Confirm Credential |
+
+### Example messages
+
+```json
+// Client sends Credential
+{ "mpp": "authorization", "authorization": "eyJjaGFsbGVuZ2UiOi..." }
+
+// Server confirms payment
+{ "mpp": "payment-receipt", "data": { "status": "success", ... } }
+
+// Server streams data
+{ "mpp": "message", "data": "chunk of application data" }
+
+// Server requests top-up
+{ "mpp": "payment-need-voucher", "data": { "remaining": "0", ... } }
+
+// Client requests close
+{ "mpp": "payment-close-request" }
+
+// Server acknowledges close
+{ "mpp": "payment-close-ready", "data": { "status": "success", ... } }
+```
+
+## Connection flow
+
+<MermaidDiagram
+  chart={`sequenceDiagram
+  participant C as Client
+  participant S as Server
+  C->>S: WebSocket connect
+  C->>S: authorization (Credential)
+  S->>C: payment-receipt
+  S-->>C: message (data)
+  S-->>C: message (data)
+  S->>C: payment-need-voucher
+  C->>S: authorization (top-up voucher)
+  S->>C: payment-receipt
+  S-->>C: message (data)
+  C->>S: payment-close-request
+  S->>C: payment-close-ready (final Receipt)
+`}
+  messageColors={{
+'authorization': { light: '#16a34a', dark: '#4ade80' },
+'payment-receipt': { light: '#16a34a', dark: '#4ade80' },
+'payment-close-ready': { light: '#16a34a', dark: '#4ade80' },
+'payment-need-voucher': { light: '#dc2626', dark: '#f87171' },
+}}
+/>
+
+> **Green** arrows represent payment flow (`authorization`, `payment-receipt`). **Red** arrows indicate a payment is required (`payment-need-voucher`). Black arrows are data messages.
+
+1. The client opens a WebSocket connection (`ws://` or `wss://`)
+2. The client sends an `authorization` message containing the session Credential
+3. The server verifies the Credential and responds with a `payment-receipt`
+4. The server streams `message` events with application data
+5. When the channel balance depletes, the server sends `payment-need-voucher`
+6. The client tops up by sending a new `authorization` with a voucher
+7. When the stream ends, the server sends `payment-close-ready` with the final Receipt
+8. The client can also initiate close at any time via `payment-close-request`
+
+## When to use WebSocket vs SSE
+
+| Aspect | WebSocket | Server-Sent Events |
+|--------|-----------|---------------------|
+| Direction | Bidirectional | Server → Client only |
+| Voucher top-ups | In-band `authorization` message | Separate HTTP request |
+| Overhead | Single persistent connection | HTTP connection + side-channel |
+| High-frequency metering | Lower overhead per message | Higher overhead per top-up |
+| Environment support | Broad (browsers, agents, servers) | Limited in some runtimes |
+
+Use the WebSocket transport when you need bidirectional communication—for example, streaming sessions where the client tops up vouchers frequently. Use SSE when the server only needs to push data and top-ups are infrequent.
+
+# Client \[Handle 402 responses automatically]
+
+The `client.Client` wraps `http.Client` and intercepts `402` responses—it parses the Challenge, signs a stablecoin transfer, and retries with the Credential.
+
+## Quick start
+
+```go [client.go]
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+
+	"github.com/tempoxyz/mpp-go/pkg/client"
+	charge "github.com/tempoxyz/mpp-go/pkg/tempo/client"
+)
+
+method, err := charge.New(charge.Config{
+	PrivateKey: os.Getenv("MPP_PRIVATE_KEY"),
+	RPCURL:     "https://rpc.tempo.xyz",
+})
+if err != nil {
+	log.Fatal(err)
+}
+c := client.New([]client.Method{method})
+
+resp, err := c.Get(context.Background(), "https://api.example.com/resource")
+if err != nil {
+	log.Fatal(err)
+}
+defer resp.Body.Close()
+fmt.Println("Status:", resp.StatusCode)
+```
+
+When the server returns `402`, the client:
+
+1. Parses the Challenge from the `WWW-Authenticate` header
+2. Calls `CreateCredential` on the matching method to sign a stablecoin transfer
+3. Retries the request with the Credential in the `Authorization` header
+
+## `charge.Config` parameters
+
+### ChainID (optional)
+
+* **Type:** `int64`
+
+Explicitly set the expected chain ID. If omitted, `mpp-go` infers it from `RPCURL` when it matches a known Tempo RPC endpoint, or uses the challenge and live RPC response at runtime.
+
+### ClientID (optional)
+
+* **Type:** `string`
+
+Attach an identifier to transactions for attribution.
+
+### CredentialType (optional)
+
+* **Type:** `tempo.CredentialType`
+
+Credential type to use: `transaction`, `hash`, or `proof`. Defaults to `transaction`.
+
+### PrivateKey
+
+* **Type:** `string`
+
+Hex-encoded private key for signing transactions.
+
+### RPC (optional)
+
+* **Type:** `tempo.RPCClient`
+
+Custom RPC client instance. Takes precedence over `RPCURL`.
+
+### RPCURL (optional)
+
+* **Type:** `string`
+* **Default:** challenge chain when present, otherwise `https://rpc.tempo.xyz`
+
+Tempo RPC endpoint URL.
+
+### Signer (optional)
+
+* **Type:** `*temposigner.Signer`
+
+Custom signer instance. Takes precedence over `PrivateKey`.
+
+## Custom HTTP client
+
+Pass an existing `http.Client` with `client.WithHTTPClient`:
+
+```go
+c := client.New(
+	[]client.Method{method},
+	client.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}),
+)
+```
+
+## Transport
+
+For composing with an existing `http.Client`, use `client.NewTransport` to wrap a base `http.RoundTripper`:
+
+```go
+transport := client.NewTransport([]client.Method{method}, http.DefaultTransport)
+httpClient := &http.Client{Transport: transport}
+
+req, _ := http.NewRequest("GET", "https://api.example.com/resource", nil)
+resp, err := httpClient.Do(req)
+```
+
+## Convenience methods
+
+| Method | Description |
+|--------|-------------|
+| `Get(ctx, url)` | GET request with automatic `402` handling |
+| `Post(ctx, url, contentType, body)` | POST request with automatic `402` handling |
+| `Do(req)` | Execute any `*http.Request` with automatic `402` handling |
+
+## Payment Receipts
+
+Parse the `Payment-Receipt` header from the response:
+
+```go
+import "github.com/tempoxyz/mpp-go/pkg/mpp"
+
+receipt, err := mpp.ParseReceipt(resp.Header.Get("Payment-Receipt"))
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println("Status:", receipt.Status)
+fmt.Println("Reference:", receipt.Reference)
+```
+
+For manual Challenge and Credential handling, see [Core types](/sdk/go/core).
+
+# Core types \[Challenge, Credential, and Receipt primitives]
+
+These types map directly to HTTP headers—`WWW-Authenticate`, `Authorization`, and `Payment-Receipt`—and can be used independently of the higher-level client and server APIs.
+
+```go
+import "github.com/tempoxyz/mpp-go/pkg/mpp"
+```
+
+## Parse a Challenge
+
+Parse a `WWW-Authenticate` header into a typed `Challenge`:
+
+```go
+challenge, err := mpp.ParseChallenge(
+	`Payment id="...", realm="...", method="tempo", intent="charge", request="eyJ..."`,
+)
+if err != nil {
+	log.Fatal(err)
+}
+
+fmt.Println("Method:", challenge.Method)
+fmt.Println("Intent:", challenge.Intent)
+```
+
+On the wire, `request` and optional `opaque` are base64url-encoded JSON strings in the `WWW-Authenticate` header. `ParseChallenge` decodes them into structured fields for application code.
+
+## Create and serialize a Credential
+
+Build a `Credential` from a Challenge echo and payment proof:
+
+```go
+credential := &mpp.Credential{
+	Challenge: challenge.ToEcho(),
+	Payload: map[string]any{
+		"type":      "transaction",
+		"signature": "0x...",
+	},
+	Source: "did:pkh:eip155:4217:0xa726a1...",
+}
+
+header := credential.ToAuthorization()
+// header = "Payment eyJ..."
+```
+
+`challenge.ToEcho()` preserves the original wire values. In the serialized Credential, `challenge.request` and `challenge.opaque` remain base64url strings inside the `Authorization` payload.
+
+## Parse and serialize a Receipt
+
+Parse the `Payment-Receipt` response header:
+
+```go
+receipt, err := mpp.ParseReceipt(headerValue)
+if err != nil {
+	log.Fatal(err)
+}
+
+fmt.Println("Status:", receipt.Status)
+fmt.Println("Reference:", receipt.Reference)
+```
+
+Serialize a Receipt back to a header value:
+
+```go
+header := receipt.ToPaymentReceipt()
+```
+
+## Type reference
+
+| Type | Description |
+|------|-------------|
+| `Challenge` | Server Challenge parsed from `WWW-Authenticate` |
+| `ChallengeEcho` | Echoed Challenge fields in a Credential |
+| `Credential` | Client Credential for the `Authorization` header |
+| `Receipt` | Server Receipt parsed from `Payment-Receipt` |
+
+# Server \[Protect endpoints with payment requirements]
+
+Create a payment handler with `server.New()` and use `ChargeMiddleware` or call `Charge()` directly. The `charge.NewMethod` factory configures `Currency` and `Recipient` once, then every charge uses those defaults.
+
+## Quick start
+
+```go [server.go]
+import (
+	"github.com/tempoxyz/mpp-go/pkg/server"
+	charge "github.com/tempoxyz/mpp-go/pkg/tempo/server"
+)
+
+intent, _ := charge.NewIntent(charge.IntentConfig{
+	RPCURL: "https://rpc.tempo.xyz",
+})
+method := charge.NewMethod(charge.MethodConfig{
+	Intent:    intent,
+	Recipient: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+})
+payment := server.New(method, "api.example.com", "my-server-secret")
+
+result, err := payment.Charge(ctx, server.ChargeParams{
+	Authorization: r.Header.Get("Authorization"),
+	Amount:        "0.50",
+})
+
+if result.IsChallenge() {
+	server.WriteChallenge(w, result.Challenge, payment.Realm())
+	return
+}
+// result.Receipt is the verified Receipt
+```
+
+## Framework middleware
+
+### net/http
+
+Use `server.ChargeMiddleware` to wrap any `http.Handler`:
+
+```go
+mux := http.NewServeMux()
+mux.Handle("/resource", server.ChargeMiddleware(payment, server.ChargeParams{
+	Amount:      "0.50",
+	Description: "Paid resource",
+})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	credential := server.CredentialFromContext(r.Context())
+	json.NewEncoder(w).Encode(map[string]any{
+		"data":  "paid content",
+		"payer": credential.Source,
+	})
+})))
+```
+
+### Gin
+
+Use `ginadapter.ChargeMiddleware` from `pkg/server/gin`:
+
+```go
+import ginadapter "github.com/tempoxyz/mpp-go/pkg/server/gin"
+
+r := gin.Default()
+r.GET("/resource", ginadapter.ChargeMiddleware(payment, server.ChargeParams{
+	Amount: "0.50",
+}), func(c *gin.Context) {
+	credential := server.CredentialFromContext(c.Request.Context())
+	c.JSON(200, gin.H{"payer": credential.Source})
+})
+```
+
+### Echo
+
+Use `echoadapter.ChargeMiddleware` from `pkg/server/echo`:
+
+```go
+import echoadapter "github.com/tempoxyz/mpp-go/pkg/server/echo"
+
+e := echo.New()
+e.GET("/resource", func(c echo.Context) error {
+	credential := server.CredentialFromContext(c.Request().Context())
+	return c.JSON(200, map[string]any{"payer": credential.Source})
+}, echoadapter.ChargeMiddleware(payment, server.ChargeParams{
+	Amount: "0.50",
+}))
+```
+
+### Chi
+
+Use `server.ChargeMiddleware` with `chi.With`:
+
+```go
+r := chi.NewRouter()
+r.With(server.ChargeMiddleware(payment, server.ChargeParams{
+	Amount: "0.50",
+})).Get("/resource", func(w http.ResponseWriter, r *http.Request) {
+	credential := server.CredentialFromContext(r.Context())
+	json.NewEncoder(w).Encode(map[string]any{"payer": credential.Source})
+})
+```
+
+## `MethodConfig` parameters
+
+### ChainID (optional)
+
+* **Type:** `int64`
+
+Explicitly bind issued Challenges to a specific chain. If omitted, `mpp-go` infers it from `IntentConfig.RPCURL` when it matches a known Tempo RPC endpoint.
+
+### Currency (optional)
+
+* **Type:** `string`
+* **Default:** USDC.e on mainnet, pathUSD on testnet
+
+TIP-20 token address for charges.
+
+### Decimals (optional)
+
+* **Type:** `int`
+* **Default:** `6`
+
+Token decimal places for dollar-to-base-unit conversion.
+
+### FeePayer (optional)
+
+* **Type:** `bool`
+* **Default:** `false`
+
+Enable fee sponsorship for all Challenges. When enabled, the server co-signs and sponsors transaction gas fees.
+
+### FeePayerURL (optional)
+
+* **Type:** `string`
+
+URL of a remote co-signer when the server does not sign locally.
+
+### Intent
+
+* **Type:** `*charge.Intent`
+
+Intent instance created by `charge.NewIntent`.
+
+### Memo (optional)
+
+* **Type:** `string`
+
+Default memo attached to Challenges.
+
+### Recipient (optional)
+
+* **Type:** `string`
+
+Default recipient address for charges.
+
+### SupportedModes (optional)
+
+* **Type:** `[]tempo.ChargeMode`
+
+Supported Credential submission modes (for example, `pull`, `push`).
+
+## `IntentConfig` parameters
+
+### FeePayerPrivateKey (optional)
+
+* **Type:** `string`
+
+Hex-encoded private key for fee sponsorship. The server co-signs and sponsors transaction gas fees.
+
+### FeePayerSigner (optional)
+
+* **Type:** `*temposigner.Signer`
+
+Custom signer for fee sponsorship. Takes precedence over `FeePayerPrivateKey`.
+
+### RPC (optional)
+
+* **Type:** `tempo.RPCClient`
+
+Custom RPC client instance. Takes precedence over `RPCURL`.
+
+### RPCURL (optional)
+
+* **Type:** `string`
+* **Default:** `"https://rpc.tempo.xyz"`
+
+Tempo RPC endpoint URL.
+
+### Store (optional)
+
+* **Type:** `tempo.Store`
+
+Replay-protection store for hash and proof Credentials. Defaults to an in-memory store.
+
+## `ChargeParams` parameters
+
+### Amount
+
+* **Type:** `string`
+
+Payment amount in dollars (for example, `"0.50"` for $0.50). Automatically converted to base units using the configured decimals.
+
+### Authorization (optional)
+
+* **Type:** `string`
+
+The `Authorization` header value from the incoming request.
+
+### ChainID (optional)
+
+* **Type:** `int64`
+
+Override the method's default chain ID for this charge.
+
+### Currency (optional)
+
+* **Type:** `string`
+
+Override the method's default currency address.
+
+### Description (optional)
+
+* **Type:** `string`
+
+Human-readable description attached to the Challenge.
+
+### Expires (optional)
+
+* **Type:** `string`
+
+Challenge expiration as ISO 8601 timestamp. Defaults to 5 minutes from now.
+
+### ExternalID (optional)
+
+* **Type:** `string`
+
+Merchant reference ID for reconciliation.
+
+### FeePayer (optional)
+
+* **Type:** `bool`
+
+Override the method's default fee sponsorship setting for this charge.
+
+### FeePayerURL (optional)
+
+* **Type:** `string`
+
+Override the method's default fee payer URL for this charge.
+
+### Memo (optional)
+
+* **Type:** `string`
+
+Memo attached to this Challenge.
+
+### Meta (optional)
+
+* **Type:** `map[string]string`
+
+Arbitrary metadata attached to the Challenge.
+
+### Recipient (optional)
+
+* **Type:** `string`
+
+Override the method's default recipient address.
+
+### Splits (optional)
+
+* **Type:** `[]tempo.SplitParams`
+
+Split the payment across multiple recipients.
+
+### SupportedModes (optional)
+
+* **Type:** `[]tempo.ChargeMode`
+
+Override supported submission modes for this charge.
+
+## Fee sponsorship
+
+Sponsor gas fees so clients do not need native tokens. Pass `FeePayerPrivateKey` in the `IntentConfig`:
+
+```go
+intent, _ := charge.NewIntent(charge.IntentConfig{
+	RPCURL:             "https://rpc.tempo.xyz",
+	FeePayerPrivateKey: os.Getenv("FEE_PAYER_KEY"),
+})
+method := charge.NewMethod(charge.MethodConfig{
+	Intent:    intent,
+	Recipient: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+})
+```
+
+When fee sponsorship is enabled, the server co-signs transactions and covers gas fees on behalf of the client.
+
+## Context helpers
+
+| Function | Description |
+|----------|-------------|
+| `CredentialFromContext(ctx)` | Extract the verified Credential from request context |
+| `ReceiptFromContext(ctx)` | Extract the verified Receipt from request context |
+| `ContextWithPayment(ctx, credential, receipt)` | Store payment data in context |
+
+## Key types
+
+| Type | Description |
+|------|-------------|
+| `ChargeParams` | Parameters for a single charge |
+| `IntentConfig` | Configuration for `charge.NewIntent` |
+| `MethodConfig` | Configuration for `charge.NewMethod` |
+| `Mpp` | Server handler binding method, realm, and secret |
+| `ChargeResult` | Charge result containing either a Challenge or a Receipt |
+| `SplitParams` | Payment split recipient and amount |
+
 # Client \[Handle 402 responses automatically]
 
 The `Client` class wraps `httpx` and intercepts `402` responses—it parses the Challenge, signs a stablecoin transfer, and retries with the Credential.
@@ -7686,35 +11958,6 @@ response = await get(
 )
 ```
 
-## Payment sessions
-
-For payment session channels, use `StreamMethod` instead of `tempo()`. The client opens a payment channel and sends incremental vouchers as it consumes content:
-
-```python [stream.py]
-import httpx
-from mpp.client import PaymentTransport
-from mpp.methods.tempo import StreamMethod, TempoAccount
-
-account = TempoAccount.from_key("0x...")
-
-method = StreamMethod(
-    account=account,
-    currency="0x20c0000000000000000000000000000000000000",
-    deposit=10_000_000,
-)
-
-transport = PaymentTransport(methods=[method])
-async with httpx.AsyncClient(transport=transport, timeout=60.0) as client:
-    async with client.stream("GET", "https://api.example.com/chat",
-        params={"prompt": "Explain payment channels"},
-    ) as response:
-        async for line in response.aiter_lines():
-            if line.startswith("data: "):
-                print(line[6:], end="", flush=True)
-```
-
-`StreamMethod` auto-manages the channel lifecycle—opening the channel on the first request and sending cumulative vouchers on subsequent requests to the same server.
-
 ## Custom httpx transport
 
 `PaymentTransport` wraps any `httpx.AsyncBaseTransport`, so you can compose it with custom transports:
@@ -7752,6 +11995,8 @@ challenge = Challenge.from_www_authenticate(
 )
 ```
 
+On the wire, `request` and optional `opaque` are base64url-encoded JSON strings in the `WWW-Authenticate` header. `Challenge.from_www_authenticate(...)` decodes them for application code.
+
 ## Create and serialize a Credential
 
 ```python
@@ -7763,6 +12008,8 @@ credential = Credential(
 
 header = credential.to_authorization()
 ```
+
+When a Credential echoes a Challenge, `challenge.request` and `challenge.opaque` stay in their base64url string form inside the serialized `Authorization` payload.
 
 ## Parse and serialize a Receipt
 
@@ -7780,6 +12027,7 @@ Protect endpoints with payment requirements.
 Create an `Mpp` instance with `Mpp.create()` and call `charge()` with a human-readable amount. The `tempo()` factory creates a Tempo payment method—configure `currency` and `recipient` once, then every `charge()` call uses those defaults.
 
 ```python [server.py]
+import os
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from mpp import Challenge
@@ -7791,9 +12039,10 @@ app = FastAPI()
 mpp = Mpp.create(
     method=tempo(
         currency="0x20c0000000000000000000000000000000000000",
-        recipient="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
         intents={"charge": ChargeIntent()},
+        recipient="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
     ),
+    secret_key=os.environ["MPP_SECRET_KEY"],
 )
 
 @app.get("/resource")
@@ -7814,14 +12063,14 @@ async def get_resource(request: Request):
     return {"data": "paid content", "payer": credential.source}
 ```
 
-`Mpp.create()` auto-detects `realm` from environment variables (`VERCEL_URL`, `FLY_APP_NAME`, `HOSTNAME`, and others) and auto-generates a `secret_key` persisted to `.env`. Pass explicit values to override:
+`Mpp.create()` auto-detects `realm` from environment variables (`VERCEL_URL`, `FLY_APP_NAME`, `HOSTNAME`, and others). It reads `MPP_SECRET_KEY` from the environment unless you pass `secret_key` explicitly:
 
 ```python [server.py]
 mpp = Mpp.create(
     method=tempo(
         currency="0x20c0000000000000000000000000000000000000",
-        recipient="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
         intents={"charge": ChargeIntent()},
+        recipient="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
     ),
     realm="api.example.com",
     secret_key="my-server-secret",
@@ -7839,29 +12088,6 @@ method = tempo(
     currency="0x20c0000000000000000000000000000000000000",
     recipient="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
     intents={"charge": ChargeIntent()},
-)
-```
-
-### With charge and session
-
-Register both intents on a single method:
-
-```python [server.py]
-from mpp.methods.tempo import tempo, ChargeIntent, StreamIntent
-from mpp.methods.tempo.stream.storage import MemoryStorage
-
-mpp = Mpp.create(
-    method=tempo(
-        currency="0x20c0000000000000000000000000000000000000",
-        recipient="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-        intents={
-            "charge": ChargeIntent(),
-            "stream": StreamIntent(
-                storage=MemoryStorage(),
-                rpc_url="https://rpc.tempo.xyz",
-            ),
-        },
-    ),
 )
 ```
 
@@ -7884,7 +12110,7 @@ Token decimal places for amount conversion (6 for pathUSD).
 
 * **Type:** `dict[str, Intent]`
 
-Intents to register (for example, `charge`, `session`). Each intent must be explicitly provided.
+Intents to register (for example, `charge`). Each intent must be explicitly provided.
 
 ### recipient (optional)
 
@@ -7917,7 +12143,7 @@ Server realm for `WWW-Authenticate` headers. Auto-detected from environment if o
 
 * **Type:** `str`
 
-HMAC secret for stateless Challenge ID verification. Auto-generated and persisted to `.env` if omitted.
+HMAC secret for stateless Challenge ID verification. Reads `MPP_SECRET_KEY` if omitted. Raises if neither is set.
 
 ## `charge()` parameters
 
@@ -7957,114 +12183,6 @@ Challenge expiration as ISO 8601 timestamp. Defaults to 5 minutes from now.
 
 Override the method's default recipient address.
 
-## `session()` parameters
-
-### amount
-
-* **Type:** `str`
-
-Price per unit in human-readable units (for example, `"0.000075"` for $0.000075 per token). Automatically converted to base units.
-
-### authorization
-
-* **Type:** `str | None`
-
-The `Authorization` header value from the incoming request.
-
-### currency (optional)
-
-* **Type:** `str`
-
-Override the method's default currency address.
-
-### description (optional)
-
-* **Type:** `str`
-
-Human-readable description attached to the Challenge.
-
-### recipient (optional)
-
-* **Type:** `str`
-
-Override the method's default recipient address.
-
-### unit\_type (optional)
-
-* **Type:** `str`
-* **Default:** `"token"`
-
-Service unit type label (for example, `"token"`, `"byte"`, `"request"`).
-
-## Session example
-
-`StreamIntent` requires a `storage` backend that implements the `ChannelStorage` protocol to persist channel and session state. The SDK ships `MemoryStorage` for development and testing—state lives in a Python dict and is lost on restart. For production, implement `ChannelStorage` backed by your database (Postgres, Redis, and others). The protocol has four methods:
-
-| Method | Description |
-|--------|-------------|
-| `get_channel(channel_id)` | Look up a channel by ID |
-| `get_session(challenge_id)` | Look up a session by Challenge ID |
-| `update_channel(channel_id, fn)` | Atomic read-modify-write for channel state |
-| `update_session(challenge_id, fn)` | Atomic read-modify-write for session state |
-
-A full SSE endpoint with per-token payment sessions:
-
-```python [server.py]
-import asyncio
-import json
-
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, StreamingResponse
-from mpp import Challenge
-from mpp.methods.tempo import StreamIntent, tempo
-from mpp.methods.tempo.stream.storage import MemoryStorage
-from mpp.server import Mpp
-
-app = FastAPI()
-
-mpp = Mpp.create(
-    method=tempo(
-        currency="0x20c0000000000000000000000000000000000000",
-        recipient="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-        intents={
-            "stream": StreamIntent(
-                storage=MemoryStorage(),
-                rpc_url="https://rpc.tempo.xyz",
-            ),
-        },
-    ),
-)
-
-@app.get("/api/chat")
-async def chat(request: Request, prompt: str = "Hello!"):
-    result = await mpp.stream(
-        authorization=request.headers.get("Authorization"),
-        amount="0.000075",
-        unit_type="token",
-    )
-
-    if isinstance(result, Challenge):
-        return JSONResponse(
-            status_code=402,
-            content={"error": "Payment required"},
-            headers={"WWW-Authenticate": result.to_www_authenticate(mpp.realm)},
-        )
-
-    credential, receipt = result
-
-    async def event_stream():
-        for token in ["The", " answer", " is", " 42."]:
-            yield f"data: {json.dumps({'token': token})}\n\n"
-            await asyncio.sleep(0.05)
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-        headers={"Payment-Receipt": receipt.to_payment_receipt()},
-    )
-```
-
 ## `@requires_payment` decorator
 
 For the lower-level decorator API, use `@requires_payment` with an explicit intent, request, realm, and secret key:
@@ -8097,6 +12215,343 @@ async def get_resource(request: Request, credential: Credential, receipt: Receip
 | `realm` | Server realm for `WWW-Authenticate` |
 | `request` | Payment request data (dict or callable) |
 | `secret_key` | Secret for Challenge IDs |
+
+# Client \[Handle 402 responses automatically]
+
+The `Mpp::Client::Transport` wraps HTTP and intercepts `402` responses—it parses the Challenge, signs a stablecoin transfer, and retries with the Credential.
+
+## Quick start
+
+```ruby [client.rb]
+require "mpp-rb"
+
+account = Mpp::Methods::Tempo::Account.from_key("0x...")
+
+transport = Mpp::Client::Transport.new(
+  methods: [Mpp::Methods::Tempo.tempo(account: account)],
+)
+
+response = transport.get("https://api.example.com/resource")
+puts response.body
+```
+
+When the server returns `402`, the client:
+
+1. Parses the Challenge from the `WWW-Authenticate` header
+2. Calls `create_credential` on the matching method to sign a stablecoin transfer
+3. Retries the request with the Credential in the `Authorization` header
+
+## Common methods
+
+| Method | Description |
+|--------|-------------|
+| `delete(url, **kwargs)` | DELETE request with payment handling |
+| `get(url, **kwargs)` | GET request with payment handling |
+| `post(url, **kwargs)` | POST request with payment handling |
+| `put(url, **kwargs)` | PUT request with payment handling |
+| `request(method, url, **kwargs)` | Generic request |
+
+## Account setup
+
+Load an account from a hex-encoded private key:
+
+```ruby
+account = Mpp::Methods::Tempo::Account.from_key("0x...")
+```
+
+Or from an environment variable (defaults to `TEMPO_PRIVATE_KEY`):
+
+```ruby
+account = Mpp::Methods::Tempo::Account.from_env
+```
+
+## Credential modes
+
+The Tempo method supports three credential modes:
+
+```ruby
+# Pull mode (default): Server broadcasts transaction
+credential = method.create_credential(challenge)
+
+# Push mode: Client broadcasts transaction
+credential = method.create_credential(challenge, mode: :push)
+
+# Proof mode: Zero-amount ownership proof
+credential = method.create_credential(challenge, mode: :proof)
+```
+
+## Payment Receipts
+
+Parse the `Payment-Receipt` header from the response:
+
+```ruby
+receipt = Mpp::Receipt.from_payment_receipt(
+  response.headers["Payment-Receipt"]
+)
+```
+
+For manual Challenge and Credential handling, see [Core types](/sdk/ruby/core).
+
+# Core Types \[Challenge, Credential, and Receipt primitives]
+
+These types map directly to HTTP headers—`WWW-Authenticate`, `Authorization`, and `Payment-Receipt`—and can be used independently of the higher-level client and server APIs.
+
+```ruby
+require "mpp-rb"
+```
+
+## Parse a Challenge
+
+Parse a `WWW-Authenticate` header into a typed `Challenge`:
+
+```ruby
+challenge = Mpp::Challenge.from_www_authenticate(
+  'Payment id="...", realm="...", method="tempo", intent="charge", request="eyJ..."'
+)
+
+challenge.method  # => "tempo"
+challenge.intent  # => "charge"
+```
+
+## Create and serialize a Credential
+
+Build a `Credential` and serialize it to an `Authorization` header:
+
+```ruby
+credential = Mpp::Credential.new(
+  id: "challenge-id",
+  payload: { "type" => "transaction", "signature" => "0x..." },
+  source: "did:pkh:eip155:42431:0xa726a1...",
+)
+
+header = credential.to_authorization
+# header = "Payment eyJ..."
+```
+
+## Parse and serialize a Receipt
+
+Parse the `Payment-Receipt` response header:
+
+```ruby
+receipt = Mpp::Receipt.from_payment_receipt(header_value)
+header = receipt.to_payment_receipt
+```
+
+## Type reference
+
+| Type | Description |
+|------|-------------|
+| `Mpp::Challenge` | Server Challenge parsed from `WWW-Authenticate` |
+| `Mpp::ChallengeEcho` | Echoed Challenge fields in a Credential |
+| `Mpp::Credential` | Client Credential for the `Authorization` header |
+| `Mpp::Receipt` | Server Receipt parsed from `Payment-Receipt` |
+
+# Server \[Protect endpoints with payment requirements]
+
+Create an `Mpp` handler with `Mpp.create()` and call `charge()` with a human-readable amount. The `Mpp::Methods::Tempo.tempo()` factory creates a Tempo payment method—configure `currency` and `recipient` once, then every `charge()` call uses those defaults.
+
+## Quick start
+
+```ruby [server.rb]
+require "mpp-rb"
+
+server = Mpp.create(
+  method: Mpp::Methods::Tempo.tempo(
+    currency: "0x20c0000000000000000000000000000000000000",
+    intents: { "charge" => Mpp::Methods::Tempo::ChargeIntent.new },
+    recipient: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  ),
+  secret_key: ENV["MPP_SECRET_KEY"],
+)
+
+result = server.charge(
+  request.get_header("HTTP_AUTHORIZATION"),
+  "0.50",
+  description: "Paid resource",
+)
+
+if result.is_a?(Mpp::Challenge)
+  resp = Mpp::Server::Decorator.make_challenge_response(result, server.realm)
+  [resp["status"], resp["headers"], [resp["body"]]]
+else
+  credential, receipt = result
+  [200, { "Payment-Receipt" => receipt.to_payment_receipt }, [{ data: "paid content", payer: credential.source }.to_json]]
+end
+```
+
+`Mpp.create()` auto-detects `realm` from environment variables (`FLY_APP_NAME`, `HEROKU_APP_NAME`, `VERCEL_URL`, and others). It reads `MPP_SECRET_KEY` from the environment unless you pass `secret_key` explicitly:
+
+```ruby [server.rb]
+server = Mpp.create(
+  method: Mpp::Methods::Tempo.tempo(
+    currency: "0x20c0000000000000000000000000000000000000",
+    intents: { "charge" => Mpp::Methods::Tempo::ChargeIntent.new },
+    recipient: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  ),
+  realm: "api.example.com",
+  secret_key: "my-server-secret",
+)
+```
+
+## `Mpp::Methods::Tempo.tempo()` factory
+
+`tempo()` creates a method that bundles a payment network, its intents, and default parameters together. Each intent must be explicitly registered via the `intents` parameter.
+
+```ruby [server.rb]
+method = Mpp::Methods::Tempo.tempo(
+  currency: "0x20c0000000000000000000000000000000000000",
+  recipient: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  intents: { "charge" => Mpp::Methods::Tempo::ChargeIntent.new },
+)
+```
+
+### `tempo()` parameters
+
+### currency (optional)
+
+* **Type:** `String`
+
+Default TIP-20 token address for charges.
+
+### decimals (optional)
+
+* **Type:** `Integer`
+* **Default:** `6`
+
+Token decimal places for amount conversion (6 for pathUSD).
+
+### intents
+
+* **Type:** `Hash`
+
+Intents to register (for example, `"charge"`). Each intent must be explicitly provided.
+
+### recipient (optional)
+
+* **Type:** `String`
+
+Default recipient address for charges.
+
+### rpc\_url (optional)
+
+* **Type:** `String`
+* **Default:** `"https://rpc.tempo.xyz"`
+
+Tempo RPC endpoint URL.
+
+## `Mpp.create()` parameters
+
+### method
+
+* **Type:** `Method`
+
+Payment method instance returned by `tempo()`.
+
+### realm (optional)
+
+* **Type:** `String`
+
+Server realm for `WWW-Authenticate` headers. Auto-detected from environment if omitted.
+
+### secret\_key (optional)
+
+* **Type:** `String`
+
+HMAC secret for stateless Challenge ID verification. Reads `MPP_SECRET_KEY` if omitted.
+
+## `charge()` parameters
+
+### amount
+
+* **Type:** `String`
+
+Payment amount in human-readable units (for example, `"0.50"` for $0.50). Automatically converted to base units using the method's decimal precision (6 decimals for pathUSD).
+
+### authorization
+
+* **Type:** `String | nil`
+
+The `Authorization` header value from the incoming request.
+
+### currency (optional)
+
+* **Type:** `String`
+
+Override the method's default currency address.
+
+### description (optional)
+
+* **Type:** `String`
+
+Human-readable description attached to the Challenge.
+
+### expires (optional)
+
+* **Type:** `String`
+
+Challenge expiration as ISO 8601 timestamp. Defaults to 5 minutes from now.
+
+### recipient (optional)
+
+* **Type:** `String`
+
+Override the method's default recipient address.
+
+### memo (optional)
+
+* **Type:** `String`
+
+Memo for memo-enabled transfers.
+
+### fee\_payer (optional)
+
+* **Type:** `Boolean`
+* **Default:** `false`
+
+Enable fee sponsorship for this charge.
+
+## Rack middleware
+
+Use `Mpp::Server::Middleware` to add payment requirements to any Rack application:
+
+```ruby [config.rb]
+require "mpp-rb"
+
+handler = Mpp.create(
+  method: Mpp::Methods::Tempo.tempo(
+    currency: "0x20c0000000000000000000000000000000000000",
+    intents: { "charge" => Mpp::Methods::Tempo::ChargeIntent.new },
+    recipient: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  ),
+)
+
+use Mpp::Server::Middleware, handler: handler
+```
+
+In your application, signal that a request requires payment by setting `env["mpp.charge"]`:
+
+```ruby
+env["mpp.charge"] = { amount: "0.50", description: "Premium endpoint" }
+```
+
+The middleware intercepts the response, returns a `402` Challenge on the first request, then processes the Credential on retry.
+
+## Fee sponsorship
+
+Sponsor gas fees so clients do not need native tokens. Pass a `fee_payer` account in the Tempo method:
+
+```ruby [server.rb]
+fee_payer = Mpp::Methods::Tempo::Account.from_env("FEE_PAYER_KEY")
+
+method = Mpp::Methods::Tempo.tempo(
+  currency: "0x20c0000000000000000000000000000000000000",
+  recipient: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  intents: { "charge" => Mpp::Methods::Tempo::ChargeIntent.new },
+  fee_payer: fee_payer,
+)
+```
+
+When fee sponsorship is enabled, the server co-signs transactions and covers gas fees on behalf of the client.
 
 # Client \[Handle 402 responses automatically]
 
@@ -8244,6 +12699,8 @@ println!("Method: {}", challenge.method);
 println!("Intent: {}", challenge.intent);
 ```
 
+On the wire, `request` and optional `opaque` are base64url-encoded JSON strings in the `WWW-Authenticate` header. `mpp-rs` stores them as `Base64UrlJson`, so you can decode them when you need structured values.
+
 Decode the base64url-encoded request to a typed struct:
 
 ```rust
@@ -8269,6 +12726,8 @@ let credential = PaymentCredential::with_source(
 let header = format_authorization(&credential)?;
 // header = "Payment eyJ..."
 ```
+
+`challenge.to_echo()` preserves the original wire values. In the serialized Credential, `challenge.request` and `challenge.opaque` remain base64url strings inside the `Authorization` payload.
 
 ## Parse a Receipt
 
@@ -8331,7 +12790,7 @@ let challenge = mpp.charge("0.10")?;
 let receipt = mpp.verify_credential(&credential).await?;
 ```
 
-`Mpp::create()` auto-detects `realm` from environment variables (`VERCEL_URL`, `FLY_APP_NAME`, `HOSTNAME`, and others) and reads `MPP_SECRET_KEY` for stateless HMAC verification. Pass explicit values with the builder to override:
+`Mpp::create()` auto-detects `realm` from environment variables (`VERCEL_URL`, `FLY_APP_NAME`, `HOSTNAME`, and others) and reads `MPP_SECRET_KEY` for stateless HMAC verification. Treat `MPP_SECRET_KEY` as root-of-trust material: store it in your secret manager, keep it server-side, and rotate it immediately if it is exposed. See [Security](/advanced/security). Pass explicit values with the builder to override:
 
 ```rust
 let mpp = Mpp::create(
@@ -8405,7 +12864,7 @@ Explicitly set the chain ID. Auto-detected from the RPC URL if omitted (moderato
 ### currency (optional)
 
 * **Type:** `&str`
-* **Default:** USDC on mainnet, pathUSD on testnet
+* **Default:** USDC.e on mainnet, pathUSD on testnet
 
 TIP-20 token address for charges.
 
@@ -8440,7 +12899,7 @@ Tempo RPC endpoint URL. Also auto-detects chain ID from the URL.
 
 * **Type:** `&str`
 
-HMAC secret for stateless Challenge ID verification. Reads `MPP_SECRET_KEY` environment variable if omitted.
+HMAC secret for stateless Challenge ID verification. Reads `MPP_SECRET_KEY` if omitted. Keep it server-side, never log it, and rotate it with an overlap window during rollovers. See [Security](/advanced/security).
 
 ## `charge()` parameters
 
@@ -8782,6 +13241,208 @@ Generate shell completions:
 ```bash [terminal]
 $ mppx completions
 ```
+
+# `Html.init` \[Initialize a payment UI context]
+
+Sets up a context for building payment method UIs in the browser. Returns challenge data, theme tokens, and helpers for error handling and credential submission.
+
+For a full guide on adding HTML support to a custom payment method, see [Custom HTML](/sdk/typescript/html/custom).
+
+## Usage
+
+```ts [example.ts]
+import * as Html from 'mppx/html'
+
+const context = Html.init('tempo')
+
+// Mount your UI
+const button = document.createElement('button')
+button.textContent = context.text.pay
+context.root.appendChild(button)
+```
+
+### With credential submission
+
+Build a complete payment form that handles errors and submits credentials.
+
+```ts [example.ts]
+import * as Html from 'mppx/html'
+
+const c = Html.init('tempo')
+
+const button = document.createElement('button')
+button.textContent = c.text.pay
+button.onclick = async () => {
+  try {
+    c.error()
+    button.disabled = true
+    const credential = await method.createCredential({
+      challenge: c.challenge,
+      context: {},
+    })
+    await c.submit(credential)
+  } catch (e) {
+    c.error(e instanceof Error ? e.message : 'Payment failed')
+  } finally {
+    button.disabled = false
+  }
+}
+c.root.appendChild(button)
+```
+
+### With CSS theming
+
+Use `context.vars` for CSS custom property references that respect the server-configured theme.
+
+```ts [example.ts]
+import * as Html from 'mppx/html'
+
+const c = Html.init('tempo')
+
+const style = document.createElement('style')
+style.textContent = `
+  button {
+    background: ${c.vars.accent};
+    border-radius: ${c.vars.radius};
+    color: ${c.vars.background};
+    font-family: ${c.vars.fontFamily};
+    padding: calc(${c.vars.spacingUnit} * 4) calc(${c.vars.spacingUnit} * 8);
+  }
+`
+c.root.appendChild(style)
+```
+
+## Return type
+
+```ts
+type Context = {
+  /** The parsed Challenge object for this payment method. */
+  challenge: Challenge
+  /** Handler-specific HTML configuration. */
+  config: Record<string, unknown>
+  /** Show or clear an error message below the root element. */
+  error: (message?: string | null | undefined) => void
+  /** Pre-formatted amount string (for example, "$10.00"). */
+  formattedAmount: string
+  /** Human-readable payment method label. */
+  label: string
+  /** The DOM element to mount your payment UI into. */
+  root: HTMLElement
+  /** Submit a credential and reload the page. */
+  submit: (credential: string) => Promise<void>
+  /** UI text strings with defaults applied. */
+  text: { expires: string; pay: string; paymentRequired: string; title: string }
+  /** Resolved theme tokens (colors, spacing, typography). */
+  theme: Record<string, string>
+  /** CSS custom property references for theming. */
+  vars: {
+    accent: CssVar       // var(--mppx-accent)
+    background: CssVar   // var(--mppx-background)
+    border: CssVar       // var(--mppx-border)
+    fontFamily: CssVar   // var(--mppx-font-family)
+    fontSizeBase: CssVar // var(--mppx-font-size-base)
+    foreground: CssVar   // var(--mppx-foreground)
+    muted: CssVar        // var(--mppx-muted)
+    negative: CssVar     // var(--mppx-negative)
+    positive: CssVar     // var(--mppx-positive)
+    radius: CssVar       // var(--mppx-radius)
+    spacingUnit: CssVar  // var(--mppx-spacing-unit)
+    surface: CssVar      // var(--mppx-surface)
+  }
+}
+```
+
+## Parameters
+
+### methodName
+
+* **Type:** `string`
+
+The payment method name to initialize (for example, `'tempo'`, `'stripe'`). Matches against the challenge data the server embeds in the page.
+
+## Context properties
+
+### challenge
+
+* **Type:** `Challenge`
+
+The parsed Challenge object for this payment method. Contains `intent`, `method`, `realm`, `request`, and other challenge fields.
+
+### config
+
+* **Type:** `Record<string, unknown>`
+
+Method-specific configuration provided by the server. For example, Stripe passes `{ publishableKey: string }`.
+
+### error
+
+* **Type:** `(message?: string | null | undefined) => void`
+
+Shows or clears an error message. Pass a string to display an error below the root element. Call with no arguments (or `null`/`undefined`) to clear the error.
+
+### formattedAmount
+
+* **Type:** `string`
+
+Pre-formatted amount string from the server (for example, `"$10.00"`).
+
+### label
+
+* **Type:** `string`
+
+Payment method label, used for tab labels when multiple methods are available.
+
+### root
+
+* **Type:** `HTMLElement`
+
+The DOM element to mount your payment UI into. Append your form elements here.
+
+### submit
+
+* **Type:** `(credential: string) => Promise<void>`
+
+Sends the credential to the server via a Service Worker, then reloads the page. Call after creating a credential from the challenge.
+
+### text
+
+* **Type:** `{ expires: string; pay: string; paymentRequired: string; title: string }`
+
+UI text strings with defaults applied.
+
+| Key | Default |
+|---|---|
+| `expires` | `"Expires at"` |
+| `pay` | `"Pay"` |
+| `paymentRequired` | `"Payment Required"` |
+| `title` | `"Payment Required"` |
+
+### theme
+
+* **Type:** `Record<string, string>`
+
+Resolved theme tokens with defaults applied. Includes color tokens (`accent`, `background`, `border`, `foreground`, `muted`, `negative`, `positive`, `surface`) and layout tokens (`colorScheme`, `fontFamily`, `fontSizeBase`, `radius`, `spacingUnit`).
+
+### vars
+
+* **Type:** `typeof vars`
+
+CSS custom property references for use in inline styles or `<style>` blocks. Each property returns the corresponding `var(--mppx-*)` value when used in a string.
+
+| Property | CSS variable |
+|---|---|
+| `accent` | `var(--mppx-accent)` |
+| `background` | `var(--mppx-background)` |
+| `border` | `var(--mppx-border)` |
+| `fontFamily` | `var(--mppx-font-family)` |
+| `fontSizeBase` | `var(--mppx-font-size-base)` |
+| `foreground` | `var(--mppx-foreground)` |
+| `muted` | `var(--mppx-muted)` |
+| `negative` | `var(--mppx-negative)` |
+| `positive` | `var(--mppx-positive)` |
+| `radius` | `var(--mppx-radius)` |
+| `spacingUnit` | `var(--mppx-spacing-unit)` |
+| `surface` | `var(--mppx-surface)` |
 
 # `Method.from` \[Create a payment method from a definition]
 
@@ -9510,7 +14171,7 @@ Maximum deposit in human-readable units. Caps the server's `suggestedDeposit`. E
 
 # `Method.tempo.charge` \[One-time payments]
 
-Creates a Tempo charge payment method for client-side transaction signing.
+Creates a Tempo charge payment method for client-side transaction and proof signing.
 
 ## Usage
 
@@ -9531,6 +14192,8 @@ Mppx.create({
 const response = await fetch('https://mpp.dev/api/ping/paid')
 ```
 
+For non-zero Challenges, the client returns either a `transaction` or `hash` payload depending on `mode`. For zero-amount Challenges, it always returns a `proof` payload and skips transaction construction.
+
 ## Return type
 
 ```ts
@@ -9545,7 +14208,7 @@ type ReturnType = Method.Client
 
 * **Type:** `Account`
 
-Account to sign transactions with. You can override this per call using the context.
+Account to sign transactions and zero-dollar proofs with. You can override this per call using the context.
 
 ```ts twoslash
 import { tempo } from 'mppx/client'
@@ -9586,12 +14249,30 @@ Client identifier used to derive the client fingerprint in attribution memos.
 
 Function that returns a viem client for the given chain ID.
 
+### expectedRecipients (optional)
+
+* **Type:** `readonly string[]`
+
+Allowlist of addresses the client will accept as split recipients. When set, the client rejects any Challenge whose split recipients are not in this list, preventing a compromised server from redirecting funds.
+
+```ts twoslash
+import { tempo } from 'mppx/client'
+import { privateKeyToAccount } from 'viem/accounts'
+
+const method = tempo.charge({
+  account: privateKeyToAccount('0xabc…123'),
+  expectedRecipients: [ // [!code focus]
+    '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', // [!code focus]
+  ], // [!code focus]
+})
+```
+
 ### mode (optional)
 
 * **Type:** `'push' | 'pull'`
 * **Default:** `'push'` for JSON-RPC accounts, `'pull'` for local accounts
 
-Controls how the charge transaction is submitted.
+Controls how non-zero charge transactions are submitted. Zero-amount Challenges ignore this option and always use a `proof` payload.
 
 * `'push'`: the client broadcasts the transaction and sends the transaction hash to the server for verification.
 * `'pull'`: the client signs the transaction and sends the serialized transaction to the server, which broadcasts it. This is required for server-side [fee sponsorship](/quickstart/server#fee-sponsorship).
@@ -9786,6 +14467,56 @@ for await (const message of stream) {
 await session.close()
 ```
 
+### With WebSocket streaming
+
+Open a paid WebSocket session. The session manager handles the HTTP `402` probe, channel open, and in-band voucher signing. Payment control frames are intercepted internally — your socket listeners only see application messages.
+
+```ts
+import { tempo } from 'mppx/client'
+import { privateKeyToAccount } from 'viem/accounts'
+
+const session = tempo.session({
+  account: privateKeyToAccount('0x...'),
+  maxDeposit: '1',
+})
+
+const url = new URL('wss://api.example.com/ws/chat')
+url.searchParams.set('prompt', 'Tell me something interesting')
+
+const socket = await session.ws(url, {
+  onReceipt(receipt) {
+    console.log('Receipt:', receipt)
+  },
+})
+
+socket.addEventListener('message', (event) => {
+  process.stdout.write(event.data)
+})
+
+await new Promise<void>((resolve) => {
+  socket.addEventListener('close', () => resolve(), { once: true })
+})
+
+const receipt = await session.close()
+```
+
+:::tip
+In Node.js or other server-side runtimes without a global `WebSocket`, pass the constructor to `tempo.session()`:
+
+```ts
+import { WebSocket } from 'isows'
+import { tempo } from 'mppx/client'
+import { privateKeyToAccount } from 'viem/accounts'
+
+const session = tempo.session({
+  account: privateKeyToAccount('0x...'),
+  maxDeposit: '1',
+  webSocket: WebSocket,
+})
+```
+
+:::
+
 ### With explicit open
 
 Open the channel before the first request. This separates the on-chain deposit transaction from the first API call.
@@ -9829,6 +14560,14 @@ type SessionManager = {
       signal?: AbortSignal
     },
   ): Promise<AsyncIterable<string>>
+  ws(
+    input: string | URL,
+    init?: {
+      onReceipt?: (receipt: SessionReceipt) => void
+      protocols?: string | string[]
+      signal?: AbortSignal
+    },
+  ): Promise<WebSocket>
   close(): Promise<SessionReceipt | undefined>
 }
 ```
@@ -9927,6 +14666,21 @@ Function that returns a viem client for the given chain ID.
 
 Maximum deposit in human-readable units (for example `"10"` for 10 tokens). Caps the server's suggested deposit and enables automatic channel management.
 
+### webSocket (optional)
+
+* **Type:** `WebSocketConstructor`
+
+WebSocket constructor for runtimes without a global `WebSocket` (e.g. Node.js). Required for `session.ws()` in non-browser environments. Use [`isows`](https://github.com/nickmccurdy/isows) for isomorphic support.
+
+```ts
+import { WebSocket } from 'isows'
+
+const session = tempo.session({
+  account,
+  webSocket: WebSocket,
+})
+```
+
 ## Methods
 
 ### `session.close()`
@@ -9951,7 +14705,7 @@ console.log(response.cumulative)
 
 ### `session.open(options?)`
 
-Opens the payment channel explicitly. You must make at least one `fetch()` or `sse()` call first to receive a 402 Challenge from the server.
+Opens the payment channel explicitly. You must make at least one `fetch()`, `sse()`, or `ws()` call first to receive a 402 Challenge from the server.
 
 * **options.deposit** (`bigint`, optional) — Raw deposit amount in token units.
 
@@ -9979,6 +14733,31 @@ for await (const message of stream) {
   console.log(message)
 }
 ```
+
+### `session.ws(input, init?)`
+
+Opens a paid WebSocket connection. Performs the HTTP `402` probe, creates the first credential, opens the socket, and sends the auth frame. Returns a `WebSocket` that only surfaces application messages — payment control frames are handled internally.
+
+* **input** (`string | URL`) — The WebSocket URL (`ws:` or `wss:`).
+* **init.onReceipt** (`(receipt: SessionReceipt) => void`, optional) — Called when the server sends a payment Receipt.
+* **init.protocols** (`string | string[]`, optional) — WebSocket sub-protocols.
+* **init.signal** (`AbortSignal`, optional) — Aborts the payment flow and closes the socket.
+
+```ts
+const socket = await session.ws('wss://api.example.com/ws/chat', {
+  onReceipt: (receipt) => console.log('paid:', receipt),
+})
+
+socket.addEventListener('message', (event) => {
+  console.log(event.data)
+})
+```
+
+:::info
+
+The returned `WebSocket` is a managed wrapper. Messages are buffered until the first listener is installed, so you won't miss frames between `await session.ws()` and adding your `message` listener.
+
+:::
 
 ## Properties
 
@@ -10185,6 +14964,74 @@ const account = privateKeyToAccount('0x...')
 const mppx = Mppx.create({
   methods: [tempo({ account })],
   polyfill: false, // [!code focus]
+})
+```
+
+### paymentPreferences (optional)
+
+* **Type:** `AcceptPayment.Config<methods>`
+
+Configures which payment methods the client prefers when a server offers multiple options via `Mppx.compose`. Emits an `Accept-Payment` header on requests so the server can filter Challenges to the client's preferred methods.
+
+Accepts a definition map or a callback that receives a typed key tree. Each key is a `method/intent` string (like `'tempo/charge'`). Values are q-values from 0 to 1—higher means more preferred. Set to 0 to explicitly opt out.
+
+```ts twoslash
+import { Mppx, stripe, tempo } from 'mppx/client'
+import { privateKeyToAccount } from 'viem/accounts'
+
+const account = privateKeyToAccount('0x...')
+
+Mppx.create({
+  methods: [
+    tempo({ account }),
+    stripe.charge({
+      createToken: async (opts) => {
+        const res = await fetch('/api/create-spt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(opts),
+        })
+        const { spt } = await res.json() as { spt: string }
+        return spt
+      },
+    }),
+  ],
+  paymentPreferences: ({ tempo, stripe }) => ({ // [!code focus:start]
+    [tempo.charge]: 1,
+    [stripe.charge]: 0.5,
+    [tempo.session]: 0.2,
+  }), // [!code focus:end]
+})
+```
+
+With a plain definition map:
+
+```ts twoslash
+import { Mppx, stripe, tempo } from 'mppx/client'
+import { privateKeyToAccount } from 'viem/accounts'
+
+const account = privateKeyToAccount('0x...')
+
+Mppx.create({
+  methods: [
+    tempo({ account }),
+    stripe.charge({
+      createToken: async (opts) => {
+        const res = await fetch('/api/create-spt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(opts),
+        })
+        const { spt } = await res.json() as { spt: string }
+        return spt
+      },
+    }),
+  ],
+  paymentPreferences: { // [!code focus:start]
+    'tempo/charge': 1,
+    'stripe/charge': 0.5,
+    'tempo/session': 0.2,
+  }, // [!code focus:end]
 })
 ```
 
@@ -10469,7 +15316,7 @@ const challenge = Challenge.deserialize(header, { methods: [Methods.charge] })
 type ReturnType = Challenge
 ```
 
-The deserialized Challenge object. If the serialized header contains an `opaque` parameter, it is deserialized and stored as `opaque` on the Challenge (accessible via `Challenge.meta`).
+The deserialized Challenge object. `mppx` decodes `request` and `opaque` from their base64url-encoded JCS strings back to structured values. If the serialized header contains an `opaque` parameter, the parsed value is accessible via `Challenge.meta`.
 
 ## Parameters
 
@@ -10489,12 +15336,16 @@ The WWW-Authenticate header value.
 
 Creates a challenge from the given parameters.
 
-If `secretKey` option is provided, the challenge ID is computed as HMAC-SHA256 over the challenge parameters (realm|method|intent|request|expires|digest|opaque), cryptographically binding the ID to its contents.
+If `secretKey` option is provided, the challenge ID is computed as HMAC-SHA256 over the challenge parameters (realm|method|intent|request|expires|digest|opaque), cryptographically binding the ID to its contents. When `expires`, `digest`, or `opaque` is absent, that slot is an empty string.
+
+Load `secretKey` from your server environment or secret manager. Do not ship it to clients.
 
 ## Usage
 
 ```ts twoslash
 import { Challenge } from 'mppx'
+
+const secretKey = process.env.MPP_SECRET_KEY!
 
 // With HMAC-bound ID (recommended for servers)
 const challenge = Challenge.from(
@@ -10503,7 +15354,7 @@ const challenge = Challenge.from(
     method: 'tempo',
     realm: 'mpp.dev',
     request: { amount: '1000000', currency: '0x...', recipient: '0x...' },
-    secretKey: 'my-secret',
+    secretKey,
   },
 )
 ```
@@ -10572,7 +15423,7 @@ Intent type (for example, `"charge"`, `"session"`).
 
 * **Type:** `Record<string, string>`
 
-Server-defined correlation data, serialized as `opaque` on the Challenge.
+Server-defined correlation data. `mppx` serializes it as the base64url-encoded `opaque` auth-param in HTTP Challenges.
 
 #### method
 
@@ -10590,13 +15441,13 @@ Server realm (for example, hostname).
 
 * **Type:** `Record<string, unknown>`
 
-Method-specific request data.
+Method-specific request data. `mppx` serializes it as base64url-encoded JCS JSON in the HTTP `request` auth-param.
 
 #### secretKey (when not using id)
 
 * **Type:** `string`
 
-Secret key for HMAC-bound challenge ID.
+Server secret for HMAC-bound challenge ID. Keep it server-side and load it from your environment or secret manager.
 
 # `Challenge.fromHeaders` \[Extract a Challenge from Headers]
 
@@ -10649,11 +15500,15 @@ Optional settings to narrow the Challenge type using method intents.
 
 Creates a validated Challenge from a method definition.
 
+Load `secretKey` from your server environment or secret manager. Do not ship it to clients.
+
 ## Usage
 
 ```ts twoslash
 import { Challenge } from 'mppx'
 import { Methods } from 'mppx/tempo'
+
+const secretKey = process.env.MPP_SECRET_KEY!
 
 const challenge = Challenge.fromMethod(
   Methods.charge,
@@ -10665,7 +15520,7 @@ const challenge = Challenge.fromMethod(
       decimals: 6,
       recipient: '0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00',
     },
-    secretKey: 'my-secret',
+    secretKey,
   },
 )
 ```
@@ -10718,7 +15573,7 @@ Explicit challenge ID.
 
 * **Type:** `Record<string, string>`
 
-Server-defined correlation data. Serialized as `opaque` on the Challenge.
+Server-defined correlation data. `mppx` serializes it as the base64url-encoded `opaque` auth-param in HTTP Challenges.
 
 #### realm
 
@@ -10730,13 +15585,13 @@ Server realm (for example, hostname).
 
 * **Type:** `z.input<method['schema']['request']>`
 
-Method-specific request data, validated against the method's schema.
+Method-specific request data, validated against the method's schema. `mppx` serializes it as base64url-encoded JCS JSON in the HTTP `request` auth-param.
 
 #### secretKey (when not using id)
 
 * **Type:** `string`
 
-Secret key for HMAC-bound challenge ID.
+Server secret for HMAC-bound challenge ID. Keep it server-side and load it from your environment or secret manager.
 
 # `Challenge.fromResponse` \[Extract a Challenge from a Response]
 
@@ -10811,6 +15666,8 @@ type ReturnType = Record<string, string> | undefined
 
 The `opaque` field from the Challenge, or `undefined` if not set.
 
+On HTTP transport, the same data travels in the `opaque` auth-param as base64url-encoded JCS JSON.
+
 ## Parameters
 
 ### challenge
@@ -10848,7 +15705,7 @@ type ReturnType = string
 
 A string suitable for the WWW-Authenticate header value.
 
-The serialized string includes optional fields when present: `description`, `digest`, `expires`, and `opaque` (server-defined correlation data set via `meta` in `Challenge.from`).
+The serialized string includes optional fields when present: `description`, `digest`, `expires`, and `opaque` (server-defined correlation data set via `meta` in `Challenge.from`). In HTTP headers, `request` and `opaque` are emitted as base64url-encoded JCS JSON strings.
 
 ## Parameters
 
@@ -10862,20 +15719,24 @@ The challenge to serialize.
 
 Verifies that a challenge ID matches the expected HMAC for the given parameters.
 
+Use the same server-managed secret that produced the Challenge ID.
+
 ## Usage
 
 ```ts twoslash
 import { Challenge } from 'mppx'
+
+const secretKey = process.env.MPP_SECRET_KEY!
 
 const challenge = Challenge.from({
   intent: 'charge',
   method: 'tempo',
   realm: 'mpp.dev',
   request: { amount: '1000000', currency: '0x...', recipient: '0x...' },
-  secretKey: 'my-secret',
+  secretKey,
 })
 
-const isValid = Challenge.verify(challenge, { secretKey: 'my-secret' })
+const isValid = Challenge.verify(challenge, { secretKey })
 // => true
 ```
 
@@ -10901,7 +15762,7 @@ The challenge to verify.
 
 * **Type:** `string`
 
-Secret key for HMAC-bound challenge ID verification.
+Server secret for HMAC-bound challenge ID verification. Keep it server-side and load it from your environment or secret manager.
 
 # `Credential.deserialize` \[Deserialize a Credential from a header]
 
@@ -10923,6 +15784,8 @@ type ReturnType = Credential<payload>
 ```
 
 The deserialized credential object.
+
+`mppx` parses the echoed Challenge inside the Credential, decoding `request` and `opaque` from their base64url-encoded wire strings back to structured values for application code.
 
 ## Parameters
 
@@ -11049,6 +15912,8 @@ type ReturnType = string
 ```
 
 A string suitable for the Authorization header value.
+
+When the Credential includes an echoed Challenge, `mppx` keeps the HTTP wire format intact: `challenge.request` and `challenge.opaque` serialize as the same base64url-encoded strings that came from the Challenge header.
 
 ## Parameters
 
@@ -11415,7 +16280,7 @@ Function that verifies a Credential and returns a Receipt.
 
 # `PaymentRequest.deserialize` \[Deserialize a payment request]
 
-Deserializes a base64url string to a payment request.
+Deserializes a base64url JCS string to a payment request.
 
 ## Usage
 
@@ -11440,7 +16305,7 @@ The deserialized request object.
 
 * **Type:** `string`
 
-The base64url-encoded string.
+The base64url-encoded JCS string.
 
 # `PaymentRequest.from` \[Create a payment request]
 
@@ -11476,7 +16341,7 @@ Request parameters. The shape depends on the intent being used.
 
 # `PaymentRequest.serialize` \[Serialize a payment request to a string]
 
-Serializes a payment request to a base64url string.
+Serializes a payment request to a base64url JCS string.
 
 ## Usage
 
@@ -11499,7 +16364,7 @@ const serialized = PaymentRequest.serialize(request)
 type ReturnType = string
 ```
 
-A base64url-encoded string (no padding).
+A base64url-encoded JCS string (no padding).
 
 ## Parameters
 
@@ -11666,6 +16531,185 @@ A base64url-encoded string suitable for the Payment-Receipt header value.
 * **Type:** `Receipt`
 
 The receipt to serialize.
+
+# Custom HTML \[Add payment links to your method]
+
+Payment methods can serve a payment page when users visit a protected endpoint in a browser. This guide covers how to add HTML support to a [custom payment method](/payment-methods/custom).
+
+For the `Html.init` API reference, see [`Html.init`](/sdk/typescript/Html.init).
+
+Adding HTML support requires two pieces:
+
+1. **Server-side handler** — provide `html` options to `Method.toServer` with a bundled script, amount formatter, and other options.
+2. **Client-side script** — a script embedded in the server-rendered page that uses [`Html.init`](/sdk/typescript/Html.init) to render a payment form and submit credentials via Service Worker.
+
+## Server-side handler
+
+Pass the `html` option to `Method.toServer`. The server embeds your script into a full HTML page and serves it when the request has `Accept: text/html`.
+
+```ts [methods.server.ts]
+import { Method, Receipt, z } from 'mppx'
+import type * as Html from 'mppx/html'
+import htmlContent from './html/main.js?raw' // bundled client script
+
+const lightning = Method.from({
+  intent: 'charge',
+  name: 'lightning',
+  schema: {
+    credential: { payload: z.object({ preimage: z.string() }) },
+    request: z.object({
+      amount: z.string(),
+      currency: z.string(),
+      invoice: z.string(),
+      paymentHash: z.string(),
+      recipient: z.string(),
+    }),
+  },
+})
+
+export function charge(parameters: {
+  html?: Html.Config | undefined
+}) {
+  const { html } = parameters
+
+  return Method.toServer(lightning, {
+    // [!code hl:start]
+    html: html
+      ? {
+          config: {},
+          content: htmlContent,
+          formatAmount: (request) => `${request.currency} ${request.amount}`,
+          text: html.text,
+          theme: html.theme,
+        }
+      : undefined,
+    // [!code hl:end]
+    async verify({ credential }) {
+      return Receipt.from({
+        method: 'lightning',
+        reference: credential.payload.preimage,
+        status: 'success',
+        timestamp: new Date().toISOString(),
+      })
+    },
+  })
+}
+```
+
+### Html options
+
+#### config
+
+* **Type:** `Record<string, unknown>`
+
+Method-specific data passed to the client script as `context.config`. For example, Stripe passes `{ publishableKey, createTokenUrl }`. Use `{}` if your method doesn't need extra configuration.
+
+#### content
+
+* **Type:** `string`
+
+The JavaScript bundle for your payment form. Embedded as an inline `<script>` in the HTML page. Import with `?raw` to get the file contents as a string.
+
+#### formatAmount
+
+* **Type:** `(request: any) => string | Promise<string>`
+
+Formats the request into a display amount (for example, `"$10.00"`). Receives the parsed request object from the Challenge.
+
+#### text (optional)
+
+* **Type:** `Html.Text`
+
+Override default UI text strings (`pay`, `expires`, `paymentRequired`, `title`).
+
+#### theme (optional)
+
+* **Type:** `Html.Theme`
+
+Override default theme tokens (colors, typography, spacing).
+
+### Reference implementations
+
+These built-in methods already support HTML. Use them as reference when building your own.
+
+| Method | Source |
+| --- | --- |
+| [`tempo.charge`](/payment-methods/tempo/charge#payment-links) | [GitHub](https://github.com/wevm/mppx/blob/main/src/tempo/server/Charge.ts) |
+| [`stripe.charge`](/payment-methods/stripe/charge#payment-links) | [GitHub](https://github.com/wevm/mppx/blob/main/src/stripe/server/Charge.ts) |
+
+For a guide on using payment links as a consumer, see [Create a payment link](/guides/payment-links).
+
+## Client-side script
+
+Create the JavaScript file that renders your payment form. Call `Html.init` to get a typed context, build your UI, and call `context.submit` with the credential.
+
+```ts [html/main.ts]
+import * as Html from 'mppx/html'
+
+const c = Html.init('lightning')
+
+// Build the payment form
+const container = document.createElement('div')
+
+const amount = document.createElement('p')
+amount.textContent = c.formattedAmount
+
+const button = document.createElement('button')
+button.textContent = c.text.pay
+
+// Style using theme variables
+const style = document.createElement('style')
+style.textContent = `
+  button {
+    background: ${c.vars.accent};
+    border: none;
+    border-radius: ${c.vars.radius};
+    color: ${c.vars.background};
+    cursor: pointer;
+    font-family: ${c.vars.fontFamily};
+    padding: calc(${c.vars.spacingUnit} * 4) calc(${c.vars.spacingUnit} * 8);
+  }
+  button:disabled {
+    opacity: 0.5;
+  }
+`
+
+// Handle payment
+button.onclick = async () => {
+  try {
+    c.error()
+    button.disabled = true
+
+    // Your payment logic here — create a credential from the challenge
+    const credential = await createCredential(c.challenge)
+    await c.submit(credential)
+  } catch (e) {
+    c.error(e instanceof Error ? e.message : 'Payment failed')
+  } finally {
+    button.disabled = false
+  }
+}
+
+container.append(style, amount, button)
+c.root.appendChild(container)
+```
+
+### Bundling the script
+
+`content` expects a single JavaScript string. Bundle your client script into one file, then import with `?raw`:
+
+```ts [methods.server.ts]
+import htmlContent from './html/main.js?raw'
+```
+
+If you use TypeScript, compile `main.ts` to `main.js` as part of your build step.
+
+### Reference implementations
+
+| Method | Source |
+| --- | --- |
+| [`tempo.charge`](/payment-methods/tempo/charge#payment-links) | [GitHub](https://github.com/wevm/mppx/blob/main/src/tempo/server/internal/html/main.ts) |
+| [`stripe.charge`](/payment-methods/stripe/charge#payment-links) | [GitHub](https://github.com/wevm/mppx/blob/main/src/stripe/server/internal/html/main.ts) |
 
 # Elysia \[Payment middleware for Elysia]
 
@@ -12223,6 +17267,8 @@ Testnet mode. Defaults the chain ID to `42431` (Tempo testnet).
 
 The `charge` intent for the Tempo payment method. Requests a one-time payment from the client.
 
+Non-zero charges verify on-chain transfers. Zero-amount charges verify a `proof` payload signed by the client's identity key and return a Receipt without broadcasting a transaction.
+
 ## Usage
 
 ```ts twoslash
@@ -12290,6 +17336,58 @@ export async function handler(request: Request) {
 }
 ```
 
+### With a custom fee payer policy
+
+Override the local fee-sponsor limits when you co-sign charge transactions.
+
+```ts twoslash
+import { Mppx, tempo } from 'mppx/server'
+import { privateKeyToAccount } from 'viem/accounts'
+
+const mppx = Mppx.create({
+  methods: [
+    tempo.charge({
+      feePayer: privateKeyToAccount(
+        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+      ),
+      feePayerPolicy: {
+        maxPriorityFeePerGas: 50_000_000_000n,
+        maxTotalFee: 100_000_000_000_000_000n,
+      },
+    }),
+  ],
+})
+```
+
+### With replay protection for zero-dollar auth
+
+Pass `store` when you want zero-dollar proof Credentials to be single-use.
+
+```ts twoslash
+import { Mppx, Store, tempo } from 'mppx/server'
+
+const replayStore = Store.memory()
+
+const mppx = Mppx.create({
+  methods: [
+    tempo.charge({
+      store: replayStore,
+    }),
+  ],
+})
+
+export async function handler(request: Request) {
+  const response = await mppx.charge({
+    amount: '0',
+    currency: '0x20c0000000000000000000000000000000000000',
+    recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+  })(request)
+
+  if (response.status === 402) return response.challenge
+  return response.withReceipt(Response.json({ data: '...' }))
+}
+```
+
 ## Return type
 
 Returns a function that accepts a `Request` and returns a response object with payment status.
@@ -12324,6 +17422,37 @@ External identifier for the payment.
 
 Account or URL for sponsoring transaction fees. Pass a viem `Account` to co-sign locally, a URL string to delegate to a remote [fee payer service](https://docs.tempo.xyz/sdk/typescript/server/handler.feePayer), or `true` when the `account` parameter doubles as the fee payer.
 
+This setting only applies to non-zero charges. Zero-amount proof flows do not create a transaction.
+
+### feePayerPolicy (optional)
+
+* **Type:** `Partial<{ maxFeePerGas: bigint; maxGas: bigint; maxPriorityFeePerGas: bigint; maxTotalFee: bigint; maxValidityWindowSeconds: number }>`
+
+Override the local fee-sponsor policy used when the server co-signs Tempo charge transactions. Remote fee payer services enforce their own policy.
+
+`mppx` resolves defaults per chain automatically. On mainnet (`4217`), the defaults are `maxFeePerGas: 100_000_000_000n`, `maxGas: 2_000_000n`, `maxPriorityFeePerGas: 10_000_000_000n`, `maxTotalFee: 50_000_000_000_000_000n`, and `maxValidityWindowSeconds: 900`. On Moderato (`42431`), `maxPriorityFeePerGas` increases to `50_000_000_000n` and the other limits stay the same.
+
+If you raise `maxFeePerGas` or `maxGas`, you may also need to raise `maxTotalFee` so the combined fee budget stays within policy.
+
+```ts twoslash
+import { Mppx, tempo } from 'mppx/server'
+import { privateKeyToAccount } from 'viem/accounts'
+
+const mppx = Mppx.create({
+  methods: [
+    tempo.charge({
+      feePayer: privateKeyToAccount(
+        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+      ),
+      feePayerPolicy: {
+        maxPriorityFeePerGas: 50_000_000_000n,
+        maxTotalFee: 100_000_000_000_000_000n,
+      },
+    }),
+  ],
+})
+```
+
 ### getClient (optional)
 
 * **Type:** `(parameters: { chainId?: number }) => MaybePromise<Client>`
@@ -12335,6 +17464,16 @@ Function that returns a viem client for the given chain ID. Overrides the defaul
 * **Type:** `string`
 
 On-chain memo for the transaction.
+
+### store (optional)
+
+* **Type:** `Store.AtomicStore`
+
+Pass a store when you want replay protection for charge Credentials. A `Store` provides async key-value operations (`get`, `put`, `delete`). An `AtomicStore` extends `Store` with an atomic `update(key, fn)` method for safe concurrent replay checks.
+
+For non-zero charges, `mppx` falls back to an in-memory store when you omit this parameter. For zero-dollar proof auth, replay prevention is disabled unless you pass a store.
+
+Use `Store.memory()` for local development, tests, or a single long-lived server process. For multi-instance deployments, use `Store.redis()`, `Store.upstash()`, or `Store.cloudflare()`. All built-in factories return `AtomicStore` — for custom backends, provide an `update` function alongside `get`, `put`, and `delete`.
 
 ### testnet (optional)
 
@@ -12348,6 +17487,8 @@ Testnet mode. Defaults the chain ID to `42431` (Tempo testnet).
 * **Default:** `true`
 
 Whether to wait for the charge transaction to confirm on-chain before responding. When `false`, the transaction is simulated via `eth_estimateGas` and broadcast without waiting for inclusion. The Receipt optimistically reports `status: 'success'` based on simulation alone.
+
+This option applies only to non-zero charges. Zero-amount proof flows return immediately after signature verification.
 
 ```ts twoslash
 import { Mppx, tempo } from 'mppx/server'
@@ -12366,6 +17507,10 @@ const mppx = Mppx.create({
 * **Type:** `string`
 
 Payment amount in human-readable units. For example, `'0.1'` represents $0.10 USD.
+
+Set `'0'` to require identity-only zero-dollar auth. In that case, the client submits a `proof` payload instead of a transaction or hash.
+
+By default, zero-dollar proof Credentials remain reusable until the Challenge expires. Pass `store` to treat proofs as single-use across the scope of that store.
 
 ### currency
 
@@ -12390,13 +17535,46 @@ ISO 8601 timestamp for when the payment challenge expires.
 
 * **Type:** `Record<string, string>`
 
-Server-defined correlation data, serialized as `opaque` on the Challenge.
+Server-defined correlation data. `mppx` serializes it as the base64url-encoded `opaque` auth-param on the Challenge, and clients echo that same string back in the Credential.
 
 ### recipient
 
 * **Type:** `string`
 
 Address to receive the payment.
+
+### splits (optional)
+
+* **Type:** `Array<{ amount: string; memo?: string; recipient: string }>`
+
+Split the charge across additional recipients. Each entry specifies an `amount` (in human-readable units) and a `recipient` address. The primary `recipient` receives `amount` minus the sum of all split amounts.
+
+| Constraint | Value |
+|---|---|
+| Array length | 1–10 |
+| Each split amount | Must be > 0 |
+| Sum of splits | Must be strictly less than `amount` |
+| Split memo | Optional, 32-byte hex hash |
+
+```ts twoslash
+import { Mppx, tempo } from 'mppx/server'
+
+const mppx = Mppx.create({ methods: [tempo.charge()] })
+// ---cut---
+export async function handler(request: Request) {
+  const response = await mppx.charge({
+    amount: '1.00',
+    currency: '0x20c0000000000000000000000000000000000000', // pathUSD
+    recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', // seller
+    splits: [ // [!code focus]
+      { amount: '0.10', recipient: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8' }, // platform fee // [!code focus]
+    ], // [!code focus]
+  })(request)
+
+  if (response.status === 402) return response.challenge
+  return response.withReceipt(Response.json({ data: '...' }))
+}
+```
 
 # `Method.tempo.session` \[Low-cost high-throughput payments]
 
@@ -12519,10 +17697,10 @@ Enable SSE streaming. Pass `true` to enable with defaults, or an options object 
 
 ### store (optional)
 
-* **Type:** `Store`
+* **Type:** `Store.AtomicStore`
 * **Default:** `Store.memory()`
 
-Storage backend for persisting channel and session state. Implements atomic read-modify-write operations for concurrency safety.
+Store backend for persisting channel and session state. A `Store` provides async key-value operations (`get`, `put`, `delete`). An `AtomicStore` extends `Store` with an atomic `update(key, fn)` method for safe concurrent read-modify-write — required for session channel state where multiple instances may process vouchers concurrently.
 
 ```ts twoslash
 import { Store, tempo } from 'mppx/server'
@@ -12531,6 +17709,8 @@ const method = tempo.session({
   store: Store.memory(), // [!code focus]
 })
 ```
+
+Use `Store.memory()` for local development and tests. For multi-instance deployments, use `Store.redis()`, `Store.upstash()`, or `Store.cloudflare()`. All built-in factories return `AtomicStore` — for custom backends, provide an `update` function alongside `get`, `put`, and `delete`.
 
 ### suggestedDeposit (optional)
 
@@ -12558,6 +17738,10 @@ Unit type label (for example, "token", "byte", "request").
 Whether to wait for open transactions to confirm on-chain before responding. When `false`, the transaction is simulated and broadcast without waiting for inclusion.
 
 ## Related
+
+### `tempo.Ws.serve`
+
+WebSocket transport for session streams. Bridges a WebSocket connection to the same session payment flow, with in-band authorization, voucher top-ups, and cooperative close over a single socket. See [`Ws.serve`](/sdk/typescript/server/Ws.serve) for full documentation.
 
 ### `tempo.settle`
 
@@ -12600,7 +17784,7 @@ Present both stablecoin and card payment options for a single endpoint. The clie
 import { Mppx, stripe, tempo } from 'mppx/server'
 
 const pathUSD = '0x20c0000000000000000000000000000000000000'
-const USDC = '0x20C000000000000000000000b9537d11c60E8b50'
+const USDCe = '0x20C000000000000000000000b9537d11c60E8b50'
 const recipient = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
 
 const charge = tempo.charge({ recipient })
@@ -12615,7 +17799,7 @@ const mppx = Mppx.create({ methods: [charge, card] })
 export async function handler(request: Request) {
   const result = await mppx.compose(
     [charge, { amount: '1', currency: pathUSD }],
-    [charge, { amount: '1', currency: USDC }],
+    [charge, { amount: '1', currency: USDCe }],
     [card, { amount: '1', currency: 'usd' }],
   )(request)
 
@@ -12723,7 +17907,7 @@ const payment = Mppx.create({
 * **Type:** `string`
 * **Default:** Auto-detected from `MPP_SECRET_KEY` environment variable. Throws if neither provided nor set.
 
-Secret key for HMAC-bound challenge IDs. Enables stateless verification—the server verifies that a Challenge was issued by itself without storing state.
+Secret key for HMAC-bound challenge IDs. Enables stateless verification—the server verifies that a Challenge was issued by itself without storing state. Treat it as root-of-trust material: store it in your secret manager, keep it server-side, never log it, and rotate it immediately if it is exposed. See [Security](/advanced/security).
 
 ```ts twoslash
 import { Mppx, tempo } from 'mppx/server'
@@ -13101,3 +18285,195 @@ type ReturnType = Transport<Extra, McpError, CallToolResult>
 ```
 
 Where `Extra` is the MCP SDK tool handler "extra" parameter compatible with [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) `RequestHandlerExtra`.
+
+# `Session.Ws.serve` \[WebSocket session payments]
+
+Bridges a WebSocket connection to a Tempo session payment flow. Credential verification is performed by routing each in-band authorization frame through `route` as a synthetic POST request that carries only the Authorization header. The synthetic request does not include cookies, bodies, query parameters, or other headers from the original WebSocket upgrade request.
+
+## Usage
+
+```ts twoslash
+import { Mppx, Store, tempo } from 'mppx/server'
+import { Session } from 'mppx/tempo'
+import { privateKeyToAccount } from 'viem/accounts'
+
+const words = ['hello', 'world']
+
+const mppx = Mppx.create({
+  methods: [
+    tempo.session({
+      account: privateKeyToAccount('0x...'),
+    }),
+  ],
+})
+
+declare const socket: Session.Ws.Socket
+
+// In your WebSocket handler:
+Session.Ws.serve({
+  generate: async function* (stream) {
+    for (const word of words) {
+      await stream.charge()
+      yield word
+    }
+  },
+  route: (request) => mppx.session({ amount: '0.001', currency: 'pathUSD', unitType: 'word' })(request),
+  socket,
+  store: Store.memory(),
+  url: 'wss://api.example.com/stream',
+})
+```
+
+## Return type
+
+```ts
+type ReturnType = Promise<void>
+```
+
+Resolves when the WebSocket session completes or the connection closes.
+
+## Parameters
+
+### amount (optional)
+
+* **Type:** `string`
+
+Expected per-tick amount. When set, Credentials with mismatched amounts are rejected.
+
+### generate
+
+* **Type:** `AsyncIterable<string> | ((stream: SessionController) => AsyncIterable<string>)`
+
+Async iterable that produces application messages. When passed as a function, receives a `SessionController` with a `charge()` method for requesting payment before yielding each value. Each yielded string is sent to the client as an application message frame.
+
+### pollIntervalMs (optional)
+
+* **Type:** `number`
+* **Default:** `100`
+
+Polling interval in milliseconds for voucher balance checks.
+
+### route
+
+* **Type:** `SessionRoute`
+
+Session route handler. Receives synthetic POST requests constructed from in-band authorization frames. The synthetic request carries only the `Authorization` header—no cookies, bodies, query parameters, or other headers from the original WebSocket upgrade request.
+
+```ts twoslash
+import { Mppx, tempo } from 'mppx/server'
+import { Session } from 'mppx/tempo'
+import { privateKeyToAccount } from 'viem/accounts'
+
+const mppx = Mppx.create({
+  methods: [tempo.session({ account: privateKeyToAccount('0x...') })],
+})
+
+const route: Session.Ws.SessionRoute = (request) =>
+  mppx.session({ amount: '0.001', currency: 'pathUSD', unitType: 'word' })(request)
+```
+
+### socket
+
+* **Type:** `Session.Ws.Socket`
+
+WebSocket instance. Accepts a browser `WebSocket`, a `ws` library socket, or any object implementing `send`/`close` with either `addEventListener`/`removeEventListener` or `on`/`off`.
+
+### store
+
+* **Type:** `Store.Store | ChannelStore`
+
+Channel store for persisting session and channel state.
+
+### url
+
+* **Type:** `string`
+
+URL used for constructing synthetic route requests. `ws://` and `wss://` schemes are normalized to `http://` and `https://`.
+
+## Helper functions
+
+### `Session.Ws.parseMessage`
+
+Parses a raw WebSocket message string into a typed `Message`.
+
+```ts
+const message = Session.Ws.parseMessage(raw)
+```
+
+### `Session.Ws.formatAuthorizationMessage`
+
+Formats an authorization string into a message frame.
+
+```ts
+const frame = Session.Ws.formatAuthorizationMessage(authorization)
+```
+
+### `Session.Ws.formatApplicationMessage`
+
+Formats application data into a message frame.
+
+```ts
+const frame = Session.Ws.formatApplicationMessage(data)
+```
+
+### `Session.Ws.formatCloseRequestMessage`
+
+Formats a close request message frame.
+
+```ts
+const frame = Session.Ws.formatCloseRequestMessage()
+```
+
+### `Session.Ws.formatReceiptMessage`
+
+Formats a Receipt into a message frame.
+
+```ts
+const frame = Session.Ws.formatReceiptMessage(receipt)
+```
+
+### `Session.Ws.formatErrorMessage`
+
+Formats an error into a message frame.
+
+```ts
+const frame = Session.Ws.formatErrorMessage({ message, status })
+```
+
+## Types
+
+### Message
+
+```ts
+type Message =
+  | { mpp: 'authorization'; authorization: string }
+  | { mpp: 'message'; data: string }
+  | { mpp: 'payment-close-request' }
+  | { mpp: 'payment-close-ready'; data: SessionReceipt }
+  | { mpp: 'payment-error'; status: number; message: string }
+  | { mpp: 'payment-need-voucher'; data: NeedVoucherEvent }
+  | { mpp: 'payment-receipt'; data: SessionReceipt }
+```
+
+### Socket
+
+```ts
+type Socket = {
+  close(code?: number, reason?: string): unknown
+  send(data: string): unknown
+  addEventListener?: (type: string, listener: (event: any) => void) => unknown
+  removeEventListener?: (type: string, listener: (event: any) => void) => unknown
+  on?: (type: string, listener: (...args: any[]) => void) => unknown
+  off?: (type: string, listener: (...args: any[]) => void) => unknown
+}
+```
+
+### SessionRoute
+
+```ts
+type SessionRouteResult =
+  | { status: 402; challenge: Response }
+  | { status: 200; withReceipt(response?: Response): Response }
+
+type SessionRoute = (request: Request) => Promise<SessionRouteResult>
+```
