@@ -162,19 +162,55 @@ export function createRouter<const P extends Record<string, string> = Record<nev
           resolvedStore = Store.upstash(createUpstashRest(kvUrl, kvToken));
         }
 
-        deps.mppx = Mppx.create({
-          methods: [
-            tempo.charge({
+        // Register `tempo.charge` for fixed-price routes and (when configured)
+        // `tempo.session` for variable-price routes. Sessions go through the
+        // payment-channel escrow contract — mppx handles the channel lifecycle
+        // (open / voucher / close) and the SSE-based bidirectional voucher
+        // top-up that variable post-work pricing requires. We just call
+        // `mppx.session({ amount: tickCost, unitType })(request)` and feed
+        // an async generator into `withReceipt(...)`.
+        const methods: unknown[] = [
+          tempo.charge({
+            currency: config.mpp.currency as `0x${string}`,
+            recipient: (config.mpp.recipient ?? config.payeeAddress) as `0x${string}`,
+            getClient,
+            ...(feePayerAccount ? { feePayer: feePayerAccount } : {}),
+            ...(resolvedStore ? { store: resolvedStore } : {}),
+          } as Parameters<typeof tempo.charge>[0]),
+        ];
+
+        if (config.mpp.session && feePayerAccount) {
+          methods.push(
+            tempo.session({
               currency: config.mpp.currency as `0x${string}`,
               recipient: (config.mpp.recipient ?? config.payeeAddress) as `0x${string}`,
               getClient,
-              ...(feePayerAccount ? { feePayer: feePayerAccount } : {}),
+              // tempo.session() requires a signing `account` (used for on-chain
+              // close/settle). Reuse the fee payer account — same operator
+              // wallet plays both roles.
+              account: feePayerAccount,
+              feePayer: feePayerAccount,
+              sse: true,
               ...(resolvedStore ? { store: resolvedStore } : {}),
-            } as Parameters<typeof tempo.charge>[0]),
-          ],
+            } as unknown as Parameters<typeof tempo.session>[0]),
+          );
+        }
+
+        // Cast through unknown: Mppx.create's return type is generic over the
+        // methods array, but our deps.mppx interface declares only the surface
+        // we actually call (charge + optional session). Both shapes coexist at
+        // runtime; the cast bridges them.
+        deps.mppx = Mppx.create({
+          methods: methods as Parameters<typeof Mppx.create>[0]['methods'],
           secretKey: config.mpp.secretKey,
           realm: new URL(resolvedBaseUrl).host,
-        });
+        }) as unknown as OrchestrateDeps['mppx'];
+        deps.mppSessionConfig = config.mpp.session
+          ? {
+              tickCost: config.mpp.session.tickCost ?? '0.0001',
+              unitType: config.mpp.session.unitType ?? 'unit',
+            }
+          : null;
       } catch (err: unknown) {
         deps.mppx = null;
         deps.mppInitError = err instanceof Error ? err.message : String(err);

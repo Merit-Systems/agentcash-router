@@ -38,6 +38,58 @@ function isDecimalDollarString(s: string): boolean {
   return /^\d+(?:\.\d+)?$/.test(s) && s.includes('.');
 }
 
+/**
+ * Detect whether a Request likely carries a body. mppx's session `respond`
+ * hook gates "management" actions (channel open, voucher POST without body)
+ * with a 204 ack — content actions fall through to the user handler.
+ */
+function hasRequestBody(request: Request): boolean {
+  const cl = request.headers.get('content-length');
+  if (cl !== null && cl !== '0') return true;
+  if (request.headers.has('transfer-encoding')) return true;
+  return false;
+}
+
+/**
+ * Compute the number of session ticks needed to charge `actualDecimal` USDC
+ * given a per-tick cost in decimal form. Rounds up — we'd rather over-charge
+ * by a fraction of a cent than under-charge.
+ *
+ * Both inputs are decimal-dollar strings (e.g. "0.034", "0.0001"). USDC is
+ * 6-decimal so we scale to bigint atomic units to avoid float rounding.
+ */
+function computeSessionTicks(actualDecimal: string, tickDecimal: string): number {
+  const actualAtomic = decimalToBigintAtomic(actualDecimal, 6);
+  const tickAtomic = decimalToBigintAtomic(tickDecimal, 6);
+  if (tickAtomic <= 0n) return 0;
+  // Ceiling division.
+  const ticks = (actualAtomic + tickAtomic - 1n) / tickAtomic;
+  return Number(ticks);
+}
+
+function decimalToBigintAtomic(amount: string, decimals: number): bigint {
+  const m = /^(\d+)(?:\.(\d+))?$/.exec(amount);
+  if (!m) return 0n;
+  const whole = m[1];
+  const fraction = (m[2] ?? '').slice(0, decimals).padEnd(decimals, '0');
+  return BigInt(`${whole}${fraction}`.replace(/^0+(?=\d)/, '') || '0');
+}
+
+/**
+ * Read a NextResponse/Response body as text without disturbing it for callers.
+ * We need this to feed the handler's body into an SSE generator one yielded
+ * chunk later.
+ */
+async function readResponseAsText(response: Response): Promise<string> {
+  // .clone() preserves the original for any later reads (e.g. plugin hooks);
+  // we read text from the clone.
+  try {
+    return await response.clone().text();
+  } catch {
+    return '';
+  }
+}
+
 function getRequirementNetwork(requirements: unknown, fallback: string): string {
   const network = (requirements as { network?: unknown } | null)?.network;
   return typeof network === 'string' ? network : fallback;
@@ -108,6 +160,36 @@ export interface OrchestrateDeps {
       | { status: 402; challenge: Response }
       | { status: 200; withReceipt: (response: Response) => Response }
     >;
+    /**
+     * Session-mode middleware. Present iff `RouterConfig.mpp.session` was
+     * configured. Variable-price routes route through this for post-work
+     * amount handling — the response argument to `withReceipt` may be an
+     * async generator (or iterable), in which case mppx auto-converts it
+     * to an SSE stream with per-tick voucher charging.
+     */
+    session?: (options: { amount: string; unitType?: string; suggestedDeposit?: string }) => (
+      input: Request,
+    ) => Promise<
+      | { status: 402; challenge: Response }
+      | {
+          status: 200;
+          withReceipt: (
+            response:
+              | Response
+              | AsyncIterable<string>
+              | ((stream: { charge: () => Promise<void> }) => AsyncIterable<string>),
+          ) => Response;
+        }
+    >;
+  } | null;
+  /**
+   * Per-deployment session configuration. Set by createRouter when
+   * `RouterConfig.mpp.session` is configured; null otherwise. Variable+MPP
+   * routes use these values when issuing session challenges.
+   */
+  mppSessionConfig?: {
+    tickCost: string;
+    unitType: string;
   } | null;
   tempoClient?: import('viem').Client | null;
 }
@@ -880,6 +962,185 @@ export function createRequestHandler(
       const wallet = normalizeWalletAddress(isAddress(lastPart) ? getAddress(lastPart) : rawSource);
 
       const payloadType = (mppCredential?.payload as { type?: string } | null)?.type;
+      const sessionAction = (mppCredential?.payload as { action?: string } | null)?.action;
+      const isSessionCredential =
+        sessionAction === 'open' ||
+        sessionAction === 'topUp' ||
+        sessionAction === 'voucher' ||
+        sessionAction === 'close';
+
+      // ---- MPP session payload (variable-price routes only) ----
+      if (isSessionCredential) {
+        if (!routeEntry.variablePrice) {
+          // Session credentials only make sense on variable routes — fixed
+          // routes use `tempo.charge`. This shouldn't happen if the client
+          // honored our challenge, but reject loudly if it does.
+          return fail(
+            400,
+            'This route does not accept MPP session credentials. Use a charge credential instead.',
+            meta,
+            pluginCtx,
+            body.data,
+          );
+        }
+        if (!deps.mppx.session || !deps.mppSessionConfig) {
+          firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+            level: 'critical' as const,
+            message:
+              'MPP session credential received but `RouterConfig.mpp.session` is not configured',
+            route: routeEntry.key,
+          });
+          return fail(500, 'MPP session not configured on this server', meta, pluginCtx, body.data);
+        }
+
+        const tickCost = deps.mppSessionConfig.tickCost;
+        const unitType = deps.mppSessionConfig.unitType;
+
+        type SessionResult = Awaited<ReturnType<ReturnType<NonNullable<typeof deps.mppx.session>>>>;
+        let sessionResult: SessionResult;
+        try {
+          sessionResult = await deps.mppx.session({
+            amount: tickCost,
+            unitType,
+            suggestedDeposit: routeEntry.maxPrice ?? price,
+          })(request);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(`[router] ${routeEntry.key}: MPP session verify failed: ${message}`);
+          firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+            level: 'critical' as const,
+            message: `MPP session verify failed: ${message}`,
+            route: routeEntry.key,
+          });
+          return fail(500, `MPP session verify failed: ${message}`, meta, pluginCtx, body.data);
+        }
+
+        if (sessionResult.status === 402) {
+          firePluginResponse(deps, pluginCtx, meta, sessionResult.challenge as NextResponse);
+          return sessionResult.challenge as NextResponse;
+        }
+
+        // Verified. mppx's `respond` hook in tempo.session() returns a 204
+        // for management actions (close, topUp, bodyless open/voucher); for
+        // those, withReceipt(...) will return that 204 regardless of what we
+        // pass in. For content actions (voucher with body, etc.) we run the
+        // handler and feed the result back as an SSE generator.
+        const isManagementAction =
+          sessionAction === 'close' ||
+          sessionAction === 'topUp' ||
+          ((sessionAction === 'open' || sessionAction === 'voucher') && !hasRequestBody(request));
+
+        pluginCtx.setVerifiedWallet(wallet);
+        firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
+          protocol: 'mpp',
+          payer: wallet,
+          amount: price,
+          network: 'tempo:4217',
+        });
+
+        if (isManagementAction) {
+          // mppx returns its own 204 for management; we just pass any response.
+          const ack = sessionResult.withReceipt(new Response(null, { status: 200 }));
+          firePluginResponse(deps, pluginCtx, meta, ack as NextResponse);
+          return ack as NextResponse;
+        }
+
+        // Content request — run handler, then build the SSE generator.
+        const mppRecipient = deps.mppRecipient ?? deps.payeeAddress;
+        const payment: HandlerPaymentContext = {
+          protocol: 'mpp',
+          status: 'verified',
+          payer: wallet,
+          amount: price,
+          network: 'tempo:4217',
+          ...(mppRecipient ? { recipient: mppRecipient } : {}),
+          setAmount: makeSetAmount(),
+        };
+        const { response: handlerResp, rawResult } = await invoke(
+          request,
+          meta,
+          pluginCtx,
+          wallet,
+          account,
+          body.data,
+          payment,
+        );
+
+        if (handlerResp.status >= 400) {
+          // Handler errored — return the error directly without engaging the
+          // SSE generator. No charge happens because no `stream.charge()` is
+          // called; mppx's session `withReceipt` will wrap the error response
+          // (still consumes the voucher's nonce, which is correct — the client
+          // signed for the request and got a response).
+          const wrapped = sessionResult.withReceipt(handlerResp);
+          finalize(wrapped as NextResponse, rawResult, meta, pluginCtx, body.data);
+          return wrapped as NextResponse;
+        }
+
+        const effectiveAmount = settlementOverride.amount ?? routeEntry.maxPrice ?? price;
+        const effectiveDecimal = effectiveAmount.startsWith('$')
+          ? effectiveAmount.slice(1)
+          : effectiveAmount;
+        const ticksNeeded = computeSessionTicks(effectiveDecimal, tickCost);
+
+        const handlerBodyText = await readResponseAsText(handlerResp);
+
+        async function* sseGenerator(stream: { charge: () => Promise<void> }) {
+          // Charge `ticksNeeded` ticks before yielding the body. mppx will
+          // ask the client for additional vouchers (via `event:
+          // payment-need-voucher`) if the channel runs short — cycling is
+          // transparent to us.
+          for (let i = 0; i < ticksNeeded; i++) {
+            await stream.charge();
+          }
+          yield handlerBodyText;
+        }
+
+        const sseResponse = sessionResult.withReceipt(sseGenerator);
+
+        if (routeEntry.siwxEnabled && parseFloat(effectiveDecimal) > 0) {
+          try {
+            await deps.entitlementStore.grant(routeEntry.key, wallet);
+          } catch (error) {
+            firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+              level: 'warn' as const,
+              message: `Entitlement grant failed: ${error instanceof Error ? error.message : String(error)}`,
+              route: routeEntry.key,
+            });
+          }
+        }
+
+        firePluginHook(deps.plugin, 'onPaymentSettled', pluginCtx, {
+          protocol: 'mpp',
+          payer: wallet,
+          transaction: '',
+          network: 'tempo:4217',
+          amount: effectiveDecimal,
+        });
+
+        finalize(sseResponse as NextResponse, rawResult, meta, pluginCtx, body.data);
+        return sseResponse as NextResponse;
+      }
+
+      // Variable-price routes only accept session credentials. Charge
+      // credentials (transaction or hash) commit the client to a specific
+      // amount before the handler runs, which can't honor a post-work
+      // override. The server's 402 challenge advertises sessions, so this
+      // path only fires for misbehaving clients.
+      if (routeEntry.variablePrice) {
+        firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+          level: 'warn' as const,
+          message: `Variable-price route received an MPP charge credential — session credential required`,
+          route: routeEntry.key,
+        });
+        return fail(
+          400,
+          `This route requires an MPP session credential (the server's 402 challenge advertised sessions, not charge). Variable-price routes use payment-channel sessions because charge credentials commit to a fixed amount up-front.`,
+          meta,
+          pluginCtx,
+          body.data,
+        );
+      }
 
       // ---- MPP transaction payload: simulate → invoke → broadcast + confirm ----
       if (payloadType === 'transaction' && deps.tempoClient) {
@@ -1073,25 +1334,8 @@ export function createRequestHandler(
 
       // ---- MPP hash payload (or fallback): verify first, then invoke ----
       // The tx was pre-broadcast by the client — mppx just verifies the receipt.
-
-      // Variable-price routes can't honor a post-work amount on push mode:
-      // the chain has already moved maxPrice from client to server, so there's
-      // no settlement step left to shrink. Reject with a 400 pointing the
-      // client at pull mode (mode: 'pull' in tempo() config).
-      if (routeEntry.variablePrice && payloadType === 'hash') {
-        firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
-          level: 'warn' as const,
-          message: `Variable-price route received push-mode (hash) MPP credential — pull mode required`,
-          route: routeEntry.key,
-        });
-        return fail(
-          400,
-          `This route does not accept push-mode MPP credentials. Use pull mode (mode: 'pull' in tempo() config) so the server can settle for the actual amount.`,
-          meta,
-          pluginCtx,
-          body.data,
-        );
-      }
+      // (Variable-price guard already handled above before the transaction
+      // branch — anything reaching here is a non-variable charge credential.)
 
       let mppResult: Awaited<ReturnType<ReturnType<typeof deps.mppx.charge>>>;
       try {
@@ -1500,7 +1744,18 @@ async function build402(
 
   if (routeEntry.protocols.includes('mpp') && deps.mppx) {
     try {
-      const result = await deps.mppx.charge({ amount: challengePrice })(request);
+      // Variable-price routes route through MPP sessions because pull-mode
+      // `charge` can't honor a post-work amount override (the signed Tempo
+      // tx commits to a specific amount). The session challenge advertises
+      // a small per-tick cost and a suggestedDeposit equal to maxPrice.
+      const useSession = routeEntry.variablePrice && deps.mppx.session && deps.mppSessionConfig;
+      const result = useSession
+        ? await deps.mppx.session!({
+            amount: deps.mppSessionConfig!.tickCost,
+            unitType: deps.mppSessionConfig!.unitType,
+            suggestedDeposit: routeEntry.maxPrice ?? challengePrice,
+          })(request)
+        : await deps.mppx.charge({ amount: challengePrice })(request);
       if (result.status === 402) {
         const wwwAuth = result.challenge.headers.get('WWW-Authenticate');
         if (wwwAuth) response.headers.set('WWW-Authenticate', wwwAuth);

@@ -165,4 +165,45 @@ describe('openapi discovery document', () => {
       protocols: [{ x402: {} }],
     });
   });
+
+  it('emits mode=variable with maxAmount and mpp(session) for variable routes', async () => {
+    const registry = new RouteRegistry();
+    registry.register(
+      makeEntry({
+        key: 'llm/generate',
+        path: 'llm/generate',
+        method: 'POST',
+        authMode: 'paid',
+        pricing: '0.10',
+        variablePrice: true,
+        maxPrice: '0.10',
+        protocols: ['x402', 'mpp'],
+      }),
+    );
+
+    const handler = createOpenAPIHandler(registry, 'https://example.com', undefined, {
+      title: 'Example API',
+      version: '1.0.0',
+    });
+
+    const response = await handler(request);
+    const doc = (await response.json()) as Record<string, any>;
+
+    const operation = doc.paths['/api/llm/generate'].post;
+    expect(operation['x-payment-info']).toEqual({
+      price: { mode: 'variable', currency: 'USD', maxAmount: '0.10' },
+      protocols: [
+        { x402: {} },
+        {
+          mpp: {
+            method: 'tempo',
+            // Variable + MPP routes use sessions, not charge — sessions are
+            // the only intent that supports post-work amount overrides.
+            intent: 'session',
+            currency: '0x20c000000000000000000000b9537d11c60e8b50',
+          },
+        },
+      ],
+    });
+  });
 });

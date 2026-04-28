@@ -56,7 +56,12 @@ router
   });
 ```
 
-Wires to x402 `upto` (requires an `upto` accept on a configured network) and to MPP pull mode. Push-mode (hash-payload) MPP credentials on a variable route are rejected with `400` because the chain has already moved `maxPrice` and there is nothing left to settle. SIWX entitlement is not granted when the effective settled amount is `0`.
+Wires to two protocol mechanisms:
+
+- **x402 `upto`** — requires an `upto` accept on a configured network in `RouterConfig.x402.accepts`. The handler's `setAmount()` becomes a `SettlementOverrides` arg on the upstream settle call; the Permit2Proxy contract enforces `actualAmount ≤ maxPrice` on chain.
+- **MPP sessions** (Tempo only) — requires `RouterConfig.mpp.session = { tickCost, unitType }`. Variable + MPP routes advertise an `intent="session"` 402 (with `tickCost` per voucher tick and `suggestedDeposit = maxPrice`); the response is wrapped as an SSE stream where the router emits `ceil(actualAmount / tickCost)` `stream.charge()` calls before yielding the body. mppx auto-cycles vouchers if the channel runs short.
+
+Charge credentials (transaction or hash) on a variable+MPP route are rejected with `400` — those credentials commit the client to a fixed amount before the handler runs and can't honor a post-work override. SIWX entitlement is not granted when the effective settled amount is `0`.
 
 ### `.siwx()` — Wallet identity required (no payment)
 ```typescript

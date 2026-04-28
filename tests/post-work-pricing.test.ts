@@ -135,10 +135,15 @@ function withUptoPayment(): NextRequest {
 // MPP fixtures
 // ---------------------------------------------------------------------------
 
-function createFakeMppx(chargeSpy?: (amount: string) => void) {
+function createFakeMppx(
+  opts: {
+    chargeSpy?: (amount: string) => void;
+    sessionChargeCounts?: number[]; // pushes the # of stream.charge() calls per session withReceipt
+  } = {},
+) {
   return {
     charge: (options: { amount: string }) => async (input: Request) => {
-      chargeSpy?.(options.amount);
+      opts.chargeSpy?.(options.amount);
       const auth = input.headers.get('Authorization');
       if (!auth?.startsWith('Payment ')) {
         return {
@@ -172,6 +177,88 @@ function createFakeMppx(chargeSpy?: (amount: string) => void) {
         challenge: new Response(null, { status: 402 }),
       };
     },
+    session:
+      (_sessionOpts: { amount: string; unitType?: string; suggestedDeposit?: string }) =>
+      async (input: Request) => {
+        const auth = input.headers.get('Authorization');
+        if (!auth?.startsWith('Payment ')) {
+          return {
+            status: 402 as const,
+            challenge: new Response(null, {
+              status: 402,
+              headers: { 'WWW-Authenticate': 'MOCK_MPP_SESSION_CHALLENGE' },
+            }),
+          };
+        }
+        try {
+          const payload = JSON.parse(Buffer.from(auth.slice(8), 'base64').toString());
+          if (payload.payer !== KNOWN_MPP_PAYER) throw new Error('bad payer');
+          const action = payload.payload?.action as string | undefined;
+          // Mimic mppx's `respond` hook: management actions short-circuit to 204.
+          const isManagementAction =
+            action === 'close' ||
+            action === 'topUp' ||
+            ((action === 'open' || action === 'voucher') && !input.headers.get('content-length'));
+          return {
+            status: 200 as const,
+            withReceipt: (
+              response:
+                | Response
+                | AsyncIterable<string>
+                | ((stream: { charge: () => Promise<void> }) => AsyncIterable<string>),
+            ) => {
+              if (isManagementAction) {
+                return new Response(null, {
+                  status: 204,
+                  headers: { 'Payment-Receipt': 'MOCK_MPP_SESSION_ACK' },
+                });
+              }
+              if (typeof response === 'function') {
+                // Drain the generator lazily when the response body is read
+                // (matches real mppx's deferred iteration). Tests must await
+                // `response.text()` before asserting on `sessionChargeCounts`.
+                let chargeCount = 0;
+                const stream = {
+                  charge: async () => {
+                    chargeCount++;
+                  },
+                };
+                const iter = response(stream);
+                const body = new ReadableStream<Uint8Array>({
+                  async pull(controller) {
+                    let collected = '';
+                    for await (const chunk of iter) collected += chunk;
+                    opts.sessionChargeCounts?.push(chargeCount);
+                    controller.enqueue(new TextEncoder().encode(collected));
+                    controller.close();
+                  },
+                });
+                return new Response(body, {
+                  status: 200,
+                  headers: {
+                    'Content-Type': 'text/event-stream',
+                    'Payment-Receipt': 'MOCK_MPP_SESSION_RECEIPT',
+                  },
+                });
+              }
+              if (response instanceof Response) {
+                const receiptResponse = new Response(response.body, {
+                  status: response.status,
+                  headers: response.headers,
+                });
+                receiptResponse.headers.set('Payment-Receipt', 'MOCK_MPP_SESSION_RECEIPT');
+                return receiptResponse;
+              }
+              return new Response(null, { status: 500 });
+            },
+          };
+        } catch {
+          return {
+            status: 402 as const,
+            challenge: new Response(null, { status: 402 }),
+          };
+        }
+      },
   };
 }
 
@@ -197,10 +284,38 @@ function makeMppDeps(overrides: Partial<OrchestrateDeps> = {}): OrchestrateDeps 
     payeeAddress: KNOWN_PAYEE,
     network: 'tempo:42431',
     x402Accepts: [],
-    mppx: createFakeMppx(),
+    mppx: createFakeMppx() as unknown as OrchestrateDeps['mppx'],
+    mppSessionConfig: { tickCost: '0.0001', unitType: 'unit' },
     tempoClient: {} as unknown as OrchestrateDeps['tempoClient'],
     ...overrides,
   };
+}
+
+function withMppSessionCredential(
+  action: 'open' | 'voucher' | 'topUp' | 'close',
+  body?: unknown,
+): NextRequest {
+  const credential = Buffer.from(
+    JSON.stringify({
+      payer: KNOWN_MPP_PAYER,
+      payload: {
+        action,
+        channelId: '0xabc',
+        cumulativeAmount: '1000000',
+        signature: '0xdeadbeef',
+      },
+    }),
+  ).toString('base64');
+  const headers: Record<string, string> = { Authorization: `Payment ${credential}` };
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+    headers['Content-Length'] = String(JSON.stringify(body).length);
+  }
+  return new NextRequest('http://localhost:3000/api/test', {
+    method: 'POST',
+    headers,
+    ...(body !== undefined && { body: JSON.stringify(body) }),
+  });
 }
 
 function withMppCredential(payloadType: 'transaction' | 'hash' = 'transaction'): NextRequest {
@@ -414,30 +529,32 @@ describe('post-work pricing — non-variable paid routes', () => {
 });
 
 describe('post-work pricing — MPP', () => {
-  it('threads setAmount through mppx.charge on pull-mode (transaction-payload)', async () => {
-    const chargeSpy = vi.fn();
+  // Variable + MPP routes require a session credential. Pull-mode (transaction)
+  // and push-mode (hash) charge credentials are both rejected because they
+  // commit the client to a fixed amount before the handler runs.
+
+  it('rejects pull-mode (transaction-payload) charge credentials on variable routes', async () => {
     const handler = createRequestHandler(
       makeMppEntry(),
-      async ({ payment }) => {
-        payment!.setAmount('0.05');
-        return { ok: true };
+      // Handler must not run — the route should reject the credential before
+      // invoking it.
+      async () => {
+        throw new Error('handler should not have been invoked');
       },
-      makeMppDeps({ mppx: createFakeMppx(chargeSpy) }),
+      makeMppDeps(),
     );
 
     const response = await handler(withMppCredential('transaction'));
-    expect(response.status).toBe(200);
-    // The first call is the post-handler charge — the only one in this flow.
-    // Earlier challenge calls happen only when no credential is present.
-    expect(chargeSpy).toHaveBeenCalledWith('0.05');
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).toMatch(/session credential/i);
   });
 
-  it('rejects push-mode (hash-payload) MPP credentials on variable routes with 400', async () => {
+  it('rejects push-mode (hash-payload) charge credentials on variable routes', async () => {
     const alertSpy = vi.fn();
     const plugin: RouterPlugin = { onAlert: alertSpy };
     const handler = createRequestHandler(
       makeMppEntry(),
-      // Handler must not run when push-mode is rejected pre-invoke.
       async () => {
         throw new Error('handler should not have been invoked');
       },
@@ -447,11 +564,106 @@ describe('post-work pricing — MPP', () => {
     const response = await handler(withMppCredential('hash'));
     expect(response.status).toBe(400);
     const body = await response.json();
-    expect(body.error).toMatch(/push-mode/i);
-    expect(body.error).toMatch(/pull/i);
+    expect(body.error).toMatch(/session credential/i);
     expect(alertSpy).toHaveBeenCalled();
     const alerts = alertSpy.mock.calls.map((c) => c[1]);
-    expect(alerts.some((a) => a.level === 'warn' && /push-mode/i.test(a.message))).toBe(true);
+    expect(alerts.some((a) => a.level === 'warn' && /charge credential/i.test(a.message))).toBe(
+      true,
+    );
+  });
+
+  it('handles a session voucher credential by emitting an SSE response with N ticks', async () => {
+    const sessionChargeCounts: number[] = [];
+    const fakeMppx = createFakeMppx({ sessionChargeCounts });
+    const handler = createRequestHandler(
+      makeMppEntry(),
+      async ({ payment }) => {
+        // Post-work amount = 0.034. tickCost = 0.0001 → 340 ticks.
+        payment!.setAmount('0.034');
+        return { fortune: 'pay-as-you-go' };
+      },
+      makeMppDeps({ mppx: fakeMppx as unknown as OrchestrateDeps['mppx'] }),
+    );
+
+    const response = await handler(withMppSessionCredential('voucher', { mood: 'long' }));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toMatch(/event-stream/);
+    expect(response.headers.get('Payment-Receipt')).toBe('MOCK_MPP_SESSION_RECEIPT');
+    // Drain the body so the fake's lazy generator runs.
+    await response.text();
+    // 0.034 / 0.0001 = 340 ticks.
+    expect(sessionChargeCounts).toEqual([340]);
+  });
+
+  it('charges ceil(maxPrice / tickCost) ticks when the handler does not call setAmount', async () => {
+    const sessionChargeCounts: number[] = [];
+    const fakeMppx = createFakeMppx({ sessionChargeCounts });
+    const handler = createRequestHandler(
+      makeMppEntry({ maxPrice: '0.05' }),
+      async () => ({ ok: true }),
+      makeMppDeps({ mppx: fakeMppx as unknown as OrchestrateDeps['mppx'] }),
+    );
+
+    const response = await handler(withMppSessionCredential('voucher', {}));
+    expect(response.status).toBe(200);
+    await response.text();
+    // 0.05 / 0.0001 = 500 ticks.
+    expect(sessionChargeCounts).toEqual([500]);
+  });
+
+  it('does not charge ticks when the handler returns an error response', async () => {
+    const sessionChargeCounts: number[] = [];
+    const fakeMppx = createFakeMppx({ sessionChargeCounts });
+    const handler = createRequestHandler(
+      makeMppEntry(),
+      async () => {
+        // Simulate a handler that throws after partial work — orchestrate's
+        // safeCallHandler will turn this into a 500.
+        throw new Error('handler exploded');
+      },
+      makeMppDeps({ mppx: fakeMppx as unknown as OrchestrateDeps['mppx'] }),
+    );
+
+    const response = await handler(withMppSessionCredential('voucher', {}));
+    expect(response.status).toBeGreaterThanOrEqual(500);
+    // The error path skips the SSE generator entirely — no ticks charged.
+    expect(sessionChargeCounts).toEqual([]);
+  });
+
+  it('returns 204 for management actions (close) without invoking the handler', async () => {
+    const handlerSpy = vi.fn(async () => ({ ok: true }));
+    const handler = createRequestHandler(makeMppEntry(), handlerSpy, makeMppDeps());
+
+    const response = await handler(withMppSessionCredential('close'));
+    expect(response.status).toBe(204);
+    expect(handlerSpy).not.toHaveBeenCalled();
+  });
+
+  it('issues a session 402 challenge when no credential is present (variable route)', async () => {
+    const handler = createRequestHandler(makeMppEntry(), async () => ({ ok: true }), makeMppDeps());
+
+    const response = await handler(
+      new NextRequest('http://localhost:3000/api/test', { method: 'POST' }),
+    );
+    expect(response.status).toBe(402);
+    expect(response.headers.get('WWW-Authenticate')).toBe('MOCK_MPP_SESSION_CHALLENGE');
+  });
+
+  it('returns 500 with a clear error when a session credential arrives but session is not configured', async () => {
+    const fakeMppx = createFakeMppx();
+    const handler = createRequestHandler(
+      makeMppEntry(),
+      async () => ({ ok: true }),
+      makeMppDeps({
+        mppx: fakeMppx as unknown as OrchestrateDeps['mppx'],
+        mppSessionConfig: null,
+      }),
+    );
+
+    const response = await handler(withMppSessionCredential('voucher', {}));
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.error).toMatch(/session not configured/i);
   });
 });
 

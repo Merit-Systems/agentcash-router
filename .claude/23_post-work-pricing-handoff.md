@@ -1,6 +1,6 @@
 # 23. Post-work pricing — session handoff
 
-**Status:** Phase 1 implemented. mppx bumped in v1.5.1; `.paid({ variable, maxPrice })` + `payment.setAmount()` shipped behind a minor changeset. Phase 2 (`.session()` / `payment.tick()`) still pending.
+**Status:** Phase 1 implemented for both x402 and MPP, on the `mason/upto-mpp-sessions` branch. x402 ships unchanged (Permit2 upto witness + override). MPP variable pricing routes through `tempo.session({ sse: true })` + `Sse.serve()` because pull-mode `tempo.charge()` cannot honor a post-work amount override (the signed Tempo transaction commits the client to a specific amount before the handler runs — empirically verified, see plan doc 22).
 
 This doc captures everything decided in the conversation that produced docs 21 and 22, plus the clarifications that came after them, so the next session can pick up cold without re-deriving the design.
 

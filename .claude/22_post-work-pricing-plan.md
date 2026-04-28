@@ -1,7 +1,7 @@
-# 22. Post-work pricing — implementation plan (x402 `upto` now, MPP sessions later)
+# 22. Post-work pricing — implementation plan (x402 `upto` + MPP sessions)
 
-**Status:** Phase 1 implemented (pending release). Phase 2 (sessions) still design-only.
-**Companion:** `21_x402-upto-research.md` (how upstream does it)
+**Status:** Phase 1 implemented for both protocols. x402 `upto` ships unchanged from the original plan. MPP support uses `tempo.session` + SSE rather than `tempo.charge`, because pull-mode `charge` can't honor a post-work amount override (the signed Tempo transaction commits the client to a specific amount before the handler runs — empirically confirmed; see "MPP via sessions" section below).
+**Companion:** `21_x402-upto-research.md` (how x402 upstream implements `upto`)
 
 ## Problem
 
@@ -75,40 +75,45 @@ If the handler returns without calling `setAmount()`, we settle for `maxPrice` (
 | Handler calls `setAmount` twice | Last call wins. |
 | Handler throws | Skip settle entirely. `setAmount` is irrelevant. (Today's behavior.) |
 
-### Why this works for MPP `charge` too (transaction-payload / pull mode)
+### MPP via sessions (corrects the original "free pull-mode override" claim)
 
-`src/orchestrate.ts:906` already broadcasts the MPP charge **after** the handler runs:
+The original plan optimistically asserted that `mppx.charge({ amount: override })` would honor a post-work amount on pull-mode (transaction-payload). That was wrong. mppx's `Charge.js` `transaction` branch deserializes the signed Tempo tx and calls `assertTransferCalls` / `FeePayer.validateCalls` against the `amount` arg — if the signed amount and the `charge()` arg differ, mppx rejects with `MismatchError` ("credential amount does not match this route's requirements"). Empirically reproduced against the live fortune route (TX `0xb0...4a83` for $0.05 went through; `setAmount('$0.034')` against the same maxPrice signed credential produced a 500 with the mismatch error).
 
-```ts
-mppResult = await deps.mppx.charge({ amount: price })(request);
-```
+Why: pull-mode signs a *final* transaction with a specific amount. The amount is in the bytes the signature commits to. The server can either broadcast what the client signed or reject; it can't broadcast a different amount.
 
-Today `price` is the body-derived dynamic price. With this plan, `price` for `variable` routes becomes `override.amount ?? maxPrice` — exactly the same plumbing as x402 upto, just a different sink. Free.
+The MPP analog of x402 `upto` is the **session** intent. A session opens a payment-channel deposit (escrow), the client signs cumulative-amount vouchers off-chain, and the server settles for the actual cumulative — unused deposit auto-refunds. To get the post-work amount onto a signed voucher, the server needs the client to sign a fresh voucher *after* the handler decides the amount, which is bidirectional. mppx supports this via SSE: after handler, the server's SSE generator calls `stream.charge()` per tick; mppx auto-cycles vouchers via `event: payment-need-voucher` if the channel runs short.
 
-This covers the dominant MPP traffic path: **pull mode is the default** in mppx (`MPP_DOCS.md` §"Push & pull modes" — "the client signs the transaction and sends the serialized transaction to the server. The server broadcasts it"). Every agent-style integration the router targets (mppx CLI, AgentCash, Tempo Wallet, Privy Agent CLI) defaults to pull because it's what enables `feePayer` gas sponsorship.
+**Wire shape — how variable + MPP routes flow today**
 
-### What about MPP hash-payload (push mode)?
+1. `RouterConfig.mpp.session = { tickCost, unitType }` opts the router into session support. We wire `tempo.session({ sse: true, account, currency, recipient, store })` alongside `tempo.charge` in `Mppx.create({ methods })` (`src/index.ts`).
+2. `build402` for variable + MPP routes issues a session challenge: `mppx.session({ amount: tickCost, unitType, suggestedDeposit: maxPrice })(request)`. The 402 advertises `intent="session"` with the canonical Tempo escrow contract.
+3. Request handler distinguishes session credentials via `payload.action ∈ {open, voucher, topUp, close}` (vs charge's `payload.type ∈ {transaction, hash}`):
+   - **management actions** (close, topUp, bodyless open/voucher) → mppx's `respond` hook returns 204; we pass through.
+   - **content actions** (voucher with body, GET retries) → run handler, build async generator that calls `stream.charge()` `ceil(actualAmount / tickCost)` times then yields the response body, hand it to `result.withReceipt(generator)`. mppx auto-converts to SSE.
+4. Charge credentials arriving at variable routes are rejected with 400 + warn alert (the route advertises sessions, not charge — only misbehaving clients hit this).
 
-Push mode is opt-in — the client sets `mode: 'push'` on its `tempo()` config. The client builds, signs, **and broadcasts** the transaction itself, then sends only the resulting tx hash. By the time the request hits us at `src/orchestrate.ts:1013`, the chain has already moved `maxPrice` from client to server. There's no settlement step to shrink, and `payment.setAmount('0.07')` would silently misreport what was actually charged.
+**Why we set `tickCost` instead of using a single dynamic charge**
 
-Rather than reject `variable` + MPP at registration (blocks the dominant pull-mode use), reject **at runtime when a hash-payload credential arrives on a variable route**:
-
-- Detect `payloadType === 'hash'` (already discriminated at `src/orchestrate.ts:828`) before invoking the handler.
-- If the route is `variable`, return `400 Bad Request` with body `{ error: 'This route does not accept push-mode MPP credentials. Use pull mode (mode: "pull" in tempo() config) so the server can settle for the actual amount.' }`. Fire a `warn` plugin alert so operators see misuse in their logs.
-- Pull-mode (`payloadType === 'transaction'`) and zero-amount proof flows are unaffected.
-
-Net effect: identical loud-failure semantics for the unsupported case, but the common pull-mode path keeps working without a registration-time gate. If a real use-case for `variable` + push appears later (probably tied to an explicit refund hook), narrowing this runtime check to opt-in is trivial.
+mppx's `SessionController.charge()` reserves a fixed `tickCost` per call (set on the session method's `amount` config and forwarded via the credential's `request.amount`). To charge an arbitrary post-work amount we tick `N` times where `N = ceil(actualAmount / tickCost)`. With `tickCost: '0.0001'` (one hundredth of a cent), a $0.05 max admits up to 500 ticks per request — comfortable headroom and 4-decimal precision. Slightly chatty server-side but uses only the documented public API. If mppx exposes a single-call variable-amount method later, the helper that translates `effectiveAmount` to N ticks is the only piece that changes.
 
 ### Tests (mirror `tests/upto-scheme.test.ts`)
 
+x402 upto:
 - handler calls `setAmount('0.05')` → settled requirements.amount === atomic('0.05')
 - handler calls `setAmount('0')` → no settle facilitator call, response still 200, `payment.transaction === ''`
 - handler doesn't call setAmount → settled at maxPrice
 - handler calls setAmount twice → last call wins
 - registration: `variable: true` without `maxPrice` throws
 - registration: `variable: true` with only `exact` x402 accepts throws
-- variable + MPP pull-mode (transaction-payload) → mppx.charge called with override amount
-- variable + MPP push-mode (hash-payload) → 400 at runtime, handler not invoked, plugin `warn` alert fired
+
+variable + MPP:
+- session voucher credential with body → SSE response, charge() called N=actualAmount/tickCost times
+- session voucher credential, no setAmount → charge() called N=maxPrice/tickCost times
+- session close/topUp/bodyless open/voucher → 204 management ack, handler not invoked
+- no credential → 402 advertising session intent
+- pull-mode charge credential (transaction) on variable route → 400 reject with "session credential required"
+- push-mode charge credential (hash) on variable route → 400 reject with "session credential required"
+- session credential without `mpp.session` configured → 500 with "session not configured"
 
 ### Code locations to touch (Phase 1)
 

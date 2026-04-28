@@ -450,6 +450,35 @@ export interface RouterConfig {
      * })
      */
     useDefaultStore?: boolean;
+    /**
+     * Session-mode configuration. Required for `.paid({ variable: true })` routes
+     * over MPP — the router routes those through `tempo.session({ sse: true })`
+     * because pull-mode `tempo.charge` can't honor a post-work amount override
+     * (the signed Tempo transaction commits the client to a specific amount).
+     *
+     * Sessions deposit funds into a payment-channel escrow contract; the server
+     * meters per-tick charges against signed vouchers and settles the actual
+     * cumulative amount on close. Unused deposit auto-refunds.
+     *
+     * If omitted, variable + MPP routes still register but the MPP path is
+     * effectively unusable (challenge generation falls back to charge mode).
+     */
+    session?: {
+      /**
+       * Per-tick cost in decimal-dollar form. Defines the granularity of
+       * variable pricing — actual charges are quantized to multiples of this
+       * value. Default `'0.0001'` (one hundredth of a cent), which gives
+       * 4-decimal precision and bounded ticks per request.
+       */
+      tickCost?: string;
+      /**
+       * Unit label for the session challenge. Surfaced in 402 challenges and
+       * in client UIs. Default `'unit'`. Override to something descriptive of
+       * what's being charged (e.g. `'token'`, `'word'`, `'request'`) — purely
+       * cosmetic; doesn't affect billing.
+       */
+      unitType?: string;
+    };
   };
   /**
    * Payment protocols to accept on paid routes unless a route overrides them.

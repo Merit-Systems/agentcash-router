@@ -14,6 +14,13 @@ const mppConfig = process.env.MPP_SECRET_KEY
       recipient: payeeAddress,
       rpcUrl: process.env.TEMPO_RPC_URL,
       feePayerKey: process.env.MPP_FEE_PAYER_KEY,
+      // Enable MPP sessions so .paid({ variable }) routes can settle for the
+      // post-work amount over a payment channel. tickCost is the granularity
+      // of variable pricing (default 0.0001 USDC per tick).
+      session: {
+        tickCost: '0.0001',
+        unitType: 'unit',
+      },
     }
   : undefined;
 

@@ -122,9 +122,7 @@ function buildOperation(
   requiresApiKeyScheme: boolean;
 } {
   const protocols =
-    entry.protocols.length > 0
-      ? entry.protocols.map((p) => toProtocolObject(p, entry.mppInfo))
-      : undefined;
+    entry.protocols.length > 0 ? entry.protocols.map((p) => toProtocolObject(p, entry)) : undefined;
   const paymentRequired = Boolean(entry.pricing) || entry.authMode === 'paid';
   const requiresSiwxScheme = entry.authMode === 'siwx' || Boolean(entry.siwxEnabled);
   const requiresApiKeyScheme = Boolean(entry.apiKeyResolver) && entry.authMode !== 'siwx';
@@ -191,15 +189,16 @@ function buildOperation(
   };
 }
 
-function toProtocolObject(
-  protocol: string,
-  mppInfo?: { method?: string; intent?: string; currency?: string },
-): Record<string, unknown> {
+function toProtocolObject(protocol: string, entry: RouteEntry): Record<string, unknown> {
+  const mppInfo = entry.mppInfo;
   if (protocol === 'mpp') {
+    // Variable-price routes advertise sessions, not charge — sessions are the
+    // only MPP intent that supports post-work amount overrides via vouchers.
+    const defaultIntent = entry.variablePrice ? 'session' : 'charge';
     return {
       mpp: {
         method: mppInfo?.method ?? 'tempo',
-        intent: mppInfo?.intent ?? 'charge',
+        intent: mppInfo?.intent ?? defaultIntent,
         currency: mppInfo?.currency ?? TEMPO_USDC_CURRENCY,
       },
     };
@@ -209,6 +208,19 @@ function toProtocolObject(
 
 function buildPricingInfo(entry: RouteEntry): Record<string, unknown> | undefined {
   if (!entry.pricing) return undefined;
+
+  // Variable post-work pricing — advertise the cap as `maxAmount` rather than
+  // a fixed `amount` so clients understand the actual charge is decided after
+  // the handler runs (capped at maxPrice).
+  if (entry.variablePrice) {
+    return {
+      price: {
+        mode: 'variable',
+        currency: 'USD',
+        maxAmount: entry.maxPrice ?? (typeof entry.pricing === 'string' ? entry.pricing : '0'),
+      },
+    };
+  }
 
   if (typeof entry.pricing === 'string') {
     return {
