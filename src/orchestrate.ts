@@ -307,6 +307,24 @@ export function createRequestHandler(
       (firePluginHook(deps.plugin, 'onRequest', meta) as PluginContext | undefined) ??
       createDefaultContext(meta);
 
+    // Closure-scoped override carrier for variable-price routes. The handler
+    // mutates this via `payment.setAmount(amount)`; orchestrate reads it post-handler
+    // to pick the effective settle amount. Last call wins.
+    const settlementOverride: { amount?: string } = {};
+
+    function makeSetAmount(): (amount: string) => void {
+      if (!routeEntry.variablePrice) {
+        return () => {
+          throw new Error(
+            `route '${routeEntry.key}': payment.setAmount() is only available on routes configured with .paid({ variable: true })`,
+          );
+        };
+      }
+      return (amount: string) => {
+        settlementOverride.amount = amount;
+      };
+    }
+
     /** Shared non-payment tail: parse body → validate → invoke handler → finalize. */
     async function handleAuth(wallet: string | null, account: unknown): Promise<NextResponse> {
       const body = await parseBody(request, routeEntry);
@@ -706,6 +724,7 @@ export function createRequestHandler(
         amount: price,
         network: matchedNetwork,
         ...(matchedRecipient ? { recipient: matchedRecipient } : {}),
+        setAmount: makeSetAmount(),
       };
       pluginCtx.setVerifiedWallet(wallet);
       firePluginHook(deps.plugin, 'onPaymentVerified', pluginCtx, {
@@ -742,10 +761,12 @@ export function createRequestHandler(
         if (validationFailure) return validationFailure;
 
         try {
+          const overrideAmount = settlementOverride.amount;
           const settle = await settleX402Payment(
             deps.x402Server,
             verifyPayload,
             verifyRequirements,
+            overrideAmount !== undefined ? { amount: overrideAmount } : undefined,
           );
           if (!settle.result?.success) {
             const reason = settle.result?.errorReason || 'x402 settlement returned success=false';
@@ -753,7 +774,14 @@ export function createRequestHandler(
             error.errorReason = reason;
             throw error;
           }
-          if (routeEntry.siwxEnabled) {
+          // Effective amount for billing/observability. For variable routes this is
+          // the post-work value chosen by setAmount; for everyone else it equals
+          // the originally quoted price (`price` is maxPrice for variable routes).
+          const effectiveAmount = overrideAmount ?? price;
+          // Skip SIWX entitlement grant when no funds actually moved. A `0`
+          // settlement is a legal upto outcome ("we matched a cached result, don't charge")
+          // but should not unlock paid-route acceleration.
+          if (routeEntry.siwxEnabled && parseFloat(effectiveAmount) > 0) {
             try {
               await deps.entitlementStore.grant(routeEntry.key, wallet);
             } catch (error) {
@@ -770,6 +798,7 @@ export function createRequestHandler(
           const settledPayment: HandlerPaymentContext & { status: 'settled' } = {
             ...payment,
             status: 'settled',
+            amount: effectiveAmount,
             ...(transaction ? { transaction } : {}),
           };
           firePluginHook(deps.plugin, 'onPaymentSettled', pluginCtx, {
@@ -777,6 +806,7 @@ export function createRequestHandler(
             payer: wallet,
             transaction,
             network: matchedNetwork,
+            amount: effectiveAmount,
           });
           await runAfterSettle({ ...settleScope, payment: settledPayment });
         } catch (err) {
@@ -872,6 +902,7 @@ export function createRequestHandler(
           amount: price,
           network: 'tempo:4217',
           ...(mppRecipient ? { recipient: mppRecipient } : {}),
+          setAmount: makeSetAmount(),
         };
         const { response, rawResult, handlerError } = await invoke(
           request,
@@ -901,9 +932,12 @@ export function createRequestHandler(
 
           // Step 4: Handler succeeded — broadcast and wait for on-chain confirmation.
           // Merchant bears the risk if this fails after service was rendered.
+          // For variable-price routes, broadcast at the post-work amount chosen
+          // by setAmount (capped at maxPrice by the signed credential).
+          const effectiveAmount = settlementOverride.amount ?? price;
           let mppResult: Awaited<ReturnType<ReturnType<typeof deps.mppx.charge>>>;
           try {
-            mppResult = await deps.mppx.charge({ amount: price })(request);
+            mppResult = await deps.mppx.charge({ amount: effectiveAmount })(request);
           } catch (err) {
             await runSettlementError(settleScope, err, 'settle');
             const message = err instanceof Error ? err.message : String(err);
@@ -969,7 +1003,7 @@ export function createRequestHandler(
             }
           }
 
-          if (routeEntry.siwxEnabled) {
+          if (routeEntry.siwxEnabled && parseFloat(effectiveAmount) > 0) {
             try {
               await deps.entitlementStore.grant(routeEntry.key, wallet);
             } catch (error) {
@@ -986,10 +1020,12 @@ export function createRequestHandler(
             payer: wallet,
             transaction: txHash,
             network: 'tempo:4217',
+            amount: effectiveAmount,
           });
           const settledPayment: HandlerPaymentContext & { status: 'settled' } = {
             ...payment,
             status: 'settled',
+            amount: effectiveAmount,
             ...(txHash ? { transaction: txHash } : {}),
             ...(receiptHeader ? { receipt: receiptHeader } : {}),
           };
@@ -1008,6 +1044,26 @@ export function createRequestHandler(
 
       // ---- MPP hash payload (or fallback): verify first, then invoke ----
       // The tx was pre-broadcast by the client — mppx just verifies the receipt.
+
+      // Variable-price routes can't honor a post-work amount on push mode:
+      // the chain has already moved maxPrice from client to server, so there's
+      // no settlement step left to shrink. Reject with a 400 pointing the
+      // client at pull mode (mode: 'pull' in tempo() config).
+      if (routeEntry.variablePrice && payloadType === 'hash') {
+        firePluginHook(deps.plugin, 'onAlert', pluginCtx, {
+          level: 'warn' as const,
+          message: `Variable-price route received push-mode (hash) MPP credential — pull mode required`,
+          route: routeEntry.key,
+        });
+        return fail(
+          400,
+          `This route does not accept push-mode MPP credentials. Use pull mode (mode: 'pull' in tempo() config) so the server can settle for the actual amount.`,
+          meta,
+          pluginCtx,
+          body.data,
+        );
+      }
+
       let mppResult: Awaited<ReturnType<ReturnType<typeof deps.mppx.charge>>>;
       try {
         mppResult = await deps.mppx.charge({ amount: price })(request);
@@ -1075,6 +1131,7 @@ export function createRequestHandler(
         ...(mppRecipient ? { recipient: mppRecipient } : {}),
         ...(txHash ? { transaction: txHash } : {}),
         ...(receiptHeader ? { receipt: receiptHeader } : {}),
+        setAmount: makeSetAmount(),
       };
       const { response, rawResult, handlerError } = await invoke(
         request,
@@ -1117,6 +1174,7 @@ export function createRequestHandler(
           payer: wallet,
           transaction: txHash,
           network: 'tempo:4217',
+          amount: price,
         });
         await runAfterSettle({ ...settleScope, response: receiptResponse });
         finalize(receiptResponse, rawResult, meta, pluginCtx, body.data);

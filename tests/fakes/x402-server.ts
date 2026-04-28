@@ -11,7 +11,11 @@ const TX_HASH = '0xTX_HASH_FAKE_1234567890abcdef';
 
 export class FakeX402Server {
   initialized = false;
-  settledPayments: Array<{ payload: unknown; requirements: unknown }> = [];
+  settledPayments: Array<{
+    payload: unknown;
+    requirements: unknown;
+    overrides?: { amount?: string };
+  }> = [];
 
   constructor(_payeeAddress = KNOWN_PAYEE) {}
 
@@ -75,8 +79,27 @@ export class FakeX402Server {
     return { isValid: false, payer: null };
   }
 
-  async settlePayment(payload: unknown, requirements: unknown) {
-    this.settledPayments.push({ payload, requirements });
+  async settlePayment(
+    payload: unknown,
+    requirements: unknown,
+    _declaredExtensions?: Record<string, unknown>,
+    _transportContext?: unknown,
+    overrides?: { amount?: string },
+  ) {
+    this.settledPayments.push({ payload, requirements, overrides });
+    // Behavioral parity with upstream x402's `upto` settle: an override of '0'
+    // is a legal no-op that skips on-chain transfer. The fake mimics that by
+    // returning an empty transaction so callers can assert "didn't settle on chain"
+    // without instantiating a real facilitator.
+    if (overrides?.amount === '0') {
+      return {
+        success: true,
+        payer: KNOWN_PAYER,
+        transaction: '',
+        network: ((requirements as { network?: string } | null)?.network ??
+          'eip155:8453') as string,
+      };
+    }
     return {
       success: true,
       payer: KNOWN_PAYER,

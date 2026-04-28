@@ -27,6 +27,17 @@ export const router = createRouter({
     },
     accepts: [
       { network: 'eip155:8453', payTo: payeeAddress },
+      // `upto` accept enables post-work pricing on Base (see `fortune/upto`).
+      // The router validates that any `.paid({ variable: true })` route on x402
+      // has at least one upto-scheme accept on a configured network.
+      {
+        scheme: 'upto',
+        network: 'eip155:8453',
+        payTo: payeeAddress,
+        // Base USDC
+        asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+        decimals: 6,
+      },
       { network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', payTo: process.env.SOLANA_PAYEE_ADDRESS },
     ],
   },

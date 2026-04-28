@@ -37,7 +37,26 @@ Four auth modes, mutually exclusive (except `.apiKey()` composes with `.paid()`)
 .paid('0.01')                    // Static price
 .paid((body) => calcPrice(body)) // Dynamic pricing
 .paid({ field: 'tier', tiers: { basic: { price: '0.01' } } }) // Tiered
+.paid({ variable: true, maxPrice: '0.10' }) // Post-work pricing — see below
 ```
+
+#### `.paid({ variable: true, maxPrice })` — Post-work pricing
+
+For routes whose price is only known after the handler runs (LLM token cost, search-result count). The 402 challenge advertises `maxPrice`; the handler reports the actual amount via `payment.setAmount(amount)`.
+
+```typescript
+router
+  .route('llm/generate')
+  .paid({ variable: true, maxPrice: '0.10' })
+  .body(GenerateSchema)
+  .handler(async ({ body, payment }) => {
+    const result = await runModel(body);
+    payment.setAmount(result.usdCost); // <= '0.10'; '0' = no charge
+    return result;
+  });
+```
+
+Wires to x402 `upto` (requires an `upto` accept on a configured network) and to MPP pull mode. Push-mode (hash-payload) MPP credentials on a variable route are rejected with `400` because the chain has already moved `maxPrice` and there is nothing left to settle. SIWX entitlement is not granted when the effective settled amount is `0`.
 
 ### `.siwx()` — Wallet identity required (no payment)
 ```typescript

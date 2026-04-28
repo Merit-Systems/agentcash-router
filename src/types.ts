@@ -72,7 +72,13 @@ export interface X402Server {
     requirements: PaymentRequirements,
   ): Promise<{ isValid: boolean; payer?: string }>;
 
-  settlePayment(payload: unknown, requirements: PaymentRequirements): Promise<SettleResponse>;
+  settlePayment(
+    payload: unknown,
+    requirements: PaymentRequirements,
+    declaredExtensions?: Record<string, unknown>,
+    transportContext?: unknown,
+    settlementOverrides?: { amount?: string },
+  ): Promise<SettleResponse>;
 }
 
 // ---------------------------------------------------------------------------
@@ -162,6 +168,15 @@ export interface PaidOptions {
   payTo?: PayToConfig;
   /** Override MPP protocol metadata in x-payment-info discovery. */
   mpp?: MppProtocolInfo;
+  /**
+   * Variable post-work pricing. The handler decides the actual settled amount via
+   * `payment.setAmount(amount)`, capped at `maxPrice`. Requires `maxPrice`.
+   *
+   * Wires to x402 `upto` (requires an `upto` accept on a configured network)
+   * and to MPP pull mode. Push-mode MPP credentials are rejected at runtime
+   * because the chain has already moved `maxPrice` and there is nothing to settle.
+   */
+  variable?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -179,6 +194,18 @@ export interface HandlerPaymentContext {
   recipient?: string;
   transaction?: string;
   receipt?: string;
+  /**
+   * Set the post-work settled amount on routes configured with `.paid({ variable: true })`.
+   *
+   * Accepts the same string formats as upstream x402 `SettlementOverrides.amount`:
+   * raw atomic units (`'1000'`), percent (`'50%'`), or dollars (`'$0.05'`). The
+   * default form is decimal dollars (`'0.07'`) to match `.paid('0.07')` elsewhere.
+   *
+   * `'0'` is legal and skips the on-chain settle entirely. Last call wins.
+   *
+   * Throws synchronously when called on a paid route that is not `variable: true`.
+   */
+  setAmount(amount: string): void;
 }
 
 export interface SettlementLifecycleContext<TBody = unknown> {
@@ -290,6 +317,11 @@ export interface RouteEntry {
    */
   siwxEnabled?: boolean;
   pricing?: PricingConfig;
+  /**
+   * When true, settled amount is decided by the handler via `payment.setAmount()`,
+   * capped at `maxPrice`. See `PaidOptions.variable`.
+   */
+  variablePrice?: boolean;
   protocols: ProtocolType[];
   bodySchema?: ZodType;
   querySchema?: ZodType;

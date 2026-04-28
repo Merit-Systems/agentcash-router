@@ -85,6 +85,7 @@ export class RouteBuilder<
   /** @internal */ _protocols: ProtocolType[] = ['x402'];
   /** @internal */ _maxPrice: string | undefined;
   /** @internal */ _minPrice: string | undefined;
+  /** @internal */ _variablePrice = false;
   /** @internal */ _payTo: PayToConfig | undefined;
   /** @internal */ _bodySchema: ZodType | undefined;
   /** @internal */ _querySchema: ZodType | undefined;
@@ -125,6 +126,9 @@ export class RouteBuilder<
     pricing: string,
     options?: PaidOptions,
   ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody>;
+  paid(
+    options: PaidOptions & { variable: true; maxPrice: string },
+  ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody>;
   paid<TBodyIn>(
     pricing: (body: TBodyIn) => string | Promise<string>,
     options?: PaidOptions & { maxPrice?: string },
@@ -138,9 +142,32 @@ export class RouteBuilder<
     options?: PaidOptions,
   ): RouteBuilder<TBody, TQuery, TOutput, True, True, HasBody>;
   paid(
-    pricing: PricingConfig,
+    pricingOrOptions: PricingConfig | (PaidOptions & { variable: true; maxPrice: string }),
     options?: PaidOptions,
   ): RouteBuilder<TBody, TQuery, TOutput, True, boolean, HasBody> {
+    // `.paid({ variable: true, maxPrice })` shape — no separate pricing arg.
+    // Variable pricing is decided post-work by the handler, so the only price
+    // surfaced upfront is `maxPrice`.
+    let pricing: PricingConfig;
+    let resolvedOptions: PaidOptions | undefined;
+    if (
+      typeof pricingOrOptions === 'object' &&
+      pricingOrOptions !== null &&
+      !('tiers' in pricingOrOptions) &&
+      typeof pricingOrOptions !== 'function' &&
+      'variable' in pricingOrOptions &&
+      pricingOrOptions.variable
+    ) {
+      const opts = pricingOrOptions as PaidOptions & { variable: true; maxPrice: string };
+      if (!opts.maxPrice) {
+        throw new Error(`route '${this._key}': .paid({ variable: true }) requires maxPrice`);
+      }
+      pricing = opts.maxPrice;
+      resolvedOptions = opts;
+    } else {
+      pricing = pricingOrOptions as PricingConfig;
+      resolvedOptions = options;
+    }
     if (this._authMode === 'unprotected') {
       throw new Error(
         `route '${this._key}': Cannot combine .unprotected() and .paid() on the same route.`,
@@ -155,18 +182,24 @@ export class RouteBuilder<
     const next = this.fork() as RouteBuilder<TBody, TQuery, TOutput, True, boolean, HasBody>;
     next._authMode = 'paid';
     next._pricing = pricing;
-    if (options?.protocols) {
-      next._protocols = [...options.protocols];
+    if (resolvedOptions?.protocols) {
+      next._protocols = [...resolvedOptions.protocols];
     } else if (next._protocols.length === 0) {
       next._protocols = ['x402'];
     }
-    if (options?.maxPrice) next._maxPrice = options.maxPrice;
-    if (options?.minPrice) next._minPrice = options.minPrice;
-    if (options?.payTo) next._payTo = options.payTo;
-    if (options?.mpp) next._mppInfo = options.mpp;
+    if (resolvedOptions?.maxPrice) next._maxPrice = resolvedOptions.maxPrice;
+    if (resolvedOptions?.minPrice) next._minPrice = resolvedOptions.minPrice;
+    if (resolvedOptions?.payTo) next._payTo = resolvedOptions.payTo;
+    if (resolvedOptions?.mpp) next._mppInfo = resolvedOptions.mpp;
+    if (resolvedOptions?.variable) next._variablePrice = true;
 
     // Registration-time validation
     if (typeof pricing === 'object' && 'tiers' in pricing) {
+      if (next._variablePrice) {
+        throw new Error(
+          `route '${this._key}': .paid({ variable: true }) is incompatible with tiered pricing`,
+        );
+      }
       for (const [tierKey, tierConfig] of Object.entries(pricing.tiers)) {
         if (!tierKey) {
           throw new Error(`route '${this._key}': tier key cannot be empty`);
@@ -179,13 +212,16 @@ export class RouteBuilder<
         }
       }
     }
-    if (options?.maxPrice !== undefined) {
-      const parsed = parseFloat(options.maxPrice);
+    if (resolvedOptions?.maxPrice !== undefined) {
+      const parsed = parseFloat(resolvedOptions.maxPrice);
       if (isNaN(parsed) || parsed <= 0) {
         throw new Error(
-          `route '${this._key}': maxPrice '${options.maxPrice}' must be a positive decimal string`,
+          `route '${this._key}': maxPrice '${resolvedOptions.maxPrice}' must be a positive decimal string`,
         );
       }
+    }
+    if (next._variablePrice && !next._maxPrice) {
+      throw new Error(`route '${this._key}': .paid({ variable: true }) requires maxPrice`);
     }
 
     return next;
@@ -521,6 +557,15 @@ export class RouteBuilder<
     if (this._settlement && !this._pricing) {
       throw new Error(`route '${this._key}': .settlement() requires a paid route`);
     }
+    if (this._variablePrice && this._protocols.includes('x402')) {
+      const hasUpto = this._deps.x402Accepts.some((accept) => accept.scheme === 'upto');
+      if (!hasUpto) {
+        throw new Error(
+          `route '${this._key}': .paid({ variable: true }) on an x402 route requires an 'upto' accept on at least one configured network. ` +
+            `Add { scheme: 'upto', network, asset } to RouterConfig.x402.accepts.`,
+        );
+      }
+    }
 
     validateExamples(
       this._key,
@@ -539,6 +584,7 @@ export class RouteBuilder<
       authMode: this._authMode!,
       siwxEnabled: this._siwxEnabled,
       pricing: this._pricing,
+      variablePrice: this._variablePrice ? true : undefined,
       protocols: this._protocols,
       bodySchema: this._bodySchema,
       querySchema: this._querySchema,

@@ -37,6 +37,8 @@ Minimal Next.js app demonstrating `@agentcash/router` with both x402 and MPP pay
 
 - `POST /api/fortune` - Get a random fortune ($0.001, x402/MPP)
 - `POST /api/fortune/premium` - Premium fortune by category ($0.005, x402/MPP)
+- `POST /api/fortune/dynamic` - Body-derived dynamic pricing (price quoted upfront, validated pre-payment)
+- `POST /api/fortune/upto` - Post-work pricing via x402 `upto` (charge decided after the handler runs, capped at $0.05)
 - `GET /api/fortune/profile` - Verified wallet identity (SIWX only; EVM + Solana)
 - `POST /api/fortune/favorites` - Save a favorite fortune (SIWX)
 - `GET /api/fortune/favorites` - List saved favorites (SIWX)

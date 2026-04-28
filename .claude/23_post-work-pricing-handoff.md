@@ -1,6 +1,6 @@
 # 23. Post-work pricing — session handoff
 
-**Status:** Plan locked, not yet implemented. Blocked on `mppx` version bump (user-chosen ordering — bump first, then build on top).
+**Status:** Phase 1 implemented. mppx bumped in v1.5.1; `.paid({ variable, maxPrice })` + `payment.setAmount()` shipped behind a minor changeset. Phase 2 (`.session()` / `payment.tick()`) still pending.
 
 This doc captures everything decided in the conversation that produced docs 21 and 22, plus the clarifications that came after them, so the next session can pick up cold without re-deriving the design.
 

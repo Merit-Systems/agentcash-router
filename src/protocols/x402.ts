@@ -388,10 +388,19 @@ export async function settleX402Payment(
   server: X402Server,
   payload: unknown,
   requirements: PaymentRequirements,
+  overrides?: { amount?: string },
 ) {
   const { encodePaymentResponseHeader } = await import('@x402/core/http');
 
-  const result = await server.settlePayment(payload, requirements);
+  // Forward `overrides` as the 5th arg per upstream `x402ResourceServer.settlePayment`.
+  // Upstream resolves the override against the `upto` scheme's decimals and clones
+  // requirements with the effective amount before calling the facilitator.
+  const result =
+    overrides && overrides.amount !== undefined
+      ? await server.settlePayment(payload, requirements, undefined, undefined, {
+          amount: overrides.amount,
+        })
+      : await server.settlePayment(payload, requirements);
   const encoded = encodePaymentResponseHeader(result);
 
   return { encoded, result: result as SettleResponse & { transaction?: string } };

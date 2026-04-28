@@ -1,6 +1,6 @@
 # 22. Post-work pricing — implementation plan (x402 `upto` now, MPP sessions later)
 
-**Status:** Plan. Phase 1 ready to implement.
+**Status:** Phase 1 implemented (pending release). Phase 2 (sessions) still design-only.
 **Companion:** `21_x402-upto-research.md` (how upstream does it)
 
 ## Problem

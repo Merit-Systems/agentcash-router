@@ -40,6 +40,12 @@ export interface SettlementEvent {
   payer: string;
   transaction: string;
   network: string;
+  /**
+   * Effective settled amount in decimal-dollar form. For variable-price routes
+   * this reflects the post-work amount chosen by `payment.setAmount()`; for all
+   * other routes it equals the originally quoted price.
+   */
+  amount: string;
 }
 
 export interface ResponseMeta {

@@ -724,7 +724,7 @@ describe('x402 paid route', () => {
 
     await handler(makePaymentRequest({ query: 'test' }));
 
-    expect(capturedPayment).toEqual({
+    expect(capturedPayment).toMatchObject({
       protocol: 'x402',
       status: 'verified',
       payer: KNOWN_PAYER.toLowerCase(),
@@ -732,6 +732,7 @@ describe('x402 paid route', () => {
       network: 'eip155:8453',
       recipient: KNOWN_PAYEE,
     });
+    expect(typeof capturedPayment!.setAmount).toBe('function');
   });
 
   it('uses capped maxPrice when verifying paid dynamic-price requests', async () => {
@@ -940,7 +941,7 @@ describe('MPP paid route', () => {
 
     await handler(withMPPPayment({ body: { query: 'test' } }));
 
-    expect(capturedPayment).toEqual({
+    expect(capturedPayment).toMatchObject({
       protocol: 'mpp',
       status: 'settled',
       payer: KNOWN_MPP_PAYER.toLowerCase(),
@@ -949,6 +950,7 @@ describe('MPP paid route', () => {
       recipient: KNOWN_PAYEE,
       receipt: 'MOCK_MPP_RECEIPT',
     });
+    expect(typeof capturedPayment!.setAmount).toBe('function');
   });
 
   it('uses the configured MPP recipient when router payeeAddress is absent', async () => {
