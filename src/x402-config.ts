@@ -36,15 +36,28 @@ export function getConfiguredX402Networks(config: RouterConfig): string[] {
   return [...new Set(getConfiguredX402Accepts(config).map((accept) => accept.network))];
 }
 
+/**
+ * x402 schemes that support post-work amount overrides at settle time.
+ * Variable-price routes must restrict their accepts to this set, otherwise
+ * the challenge can degrade to a fixed-amount scheme (e.g. `exact`) when
+ * facilitator enrichment fails — the client signs for the cap, the server
+ * tries to apply `payment.setAmount()` on settle, and upstream rejects with
+ * `invalid_exact_evm_payload_authorization_value`.
+ */
+const OVERRIDE_CAPABLE_SCHEMES = new Set(['upto']);
+
 export async function resolveX402Accepts(
   request: Request,
-  routeEntry: Pick<RouteEntry, 'payTo'>,
+  routeEntry: Pick<RouteEntry, 'payTo' | 'variablePrice'>,
   accepts: readonly X402AcceptConfig[],
   fallbackPayTo: string,
   body?: unknown,
 ): Promise<X402ResolvedAccept[]> {
+  const filtered = routeEntry.variablePrice
+    ? accepts.filter((a) => OVERRIDE_CAPABLE_SCHEMES.has(a.scheme ?? 'exact'))
+    : accepts;
   return Promise.all(
-    accepts.map(async (accept) => ({
+    filtered.map(async (accept) => ({
       network: accept.network,
       scheme: accept.scheme ?? 'exact',
       payTo: await resolvePayToValue(

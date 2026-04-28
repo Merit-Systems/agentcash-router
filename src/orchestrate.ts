@@ -29,6 +29,15 @@ import { verifyMppSiwx } from './auth/mpp-siwx.js';
 import { verifyApiKey } from './auth/api-key.js';
 import { resolveX402Accepts } from './x402-config.js';
 
+/**
+ * Match a decimal price string like "0.05" or "1.234". A leading `$`, trailing
+ * `%`, or any non-digit-or-dot suffix means the caller already supplied a
+ * tagged form (dollars/percent) or raw atomic — pass it through untouched.
+ */
+function isDecimalDollarString(s: string): boolean {
+  return /^\d+(?:\.\d+)?$/.test(s) && s.includes('.');
+}
+
 function getRequirementNetwork(requirements: unknown, fallback: string): string {
   const network = (requirements as { network?: unknown } | null)?.network;
   return typeof network === 'string' ? network : fallback;
@@ -323,6 +332,19 @@ export function createRequestHandler(
       return (amount: string) => {
         settlementOverride.amount = amount;
       };
+    }
+
+    /**
+     * Convert whatever the handler passed to `setAmount()` into the form
+     * upstream `resolveSettlementOverrideAmount` expects. It accepts:
+     *   - raw atomic ("1000")
+     *   - percent ("50%")
+     *   - dollars ("$0.05")
+     * Bare decimals (e.g. "0.05") are documented as decimal dollars and tagged
+     * with `$` here so upstream interprets them correctly.
+     */
+    function normalizeOverrideForUpstream(amount: string): string {
+      return isDecimalDollarString(amount) ? `$${amount}` : amount;
     }
 
     /** Shared non-payment tail: parse body → validate → invoke handler → finalize. */
@@ -766,7 +788,9 @@ export function createRequestHandler(
             deps.x402Server,
             verifyPayload,
             verifyRequirements,
-            overrideAmount !== undefined ? { amount: overrideAmount } : undefined,
+            overrideAmount !== undefined
+              ? { amount: normalizeOverrideForUpstream(overrideAmount) }
+              : undefined,
           );
           if (!settle.result?.success) {
             const reason = settle.result?.errorReason || 'x402 settlement returned success=false';
@@ -937,7 +961,12 @@ export function createRequestHandler(
           const effectiveAmount = settlementOverride.amount ?? price;
           let mppResult: Awaited<ReturnType<ReturnType<typeof deps.mppx.charge>>>;
           try {
-            mppResult = await deps.mppx.charge({ amount: effectiveAmount })(request);
+            // mppx.charge expects a decimal-dollar string (matches `price`);
+            // strip the optional `$` prefix users may have included when
+            // calling setAmount().
+            mppResult = await deps.mppx.charge({
+              amount: effectiveAmount.startsWith('$') ? effectiveAmount.slice(1) : effectiveAmount,
+            })(request);
           } catch (err) {
             await runSettlementError(settleScope, err, 'settle');
             const message = err instanceof Error ? err.message : String(err);
@@ -1415,6 +1444,22 @@ async function build402(
       }
     } catch {
       // SIWX extension is optional enrichment for 402 challenges
+    }
+  }
+
+  // Variable-price routes use the upto scheme over Permit2; advertise the
+  // EIP-2612 gasless approval extension so clients without an existing Permit2
+  // allowance can sign a Permit in the same flow rather than requiring a
+  // separate `approve()` transaction first.
+  if (routeEntry.variablePrice && routeEntry.protocols.includes('x402')) {
+    try {
+      const { declareEip2612GasSponsoringExtension } = await import('@x402/extensions');
+      extensions = {
+        ...(extensions ?? {}),
+        ...declareEip2612GasSponsoringExtension(),
+      };
+    } catch {
+      // Extension is optional; routes still work for clients with prior allowance.
     }
   }
 

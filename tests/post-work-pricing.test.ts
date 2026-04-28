@@ -18,6 +18,7 @@ import { MemoryEntitlementStore } from '../src/auth/entitlement.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
 import { createRouter } from '../src/index.js';
 import type { RouteEntry, RouterPlugin } from '../src/index.js';
+import type { ResolvedX402Facilitator } from '../src/x402-facilitators.js';
 
 const BASE_NETWORK = 'eip155:8453';
 const USDC_ASSET = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
@@ -80,6 +81,15 @@ function makeVariableEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
   };
 }
 
+function makeFacilitator(network: string, url: string): ResolvedX402Facilitator {
+  return {
+    family: 'evm',
+    network: network as ResolvedX402Facilitator['network'],
+    url,
+    config: { url },
+  };
+}
+
 function makeX402Deps(server: FakeX402Server): OrchestrateDeps {
   return {
     x402Server: server as unknown as OrchestrateDeps['x402Server'],
@@ -88,6 +98,9 @@ function makeX402Deps(server: FakeX402Server): OrchestrateDeps {
     entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: KNOWN_PAYEE,
     network: BASE_NETWORK,
+    x402FacilitatorsByNetwork: {
+      [BASE_NETWORK]: makeFacilitator(BASE_NETWORK, 'https://cdp.example'),
+    },
     x402Accepts: [
       { scheme: 'exact', network: BASE_NETWORK, payTo: KNOWN_PAYEE },
       {
@@ -227,7 +240,10 @@ describe('post-work pricing — x402 upto', () => {
     const response = await handler(withUptoPayment());
     expect(response.status).toBe(200);
     expect(server.settledPayments).toHaveLength(1);
-    expect(server.settledPayments[0]!.overrides).toEqual({ amount: '0.05' });
+    // Bare decimals are normalized to upstream's "$0.05" dollar form before
+    // being threaded into settle overrides (raw decimals would be misread as
+    // atomic units by the facilitator).
+    expect(server.settledPayments[0]!.overrides).toEqual({ amount: '$0.05' });
   });
 
   it('skips on-chain settle when handler calls setAmount("0")', async () => {
@@ -278,7 +294,7 @@ describe('post-work pricing — x402 upto', () => {
 
     const response = await handler(withUptoPayment());
     expect(response.status).toBe(200);
-    expect(server.settledPayments[0]!.overrides).toEqual({ amount: '0.07' });
+    expect(server.settledPayments[0]!.overrides).toEqual({ amount: '$0.07' });
   });
 
   it('does not grant SIWX entitlement when effective amount is 0', async () => {
@@ -298,6 +314,46 @@ describe('post-work pricing — x402 upto', () => {
     const response = await handler(withUptoPayment());
     expect(response.status).toBe(200);
     expect(grantSpy).not.toHaveBeenCalled();
+  });
+
+  it('filters out exact accepts on variable routes — challenges only advertise override-capable schemes', async () => {
+    // Regression: when CDP /accepts 401s and only `exact` survives the
+    // facilitator enrichment, agentcash signs an exact payment for maxPrice
+    // and the server tries to apply setAmount() override on settle —
+    // upstream rejects with `invalid_exact_evm_payload_authorization_value`.
+    // Variable routes must never advertise exact in the first place.
+    await import('vitest').then(async ({ vi: _vi }) => {
+      // pass-through facilitator like upto-scheme.test.ts uses
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { accepts?: unknown[] };
+        return new Response(JSON.stringify({ accepts: body.accepts ?? [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }) as typeof fetch;
+      try {
+        const server = new FakeX402Server();
+        const handler = createRequestHandler(
+          makeVariableEntry(),
+          async () => ({ ok: true }),
+          makeX402Deps(server),
+        );
+
+        const response = await handler(
+          new NextRequest(URL_X402, { method: 'POST' }), // no payment → 402 challenge
+        );
+        expect(response.status).toBe(402);
+
+        const encoded = response.headers.get('PAYMENT-REQUIRED')!;
+        const challenge = JSON.parse(Buffer.from(encoded, 'base64').toString());
+        const schemes = (challenge.accepts as Array<{ scheme: string }>).map((a) => a.scheme);
+        expect(schemes).toContain('upto');
+        expect(schemes).not.toContain('exact');
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
   });
 
   it('reports the effective amount in onPaymentSettled', async () => {

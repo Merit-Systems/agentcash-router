@@ -2,7 +2,7 @@ import type { PaymentPayload, PaymentRequirements, SettleResponse } from '@x402/
 import type { RouteEntry, X402ResolvedAccept, X402Server } from '../types.js';
 import { getFacilitatorForRequirement, sameResolvedX402Facilitator } from '../x402-facilitators.js';
 import type { ResolvedX402Facilitator, ResolvedX402Facilitators } from '../x402-facilitators.js';
-import { buildEvmExactOptions } from './evm.js';
+import { buildEvmExactOptions, buildEvmUptoOptions, isEvmNetwork } from './evm.js';
 import {
   buildSolanaExactOptions,
   enrichRequirementsWithFacilitatorAccepts,
@@ -80,17 +80,32 @@ export async function verifyX402Payment(opts: VerifyPaymentOptions) {
     return invalidPaymentVerification();
   }
 
-  let verify: { isValid: boolean; payer?: unknown };
+  let verify: {
+    isValid: boolean;
+    payer?: unknown;
+    invalidReason?: string;
+    invalidMessage?: string;
+  };
   try {
     verify = await server.verifyPayment(payload, matching);
   } catch (err: unknown) {
     // VerifyError from @x402/core with 4xx statusCode (e.g. insufficient_funds)
     // is a client payment issue → 402 challenge, not 500. 5xx/unknown re-throws.
     const sc = (err as { statusCode?: number }).statusCode;
-    if (sc && sc >= 400 && sc < 500) return invalidPaymentVerification();
+    if (sc && sc >= 400 && sc < 500) {
+      console.warn(
+        `[router] x402 verify rejected (${sc}): ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return invalidPaymentVerification();
+    }
     throw err;
   }
-  if (!verify.isValid) return invalidPaymentVerification();
+  if (!verify.isValid) {
+    console.warn(
+      `[router] x402 verify returned invalid: reason=${verify.invalidReason ?? 'unknown'} message=${verify.invalidMessage ?? '(none)'}`,
+    );
+    return invalidPaymentVerification();
+  }
   if (typeof verify.payer !== 'string' || verify.payer.length === 0) {
     throw new Error('x402 verification succeeded without a payer address');
   }
@@ -143,28 +158,35 @@ async function buildExpectedRequirements(
   price: string,
   accepts: X402ResolvedAccept[],
 ): Promise<PaymentRequirements[]> {
-  const exactRequirements = await buildExactRequirements(server, request, price, accepts);
+  const sdkRequirements = await buildSdkHandledRequirements(server, request, price, accepts);
   const customRequirements = buildCustomRequirements(price, accepts);
-  return [...exactRequirements, ...customRequirements];
+  return [...sdkRequirements, ...customRequirements];
 }
 
-async function buildExactRequirements(
+/**
+ * Build requirements for accepts whose scheme is registered with the local
+ * `x402ResourceServer` instance: EVM exact, EVM upto, Solana exact. Each
+ * registered scheme produces a fully-enriched requirement without an HTTP
+ * roundtrip to the facilitator's (non-standard) `/accepts` endpoint.
+ */
+async function buildSdkHandledRequirements(
   server: X402Server,
   request: Request,
   price: string,
   accepts: X402ResolvedAccept[],
 ): Promise<PaymentRequirements[]> {
-  const exactGroups = [
+  const groups = [
     buildEvmExactOptions(accepts, price),
+    buildEvmUptoOptions(accepts, price),
     buildSolanaExactOptions(accepts, price),
   ].filter((options) => options.length > 0);
 
-  if (exactGroups.length === 0) return [];
+  if (groups.length === 0) return [];
 
   const requirements: PaymentRequirements[] = [];
   const failures: Error[] = [];
 
-  for (const options of exactGroups) {
+  for (const options of groups) {
     try {
       requirements.push(
         ...(await server.buildPaymentRequirementsFromOptions(options, { request })),
@@ -172,11 +194,11 @@ async function buildExactRequirements(
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       failures.push(err);
-      if (exactGroups.length === 1) {
+      if (groups.length === 1) {
         throw err;
       }
       console.warn(
-        `[router] Failed to build x402 exact requirements for ${options[0]?.network}: ${err.message}`,
+        `[router] Failed to build x402 ${options[0]?.scheme} requirements for ${options[0]?.network}: ${err.message}`,
       );
     }
   }
@@ -185,16 +207,34 @@ async function buildExactRequirements(
     return requirements;
   }
 
-  throw failures[0] ?? new Error('Failed to build x402 exact requirements');
+  throw failures[0] ?? new Error('Failed to build x402 SDK-handled requirements');
 }
 
+/**
+ * Fallback for accepts whose scheme isn't registered with the local SDK. Builds
+ * a raw `PaymentRequirements` from the user's accept config that subsequently
+ * needs enrichment via the facilitator's `/accepts` endpoint (Solana extension).
+ *
+ * EVM exact, EVM upto, and Solana exact are excluded — they're handled by the
+ * SDK in `buildSdkHandledRequirements` above.
+ */
 function buildCustomRequirements(
   price: string,
   accepts: X402ResolvedAccept[],
 ): PaymentRequirements[] {
   return accepts
-    .filter((accept) => accept.scheme !== 'exact')
+    .filter((accept) => !isSdkHandled(accept))
     .map((accept) => buildCustomRequirement(price, accept));
+}
+
+function isSdkHandled(accept: X402ResolvedAccept): boolean {
+  if (isEvmNetwork(accept.network)) {
+    return accept.scheme === 'exact' || accept.scheme === 'upto';
+  }
+  if (isSolanaRequirement({ network: accept.network } as PaymentRequirements)) {
+    return accept.scheme === 'exact';
+  }
+  return false;
 }
 
 async function buildChallengeRequirements(
@@ -211,7 +251,11 @@ async function buildChallengeRequirements(
 }
 
 function needsFacilitatorEnrichment(accepts: X402ResolvedAccept[]): boolean {
-  return accepts.some((accept) => accept.scheme !== 'exact') || hasSolanaAccepts(accepts);
+  // `/accepts` is a non-standard extension used by Solana facilitators (e.g.
+  // Corbits) to fill in dynamic fields like `feePayer` and `recentBlockhash`.
+  // EVM schemes (exact, upto) are built fully by the locally-registered scheme
+  // classes in `buildSdkHandledRequirements`, so they never need this roundtrip.
+  return hasSolanaAccepts(accepts);
 }
 
 async function enrichGroup(
@@ -325,7 +369,9 @@ function getRequiredFacilitator(
 }
 
 function requiresFacilitatorEnrichment(requirement: PaymentRequirements): boolean {
-  return requirement.scheme !== 'exact' || isSolanaRequirement(requirement);
+  // Only Solana requirements need facilitator-side enrichment; EVM (exact + upto)
+  // is fully built by the registered SchemeNetworkServer locally.
+  return isSolanaRequirement(requirement);
 }
 
 function buildCustomRequirement(price: string, accept: X402ResolvedAccept): PaymentRequirements {

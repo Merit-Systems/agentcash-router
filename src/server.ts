@@ -55,28 +55,45 @@ export async function createX402Server(config: RouterConfig) {
 }
 
 /**
- * Wrap an HTTPFacilitatorClient to return a hardcoded getSupported() response
- * for exact schemes. verify() and settle() pass through to the real client.
+ * Wrap an HTTPFacilitatorClient so getSupported() is fetched at most once per
+ * process, with a hardcoded fallback if the real call fails.
  *
- * Why: getSupported() hits the facilitator on every cold start. On Vercel,
- * N simultaneous cold starts blast the facilitator and get 429'd.
+ * Why a wrapper: getSupported() can be called multiple times during a request
+ * (challenge build, verify, settle), and on Vercel each cold start spawns a
+ * new process. Without caching, N simultaneous cold starts can blast the
+ * facilitator with /supported and get 429'd (see .claude/18).
  *
- * For Solana, dynamic fields like feePayer/recentBlockhash are supplied later
- * by the /accepts enrichment call, so getSupported() only needs to advertise
- * that exact is available on the configured networks.
+ * Why fetch the real response at all: schemes like `upto` require facilitator-
+ * specific `extra` fields (e.g. `facilitatorAddress` for the Permit2 witness)
+ * that we can't synthesize locally. We fetch once, cache the result, and serve
+ * it from memory thereafter.
+ *
+ * Why a fallback: if the real getSupported() fails (network glitch, persistent
+ * 429), we degrade gracefully — exact routes keep working with the synthesized
+ * `fallbackKinds`; upto routes will return a 402 that's missing
+ * `extra.facilitatorAddress`, and the agentcash CLI surfaces a clear error.
  */
 function cachedClient(
   inner: FacilitatorClient,
-  kinds: SupportedResponse['kinds'],
+  fallbackKinds: SupportedResponse['kinds'],
 ): FacilitatorClient {
+  let cachedPromise: Promise<SupportedResponse> | null = null;
   return {
     verify: inner.verify.bind(inner),
     settle: inner.settle.bind(inner),
-    getSupported: async (): Promise<SupportedResponse> => ({
-      kinds,
-      extensions: [],
-      signers: {},
-    }),
+    getSupported: async (): Promise<SupportedResponse> => {
+      if (!cachedPromise) {
+        cachedPromise = inner.getSupported().catch((err) => {
+          console.warn(
+            `[router] facilitator getSupported() failed; falling back to hardcoded kinds: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          // Reset the cache so a subsequent successful call can populate it.
+          cachedPromise = null;
+          return { kinds: fallbackKinds, extensions: [], signers: {} };
+        });
+      }
+      return cachedPromise;
+    },
   };
 }
 

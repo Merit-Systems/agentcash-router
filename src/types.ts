@@ -51,7 +51,14 @@ export interface X402Server {
   initialize(): Promise<void>;
 
   buildPaymentRequirementsFromOptions(
-    options: Array<{ scheme: string; network: string; price: string; payTo: string }>,
+    options: Array<{
+      scheme: string;
+      network: string;
+      price: string | { asset: string; amount: string; extra?: Record<string, unknown> };
+      payTo: string;
+      maxTimeoutSeconds?: number;
+      extra?: Record<string, unknown>;
+    }>,
     context: { request: Request },
   ): Promise<PaymentRequirements[]>;
 
