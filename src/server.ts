@@ -55,44 +55,28 @@ export async function createX402Server(config: RouterConfig) {
 }
 
 /**
- * Wrap an HTTPFacilitatorClient so getSupported() is fetched at most once per
- * process, with a hardcoded fallback if the real call fails.
- *
- * Why a wrapper: getSupported() can be called multiple times during a request
- * (challenge build, verify, settle), and on Vercel each cold start spawns a
- * new process. Without caching, N simultaneous cold starts can blast the
- * facilitator with /supported and get 429'd (see .claude/18).
- *
- * Why fetch the real response at all: schemes like `upto` require facilitator-
- * specific `extra` fields (e.g. `facilitatorAddress` for the Permit2 witness)
- * that we can't synthesize locally. We fetch once, cache the result, and serve
- * it from memory thereafter.
- *
- * Why a fallback: if the real getSupported() fails (network glitch, persistent
- * 429), we degrade gracefully — exact routes keep working with the synthesized
- * `fallbackKinds`; upto routes will return a 402 that's missing
- * `extra.facilitatorAddress`, and the agentcash CLI surfaces a clear error.
+ * Memoize getSupported() per process and degrade to a synthesized response
+ * on persistent failure. See `.claude/18` for the cold-start 429 background.
  */
-function cachedClient(
+function withMemoizedGetSupported(
   inner: FacilitatorClient,
-  fallbackKinds: SupportedResponse['kinds'],
+  failureFallback: SupportedResponse['kinds'],
 ): FacilitatorClient {
-  let cachedPromise: Promise<SupportedResponse> | null = null;
+  let inFlight: Promise<SupportedResponse> | null = null;
   return {
     verify: inner.verify.bind(inner),
     settle: inner.settle.bind(inner),
-    getSupported: async (): Promise<SupportedResponse> => {
-      if (!cachedPromise) {
-        cachedPromise = inner.getSupported().catch((err) => {
+    getSupported: async () => {
+      if (!inFlight) {
+        inFlight = inner.getSupported().catch((err) => {
           console.warn(
-            `[router] facilitator getSupported() failed; falling back to hardcoded kinds: ${err instanceof Error ? err.message : String(err)}`,
+            `[router] facilitator getSupported() failed; using fallback kinds: ${err instanceof Error ? err.message : String(err)}`,
           );
-          // Reset the cache so a subsequent successful call can populate it.
-          cachedPromise = null;
-          return { kinds: fallbackKinds, extensions: [], signers: {} };
+          inFlight = null; // let the next call retry
+          return { kinds: failureFallback, extensions: [], signers: {} };
         });
       }
-      return cachedPromise;
+      return inFlight;
     },
   };
 }
@@ -125,6 +109,6 @@ function createFacilitatorClients(
       }
       return [exactKind];
     });
-    return cachedClient(inner, kinds);
+    return withMemoizedGetSupported(inner, kinds);
   });
 }

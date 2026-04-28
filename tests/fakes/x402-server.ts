@@ -112,24 +112,10 @@ export class FakeX402Server {
     overrides?: { amount?: string },
   ) {
     this.settledPayments.push({ payload, requirements, overrides });
-    // Behavioral parity with upstream x402's `upto` settle: an override of '0'
-    // is a legal no-op that skips on-chain transfer. The fake mimics that by
-    // returning an empty transaction so callers can assert "didn't settle on chain"
-    // without instantiating a real facilitator.
-    if (overrides?.amount === '0') {
-      return {
-        success: true,
-        payer: KNOWN_PAYER,
-        transaction: '',
-        network: ((requirements as { network?: string } | null)?.network ??
-          'eip155:8453') as string,
-      };
-    }
-    return {
-      success: true,
-      payer: KNOWN_PAYER,
-      transaction: TX_HASH,
-      network: ((requirements as { network?: string } | null)?.network ?? 'eip155:8453') as string,
-    };
+    const network = ((requirements as { network?: string } | null)?.network ??
+      'eip155:8453') as string;
+    const skippedOnChainTransfer = overrides?.amount === '0';
+    const transaction = skippedOnChainTransfer ? '' : TX_HASH;
+    return { success: true, payer: KNOWN_PAYER, transaction, network };
   }
 }
