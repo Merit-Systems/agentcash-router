@@ -223,7 +223,12 @@ This repo uses [changesets](https://github.com/changesets/changesets) for versio
 1. When PRs with changesets merge to `main`, the `changesets/action` creates a **"chore: version packages"** PR that bumps `package.json` version and updates `CHANGELOG.md`
 2. When that version PR is merged, the action **publishes to npm** automatically
 
+### ⚠️ Never edit `version` in package.json directly
+
+CI will reject any PR that modifies the `version` field in `package.json`. Only `changesets/action` is allowed to bump versions (on its automated "chore: version packages" PR). Always use `pnpm changeset` to describe your change — the version bump happens automatically on merge.
+
 ### Troubleshooting
 
 - **Publish fails**: Check `NPM_TOKEN` secret is set and has write access to `@agentcash` scope
 - **No version PR created**: Ensure your PR included a `.changeset/*.md` file
+- **CI blocks my version bump**: You edited `package.json` version directly. Revert it and run `pnpm changeset` instead
