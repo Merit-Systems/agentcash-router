@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveX402Accepts } from '../src/x402-config.js';
+import { resolveX402Accepts } from '../src/protocols/x402/accepts.js';
 
 describe('resolveX402Accepts body forwarding', () => {
   const fakeRequest = new Request('https://example.com');

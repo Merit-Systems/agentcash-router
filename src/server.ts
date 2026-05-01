@@ -1,13 +1,13 @@
 import type { FacilitatorConfig, FacilitatorClient } from '@x402/core/http';
 import type { SupportedResponse } from '@x402/core/types';
-import { filterEvmNetworks } from './protocols/evm.js';
-import { filterSolanaNetworks } from './protocols/solana.js';
+import { filterEvmNetworks } from './protocols/x402/evm.js';
+import { filterSolanaNetworks } from './protocols/x402/solana.js';
 import type { RouterConfig, X402Server } from './types.js';
 import {
   getResolvedX402Facilitators,
   getResolvedX402FacilitatorGroups,
-} from './x402-facilitators.js';
-import { getConfiguredX402Networks } from './x402-config.js';
+} from './protocols/x402/facilitators.js';
+import { getConfiguredX402Networks } from './protocols/x402/accepts.js';
 
 export async function createX402Server(config: RouterConfig) {
   // Dynamic ESM imports: peer deps are loaded lazily so the router can

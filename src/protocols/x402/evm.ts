@@ -1,5 +1,5 @@
 import type { Network, PaymentRequirements } from '@x402/core/types';
-import type { X402ResolvedAccept } from '../types.js';
+import type { X402ResolvedAccept } from '../../types.js';
 
 export function isEvmNetwork(network: string): network is `eip155:${string}` {
   return network.startsWith('eip155:');

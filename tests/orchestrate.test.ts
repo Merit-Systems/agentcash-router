@@ -20,8 +20,8 @@ import type {
 // Mock the protocol modules to use our fakes
 // ---------------------------------------------------------------------------
 
-// Mock x402 protocol to use FakeX402Server directly
-vi.mock('../src/protocols/x402.js', () => ({
+// Mock x402 protocol modules to use FakeX402Server directly
+vi.mock('../src/protocols/x402/challenge.js', () => ({
   buildX402Challenge: ({
     server,
     request,
@@ -52,7 +52,9 @@ vi.mock('../src/protocols/x402.js', () => ({
       requirements,
     };
   },
+}));
 
+vi.mock('../src/protocols/x402/verify.js', () => ({
   verifyX402Payment: async ({
     server,
     request,
@@ -95,8 +97,14 @@ vi.mock('../src/protocols/x402.js', () => ({
       requirements: matching,
     };
   },
+}));
 
-  settleX402Payment: async (server: FakeX402Server, payload: unknown, requirements: unknown) => {
+vi.mock('../src/protocols/x402/settle.js', () => ({
+  settleX402Payment: async (
+    server: FakeX402Server,
+    payload: unknown,
+    requirements: unknown,
+  ) => {
     const result = await server.settlePayment(payload, requirements);
     return { encoded: 'SETTLE_' + result.transaction, result };
   },

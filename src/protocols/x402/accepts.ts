@@ -4,8 +4,8 @@ import type {
   RouterConfig,
   X402AcceptConfig,
   X402ResolvedAccept,
-} from './types.js';
-import { BASE_NETWORK } from './constants.js';
+} from '../../types.js';
+import { BASE_NETWORK } from '../../constants.js';
 
 async function resolvePayToValue(
   payTo: PayToConfig | undefined,
@@ -62,3 +62,4 @@ export async function resolveX402Accepts(
     })),
   );
 }
+

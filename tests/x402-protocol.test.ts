@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { encodePaymentSignatureHeader } from '@x402/core/http';
-import { verifyX402Payment } from '../src/protocols/x402.js';
+import { verifyX402Payment } from '../src/protocols/x402/verify.js';
 import { FakeX402Server, KNOWN_PAYEE } from './fakes/x402-server.js';
 
 describe('verifyX402Payment', () => {

@@ -1,0 +1,130 @@
+/**
+ * MPP transaction-payload mode.
+ *
+ * Flow:
+ *   verify  → simulate the user-signed transaction via viem (no broadcast).
+ *             A simulation revert means the user is never charged.
+ *   settle  → broadcast and wait for on-chain confirmation. The merchant bears
+ *             the risk of broadcast failure after the handler ran.
+ */
+
+import type { NextResponse } from 'next/server';
+import { Transaction as TempoTransaction } from 'viem/tempo';
+import { call as viemCall } from 'viem/actions';
+import { HEADERS } from '../../headers.js';
+import type { HandlerPaymentContext } from '../../types.js';
+import type { SettleArgs, SettleOutcome, VerifyArgs, VerifySuccess } from '../types.js';
+import type { MppCredentialInfo } from './credential.js';
+import { extractTxHash, readChallengeReason } from './receipt.js';
+
+export interface TxModeToken {
+  mode: 'transaction';
+  credential: MppCredentialInfo['credential'];
+}
+
+export async function verifyTxMode(
+  args: VerifyArgs,
+  info: MppCredentialInfo,
+): Promise<VerifySuccess | { ok: false; kind: 'invalid' } | { ok: false; kind: 'config'; message: string }> {
+  const { deps, price, routeEntry } = args;
+  if (!deps.tempoClient) {
+    return { ok: false, kind: 'config', message: 'tempoClient not configured for MPP transaction-payload mode' };
+  }
+
+  // Simulate to catch obvious reverts before invoking the handler.
+  try {
+    const serializedTx = (info.credential.payload as { signature: `0x${string}` }).signature;
+    const transaction = TempoTransaction.deserialize(serializedTx) as {
+      from?: `0x${string}`;
+      calls?: unknown[];
+      [key: string]: unknown;
+    };
+    await viemCall(deps.tempoClient, {
+      ...transaction,
+      account: transaction.from,
+      calls: transaction.calls ?? [],
+    } as never);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[router] ${routeEntry.key}: MPP simulation failed — ${message}`);
+    return { ok: false, kind: 'invalid' };
+  }
+
+  const mppRecipient = deps.mppRecipient ?? deps.payeeAddress;
+  const payment: HandlerPaymentContext = {
+    protocol: 'mpp',
+    status: 'verified',
+    payer: info.wallet,
+    amount: price,
+    network: 'tempo:4217',
+    ...(mppRecipient ? { recipient: mppRecipient } : {}),
+  };
+
+  return {
+    ok: true,
+    wallet: info.wallet,
+    payment,
+    token: { mode: 'transaction', credential: info.credential } satisfies TxModeToken,
+    alreadySettled: false,
+  };
+}
+
+export async function settleTxMode(args: SettleArgs): Promise<SettleOutcome> {
+  const { request, response, payment, deps, routeEntry } = args;
+
+  if (!deps.mppx) {
+    return {
+      ok: false,
+      error: new Error('mppx unavailable'),
+      failMessage: 'MPP not initialized',
+      failStatus: 500,
+    };
+  }
+
+  // Broadcast and confirm.
+  let result: Awaited<ReturnType<ReturnType<typeof deps.mppx.charge>>>;
+  try {
+    result = await deps.mppx.charge({ amount: payment.amount })(request);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[router] ${routeEntry.key}: MPP broadcast failed after handler: ${message}`);
+    return {
+      ok: false,
+      error: err,
+      failMessage: `MPP payment processing failed: ${message}`,
+      failStatus: 500,
+    };
+  }
+
+  if (result.status === 402) {
+    const reason = await readChallengeReason(result.challenge);
+    const detail = reason || 'transaction reverted on-chain after handler execution';
+    const settlementError = Object.assign(new Error(detail), {
+      status: 402,
+      detail,
+      mppResult: result,
+      challenge: result.challenge,
+    });
+    console.error(`[router] ${routeEntry.key}: MPP payment failed after handler — ${detail}`);
+    return {
+      ok: false,
+      error: settlementError,
+      failMessage: `MPP payment failed: ${detail}`,
+      failStatus: 500,
+    };
+  }
+
+  const receiptResponse = result.withReceipt(response) as NextResponse;
+  receiptResponse.headers.set('Cache-Control', 'private');
+  const receiptHeader = receiptResponse.headers.get(HEADERS.MPP_PAYMENT_RECEIPT) ?? undefined;
+  const txHash = extractTxHash(receiptHeader);
+
+  const settledPayment: HandlerPaymentContext & { status: 'settled' } = {
+    ...payment,
+    status: 'settled',
+    ...(txHash ? { transaction: txHash } : {}),
+    ...(receiptHeader ? { receipt: receiptHeader } : {}),
+  };
+
+  return { ok: true, response: receiptResponse, settledPayment };
+}

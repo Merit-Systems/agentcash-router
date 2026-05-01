@@ -10,7 +10,7 @@ import { MemoryEntitlementStore } from './auth/entitlement.js';
 import { createWellKnownHandler } from './discovery/well-known.js';
 import { createOpenAPIHandler } from './discovery/openapi.js';
 import { createLlmsTxtHandler } from './discovery/llms-txt.js';
-import { getConfiguredX402Accepts } from './x402-config.js';
+import { getConfiguredX402Accepts } from './protocols/x402/accepts.js';
 import { BASE_NETWORK } from './constants.js';
 import { RouterConfigError, formatRouterConfigIssues, getRouterConfigIssues } from './config.js';
 // ---------------------------------------------------------------------------

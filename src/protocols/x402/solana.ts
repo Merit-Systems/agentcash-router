@@ -1,7 +1,7 @@
 import type { Network, PaymentRequirements } from '@x402/core/types';
-import type { X402ResolvedAccept } from '../types.js';
-import type { ResolvedX402Facilitator } from '../x402-facilitators.js';
-import { getAcceptsHeadersForFacilitator } from '../x402-facilitators.js';
+import type { X402ResolvedAccept } from '../../types.js';
+import type { ResolvedX402Facilitator } from './facilitators.js';
+import { getAcceptsHeadersForFacilitator } from './facilitators.js';
 
 type ChallengeResource = {
   url: string;

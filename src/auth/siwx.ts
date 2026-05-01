@@ -1,5 +1,6 @@
 import type { NonceStore } from './nonce.js';
 import type { RouteEntry } from '../types.js';
+import { HEADERS } from '../headers.js';
 
 /**
  * SIWX verification error codes.
@@ -50,7 +51,7 @@ export async function verifySIWX(
   const { parseSIWxHeader, validateSIWxMessage, verifySIWxSignature } =
     await import('@x402/extensions/sign-in-with-x');
 
-  const header = request.headers.get('SIGN-IN-WITH-X');
+  const header = request.headers.get(HEADERS.SIWX);
   if (!header) {
     return { valid: false, wallet: null, code: 'siwx_missing_header' };
   }
