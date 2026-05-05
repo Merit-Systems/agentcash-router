@@ -13,12 +13,7 @@
 import type { NextResponse } from 'next/server';
 import { HEADERS } from '../../headers.js';
 import type { HandlerPaymentContext } from '../../types.js';
-import type {
-  SettleArgs,
-  SettleOutcome,
-  VerifyArgs,
-  VerifySuccess,
-} from '../types.js';
+import type { SettleArgs, SettleOutcome, VerifyArgs, VerifySuccess } from '../types.js';
 import type { MppCredentialInfo } from './credential.js';
 import { extractTxHash, readChallengeReason } from './receipt.js';
 
@@ -31,9 +26,7 @@ export async function verifyHashMode(
   args: VerifyArgs,
   info: MppCredentialInfo,
 ): Promise<
-  | VerifySuccess
-  | { ok: false; kind: 'invalid' }
-  | { ok: false; kind: 'config'; message: string }
+  VerifySuccess | { ok: false; kind: 'invalid' } | { ok: false; kind: 'config'; message: string }
 > {
   const { deps, price, routeEntry, request } = args;
 

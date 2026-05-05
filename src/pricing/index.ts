@@ -6,12 +6,7 @@ import type { PricingDeps, PricingStrategy, RawPricingConfig } from './types.js'
 export { FixedPricing } from './fixed.js';
 export { DynamicPricing } from './dynamic.js';
 export { TieredPricing } from './tiered.js';
-export type {
-  PricingStrategy,
-  PricingDescriptor,
-  RawPricingConfig,
-  PricingDeps,
-} from './types.js';
+export type { PricingStrategy, PricingDescriptor, RawPricingConfig, PricingDeps } from './types.js';
 
 /** Convert user-supplied pricing config into a strategy. */
 export function selectPricing(

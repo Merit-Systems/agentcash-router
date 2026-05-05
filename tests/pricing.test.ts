@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { selectPricing, FixedPricing, DynamicPricing, TieredPricing } from '../src/pricing/index.js';
+import {
+  selectPricing,
+  FixedPricing,
+  DynamicPricing,
+  TieredPricing,
+} from '../src/pricing/index.js';
 
 describe('FixedPricing', () => {
   it('quote returns the configured price', async () => {
@@ -19,7 +24,9 @@ describe('FixedPricing', () => {
 
 describe('DynamicPricing', () => {
   it('calls the price function with parsed body', async () => {
-    const p = new DynamicPricing({ fn: (body) => ((body as { size: number }).size * 0.01).toFixed(2) });
+    const p = new DynamicPricing({
+      fn: (body) => ((body as { size: number }).size * 0.01).toFixed(2),
+    });
     expect(await p.quote({ size: 5 })).toBe('0.05');
   });
 

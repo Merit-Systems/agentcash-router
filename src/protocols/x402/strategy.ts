@@ -26,7 +26,7 @@ export const x402Strategy: PaymentStrategy = {
   detects(request: Request): boolean {
     return Boolean(
       request.headers.get(HEADERS.X402_PAYMENT_SIGNATURE) ??
-        request.headers.get(HEADERS.X402_PAYMENT_LEGACY),
+      request.headers.get(HEADERS.X402_PAYMENT_LEGACY),
     );
   },
 

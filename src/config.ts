@@ -2,10 +2,7 @@ import type { PaidOptions, ProtocolType, RouterConfig, X402AcceptConfig } from '
 import { BASE_NETWORK, SOLANA_MAINNET_NETWORK } from './constants.js';
 import { isEvmNetwork } from './protocols/x402/evm.js';
 import { isSolanaNetwork } from './protocols/x402/solana.js';
-import {
-  getConfiguredX402Accepts,
-  getConfiguredX402Networks,
-} from './protocols/x402/accepts.js';
+import { getConfiguredX402Accepts, getConfiguredX402Networks } from './protocols/x402/accepts.js';
 
 export type RouterEnv = Record<string, string | undefined>;
 

@@ -58,9 +58,7 @@ export interface FlowCtx {
 // Result types
 // ---------------------------------------------------------------------------
 
-export type ParseBodyResult =
-  | { ok: true; data: unknown }
-  | { ok: false; response: NextResponse };
+export type ParseBodyResult = { ok: true; data: unknown } | { ok: false; response: NextResponse };
 
 export interface InvokeResult {
   response: NextResponse;

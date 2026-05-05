@@ -92,7 +92,9 @@ export async function build402(
  * optional SIWX extension for paid+SIWX routes. The SIWX-only challenge has
  * a different shape and is built in flows/siwx-only.ts.
  */
-async function buildChallengeExtensions(ctx: FlowCtx): Promise<Record<string, unknown> | undefined> {
+async function buildChallengeExtensions(
+  ctx: FlowCtx,
+): Promise<Record<string, unknown> | undefined> {
   const { routeEntry } = ctx;
   let extensions: Record<string, unknown> | undefined;
 

@@ -160,13 +160,7 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   });
 
   // ---- 9. Invoke handler ----
-  const result = await invoke(
-    ctx,
-    verifyOutcome.wallet,
-    account,
-    body.data,
-    verifyOutcome.payment,
-  );
+  const result = await invoke(ctx, verifyOutcome.wallet, account, body.data, verifyOutcome.payment);
 
   const settleScope: SettleScope = {
     wallet: verifyOutcome.wallet,
@@ -182,7 +176,9 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   if (verifyOutcome.alreadySettled) {
     // Payment is already on-chain (e.g., MPP hash-payload).
     if (result.response.status >= 400) {
-      const settledScope = settleScope as SettleScope<HandlerPaymentContext & { status: 'settled' }>;
+      const settledScope = settleScope as SettleScope<
+        HandlerPaymentContext & { status: 'settled' }
+      >;
       await runSettledHandlerError(ctx, settledScope);
       return finalize(ctx, result.response, result.rawResult, body.data);
     }

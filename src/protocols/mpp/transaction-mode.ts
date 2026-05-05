@@ -25,10 +25,16 @@ export interface TxModeToken {
 export async function verifyTxMode(
   args: VerifyArgs,
   info: MppCredentialInfo,
-): Promise<VerifySuccess | { ok: false; kind: 'invalid' } | { ok: false; kind: 'config'; message: string }> {
+): Promise<
+  VerifySuccess | { ok: false; kind: 'invalid' } | { ok: false; kind: 'config'; message: string }
+> {
   const { deps, price, routeEntry } = args;
   if (!deps.tempoClient) {
-    return { ok: false, kind: 'config', message: 'tempoClient not configured for MPP transaction-payload mode' };
+    return {
+      ok: false,
+      kind: 'config',
+      message: 'tempoClient not configured for MPP transaction-payload mode',
+    };
   }
 
   // Simulate to catch obvious reverts before invoking the handler.

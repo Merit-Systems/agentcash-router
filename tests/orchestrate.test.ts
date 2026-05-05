@@ -100,11 +100,7 @@ vi.mock('../src/protocols/x402/verify.js', () => ({
 }));
 
 vi.mock('../src/protocols/x402/settle.js', () => ({
-  settleX402Payment: async (
-    server: FakeX402Server,
-    payload: unknown,
-    requirements: unknown,
-  ) => {
+  settleX402Payment: async (server: FakeX402Server, payload: unknown, requirements: unknown) => {
     const result = await server.settlePayment(payload, requirements);
     return { encoded: 'SETTLE_' + result.transaction, result };
   },

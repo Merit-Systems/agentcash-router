@@ -15,10 +15,7 @@ import type { RouterDeps } from './types.js';
  * 500 with this message instead of advertising a payment challenge the
  * server can't actually settle.
  */
-export function protocolInitError(
-  routeEntry: RouteEntry,
-  deps: RouterDeps,
-): string | null {
+export function protocolInitError(routeEntry: RouteEntry, deps: RouterDeps): string | null {
   if (!routeEntry.pricing) return null;
 
   const errors: string[] = [];
