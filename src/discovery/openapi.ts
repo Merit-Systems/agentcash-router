@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import type { RouteRegistry } from '../registry.js';
 import type { RouteEntry, DiscoveryConfig } from '../types.js';
 import { TEMPO_USDC_CURRENCY } from '../constants.js';
+import { HEADERS } from '../headers.js';
 import { resolveGuidance } from './utils/guidance.js';
 
 export function createOpenAPIHandler(
@@ -51,14 +52,14 @@ export function createOpenAPIHandler(
       securitySchemes.siwx = {
         type: 'apiKey',
         in: 'header',
-        name: 'SIGN-IN-WITH-X',
+        name: HEADERS.SIWX,
       };
     }
     if (requiresApiKeyScheme) {
       securitySchemes.apiKey = {
         type: 'apiKey',
         in: 'header',
-        name: 'X-API-Key',
+        name: HEADERS.API_KEY,
       };
     }
 

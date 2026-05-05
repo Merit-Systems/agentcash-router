@@ -5,7 +5,7 @@ import {
   getResolvedX402Facilitator,
   getResolvedX402Facilitators,
   getResolvedX402FacilitatorGroups,
-} from '../src/x402-facilitators.js';
+} from '../src/protocols/x402/facilitators.js';
 import type { RouterConfig } from '../src/types.js';
 
 const DEFAULT_CDP_FACILITATOR = 'https://x402.coinbase.com/facilitator';
