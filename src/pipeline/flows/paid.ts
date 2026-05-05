@@ -1,8 +1,5 @@
 import type { NextRequest, NextResponse } from 'next/server';
 import { verifyApiKey } from '../../auth/api-key.js';
-import { normalizeWalletAddress } from '../../auth/normalize-wallet.js';
-import { verifySIWX } from '../../auth/siwx.js';
-import { HEADERS } from '../../headers.js';
 import { selectPricing } from '../../pricing/index.js';
 import { firePluginHook } from '../../plugin.js';
 import { selectIncomingStrategy } from '../../protocols/index.js';
@@ -14,17 +11,16 @@ import {
   fail,
   finalize,
   firePluginResponse,
-  grantEntitlementIfSiwx,
   invoke,
   parseBody,
   protocolInitError,
-  runAfterSettle,
   runBeforeSettle,
-  runHandlerOnly,
   runSettlementError,
   runSettledHandlerError,
   runValidate,
+  settleAndFinalize,
   shouldParseBodyEarly,
+  trySiwxFastPath,
   type FlowCtx,
   type SettleScope,
 } from '../context/index.js';
@@ -81,26 +77,8 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   }
 
   // ---- 5. SIWX entitlement fast-path (paid+SIWX) ----
-  if (routeEntry.siwxEnabled) {
-    const siwxHeader = request.headers.get(HEADERS.SIWX);
-    if (siwxHeader) {
-      const siwx = await verifySIWX(request, routeEntry, deps.nonceStore);
-      // Invalid SIWX falls through to payment flow (don't fail-fast).
-      if (siwx.valid) {
-        const wallet = normalizeWalletAddress(siwx.wallet);
-        ctx.pluginCtx.setVerifiedWallet(wallet);
-        const entitled = await deps.entitlementStore.has(routeEntry.key, wallet);
-        if (entitled) {
-          firePluginHook(deps.plugin, 'onAuthVerified', ctx.pluginCtx, {
-            authMode: 'siwx',
-            wallet,
-            route: routeEntry.key,
-          });
-          return runHandlerOnly(ctx, wallet, account);
-        }
-      }
-    }
-  }
+  const siwxFastPath = await trySiwxFastPath(ctx, account);
+  if (siwxFastPath) return siwxFastPath;
 
   // ---- 6. No payment header → 402 challenge ----
   if (!incomingStrategy) {
@@ -182,34 +160,14 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
       await runSettledHandlerError(ctx, settledScope);
       return finalize(ctx, result.response, result.rawResult, body.data);
     }
-
-    const settle = await incomingStrategy.settle({
-      request,
-      response: result.response,
-      payment: verifyOutcome.payment,
-      token: verifyOutcome.token,
-      routeEntry,
-      deps,
+    return settleAndFinalize({
+      ctx,
+      strategy: incomingStrategy,
+      verifyOutcome,
+      scope: settleScope,
+      rawResult: result.rawResult,
+      body: body.data,
     });
-
-    if (!settle.ok) {
-      return fail(ctx, settle.failStatus ?? 500, settle.failMessage, body.data);
-    }
-
-    await grantEntitlementIfSiwx(ctx, verifyOutcome.wallet);
-    firePluginHook(deps.plugin, 'onPaymentSettled', ctx.pluginCtx, {
-      protocol: incomingStrategy.protocol,
-      payer: verifyOutcome.wallet,
-      transaction: settle.settledPayment.transaction ?? '',
-      network: settle.settledPayment.network,
-    });
-
-    await runAfterSettle(ctx, {
-      ...settleScope,
-      payment: settle.settledPayment,
-      response: settle.response,
-    });
-    return finalize(ctx, settle.response, result.rawResult, body.data);
   }
 
   // Verified-but-not-settled (x402, mpp-tx) — settle only on handler success.
@@ -220,37 +178,20 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   const beforeErr = await runBeforeSettle(ctx, settleScope);
   if (beforeErr) return beforeErr;
 
-  const settle = await incomingStrategy.settle({
-    request,
-    response: result.response,
-    payment: verifyOutcome.payment,
-    token: verifyOutcome.token,
-    routeEntry,
-    deps,
+  return settleAndFinalize({
+    ctx,
+    strategy: incomingStrategy,
+    verifyOutcome,
+    scope: settleScope,
+    rawResult: result.rawResult,
+    body: body.data,
+    onSettleError: async (error, failMessage) => {
+      await runSettlementError(ctx, settleScope, error, 'settle');
+      firePluginHook(deps.plugin, 'onAlert', ctx.pluginCtx, {
+        level: 'critical' as const,
+        message: `${incomingStrategy.protocol} ${failMessage}: ${errorMessage(error, 'unknown')}`,
+        route: routeEntry.key,
+      });
+    },
   });
-
-  if (!settle.ok) {
-    await runSettlementError(ctx, settleScope, settle.error, 'settle');
-    firePluginHook(deps.plugin, 'onAlert', ctx.pluginCtx, {
-      level: 'critical' as const,
-      message: `${incomingStrategy.protocol} ${settle.failMessage}: ${errorMessage(settle.error, 'unknown')}`,
-      route: routeEntry.key,
-    });
-    return fail(ctx, settle.failStatus ?? 500, settle.failMessage, body.data);
-  }
-
-  await grantEntitlementIfSiwx(ctx, verifyOutcome.wallet);
-  firePluginHook(deps.plugin, 'onPaymentSettled', ctx.pluginCtx, {
-    protocol: incomingStrategy.protocol,
-    payer: verifyOutcome.wallet,
-    transaction: settle.settledPayment.transaction ?? '',
-    network: settle.settledPayment.network,
-  });
-
-  await runAfterSettle(ctx, {
-    ...settleScope,
-    payment: settle.settledPayment,
-    response: settle.response,
-  });
-  return finalize(ctx, settle.response, result.rawResult, body.data);
 }
