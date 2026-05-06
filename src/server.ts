@@ -1,13 +1,14 @@
 import type { FacilitatorConfig, FacilitatorClient } from '@x402/core/http';
-import type { SupportedResponse } from '@x402/core/types';
 import { filterEvmNetworks } from './protocols/x402/evm.js';
 import { filterSolanaNetworks } from './protocols/x402/solana.js';
 import type { RouterConfig, X402Server } from './types.js';
 import {
   getResolvedX402Facilitators,
   getResolvedX402FacilitatorGroups,
+  type ResolvedX402FacilitatorGroup,
 } from './protocols/x402/facilitators.js';
 import { getConfiguredX402Networks } from './protocols/x402/accepts.js';
+import { withCachedGetSupported } from './protocols/x402/supported.js';
 
 export async function createX402Server(config: RouterConfig) {
   // Dynamic ESM imports: peer deps are loaded lazily so the router can
@@ -26,7 +27,11 @@ export async function createX402Server(config: RouterConfig) {
   );
   const evmNetworks = filterEvmNetworks(configuredNetworks);
   const svmNetworks = filterSolanaNetworks(configuredNetworks);
-  const facilitatorClients = createFacilitatorClients(facilitatorsByNetwork, HTTPFacilitatorClient);
+  const facilitatorClients = createFacilitatorClients(
+    facilitatorsByNetwork,
+    HTTPFacilitatorClient,
+    config.x402?.supportedCache,
+  );
   const server = new x402ResourceServer(
     facilitatorClients.length === 1 ? facilitatorClients[0] : facilitatorClients,
   );
@@ -54,60 +59,64 @@ export async function createX402Server(config: RouterConfig) {
   };
 }
 
-/**
- * Wrap an HTTPFacilitatorClient to return a hardcoded getSupported() response
- * for exact schemes. verify() and settle() pass through to the real client.
- *
- * Why: getSupported() hits the facilitator on every cold start. On Vercel,
- * N simultaneous cold starts blast the facilitator and get 429'd.
- *
- * For Solana, dynamic fields like feePayer/recentBlockhash are supplied later
- * by the /accepts enrichment call, so getSupported() only needs to advertise
- * that exact is available on the configured networks.
- */
-function cachedClient(
-  inner: FacilitatorClient,
-  kinds: SupportedResponse['kinds'],
-): FacilitatorClient {
-  return {
-    verify: inner.verify.bind(inner),
-    settle: inner.settle.bind(inner),
-    getSupported: async (): Promise<SupportedResponse> => ({
-      kinds,
-      extensions: [],
-      signers: {},
-    }),
-  };
-}
-
 function createFacilitatorClients(
   facilitatorsByNetwork: ReturnType<typeof getResolvedX402Facilitators>,
   HTTPFacilitatorClient: new (config?: FacilitatorConfig) => FacilitatorClient,
+  cacheConfig: NonNullable<RouterConfig['x402']>['supportedCache'],
 ): FacilitatorClient[] {
   const groups = getResolvedX402FacilitatorGroups(facilitatorsByNetwork);
 
   return groups.map((group) => {
     const inner = new HTTPFacilitatorClient(group.config);
-    const kinds = group.networks.flatMap((network) => {
-      const exactKind = {
-        x402Version: 2 as const,
-        scheme: 'exact' as const,
-        network,
-        ...(group.family === 'solana'
-          ? {
-              extra: {
-                features: {
-                  xSettlementAccountSupported: true,
-                },
-              },
-            }
-          : {}),
-      };
-      if (group.family === 'evm') {
-        return [exactKind, { x402Version: 2 as const, scheme: 'upto' as const, network }];
-      }
-      return [exactKind];
+    const fallbackKinds = buildFallbackKinds(group);
+    return withCachedGetSupported(inner, {
+      cacheKey: facilitatorCacheKey(group),
+      fallbackKinds,
+      store: cacheConfig?.store ?? null,
+      ttlMs: cacheConfig?.ttlMs,
     });
-    return cachedClient(inner, kinds);
+  });
+}
+
+/**
+ * Stable identifier for caching. Different facilitators (CDP vs Corbits vs
+ * self-hosted) advertise different `/supported` payloads, so URL is the
+ * primary discriminator. Networks are appended so a single facilitator URL
+ * serving multiple network groupings doesn't share a slot — sorted to keep
+ * the key deterministic across instances.
+ */
+function facilitatorCacheKey(group: ResolvedX402FacilitatorGroup): string {
+  const url = group.config.url ?? 'default';
+  const nets = [...group.networks].sort().join(',');
+  return `${url}|${nets}`;
+}
+
+/**
+ * Hardcoded kinds returned when `/supported` fails persistently. Covers the
+ * `exact` scheme (works without facilitator metadata) and advertises `upto`
+ * for EVM. `upto` requires `extra.facilitatorAddress` from a real `/supported`
+ * response to construct Permit2 witnesses, so it degrades — the kind is
+ * advertised but clients can't actually pay until `/supported` recovers.
+ */
+function buildFallbackKinds(group: ResolvedX402FacilitatorGroup) {
+  return group.networks.flatMap((network) => {
+    const exactKind = {
+      x402Version: 2 as const,
+      scheme: 'exact' as const,
+      network,
+      ...(group.family === 'solana'
+        ? {
+            extra: {
+              features: {
+                xSettlementAccountSupported: true,
+              },
+            },
+          }
+        : {}),
+    };
+    if (group.family === 'evm') {
+      return [exactKind, { x402Version: 2 as const, scheme: 'upto' as const, network }];
+    }
+    return [exactKind];
   });
 }

@@ -77,7 +77,11 @@ async function buildChallengeRequirements(
 }
 
 function needsFacilitatorEnrichment(accepts: X402ResolvedAccept[]): boolean {
-  return accepts.some((accept) => accept.scheme !== 'exact') || hasSolanaAccepts(accepts);
+  // `/accepts` is a non-standard extension used by Solana facilitators (e.g.
+  // Corbits) to fill in dynamic fields like `feePayer` and `recentBlockhash`.
+  // EVM schemes (exact, upto) are built fully by the locally registered scheme
+  // classes in `buildSdkHandledRequirements`, so they never need this roundtrip.
+  return hasSolanaAccepts(accepts);
 }
 
 async function enrichGroup(
@@ -191,7 +195,9 @@ function getRequiredFacilitator(
 }
 
 function requiresFacilitatorEnrichment(requirement: PaymentRequirements): boolean {
-  return requirement.scheme !== 'exact' || isSolanaRequirement(requirement);
+  // Only Solana requirements need facilitator-side enrichment; EVM (exact + upto)
+  // is fully built by the registered SchemeNetworkServer locally.
+  return isSolanaRequirement(requirement);
 }
 
 function buildChallengeResource(request: Request, routeEntry: RouteEntry): ChallengeResource {

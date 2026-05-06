@@ -11,15 +11,17 @@
  */
 
 import type { NextResponse } from 'next/server';
+import type { Transport } from 'mppx/server';
 import { HEADERS } from '../../headers.js';
 import type { HandlerPaymentContext } from '../../types.js';
 import type { SettleArgs, SettleOutcome, VerifyArgs, VerifySuccess } from '../types.js';
+import type { MppxMiddlewareResponse } from '../../pipeline/context/types.js';
 import type { MppCredentialInfo } from './credential.js';
 import { extractTxHash, readChallengeReason } from './receipt.js';
 
 export interface HashModeToken {
   mode: 'hash';
-  charge: { status: 200; withReceipt: (response: Response) => Response };
+  charge: Extract<MppxMiddlewareResponse<Transport.Http>, { status: 200 }>;
 }
 
 export async function verifyHashMode(

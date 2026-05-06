@@ -19,20 +19,17 @@
 
 import { walletFromDid } from './credential.js';
 import { Credential } from 'mppx';
+import type { Transport } from 'mppx/server';
+import type { MppxMiddleware, MppxMiddlewareResponse } from '../../pipeline/context/types.js';
 
 type MppxInstance = {
-  charge: (options: {
-    amount: string;
-  }) => (
-    request: Request,
-  ) => Promise<
-    | { status: 402; challenge: Response }
-    | { status: 200; withReceipt: (response: Response) => Response }
-  >;
+  charge: MppxMiddleware<{ amount: string }, Transport.Http>;
 };
 
+type ChargeSuccess = Extract<MppxMiddlewareResponse<Transport.Http>, { status: 200 }>;
+
 export type MppSiwxResult =
-  | { valid: true; wallet: string; withReceipt: (response: Response) => Response }
+  | { valid: true; wallet: string; withReceipt: ChargeSuccess['withReceipt'] }
   | { valid: false; challenge: Response };
 
 export async function verifyMppSiwx(request: Request, mppx: MppxInstance): Promise<MppSiwxResult> {

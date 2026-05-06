@@ -162,19 +162,51 @@ export function createRouter<const P extends Record<string, string> = Record<nev
           resolvedStore = Store.upstash(createUpstashRest(kvUrl, kvToken));
         }
 
-        deps.mppx = Mppx.create({
-          methods: [
-            tempo.charge({
+        // `tempo.charge` handles fixed-amount push-mode payments. When a
+        // session config is supplied we also register `tempo.session`, which
+        // brings payment-channel sessions (open / voucher / close) — required
+        // for any flow that needs a post-handler amount commitment over MPP.
+        // Sessions need a signing account for on-chain close/settle; reuse
+        // `feePayerAccount` (same operator wallet plays both roles).
+        const methods: unknown[] = [
+          tempo.charge({
+            currency: config.mpp.currency as `0x${string}`,
+            recipient: (config.mpp.recipient ?? config.payeeAddress) as `0x${string}`,
+            getClient,
+            ...(feePayerAccount ? { feePayer: feePayerAccount } : {}),
+            ...(resolvedStore ? { store: resolvedStore } : {}),
+          } as Parameters<typeof tempo.charge>[0]),
+        ];
+
+        if (config.mpp.session && feePayerAccount) {
+          methods.push(
+            tempo.session({
               currency: config.mpp.currency as `0x${string}`,
               recipient: (config.mpp.recipient ?? config.payeeAddress) as `0x${string}`,
               getClient,
-              ...(feePayerAccount ? { feePayer: feePayerAccount } : {}),
+              account: feePayerAccount,
+              feePayer: feePayerAccount,
+              sse: true,
               ...(resolvedStore ? { store: resolvedStore } : {}),
-            } as Parameters<typeof tempo.charge>[0]),
-          ],
+            } as unknown as Parameters<typeof tempo.session>[0]),
+          );
+        }
+
+        // `Mppx.create`'s return type is generic over the methods array; our
+        // RouterDeps interface declares only the surface we call. Cast through
+        // unknown to bridge — both shapes coexist at runtime.
+        deps.mppx = Mppx.create({
+          methods: methods as Parameters<typeof Mppx.create>[0]['methods'],
           secretKey: config.mpp.secretKey,
           realm: new URL(resolvedBaseUrl).host,
-        });
+        }) as unknown as (typeof deps)['mppx'];
+
+        deps.mppSessionConfig = config.mpp.session
+          ? {
+              tickCost: config.mpp.session.tickCost ?? '0.0001',
+              unitType: config.mpp.session.unitType ?? 'unit',
+            }
+          : null;
       } catch (err: unknown) {
         deps.mppx = null;
         deps.mppInitError = err instanceof Error ? err.message : String(err);
@@ -344,3 +376,6 @@ export type { SiwxErrorCode } from './auth/siwx.js';
 export { SIWX_ERROR_MESSAGES } from './auth/siwx.js';
 export { RouteBuilder } from './builder.js';
 export { RouteRegistry } from './registry.js';
+
+export type { SupportedKVStore } from './protocols/x402/supported.js';
+export { mppxStoreAdapter } from './protocols/x402/supported.js';

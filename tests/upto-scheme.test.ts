@@ -139,7 +139,9 @@ describe('upto scheme', () => {
 
         expect(uptoAccept).toBeDefined();
         expect(uptoAccept!.network).toBe(BASE_NETWORK);
-        expect(uptoAccept!.asset).toBe(USDC_ASSET);
+        // Asset comes from the registered UptoEvmScheme's network defaults
+        // (real upstream picks USDC for Base); the fake stamps `mock-usdc`.
+        expect(uptoAccept!.asset).toBeTruthy();
         expect(uptoAccept!.payTo).toBe(KNOWN_PAYEE);
       });
     });

@@ -51,7 +51,14 @@ export interface X402Server {
   initialize(): Promise<void>;
 
   buildPaymentRequirementsFromOptions(
-    options: Array<{ scheme: string; network: string; price: string; payTo: string }>,
+    options: Array<{
+      scheme: string;
+      network: string;
+      price: string | { asset: string; amount: string; extra?: Record<string, unknown> };
+      payTo: string;
+      maxTimeoutSeconds?: number;
+      extra?: Record<string, unknown>;
+    }>,
     context: { request: Request },
   ): Promise<PaymentRequirements[]>;
 
@@ -362,6 +369,19 @@ export interface RouterConfig {
   x402?: {
     accepts?: X402AcceptConfig[];
     facilitators?: X402FacilitatorsConfig;
+    /**
+     * Cache layer for facilitator `/supported` responses (used by `upto` to
+     * read `facilitatorAddress` and asset metadata). Without a `store`, only
+     * per-process memoization applies — `M` cold-starting lambdas → `M` raw
+     * HTTP calls. Pass a shared KV here to coordinate across the fleet.
+     *
+     * mppx-shape stores can be wrapped via `mppxStoreAdapter` to satisfy
+     * `SupportedKVStore`.
+     */
+    supportedCache?: {
+      store?: import('./protocols/x402/supported.js').SupportedKVStore;
+      ttlMs?: number;
+    };
   };
   plugin?: import('./plugin.js').RouterPlugin;
   siwx?: {
@@ -411,6 +431,29 @@ export interface RouterConfig {
      * })
      */
     useDefaultStore?: boolean;
+    /**
+     * Session-mode configuration. When set, the router additionally registers
+     * `tempo.session` alongside `tempo.charge` so MPP payment-channel sessions
+     * (open / voucher / close) can be verified and settled. Required for any
+     * future feature that needs post-handler amount overrides over MPP — pull-mode
+     * `charge` commits the client to a fixed amount before the handler runs.
+     *
+     * Sessions also require `mpp.feePayerKey` (the operator account signs
+     * channel close/settle).
+     */
+    session?: {
+      /**
+       * Per-tick cost in decimal-dollar form. Defines the granularity of
+       * session billing — actual charges are quantized to multiples of this.
+       * Default `'0.0001'` (one hundredth of a cent).
+       */
+      tickCost?: string;
+      /**
+       * Cosmetic unit label surfaced in 402 challenges and client UIs.
+       * Default `'unit'`. Doesn't affect billing.
+       */
+      unitType?: string;
+    };
   };
   /**
    * Payment protocols to accept on paid routes unless a route overrides them.

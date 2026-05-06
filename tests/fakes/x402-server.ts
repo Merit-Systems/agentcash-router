@@ -9,6 +9,15 @@ export const KNOWN_PAYER = '0xPAYER1234567890';
 export const KNOWN_PAYEE = '0xPAYEE0987654321';
 const TX_HASH = '0xTX_HASH_FAKE_1234567890abcdef';
 
+function decimalToAtomic(amount: string, decimals: number): string {
+  const match = /^(?<whole>\d+)(?:\.(?<fraction>\d+))?$/.exec(amount);
+  if (!match?.groups) return amount; // pass through if not decimal-shaped
+  const whole = match.groups.whole;
+  const fraction = (match.groups.fraction ?? '').slice(0, decimals);
+  const padded = `${whole}${fraction.padEnd(decimals, '0')}`.replace(/^0+(?=\d)/, '');
+  return padded === '' ? '0' : padded;
+}
+
 export class FakeX402Server {
   initialized = false;
   settledPayments: Array<{ payload: unknown; requirements: unknown }> = [];
@@ -20,19 +29,35 @@ export class FakeX402Server {
   }
 
   buildPaymentRequirementsFromOptions(
-    options: Array<{ price: string; payTo: string; scheme: string; network: string }>,
+    options: Array<{
+      price: string | { asset: string; amount: string; extra?: Record<string, unknown> };
+      payTo: string;
+      scheme: string;
+      network: string;
+      maxTimeoutSeconds?: number;
+      extra?: Record<string, unknown>;
+    }>,
     _ctx: unknown,
   ) {
-    return options.map((option) => ({
-      scheme: option.scheme,
-      network: option.network,
-      amount: option.price,
-      maxAmountRequired: option.price,
-      asset: 'mock-usdc',
-      resource: option.payTo,
-      payTo: option.payTo,
-      maxTimeoutSeconds: 300,
-    }));
+    return options.map((option) => {
+      const isAssetAmount = typeof option.price === 'object';
+      // AssetAmount.amount is already atomic (caller pre-converted using their
+      // configured decimals). Money strings are decimal — convert here to mirror
+      // upstream behavior so callers can assert on `amount` like they would
+      // against the real scheme registry.
+      const atomic = isAssetAmount ? option.price.amount : decimalToAtomic(option.price, 6);
+      return {
+        scheme: option.scheme,
+        network: option.network,
+        amount: atomic,
+        maxAmountRequired: atomic,
+        asset: isAssetAmount ? option.price.asset : 'mock-usdc',
+        resource: option.payTo,
+        payTo: option.payTo,
+        maxTimeoutSeconds: option.maxTimeoutSeconds ?? 300,
+        extra: { ...(option.extra ?? {}), ...(isAssetAmount ? (option.price.extra ?? {}) : {}) },
+      };
+    });
   }
 
   createPaymentRequiredResponse(
