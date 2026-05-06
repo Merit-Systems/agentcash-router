@@ -81,14 +81,23 @@ export const x402Strategy: PaymentStrategy = {
   },
 
   async settle(args: SettleArgs): Promise<SettleOutcome> {
-    const { response, payment, token, deps } = args;
+    const { response, payment, token, deps, routeEntry, effectiveAmount } = args;
     const x402Token = token as X402Token;
 
     try {
+      // Variable-priced upto routes thread the post-handler total here as a
+      // settlement override; the Permit2Proxy contract enforces `actual ≤
+      // permitted.amount` (the cap the user signed) on chain. Static routes
+      // settle for the requirements amount the client already verified
+      // against, so we don't push an override.
+      const settlementAmountOverride = routeEntry.dynamicPrice
+        ? { amount: effectiveAmount }
+        : undefined;
       const settle = await settleX402Payment(
         deps.x402Server!,
         x402Token.payload,
         x402Token.requirements,
+        settlementAmountOverride,
       );
       if (!settle.result?.success) {
         const reason = settle.result?.errorReason || 'x402 settlement returned success=false';
@@ -104,6 +113,7 @@ export const x402Strategy: PaymentStrategy = {
       const settledPayment: HandlerPaymentContext & { status: 'settled' } = {
         ...payment,
         status: 'settled',
+        amount: effectiveAmount,
         ...(transaction ? { transaction } : {}),
       };
 

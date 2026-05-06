@@ -26,9 +26,17 @@ export async function settleAndFinalize(args: {
   scope: SettleScope;
   rawResult: unknown;
   body: unknown;
+  /**
+   * The canonical settle amount in decimal-dollar form: dynamic routes pass
+   * the running `charge()` total; static routes pass the verified quoted
+   * price. Strategies decide whether to push it to upstream based on
+   * `routeEntry.dynamicPrice`.
+   */
+  effectiveAmount: string;
   onSettleError?: (error: unknown, failMessage: string) => Promise<void>;
 }): Promise<NextResponse> {
-  const { ctx, strategy, verifyOutcome, scope, rawResult, body, onSettleError } = args;
+  const { ctx, strategy, verifyOutcome, scope, rawResult, body, effectiveAmount, onSettleError } =
+    args;
   const { request, routeEntry, deps } = ctx;
 
   const settle = await strategy.settle({
@@ -38,6 +46,7 @@ export async function settleAndFinalize(args: {
     token: verifyOutcome.token,
     routeEntry,
     deps,
+    effectiveAmount,
   });
 
   if (!settle.ok) {

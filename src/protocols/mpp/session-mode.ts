@@ -20,10 +20,10 @@
  *             `respond` hook produces a 204 ack; just pass any response and
  *             return its result.
  *
- * Note: this module is self-contained. It is not yet wired into
- * `protocols/mpp/strategy.ts` — wire-up depends on the route-level interface
- * decision (e.g. `variable: true`, `.session()`, etc.) which is intentionally
- * deferred. Callers supply the `effectiveAmount` directly.
+ * Wired in via `protocols/mpp/strategy.ts` — when a credential's
+ * `payload.action` is one of `open|voucher|topUp|close`, this module's
+ * verify/settle functions handle the request. Callers supply the
+ * `effectiveAmount` directly (the post-handler total chosen via `charge()`).
  */
 
 import type { NextResponse } from 'next/server';
@@ -147,9 +147,7 @@ export async function verifySessionMode(
  * decimal-dollar form (e.g. `'0.034'`). `'0'` is legal — emits zero ticks and
  * the channel state advances without funds moving.
  */
-export async function settleSessionMode(
-  args: SettleArgs & { effectiveAmount: string },
-): Promise<SettleOutcome> {
+export async function settleSessionMode(args: SettleArgs): Promise<SettleOutcome> {
   const { response, payment, token, effectiveAmount } = args;
   const sessionToken = token as MppSessionToken;
 

@@ -46,6 +46,30 @@ export interface SettleArgs {
   token: unknown;
   routeEntry: RouteEntry;
   deps: RouterDeps;
+  /**
+   * The amount to actually settle, in decimal-dollar form. For dynamic-priced
+   * routes, this is the post-handler total chosen via `charge()`; for static
+   * routes, it equals the verified quoted price. Strategies that support
+   * settlement overrides (x402 `upto`, MPP session tick metering) consult
+   * `routeEntry.dynamicPrice` to decide whether to push it to upstream.
+   */
+  effectiveAmount: string;
+}
+
+/**
+ * Streaming settle path — called when the handler returned an `AsyncIterable`
+ * instead of a value. Strategies opt in by implementing this; strategies that
+ * don't support streaming should leave it unset and the flow rejects streaming
+ * routes at registration time.
+ */
+export interface StreamSettleArgs {
+  request: NextRequest;
+  /** The handler's async iterable. Each yield emits one charge tick (auto-mode). */
+  source: AsyncIterable<unknown>;
+  payment: HandlerPaymentContext;
+  token: unknown;
+  routeEntry: RouteEntry;
+  deps: RouterDeps;
 }
 
 export type SettleOutcome =
@@ -90,6 +114,13 @@ export interface PaymentStrategy {
 
   /** Called only after handler returned a 2xx response. */
   settle(args: SettleArgs): Promise<SettleOutcome>;
+
+  /**
+   * Settle a streaming handler whose response is an async iterable. Optional —
+   * strategies without streaming support leave this unset and the flow rejects
+   * streaming routes at registration time.
+   */
+  settleStream?(args: StreamSettleArgs): Promise<SettleOutcome>;
 
   /** Contribute this protocol's piece to a 402 challenge. */
   buildChallenge(args: ChallengeArgs): Promise<ChallengeContribution>;

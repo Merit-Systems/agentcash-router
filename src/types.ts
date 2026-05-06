@@ -79,7 +79,13 @@ export interface X402Server {
     requirements: PaymentRequirements,
   ): Promise<{ isValid: boolean; payer?: string }>;
 
-  settlePayment(payload: unknown, requirements: PaymentRequirements): Promise<SettleResponse>;
+  settlePayment(
+    payload: unknown,
+    requirements: PaymentRequirements,
+    declaredExtensions?: Record<string, unknown>,
+    transportContext?: unknown,
+    settlementOverrides?: { amount?: string },
+  ): Promise<SettleResponse>;
 }
 
 // ---------------------------------------------------------------------------
@@ -169,6 +175,24 @@ export interface PaidOptions {
   payTo?: PayToConfig;
   /** Override MPP protocol metadata in x-payment-info discovery. */
   mpp?: MppProtocolInfo;
+  /**
+   * Handler-driven dynamic pricing. The handler receives a `charge(amount)`
+   * callback and bills the request itself, accumulatively, capped at `maxPrice`.
+   * If the handler never calls `charge`, the request runs free.
+   *
+   * This is one of two dynamic pricing forms — the other (`.paid(fn, opts)`)
+   * computes the price from the request body before the handler runs. Both
+   * advertise `mode: 'dynamic'` to clients in OpenAPI / 402 challenges; the
+   * client only sees a cap, not whether the price is body-driven or
+   * handler-driven.
+   *
+   * Requires `maxPrice`. Incompatible with tiered pricing. On x402 routes, the
+   * configured accepts must include an `upto` accept on at least one network
+   * (the Permit2Proxy contract enforces the cap on chain). On MPP routes, the
+   * route is wrapped in an SSE session under the hood — `RouterConfig.mpp.session`
+   * must be configured with the session store.
+   */
+  dynamic?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -239,6 +263,25 @@ export interface SettlementLifecycle<TBody = unknown> {
   onSettlementError?: (ctx: SettlementErrorContext<TBody>) => void | Promise<void>;
 }
 
+/**
+ * Bills the request, accumulatively, against the route's `maxPrice` cap.
+ *
+ * Each call adds `amount` (decimal-dollar string, e.g. `'0.034'`) to a
+ * per-request running total. The orchestrator settles the final total once
+ * the handler resolves. Calling `charge` zero times means the request ran
+ * free — no on-chain transfer is submitted.
+ *
+ * Throws synchronously if the running total would exceed the route's
+ * `maxPrice` — the handler bug surfaces at the offending call site rather
+ * than waiting for an on-chain revert.
+ *
+ * In streaming handlers (`async function*`), `await charge(amount)` may also
+ * block on payment-channel back-pressure when the configured MPP session
+ * runs short of voucher headroom (mppx emits `payment-need-voucher`; the
+ * handler awaits until the client tops up).
+ */
+export type ChargeFn = (amount: string) => Promise<void>;
+
 export interface HandlerContext<TBody = undefined, TQuery = undefined> {
   body: TBody;
   query: TQuery;
@@ -250,6 +293,13 @@ export interface HandlerContext<TBody = undefined, TQuery = undefined> {
   account: unknown;
   alert: AlertFn;
   setVerifiedWallet: (addr: string) => void;
+  /**
+   * Present at runtime only when the route was declared with
+   * `.paid({ dynamic: true, maxPrice })`. On routes without handler-driven
+   * pricing the server's quoted price is what's charged, so no callback is
+   * needed.
+   */
+  charge?: ChargeFn;
 }
 
 // ---------------------------------------------------------------------------
@@ -297,6 +347,11 @@ export interface RouteEntry {
    */
   siwxEnabled?: boolean;
   pricing?: PricingConfig;
+  /**
+   * When true, the settled amount is decided by the handler via the `charge`
+   * callback in `HandlerContext`, capped at `maxPrice`. See `PaidOptions.dynamic`.
+   */
+  dynamicPrice?: boolean;
   protocols: ProtocolType[];
   bodySchema?: ZodType;
   querySchema?: ZodType;

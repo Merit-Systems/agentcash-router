@@ -1,4 +1,5 @@
-import type { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { fail } from './fail.js';
 import { finalize } from './finalize.js';
 import { firePluginResponse } from './fire-plugin-response.js';
 import { invoke } from './invoke.js';
@@ -9,6 +10,9 @@ import type { FlowCtx } from './types.js';
 /**
  * No-payment tail used by unprotected, apiKey-only, siwx-only flows, and the
  * paid+SIWX entitlement fast-path: parse body → validate → invoke → finalize.
+ *
+ * Streaming handlers are rejected here — they require a payment-channel session
+ * to meter chunks against, so they can't run on free routes.
  */
 export async function runHandlerOnly(
   ctx: FlowCtx,
@@ -25,5 +29,13 @@ export async function runHandlerOnly(
   if (validateErr) return validateErr;
 
   const result = await invoke(ctx, wallet, account, body.data, null);
+  if (result.kind === 'stream') {
+    return fail(
+      ctx,
+      500,
+      `route '${ctx.routeEntry.key}': streaming handlers require a paid route with MPP session mode`,
+      body.data,
+    );
+  }
   return finalize(ctx, result.response, result.rawResult, body.data);
 }

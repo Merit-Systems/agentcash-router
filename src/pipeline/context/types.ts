@@ -86,7 +86,7 @@ export interface RouterDeps {
 
 export interface FlowCtx {
   routeEntry: RouteEntry;
-  handler: (ctx: HandlerContext) => Promise<unknown>;
+  handler: (ctx: HandlerContext) => Promise<unknown> | AsyncIterable<unknown>;
   deps: RouterDeps;
   request: NextRequest;
   meta: RequestMeta;
@@ -99,11 +99,29 @@ export interface FlowCtx {
 
 export type ParseBodyResult = { ok: true; data: unknown } | { ok: false; response: NextResponse };
 
-export interface InvokeResult {
-  response: NextResponse;
-  rawResult: unknown;
-  handlerError?: unknown;
-}
+/**
+ * Result of invoking the user's handler.
+ *
+ * Most handlers are batch (return a value or Response); the orchestrator gets
+ * back `{ kind: 'batch', response, ... }` and runs the normal settle path.
+ *
+ * Streaming handlers (`async function*`) return an AsyncIterable that hasn't
+ * been consumed yet; the orchestrator gets back `{ kind: 'stream', source }`
+ * and routes to the strategy's `settleStream` method instead, which feeds the
+ * iterable into mppx's `Sse.serve()` (or rejects if the strategy doesn't
+ * support streaming).
+ */
+export type InvokeResult =
+  | {
+      kind: 'batch';
+      response: NextResponse;
+      rawResult: unknown;
+      handlerError?: unknown;
+    }
+  | {
+      kind: 'stream';
+      source: AsyncIterable<unknown>;
+    };
 
 export interface SettleScope<TPayment extends HandlerPaymentContext = HandlerPaymentContext> {
   wallet: string;

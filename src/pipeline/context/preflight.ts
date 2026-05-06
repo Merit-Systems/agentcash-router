@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
-import type { HandlerContext, RouteEntry } from '../../types.js';
+import type { RouteEntry } from '../../types.js';
+import type { RouteHandler } from '../../orchestrate.js';
 import { HEADERS } from '../../headers.js';
 import type { PluginContext, RequestMeta } from '../../plugin.js';
 import { createDefaultContext, firePluginHook } from '../../plugin.js';
@@ -8,7 +9,7 @@ import type { FlowCtx, RouterDeps } from './types.js';
 /** Build a per-request FlowCtx: meta + plugin context, plus the route+deps refs. */
 export function preflight(
   routeEntry: RouteEntry,
-  handler: (ctx: HandlerContext) => Promise<unknown>,
+  handler: RouteHandler,
   deps: RouterDeps,
   request: NextRequest,
 ): FlowCtx {

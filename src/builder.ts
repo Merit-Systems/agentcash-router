@@ -15,7 +15,7 @@ import type {
   PayToConfig,
 } from './types.js';
 import type { RouteRegistry } from './registry.js';
-import type { OrchestrateDeps } from './orchestrate.js';
+import type { OrchestrateDeps, RouteHandler } from './orchestrate.js';
 import { createRequestHandler } from './orchestrate.js';
 import { validateExamples } from './validate-examples.js';
 
@@ -59,7 +59,7 @@ type HandlerArg<
     ? {
         __missing: 'Call .body(schema) — dynamic/tiered pricing requires a body schema to resolve the price against';
       }
-    : (ctx: HandlerContext<TBody, TQuery>) => Promise<unknown>
+    : (ctx: HandlerContext<TBody, TQuery>) => Promise<unknown> | AsyncIterable<unknown>
   : {
       __missing: 'Select an auth mode: .paid(pricing), .siwx(), .apiKey(resolver), or .unprotected()';
     };
@@ -85,6 +85,7 @@ export class RouteBuilder<
   /** @internal */ _protocols: ProtocolType[] = ['x402'];
   /** @internal */ _maxPrice: string | undefined;
   /** @internal */ _minPrice: string | undefined;
+  /** @internal */ _dynamicPrice = false;
   /** @internal */ _payTo: PayToConfig | undefined;
   /** @internal */ _bodySchema: ZodType | undefined;
   /** @internal */ _querySchema: ZodType | undefined;
@@ -125,6 +126,9 @@ export class RouteBuilder<
     pricing: string,
     options?: PaidOptions,
   ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody>;
+  paid(
+    options: PaidOptions & { dynamic: true; maxPrice: string },
+  ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody>;
   paid<TBodyIn>(
     pricing: (body: TBodyIn) => string | Promise<string>,
     options?: PaidOptions & { maxPrice?: string },
@@ -138,9 +142,35 @@ export class RouteBuilder<
     options?: PaidOptions,
   ): RouteBuilder<TBody, TQuery, TOutput, True, True, HasBody>;
   paid(
-    pricing: PricingConfig,
+    pricingOrOptions: PricingConfig | (PaidOptions & { dynamic: true; maxPrice: string }),
     options?: PaidOptions,
   ): RouteBuilder<TBody, TQuery, TOutput, True, boolean, HasBody> {
+    // The single-argument `.paid({ dynamic: true, maxPrice })` shape — no
+    // separate pricing arg. Handler-driven dynamic pricing is decided post-work
+    // by the handler, so the only price surfaced upfront is `maxPrice`. We use
+    // `maxPrice` as the static pricing string so the rest of the pipeline
+    // (challenge advertising, plugin events) still has something to quote.
+    let pricing: PricingConfig;
+    let resolvedOptions: PaidOptions | undefined;
+    if (
+      typeof pricingOrOptions === 'object' &&
+      pricingOrOptions !== null &&
+      typeof pricingOrOptions !== 'function' &&
+      !('tiers' in pricingOrOptions) &&
+      'dynamic' in pricingOrOptions &&
+      pricingOrOptions.dynamic
+    ) {
+      const opts = pricingOrOptions as PaidOptions & { dynamic: true; maxPrice: string };
+      if (!opts.maxPrice) {
+        throw new Error(`route '${this._key}': .paid({ dynamic: true }) requires maxPrice`);
+      }
+      pricing = opts.maxPrice;
+      resolvedOptions = opts;
+    } else {
+      pricing = pricingOrOptions as PricingConfig;
+      resolvedOptions = options;
+    }
+
     if (this._authMode === 'unprotected') {
       throw new Error(
         `route '${this._key}': Cannot combine .unprotected() and .paid() on the same route.`,
@@ -155,18 +185,24 @@ export class RouteBuilder<
     const next = this.fork() as RouteBuilder<TBody, TQuery, TOutput, True, boolean, HasBody>;
     next._authMode = 'paid';
     next._pricing = pricing;
-    if (options?.protocols) {
-      next._protocols = [...options.protocols];
+    if (resolvedOptions?.protocols) {
+      next._protocols = [...resolvedOptions.protocols];
     } else if (next._protocols.length === 0) {
       next._protocols = ['x402'];
     }
-    if (options?.maxPrice) next._maxPrice = options.maxPrice;
-    if (options?.minPrice) next._minPrice = options.minPrice;
-    if (options?.payTo) next._payTo = options.payTo;
-    if (options?.mpp) next._mppInfo = options.mpp;
+    if (resolvedOptions?.maxPrice) next._maxPrice = resolvedOptions.maxPrice;
+    if (resolvedOptions?.minPrice) next._minPrice = resolvedOptions.minPrice;
+    if (resolvedOptions?.payTo) next._payTo = resolvedOptions.payTo;
+    if (resolvedOptions?.mpp) next._mppInfo = resolvedOptions.mpp;
+    if (resolvedOptions?.dynamic) next._dynamicPrice = true;
 
     // Registration-time validation
     if (typeof pricing === 'object' && 'tiers' in pricing) {
+      if (next._dynamicPrice) {
+        throw new Error(
+          `route '${this._key}': .paid({ dynamic: true }) is incompatible with tiered pricing`,
+        );
+      }
       for (const [tierKey, tierConfig] of Object.entries(pricing.tiers)) {
         if (!tierKey) {
           throw new Error(`route '${this._key}': tier key cannot be empty`);
@@ -179,13 +215,16 @@ export class RouteBuilder<
         }
       }
     }
-    if (options?.maxPrice !== undefined) {
-      const parsed = parseFloat(options.maxPrice);
+    if (resolvedOptions?.maxPrice !== undefined) {
+      const parsed = parseFloat(resolvedOptions.maxPrice);
       if (isNaN(parsed) || parsed <= 0) {
         throw new Error(
-          `route '${this._key}': maxPrice '${options.maxPrice}' must be a positive decimal string`,
+          `route '${this._key}': maxPrice '${resolvedOptions.maxPrice}' must be a positive decimal string`,
         );
       }
+    }
+    if (next._dynamicPrice && !next._maxPrice) {
+      throw new Error(`route '${this._key}': .paid({ dynamic: true }) requires maxPrice`);
     }
 
     return next;
@@ -506,7 +545,9 @@ export class RouteBuilder<
     // The conditional `HandlerArg` type forces `fn` to be a function when state
     // is valid; the error-object branches block invalid calls at compile time,
     // so at runtime `fn` is always a handler function.
-    const handlerFn = fn as unknown as (ctx: HandlerContext<TBody, TQuery>) => Promise<unknown>;
+    const handlerFn = fn as unknown as (
+      ctx: HandlerContext<TBody, TQuery>,
+    ) => Promise<unknown> | AsyncIterable<unknown>;
     // Registration-time validation
     if (!this._authMode) {
       throw new Error(
@@ -520,6 +561,31 @@ export class RouteBuilder<
     }
     if (this._settlement && !this._pricing) {
       throw new Error(`route '${this._key}': .settlement() requires a paid route`);
+    }
+    if (this._dynamicPrice && this._protocols.includes('x402')) {
+      // Handler-driven dynamic pricing on x402 requires the `upto` scheme —
+      // only `upto` permits the operator to claim less than the cap
+      // (Permit2Proxy enforces it on chain). Fixed schemes like `exact` would
+      // force the client to commit to maxPrice up front with no way to refund
+      // the unused portion.
+      const hasUpto = this._deps.x402Accepts.some((accept) => accept.scheme === 'upto');
+      if (!hasUpto) {
+        throw new Error(
+          `route '${this._key}': .paid({ dynamic: true }) on an x402 route requires an 'upto' accept on at least one configured network. ` +
+            `Add { scheme: 'upto', network, asset } to RouterConfig.x402.accepts.`,
+        );
+      }
+    }
+    if (this._dynamicPrice && this._protocols.includes('mpp')) {
+      // Handler-driven dynamic pricing on MPP requires session mode —
+      // pull-mode `tempo.charge` commits the client to a fixed amount before
+      // the handler runs and can't honor a post-work `charge()` total.
+      if (!this._deps.mppSessionConfig) {
+        throw new Error(
+          `route '${this._key}': .paid({ dynamic: true }) on an MPP route requires session mode. ` +
+            `Set RouterConfig.mpp.session = { tickCost?, unitType? } and provide mpp.feePayerKey.`,
+        );
+      }
     }
 
     validateExamples(
@@ -539,6 +605,7 @@ export class RouteBuilder<
       authMode: this._authMode!,
       siwxEnabled: this._siwxEnabled,
       pricing: this._pricing,
+      dynamicPrice: this._dynamicPrice ? true : undefined,
       protocols: this._protocols,
       bodySchema: this._bodySchema,
       querySchema: this._querySchema,
@@ -563,10 +630,6 @@ export class RouteBuilder<
     this._registry.register(entry);
 
     // Compile to request handler
-    return createRequestHandler(
-      entry,
-      handlerFn as (ctx: HandlerContext) => Promise<unknown>,
-      this._deps,
-    );
+    return createRequestHandler(entry, handlerFn as RouteHandler, this._deps);
   }
 }

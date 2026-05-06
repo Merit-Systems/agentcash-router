@@ -11,6 +11,21 @@ export type OrchestrateDeps = RouterDeps;
 export type { RouterDeps } from './pipeline/context/index.js';
 
 /**
+ * Route handler shape — either a batch handler that returns a value, or a
+ * streaming handler that yields chunks.
+ *
+ * `Promise<unknown>` covers normal `async (ctx) => result` handlers (the
+ * orchestrator settles once after the promise resolves).
+ *
+ * `AsyncIterable<unknown>` covers `async function* (ctx) { yield ... }`
+ * handlers — supported only on routes whose protocol can stream
+ * (today: MPP session SSE-mode). The orchestrator pipes the iterable through
+ * mppx's session SSE serve loop with a charge per yield (or per `charge()`
+ * call inside the generator).
+ */
+export type RouteHandler = (ctx: HandlerContext) => Promise<unknown> | AsyncIterable<unknown>;
+
+/**
  * Compile a route registration into a Next.js request handler.
  *
  * The dispatcher picks one of four flows based on the route shape:
@@ -26,7 +41,7 @@ export type { RouterDeps } from './pipeline/context/index.js';
  */
 export function createRequestHandler(
   routeEntry: RouteEntry,
-  handler: (ctx: HandlerContext) => Promise<unknown>,
+  handler: RouteHandler,
   deps: RouterDeps,
 ): (request: NextRequest) => Promise<NextResponse> {
   return async (request: NextRequest): Promise<NextResponse> => {
