@@ -1,4 +1,5 @@
 import type { NextResponse } from 'next/server';
+import type { Session } from 'mppx/tempo';
 import { AUTH_SCHEME, HEADERS } from '../../headers.js';
 import type { HandlerPaymentContext } from '../../types.js';
 import type {
@@ -35,27 +36,20 @@ export const mppStrategy: PaymentStrategy = {
     const info = readMppCredential(args.request);
     if (!info) return { ok: false, kind: 'invalid' };
 
-    // Session credentials (open/voucher/topUp/close) — long-lived payment
-    // channels. Required for dynamic-priced routes; charge credentials commit
-    // to a fixed amount before the handler runs and can't honor a post-hoc
-    // total. We accept session credentials on fixed-price routes too, but
-    // those paths aren't fully wired (mppx's auto-charge requires non-SSE
-    // session mode and we register with sse:true) — for now, gate on dynamic.
-    if (info.sessionAction) {
-      if (!args.routeEntry.dynamicPrice) {
-        return { ok: false, kind: 'invalid' };
-      }
+    const isSessionCredential = Boolean(info.sessionAction);
+    const requiresSession = args.routeEntry.dynamicPrice ?? false;
+
+    if (isSessionCredential) {
+      // Sessions on fixed-price routes aren't wired today; for now they're
+      // accepted only on dynamic routes (the 402 advertises sessions there).
+      if (!requiresSession) return { ok: false, kind: 'invalid' };
       return verifySessionMode(args, info);
     }
 
-    // Charge credentials on dynamic-priced routes can't honor a post-hoc
-    // amount. The 402 challenge advertises sessions; misbehaving clients that
-    // bypass it land here.
-    if (args.routeEntry.dynamicPrice) {
-      return { ok: false, kind: 'invalid' };
-    }
+    // Dynamic routes can't accept charge credentials — they commit the client
+    // to a fixed amount before the handler runs.
+    if (requiresSession) return { ok: false, kind: 'invalid' };
 
-    // tx-payload mode requires tempoClient; otherwise fall back to hash-mode.
     if (info.payloadType === 'transaction' && args.deps.tempoClient) {
       return verifyTxMode(args, info);
     }
@@ -70,13 +64,10 @@ export const mppStrategy: PaymentStrategy = {
   },
 
   /**
-   * Streaming settle path: the handler returned an AsyncIterable, so we feed
-   * it directly to mppx's session SSE serve loop. Each yielded value triggers
-   * one tickCost charge from the channel before the chunk is emitted; the
-   * client signs new vouchers transparently as the channel runs short.
-   *
-   * Only valid on session credentials. Rejects charge credentials and
-   * non-session tokens.
+   * Streaming settle: piggy-back the handler's async iterable onto an SSE
+   * channel. We bridge the handler's `charge()` callback to mppx's per-tick
+   * channel debit so each `charge()` reserves voucher headroom in real time;
+   * yields stay pure data flow. Only valid on session credentials.
    */
   async settleStream(args: StreamSettleArgs): Promise<SettleOutcome> {
     const token = args.token as AnyMppToken;
@@ -89,24 +80,29 @@ export const mppStrategy: PaymentStrategy = {
       };
     }
     const sessionToken = token as MppSessionToken;
+    const { bindChannelCharge, source: handlerStream } = args;
 
-    // Coerce yielded values to strings — mppx's withReceipt expects
-    // `AsyncIterable<string>` for SSE auto-charge mode. JSON-stringify objects
-    // so handlers can yield typed values without manual conversion.
-    const stringSource = (async function* () {
-      for await (const chunk of args.source) {
-        yield typeof chunk === 'string' ? chunk : JSON.stringify(chunk);
-      }
-    })();
+    const forwardHandlerStreamWithChannelDebit = (channel: Session.Sse.SessionController) =>
+      (async function* () {
+        bindChannelCharge(channel.charge);
+        try {
+          for await (const chunk of handlerStream) {
+            yield typeof chunk === 'string' ? chunk : JSON.stringify(chunk);
+          }
+        } finally {
+          bindChannelCharge(null);
+        }
+      })();
 
-    const sse = sessionToken.sessionResult.withReceipt(stringSource) as NextResponse;
+    const sse = sessionToken.sessionResult.withReceipt(
+      forwardHandlerStreamWithChannelDebit,
+    ) as NextResponse;
     sse.headers.set('Cache-Control', 'private');
 
+    // The cumulative amount isn't known until the stream ends; carry the cap.
     const settledPayment: HandlerPaymentContext & { status: 'settled' } = {
       ...args.payment,
       status: 'settled',
-      // Streaming amount is determined per-tick by mppx; we don't have the
-      // final cumulative until the stream ends. Carry the cap for now.
       amount: args.payment.amount,
     };
 
@@ -116,10 +112,6 @@ export const mppStrategy: PaymentStrategy = {
   async buildChallenge(args: ChallengeArgs): Promise<ChallengeContribution> {
     if (!args.deps.mppx) return {};
 
-    // Dynamic-priced routes advertise sessions: the client opens a channel
-    // with `suggestedDeposit` (= maxPrice) and signs vouchers per request.
-    // mppx's session middleware constructs the WWW-Authenticate header with
-    // intent="session" and the channel parameters.
     if (args.routeEntry.dynamicPrice && args.deps.mppx.session && args.deps.mppSessionConfig) {
       return buildSessionChallenge({
         ...args,

@@ -176,23 +176,27 @@ export interface PaidOptions {
   /** Override MPP protocol metadata in x-payment-info discovery. */
   mpp?: MppProtocolInfo;
   /**
-   * Handler-driven dynamic pricing. The handler receives a `charge(amount)`
-   * callback and bills the request itself, accumulatively, capped at `maxPrice`.
-   * If the handler never calls `charge`, the request runs free.
-   *
-   * This is one of two dynamic pricing forms — the other (`.paid(fn, opts)`)
-   * computes the price from the request body before the handler runs. Both
-   * advertise `mode: 'dynamic'` to clients in OpenAPI / 402 challenges; the
-   * client only sees a cap, not whether the price is body-driven or
-   * handler-driven.
+   * Handler-driven dynamic pricing. The handler receives a `charge()` callback
+   * and bills the request one tick at a time, capped at `maxPrice`. Total
+   * billed is `tickCost * call_count`; zero calls means the request runs free.
    *
    * Requires `maxPrice`. Incompatible with tiered pricing. On x402 routes, the
    * configured accepts must include an `upto` accept on at least one network
-   * (the Permit2Proxy contract enforces the cap on chain). On MPP routes, the
-   * route is wrapped in an SSE session under the hood — `RouterConfig.mpp.session`
-   * must be configured with the session store.
+   * (Permit2Proxy enforces the cap on chain). On MPP routes,
+   * `RouterConfig.mpp.session` must be configured.
    */
   dynamic?: boolean;
+  /**
+   * Per-tick cost in decimal-dollar form (positive decimal string). Required
+   * on `.paid({ dynamic: true })` routes. For MPP session routes this is
+   * also the granularity at which voucher headroom is checked.
+   */
+  tickCost?: string;
+  /**
+   * Cosmetic unit label for 402 challenges and client UIs (e.g. `'token'`,
+   * `'byte'`). Does not affect billing.
+   */
+  unitType?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -264,23 +268,17 @@ export interface SettlementLifecycle<TBody = unknown> {
 }
 
 /**
- * Bills the request, accumulatively, against the route's `maxPrice` cap.
+ * Bills the request one tick at a time. One call adds one `tickCost` USDC tick
+ * to the running total; zero calls leaves the request free. Total billed is
+ * capped at `maxPrice` — exceeding the cap throws synchronously at the
+ * offending call site.
  *
- * Each call adds `amount` (decimal-dollar string, e.g. `'0.034'`) to a
- * per-request running total. The orchestrator settles the final total once
- * the handler resolves. Calling `charge` zero times means the request ran
- * free — no on-chain transfer is submitted.
- *
- * Throws synchronously if the running total would exceed the route's
- * `maxPrice` — the handler bug surfaces at the offending call site rather
- * than waiting for an on-chain revert.
- *
- * In streaming handlers (`async function*`), `await charge(amount)` may also
- * block on payment-channel back-pressure when the configured MPP session
- * runs short of voucher headroom (mppx emits `payment-need-voucher`; the
- * handler awaits until the client tops up).
+ * On MPP session routes each tick reserves voucher headroom; in streaming
+ * handlers `await charge()` may block on `payment-need-voucher` when the
+ * channel runs short. On x402 `upto` routes the cumulative atomic amount
+ * lands verbatim in the on-chain settle.
  */
-export type ChargeFn = (amount: string) => Promise<void>;
+export type ChargeFn = () => Promise<void>;
 
 export interface HandlerContext<TBody = undefined, TQuery = undefined> {
   body: TBody;
@@ -293,12 +291,7 @@ export interface HandlerContext<TBody = undefined, TQuery = undefined> {
   account: unknown;
   alert: AlertFn;
   setVerifiedWallet: (addr: string) => void;
-  /**
-   * Present at runtime only when the route was declared with
-   * `.paid({ dynamic: true, maxPrice })`. On routes without handler-driven
-   * pricing the server's quoted price is what's charged, so no callback is
-   * needed.
-   */
+  /** Present only on `.paid({ dynamic: true, maxPrice })` routes. */
   charge?: ChargeFn;
 }
 
@@ -347,10 +340,7 @@ export interface RouteEntry {
    */
   siwxEnabled?: boolean;
   pricing?: PricingConfig;
-  /**
-   * When true, the settled amount is decided by the handler via the `charge`
-   * callback in `HandlerContext`, capped at `maxPrice`. See `PaidOptions.dynamic`.
-   */
+  /** When true the settled amount is decided by the handler's `charge()` calls, capped at `maxPrice`. */
   dynamicPrice?: boolean;
   protocols: ProtocolType[];
   bodySchema?: ZodType;
@@ -387,6 +377,10 @@ export interface RouteEntry {
   validateFn?: (body: unknown) => void | Promise<void>;
   settlement?: SettlementLifecycle;
   mppInfo?: MppProtocolInfo;
+  /** Per-tick cost (decimal-dollar). Required when `dynamicPrice` is true. */
+  tickCost?: string;
+  /** Cosmetic unit label for 402 challenges and client UIs. */
+  unitType?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -487,28 +481,15 @@ export interface RouterConfig {
      */
     useDefaultStore?: boolean;
     /**
-     * Session-mode configuration. When set, the router additionally registers
-     * `tempo.session` alongside `tempo.charge` so MPP payment-channel sessions
-     * (open / voucher / close) can be verified and settled. Required for any
-     * future feature that needs post-handler amount overrides over MPP — pull-mode
-     * `charge` commits the client to a fixed amount before the handler runs.
+     * Enables MPP payment-channel sessions. When set, the router registers
+     * `tempo.session` alongside `tempo.charge` so dynamic-priced routes can
+     * verify and settle session credentials. Per-tick cost and unit label are
+     * declared per-route via `.paid({ dynamic: true, tickCost, unitType })`.
      *
-     * Sessions also require `mpp.feePayerKey` (the operator account signs
-     * channel close/settle).
+     * Also requires `mpp.feePayerKey` (the operator account signs channel
+     * close/settle).
      */
-    session?: {
-      /**
-       * Per-tick cost in decimal-dollar form. Defines the granularity of
-       * session billing — actual charges are quantized to multiples of this.
-       * Default `'0.0001'` (one hundredth of a cent).
-       */
-      tickCost?: string;
-      /**
-       * Cosmetic unit label surfaced in 402 challenges and client UIs.
-       * Default `'unit'`. Doesn't affect billing.
-       */
-      unitType?: string;
-    };
+    session?: Record<string, never>;
   };
   /**
    * Payment protocols to accept on paid routes unless a route overrides them.

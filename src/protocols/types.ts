@@ -47,29 +47,35 @@ export interface SettleArgs {
   routeEntry: RouteEntry;
   deps: RouterDeps;
   /**
-   * The amount to actually settle, in decimal-dollar form. For dynamic-priced
-   * routes, this is the post-handler total chosen via `charge()`; for static
-   * routes, it equals the verified quoted price. Strategies that support
-   * settlement overrides (x402 `upto`, MPP session tick metering) consult
-   * `routeEntry.dynamicPrice` to decide whether to push it to upstream.
+   * Decimal-dollar amount to settle. For dynamic-priced routes this is the
+   * handler's `charge()` running total; for static routes it equals the
+   * verified quoted price. Strategies that need a tick count (MPP session)
+   * derive it from `billedAmount / tickCost`.
    */
-  effectiveAmount: string;
+  billedAmount: string;
 }
 
 /**
  * Streaming settle path — called when the handler returned an `AsyncIterable`
- * instead of a value. Strategies opt in by implementing this; strategies that
- * don't support streaming should leave it unset and the flow rejects streaming
- * routes at registration time.
+ * instead of a value. Strategies opt in by implementing this; the flow rejects
+ * streaming routes at registration when the strategy hasn't provided it.
  */
 export interface StreamSettleArgs {
   request: NextRequest;
-  /** The handler's async iterable. Each yield emits one charge tick (auto-mode). */
+  /** The handler's async iterable; yields are data, not billing signals. */
   source: AsyncIterable<unknown>;
   payment: HandlerPaymentContext;
   token: unknown;
   routeEntry: RouteEntry;
   deps: RouterDeps;
+  /**
+   * Connects the handler's `charge()` callback to the protocol's per-tick
+   * channel debit. Strategies (MPP session) call this with their per-tick
+   * callback once iteration starts and clear it back to `null` when iteration
+   * ends. Always present — streaming handlers are gated to dynamic-priced
+   * routes upstream.
+   */
+  bindChannelCharge: (fn: (() => Promise<void>) | null) => void;
 }
 
 export type SettleOutcome =

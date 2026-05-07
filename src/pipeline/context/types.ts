@@ -70,13 +70,11 @@ export interface RouterDeps {
     >;
   } | null;
   /**
-   * Per-deployment session configuration. Set by `createRouter` when
-   * `RouterConfig.mpp.session` is configured; null otherwise.
+   * Presence flag — set by `createRouter` when `RouterConfig.mpp.session` is
+   * configured, null otherwise. Used to gate dynamic-priced MPP routes at
+   * registration time.
    */
-  mppSessionConfig?: {
-    tickCost: string;
-    unitType: string;
-  } | null;
+  mppSessionConfig?: Record<string, never> | null;
   tempoClient?: import('viem').Client | null;
 }
 

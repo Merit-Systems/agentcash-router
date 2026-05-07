@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fail } from './fail.js';
-import { finalize } from './finalize.js';
+import { finalize } from './finalize/index.js';
 import { firePluginResponse } from './fire-plugin-response.js';
 import { invoke } from './invoke.js';
 import { parseBody } from './parse-body.js';

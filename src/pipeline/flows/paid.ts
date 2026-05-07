@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { verifyApiKey } from '../../auth/api-key.js';
 import { selectPricing } from '../../pricing/index.js';
+import { atomicToDecimal, decimalToAtomic } from '../../pricing/atomic.js';
 import { firePluginHook } from '../../plugin.js';
 import { selectIncomingStrategy } from '../../protocols/index.js';
 import type { AlertFn, ChargeFn, HandlerPaymentContext } from '../../types.js';
@@ -18,7 +19,8 @@ import {
   runSettlementError,
   runSettledHandlerError,
   runValidate,
-  settleAndFinalize,
+  settleAndFinalizeRequest,
+  settleAndFinalizeStream,
   shouldParseBodyEarly,
   trySiwxFastPath,
   type FlowCtx,
@@ -137,51 +139,44 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
     network: verifyOutcome.payment.network,
   });
 
-  // ---- 9. Build charge callback for dynamic-priced routes ----
-  // The handler accumulates a running total via `charge(amount)`. After the
-  // handler resolves, the orchestrator forwards the total to settle as
-  // `effectiveAmount`. If the handler never calls charge, settle is skipped —
-  // the request was free. Static-priced routes don't expose `charge`; their
-  // `effectiveAmount` is the quoted price.
-  const chargeState = routeEntry.dynamicPrice
-    ? createChargeState(routeEntry.maxPrice, routeEntry.key)
+  const tickMeter = routeEntry.dynamicPrice
+    ? createTickMeter({
+        // builder.ts guarantees tickCost is set when dynamicPrice is true
+        tickCost: routeEntry.tickCost!,
+        maxPrice: routeEntry.maxPrice,
+        route: routeEntry.key,
+      })
     : null;
 
-  // ---- 10. Invoke handler ----
   const result = await invoke(
     ctx,
     verifyOutcome.wallet,
     account,
     body.data,
     verifyOutcome.payment,
-    chargeState?.charge,
+    tickMeter?.charge,
   );
 
-  // ---- 11. Streaming branch — handler returned an AsyncIterable ----
   if (result.kind === 'stream') {
-    if (!incomingStrategy.settleStream) {
+    if (!tickMeter) {
       return fail(
         ctx,
         500,
-        `${incomingStrategy.protocol} does not support streaming handlers`,
+        `route '${routeEntry.key}': streaming handlers require .paid({ dynamic: true })`,
         body.data,
       );
     }
-    const streamOutcome = await incomingStrategy.settleStream({
-      request,
+    return settleAndFinalizeStream({
+      ctx,
+      strategy: incomingStrategy,
+      verifyOutcome,
       source: result.source,
-      payment: verifyOutcome.payment,
-      token: verifyOutcome.token,
-      routeEntry,
-      deps,
+      account,
+      body: body.data,
+      bindChannelCharge: tickMeter.bindChannelCharge,
     });
-    if (!streamOutcome.ok) {
-      return fail(ctx, streamOutcome.failStatus ?? 500, streamOutcome.failMessage, body.data);
-    }
-    return finalize(ctx, streamOutcome.response, undefined, body.data);
   }
 
-  // ---- 12. Batch branch ----
   const settleScope: SettleScope = {
     wallet: verifyOutcome.wallet,
     account,
@@ -192,23 +187,13 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
     handlerError: result.handlerError,
   };
 
-  // Dynamic-priced routes that never called charge() opt out of settle
-  // entirely — the request ran free. The handler's response is returned
-  // unchanged.
-  if (chargeState && chargeState.totalAtomic() === 0n) {
+  if (tickMeter && tickMeter.atomicTotal() === 0n) {
     return finalize(ctx, result.response, result.rawResult, body.data);
   }
 
-  // For dynamic routes, the effective amount is the running charge total
-  // (guaranteed > 0 by the early-return above). For static routes, it's the
-  // verified price — same value the strategy committed to at verify time.
-  const effectiveAmount = chargeState
-    ? atomicToDecimal(chargeState.totalAtomic())
-    : price;
+  const billedAmount = tickMeter ? atomicToDecimal(tickMeter.atomicTotal()) : price;
 
-  // ---- 13. Settlement ----
   if (verifyOutcome.alreadySettled) {
-    // Payment is already on-chain (e.g., MPP hash-payload).
     if (result.response.status >= 400) {
       const settledScope = settleScope as SettleScope<
         HandlerPaymentContext & { status: 'settled' }
@@ -216,18 +201,17 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
       await runSettledHandlerError(ctx, settledScope);
       return finalize(ctx, result.response, result.rawResult, body.data);
     }
-    return settleAndFinalize({
+    return settleAndFinalizeRequest({
       ctx,
       strategy: incomingStrategy,
       verifyOutcome,
       scope: settleScope,
       rawResult: result.rawResult,
       body: body.data,
-      effectiveAmount,
+      billedAmount,
     });
   }
 
-  // Verified-but-not-settled (x402, mpp-tx) — settle only on handler success.
   if (result.response.status >= 400) {
     return finalize(ctx, result.response, result.rawResult, body.data);
   }
@@ -235,14 +219,14 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   const beforeErr = await runBeforeSettle(ctx, settleScope);
   if (beforeErr) return beforeErr;
 
-  return settleAndFinalize({
+  return settleAndFinalizeRequest({
     ctx,
     strategy: incomingStrategy,
     verifyOutcome,
     scope: settleScope,
     rawResult: result.rawResult,
     body: body.data,
-    effectiveAmount,
+    billedAmount,
     onSettleError: async (error, failMessage) => {
       await runSettlementError(ctx, settleScope, error, 'settle');
       firePluginHook(deps.plugin, 'onAlert', ctx.pluginCtx, {
@@ -255,66 +239,47 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
 }
 
 /**
- * Per-request charge accumulator, returned to handlers as the `charge` callback.
+ * Per-request meter exposed to handlers as the `charge` callback.
  *
- * `charge` parses decimal-dollar input to atomic units (USDC 6-decimal) and
- * adds to a running bigint. If the running total would exceed `maxPrice`, the
- * call throws synchronously — the handler-author bug surfaces at the offending
- * call site rather than waiting for an on-chain revert.
- *
- * The handler may call `charge` zero, one, or many times. Zero calls means the
- * request runs free. Multi-call is additive (charge('0.01') + charge('0.02')
- * leaves a running total of 0.03).
+ * Each `charge()` call adds one tick (`tickCost` USDC) to the running total
+ * and throws synchronously if the next tick would exceed `maxPrice`. When a
+ * channel-charge callback has been bound (streaming MPP session settle),
+ * every `charge()` call also debits one tick on the channel before resolving,
+ * so `await charge()` can backpressure on payment-channel voucher refresh.
  */
-function createChargeState(maxPrice: string | undefined, route: string) {
-  const maxAtomic = maxPrice !== undefined ? decimalToAtomic(maxPrice) : null;
-  let runningAtomic = 0n;
+function createTickMeter(args: { tickCost: string; maxPrice: string | undefined; route: string }) {
+  const { tickCost, maxPrice, route } = args;
+  const tickAtomic = decimalToAtomic(tickCost);
+  if (tickAtomic <= 0n) {
+    throw new Error(`route '${route}': tickCost '${tickCost}' must be a positive decimal string`);
+  }
+  const capAtomic = maxPrice !== undefined ? decimalToAtomic(maxPrice) : null;
+  let ticks = 0;
+  let atomic = 0n;
+  let channelCharge: (() => Promise<void>) | null = null;
 
-  const charge: ChargeFn = async (amount: string) => {
-    const delta = decimalToAtomic(amount);
-    if (delta < 0n) {
-      throw Object.assign(new Error(`route '${route}': charge() amount must be non-negative`), {
-        status: 400,
-      });
-    }
-    const next = runningAtomic + delta;
-    if (maxAtomic !== null && next > maxAtomic) {
+  const charge: ChargeFn = async () => {
+    const nextAtomic = atomic + tickAtomic;
+    if (capAtomic !== null && nextAtomic > capAtomic) {
       throw Object.assign(
         new Error(
-          `route '${route}': charge() running total ($${atomicToDecimal(next)}) exceeds maxPrice ($${atomicToDecimal(maxAtomic)})`,
+          `route '${route}': charge() running total ($${atomicToDecimal(nextAtomic)}) exceeds maxPrice ($${atomicToDecimal(capAtomic)})`,
         ),
         { status: 400, code: 'CHARGE_OVER_CAP' as const },
       );
     }
-    runningAtomic = next;
+    ticks += 1;
+    atomic = nextAtomic;
+    if (channelCharge) await channelCharge();
   };
 
   return {
     charge,
-    totalAtomic: () => runningAtomic,
+    bindChannelCharge: (fn: (() => Promise<void>) | null) => {
+      channelCharge = fn;
+    },
+    tickCount: () => ticks,
+    atomicTotal: () => atomic,
   };
 }
 
-/** USDC has 6 decimals — used as the canonical atomic-unit conversion for charge() amounts. */
-const DECIMALS = 6;
-
-function decimalToAtomic(amount: string): bigint {
-  const m = /^(\d+)(?:\.(\d+))?$/.exec(amount.trim());
-  if (!m) {
-    throw Object.assign(
-      new Error(`charge() amount '${amount}' is not a valid decimal-dollar string`),
-      { status: 400 },
-    );
-  }
-  const whole = m[1];
-  const fraction = (m[2] ?? '').slice(0, DECIMALS).padEnd(DECIMALS, '0');
-  return BigInt(`${whole}${fraction}`.replace(/^0+(?=\d)/, '') || '0');
-}
-
-function atomicToDecimal(atomic: bigint): string {
-  const whole = atomic / 10n ** BigInt(DECIMALS);
-  const fraction = atomic % 10n ** BigInt(DECIMALS);
-  if (fraction === 0n) return whole.toString();
-  const fractionStr = fraction.toString().padStart(DECIMALS, '0').replace(/0+$/, '');
-  return `${whole}.${fractionStr}`;
-}

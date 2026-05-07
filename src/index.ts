@@ -201,12 +201,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
           realm: new URL(resolvedBaseUrl).host,
         }) as unknown as (typeof deps)['mppx'];
 
-        deps.mppSessionConfig = config.mpp.session
-          ? {
-              tickCost: config.mpp.session.tickCost ?? '0.0001',
-              unitType: config.mpp.session.unitType ?? 'unit',
-            }
-          : null;
+        deps.mppSessionConfig = config.mpp.session ? {} : null;
       } catch (err: unknown) {
         deps.mppx = null;
         deps.mppInitError = err instanceof Error ? err.message : String(err);

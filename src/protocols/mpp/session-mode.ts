@@ -1,34 +1,22 @@
 /**
  * MPP session-payload mode (payment-channel sessions).
  *
- * Charge credentials commit the client to a fixed amount before the handler
- * runs — they can't honor a post-handler amount commitment. Sessions add a
- * bidirectional moment: client opens a channel with a maxPrice deposit, server
- * meters per-tick charges via signed vouchers, settles cumulative on close.
- * Unused deposit auto-refunds.
+ * The client opens a channel with a `suggestedDeposit` escrow, server meters
+ * per-tick charges via signed vouchers, settles cumulative on close. Used for
+ * dynamic-priced routes — charge credentials commit the client to a fixed
+ * amount before the handler runs and can't honor a post-handler total.
  *
- * Flow:
- *   verify  → call `mppx.session({ amount: tickCost, unitType, suggestedDeposit })`.
- *             Returns mppx's challenge (402) on first contact, or a verified
- *             handle whose `withReceipt` accepts an SSE async generator.
- *   settle  → for content actions: drain handler body to text, compute
- *             `ceil(effectiveAmount / tickCost)` ticks, build an async
- *             generator that calls `stream.charge()` N times before yielding
- *             the body, hand to `withReceipt(...)` — mppx auto-converts to
- *             SSE and cycles vouchers transparently. For management actions
- *             (close / topUp / open|voucher with no body): mppx's own
- *             `respond` hook produces a 204 ack; just pass any response and
- *             return its result.
- *
- * Wired in via `protocols/mpp/strategy.ts` — when a credential's
- * `payload.action` is one of `open|voucher|topUp|close`, this module's
- * verify/settle functions handle the request. Callers supply the
- * `effectiveAmount` directly (the post-handler total chosen via `charge()`).
+ * verify  → mppx.session(...) returns a 402 challenge or a 200 handle whose
+ *           `withReceipt` accepts a Response or an SSE generator.
+ * settle  → channel-only credentials get a 204 ack; content credentials drain
+ *           `billedTicks` channel charges then yield the handler body.
  */
 
 import type { NextResponse } from 'next/server';
 import type { Transport } from 'mppx/server';
+import type { Session } from 'mppx/tempo';
 import { HEADERS } from '../../headers.js';
+import { decimalToAtomic } from '../../pricing/atomic.js';
 import type { HandlerPaymentContext } from '../../types.js';
 import type {
   ChallengeArgs,
@@ -43,31 +31,21 @@ import type { MppCredentialInfo } from './credential.js';
 
 export interface MppSessionToken {
   mode: 'session';
-  /** Underlying mppx session result — used by settle() to wrap the handler response. */
+  /** mppx's verified handle; settle() invokes its `withReceipt` to wrap the response. */
   sessionResult: Extract<MppxMiddlewareResponse<Transport.Sse>, { status: 200 }>;
-  /** True for credentials that don't carry a content body (close / topUp / bodyless open|voucher). */
-  managementAction: boolean;
-  /** Resolved tick cost (decimal-dollar string) for this deployment. */
+  /** True for credentials that only advance channel state (close / topUp / bodyless open|voucher). */
+  isChannelOnly: boolean;
   tickCost: string;
   credential: MppCredentialInfo['credential'];
 }
 
-/**
- * Verify the session credential via mppx and produce a `VerifySuccess` whose
- * token carries the `withReceipt` callback for settle. Returns the 402
- * challenge unchanged when mppx demands one (channel not yet open / voucher
- * exhausted / etc.).
- *
- * `args.price` should be the route's quoted cap (`maxPrice`) — mppx surfaces
- * it as `suggestedDeposit` on the challenge so clients know how much to escrow.
- */
 export async function verifySessionMode(
   args: VerifyArgs,
   info: MppCredentialInfo,
 ): Promise<
   VerifySuccess | { ok: false; kind: 'invalid' } | { ok: false; kind: 'config'; message: string }
 > {
-  const { request, deps, price } = args;
+  const { request, deps, price, routeEntry } = args;
 
   if (!deps.mppx?.session || !deps.mppSessionConfig) {
     return {
@@ -77,8 +55,10 @@ export async function verifySessionMode(
     };
   }
 
-  const tickCost = deps.mppSessionConfig.tickCost;
-  const unitType = deps.mppSessionConfig.unitType;
+  // builder.ts guarantees tickCost is set on dynamic-priced routes; verify is
+  // only reached for session credentials, which the strategy gates to dynamic.
+  const tickCost = routeEntry.tickCost!;
+  const unitType = routeEntry.unitType;
 
   type SessionResult = Awaited<ReturnType<ReturnType<NonNullable<typeof deps.mppx.session>>>>;
   let result: SessionResult;
@@ -98,15 +78,8 @@ export async function verifySessionMode(
   }
 
   if (result.status === 402) {
-    // mppx wants the client to advance the channel — surface as 402 challenge.
-    // The strategy's caller decides how to deliver this back to the client.
     return { ok: false, kind: 'invalid' };
   }
-
-  // Management actions (channel close, top-up, or bodyless open/voucher) don't
-  // produce content — mppx returns a 204 ack via withReceipt. Content actions
-  // continue to handler invocation + SSE streaming below.
-  const managementAction = isManagementAction(info, request);
 
   const mppRecipient = deps.mppRecipient ?? deps.payeeAddress;
   const payment: HandlerPaymentContext = {
@@ -121,7 +94,7 @@ export async function verifySessionMode(
   const token: MppSessionToken = {
     mode: 'session',
     sessionResult: result,
-    managementAction,
+    isChannelOnly: isChannelOnlyAction(info, request),
     tickCost,
     credential: info.credential,
   };
@@ -136,63 +109,59 @@ export async function verifySessionMode(
 }
 
 /**
- * Build the SSE response. Settlement is metered via per-tick `stream.charge()`
- * calls rather than a single transaction — mppx's session `withReceipt` cycles
- * vouchers (`event: payment-need-voucher`) transparently as the channel runs short.
- *
- * For management actions, mppx already wrote the 204 ack into `sessionResult`;
- * we just hand it any response and return mppx's wrapped output.
- *
- * `effectiveAmount` is the post-work amount the caller decided to charge, in
- * decimal-dollar form (e.g. `'0.034'`). `'0'` is legal — emits zero ticks and
- * the channel state advances without funds moving.
+ * Wraps the handler response into mppx's SSE transport. Channel-only
+ * credentials get a 204 ack; content credentials drain `billedTicks` channel
+ * charges (one `stream.charge()` per tick — mppx batches them into a single
+ * commit) then yield the body. mppx surfaces `payment-need-voucher` events
+ * transparently when the channel runs short.
  */
 export async function settleSessionMode(args: SettleArgs): Promise<SettleOutcome> {
-  const { response, payment, token, effectiveAmount } = args;
+  const { response, payment, token, billedAmount } = args;
   const sessionToken = token as MppSessionToken;
 
-  if (sessionToken.managementAction) {
+  if (sessionToken.isChannelOnly) {
     const ack = sessionToken.sessionResult.withReceipt(
       new Response(null, { status: 200 }),
     ) as NextResponse;
     return {
       ok: true,
       response: ack,
-      settledPayment: { ...payment, status: 'settled', amount: effectiveAmount },
+      settledPayment: { ...payment, status: 'settled', amount: billedAmount },
     };
   }
 
-  // Content action: drain handler body so we can re-emit it after metering.
-  // Handler errors are forwarded without engaging the SSE generator — no
-  // `stream.charge()` calls means no funds move (the voucher's nonce still
-  // advances, which is correct: the client signed for this request).
+  // Handler errors forward through SSE without engaging the metering generator
+  // — zero channel charges, but the voucher nonce still advances (correct: the
+  // client signed for this request).
   if (response.status >= 400) {
     const wrapped = sessionToken.sessionResult.withReceipt(response) as NextResponse;
     return {
       ok: true,
       response: wrapped,
-      settledPayment: { ...payment, status: 'settled', amount: effectiveAmount },
+      settledPayment: { ...payment, status: 'settled', amount: billedAmount },
     };
   }
 
-  const handlerBodyText = await readResponseAsText(response);
-  const ticks = computeSessionTicks(stripDollarTag(effectiveAmount), sessionToken.tickCost);
+  const handlerBodyText = await cloneResponseAsText(response);
+  const channelChargeCount = Number(
+    decimalToAtomic(billedAmount) / decimalToAtomic(sessionToken.tickCost),
+  );
 
-  async function* sseGenerator(stream: { charge: () => Promise<void> }) {
-    for (let i = 0; i < ticks; i++) {
-      await stream.charge();
+  async function* drainTicksThenYieldBody(channel: Session.Sse.SessionController) {
+    for (let i = 0; i < channelChargeCount; i++) {
+      await channel.charge();
     }
     yield handlerBodyText;
   }
 
-  const sse = sessionToken.sessionResult.withReceipt(sseGenerator) as NextResponse;
+  const sse = sessionToken.sessionResult.withReceipt(drainTicksThenYieldBody) as NextResponse;
   sse.headers.set('Cache-Control', 'private');
   const receiptHeader = sse.headers.get(HEADERS.MPP_PAYMENT_RECEIPT) ?? undefined;
 
   const settledPayment: HandlerPaymentContext & { status: 'settled' } = {
     ...payment,
     status: 'settled',
-    amount: effectiveAmount,
+    amount: billedAmount,
     ...(receiptHeader ? { receipt: receiptHeader } : {}),
   };
 
@@ -200,21 +169,23 @@ export async function settleSessionMode(args: SettleArgs): Promise<SettleOutcome
 }
 
 /**
- * Build the session piece of a 402 challenge. Used in lieu of
- * `mppx.charge(...)` when the route wants to advertise sessions. The caller
- * passes `suggestedDeposit` (typically the route's maxPrice) so the client
- * knows how much to escrow on channel open.
+ * Returns the WWW-Authenticate header for an MPP session 402. `suggestedDeposit`
+ * is the escrow amount (typically the route's `maxPrice`); tickCost/unitType
+ * come from the route (with deployment fallback).
  */
 export async function buildSessionChallenge(
   args: ChallengeArgs & { suggestedDeposit: string },
 ): Promise<ChallengeContribution> {
-  const { request, deps, suggestedDeposit } = args;
+  const { request, deps, suggestedDeposit, routeEntry } = args;
   if (!deps.mppx?.session || !deps.mppSessionConfig) return {};
+
+  const tickCost = routeEntry.tickCost!;
+  const unitType = routeEntry.unitType;
 
   try {
     const result = await deps.mppx.session({
-      amount: deps.mppSessionConfig.tickCost,
-      unitType: deps.mppSessionConfig.unitType,
+      amount: tickCost,
+      unitType,
       suggestedDeposit,
     })(request);
     if (result.status === 402) {
@@ -230,32 +201,7 @@ export async function buildSessionChallenge(
   return {};
 }
 
-/**
- * Number of ticks needed to charge `actualDecimal` USDC at `tickDecimal` per tick.
- * Both inputs are decimal-dollar strings (`'0.034'`, `'0.0001'`); USDC is
- * 6-decimal so we scale to atomic bigints to avoid float drift, then ceiling-
- * divide so the operator over-charges by a fraction of a cent rather than under.
- */
-export function computeSessionTicks(actualDecimal: string, tickDecimal: string): number {
-  const actualAtomic = decimalToBigintAtomic(actualDecimal, 6);
-  const tickAtomic = decimalToBigintAtomic(tickDecimal, 6);
-  if (tickAtomic <= 0n) return 0;
-  return Number((actualAtomic + tickAtomic - 1n) / tickAtomic);
-}
-
-function decimalToBigintAtomic(amount: string, decimals: number): bigint {
-  const m = /^(\d+)(?:\.(\d+))?$/.exec(amount);
-  if (!m) return 0n;
-  const whole = m[1];
-  const fraction = (m[2] ?? '').slice(0, decimals).padEnd(decimals, '0');
-  return BigInt(`${whole}${fraction}`.replace(/^0+(?=\d)/, '') || '0');
-}
-
-function stripDollarTag(amount: string): string {
-  return amount.startsWith('$') ? amount.slice(1) : amount;
-}
-
-async function readResponseAsText(response: Response): Promise<string> {
+async function cloneResponseAsText(response: Response): Promise<string> {
   try {
     return await response.clone().text();
   } catch {
@@ -264,12 +210,11 @@ async function readResponseAsText(response: Response): Promise<string> {
 }
 
 /**
- * Management actions don't produce content — they just advance channel state
- * (open with no body, voucher top-up, close). Detected by action type plus a
- * body-presence check: an `open` or `voucher` request *with* a body is a
- * content request that happens to also advance the channel.
+ * Channel-only credentials carry no body to meter — `close`/`topUp`, plus
+ * `open`/`voucher` requests with no body. (`open`/`voucher` *with* a body are
+ * content requests that also advance the channel.)
  */
-function isManagementAction(info: MppCredentialInfo, request: Request): boolean {
+function isChannelOnlyAction(info: MppCredentialInfo, request: Request): boolean {
   const action = info.sessionAction;
   if (!action) return false;
   if (action === 'close' || action === 'topUp') return true;

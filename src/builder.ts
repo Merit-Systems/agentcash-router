@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import type { ZodType } from 'zod';
 import type {
+  ChargeFn,
   HandlerContext,
   RouteEntry,
   PricingConfig,
@@ -48,18 +49,31 @@ type InputTypeFor<TBody, TQuery> = [TBody] extends [undefined]
  * because TypeScript doesn't reliably gate overload selection on `this` for
  * generic classes (structurally identical instance types collapse).
  */
+/**
+ * On dynamic-priced routes (`.paid({ dynamic: true })`) the handler context's
+ * `charge` callback is *required* — the orchestrator always attaches it at
+ * runtime, so handler-authors don't need non-null assertions to call it.
+ *
+ * On static-priced routes, `charge` stays absent from the type entirely (the
+ * server's quoted price is what's charged; there's nothing to call).
+ */
+type HandlerCtxFor<TBody, TQuery, IsDynamic extends boolean> = IsDynamic extends true
+  ? Omit<HandlerContext<TBody, TQuery>, 'charge'> & { charge: ChargeFn }
+  : Omit<HandlerContext<TBody, TQuery>, 'charge'>;
+
 type HandlerArg<
   TBody,
   TQuery,
   HasAuth extends boolean,
   NeedsBody extends boolean,
   HasBody extends boolean,
+  IsDynamic extends boolean,
 > = HasAuth extends true
   ? [NeedsBody, HasBody] extends [true, false]
     ? {
         __missing: 'Call .body(schema) — dynamic/tiered pricing requires a body schema to resolve the price against';
       }
-    : (ctx: HandlerContext<TBody, TQuery>) => Promise<unknown> | AsyncIterable<unknown>
+    : (ctx: HandlerCtxFor<TBody, TQuery, IsDynamic>) => Promise<unknown> | AsyncIterable<unknown>
   : {
       __missing: 'Select an auth mode: .paid(pricing), .siwx(), .apiKey(resolver), or .unprotected()';
     };
@@ -75,6 +89,7 @@ export class RouteBuilder<
   HasAuth extends boolean = false,
   NeedsBody extends boolean = false,
   HasBody extends boolean = false,
+  IsDynamic extends boolean = false,
 > {
   /** @internal */ readonly _key: string;
   /** @internal */ readonly _registry: RouteRegistry;
@@ -86,6 +101,8 @@ export class RouteBuilder<
   /** @internal */ _maxPrice: string | undefined;
   /** @internal */ _minPrice: string | undefined;
   /** @internal */ _dynamicPrice = false;
+  /** @internal */ _tickCost: string | undefined;
+  /** @internal */ _unitType: string | undefined;
   /** @internal */ _payTo: PayToConfig | undefined;
   /** @internal */ _bodySchema: ZodType | undefined;
   /** @internal */ _querySchema: ZodType | undefined;
@@ -125,14 +142,14 @@ export class RouteBuilder<
   paid(
     pricing: string,
     options?: PaidOptions,
-  ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody>;
+  ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, IsDynamic>;
   paid(
     options: PaidOptions & { dynamic: true; maxPrice: string },
-  ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody>;
+  ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, True>;
   paid<TBodyIn>(
     pricing: (body: TBodyIn) => string | Promise<string>,
     options?: PaidOptions & { maxPrice?: string },
-  ): RouteBuilder<TBody, TQuery, TOutput, True, True, HasBody>;
+  ): RouteBuilder<TBody, TQuery, TOutput, True, True, HasBody, IsDynamic>;
   paid(
     pricing: {
       field: string;
@@ -140,36 +157,12 @@ export class RouteBuilder<
       default?: string;
     },
     options?: PaidOptions,
-  ): RouteBuilder<TBody, TQuery, TOutput, True, True, HasBody>;
+  ): RouteBuilder<TBody, TQuery, TOutput, True, True, HasBody, IsDynamic>;
   paid(
     pricingOrOptions: PricingConfig | (PaidOptions & { dynamic: true; maxPrice: string }),
     options?: PaidOptions,
-  ): RouteBuilder<TBody, TQuery, TOutput, True, boolean, HasBody> {
-    // The single-argument `.paid({ dynamic: true, maxPrice })` shape — no
-    // separate pricing arg. Handler-driven dynamic pricing is decided post-work
-    // by the handler, so the only price surfaced upfront is `maxPrice`. We use
-    // `maxPrice` as the static pricing string so the rest of the pipeline
-    // (challenge advertising, plugin events) still has something to quote.
-    let pricing: PricingConfig;
-    let resolvedOptions: PaidOptions | undefined;
-    if (
-      typeof pricingOrOptions === 'object' &&
-      pricingOrOptions !== null &&
-      typeof pricingOrOptions !== 'function' &&
-      !('tiers' in pricingOrOptions) &&
-      'dynamic' in pricingOrOptions &&
-      pricingOrOptions.dynamic
-    ) {
-      const opts = pricingOrOptions as PaidOptions & { dynamic: true; maxPrice: string };
-      if (!opts.maxPrice) {
-        throw new Error(`route '${this._key}': .paid({ dynamic: true }) requires maxPrice`);
-      }
-      pricing = opts.maxPrice;
-      resolvedOptions = opts;
-    } else {
-      pricing = pricingOrOptions as PricingConfig;
-      resolvedOptions = options;
-    }
+  ): RouteBuilder<TBody, TQuery, TOutput, True, boolean, HasBody, boolean> {
+    const { pricing, resolvedOptions } = resolvePaidArgs(this._key, pricingOrOptions, options);
 
     if (this._authMode === 'unprotected') {
       throw new Error(
@@ -182,7 +175,15 @@ export class RouteBuilder<
       );
     }
 
-    const next = this.fork() as RouteBuilder<TBody, TQuery, TOutput, True, boolean, HasBody>;
+    const next = this.fork() as RouteBuilder<
+      TBody,
+      TQuery,
+      TOutput,
+      True,
+      boolean,
+      HasBody,
+      boolean
+    >;
     next._authMode = 'paid';
     next._pricing = pricing;
     if (resolvedOptions?.protocols) {
@@ -195,6 +196,8 @@ export class RouteBuilder<
     if (resolvedOptions?.payTo) next._payTo = resolvedOptions.payTo;
     if (resolvedOptions?.mpp) next._mppInfo = resolvedOptions.mpp;
     if (resolvedOptions?.dynamic) next._dynamicPrice = true;
+    if (resolvedOptions?.tickCost) next._tickCost = resolvedOptions.tickCost;
+    if (resolvedOptions?.unitType) next._unitType = resolvedOptions.unitType;
 
     // Registration-time validation
     if (typeof pricing === 'object' && 'tiers' in pricing) {
@@ -223,14 +226,25 @@ export class RouteBuilder<
         );
       }
     }
+    if (resolvedOptions?.tickCost !== undefined) {
+      const parsed = parseFloat(resolvedOptions.tickCost);
+      if (isNaN(parsed) || parsed <= 0) {
+        throw new Error(
+          `route '${this._key}': tickCost '${resolvedOptions.tickCost}' must be a positive decimal string`,
+        );
+      }
+    }
     if (next._dynamicPrice && !next._maxPrice) {
       throw new Error(`route '${this._key}': .paid({ dynamic: true }) requires maxPrice`);
+    }
+    if (next._dynamicPrice && !next._tickCost) {
+      throw new Error(`route '${this._key}': .paid({ dynamic: true }) requires tickCost`);
     }
 
     return next;
   }
 
-  siwx(): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody> {
+  siwx(): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, IsDynamic> {
     if (this._authMode === 'unprotected') {
       throw new Error(
         `route '${this._key}': Cannot combine .unprotected() and .siwx() on the same route.`,
@@ -243,7 +257,15 @@ export class RouteBuilder<
       );
     }
 
-    const next = this.fork() as RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody>;
+    const next = this.fork() as RouteBuilder<
+      TBody,
+      TQuery,
+      TOutput,
+      True,
+      False,
+      HasBody,
+      IsDynamic
+    >;
     next._siwxEnabled = true;
 
     // If route is paid (or already has pricing), SIWX is an acceleration capability.
@@ -261,20 +283,28 @@ export class RouteBuilder<
 
   apiKey(
     resolver: (key: string) => unknown | Promise<unknown>,
-  ): RouteBuilder<TBody, TQuery, TOutput, True, NeedsBody, HasBody> {
+  ): RouteBuilder<TBody, TQuery, TOutput, True, NeedsBody, HasBody, IsDynamic> {
     if (this._siwxEnabled) {
       throw new Error(
         `route '${this._key}': Combining .apiKey() and .siwx() is not supported on the same route.`,
       );
     }
-    const next = this.fork() as RouteBuilder<TBody, TQuery, TOutput, True, NeedsBody, HasBody>;
+    const next = this.fork() as RouteBuilder<
+      TBody,
+      TQuery,
+      TOutput,
+      True,
+      NeedsBody,
+      HasBody,
+      IsDynamic
+    >;
     next._authMode = 'apiKey';
     next._apiKeyResolver = resolver;
     // apiKey can compose with .paid() — auth mode will upgrade
     return next;
   }
 
-  unprotected(): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody> {
+  unprotected(): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, IsDynamic> {
     if (this._authMode && this._authMode !== 'unprotected') {
       throw new Error(
         `route '${this._key}': Cannot combine .unprotected() and .${this._authMode}() on the same route.`,
@@ -287,7 +317,15 @@ export class RouteBuilder<
       );
     }
 
-    const next = this.fork() as RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody>;
+    const next = this.fork() as RouteBuilder<
+      TBody,
+      TQuery,
+      TOutput,
+      True,
+      False,
+      HasBody,
+      IsDynamic
+    >;
     next._authMode = 'unprotected';
     next._protocols = [];
     return next;
@@ -308,22 +346,25 @@ export class RouteBuilder<
   // Schema methods
   // -------------------------------------------------------------------------
 
-  body<T>(schema: ZodType<T>): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True>;
+  body<T>(
+    schema: ZodType<T>,
+  ): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True, IsDynamic>;
   body<T>(
     schema: ZodType<T>,
     example: T & JsonObject,
-  ): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True>;
+  ): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True, IsDynamic>;
   body<T>(
     schema: ZodType<T>,
     example?: T & JsonObject,
-  ): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True> {
+  ): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True, IsDynamic> {
     const next = this.fork() as unknown as RouteBuilder<
       T,
       TQuery,
       TOutput,
       HasAuth,
       NeedsBody,
-      True
+      True,
+      IsDynamic
     >;
     next._bodySchema = schema;
     if (example !== undefined) {
@@ -333,22 +374,25 @@ export class RouteBuilder<
     return next;
   }
 
-  query<T>(schema: ZodType<T>): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody>;
+  query<T>(
+    schema: ZodType<T>,
+  ): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic>;
   query<T>(
     schema: ZodType<T>,
     example: T & JsonObject,
-  ): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody>;
+  ): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic>;
   query<T>(
     schema: ZodType<T>,
     example?: T & JsonObject,
-  ): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody> {
+  ): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       T,
       TOutput,
       HasAuth,
       NeedsBody,
-      HasBody
+      HasBody,
+      IsDynamic
     >;
     next._querySchema = schema;
     if (example !== undefined) {
@@ -359,22 +403,25 @@ export class RouteBuilder<
     return next;
   }
 
-  output<T>(schema: ZodType<T>): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody>;
+  output<T>(
+    schema: ZodType<T>,
+  ): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody, IsDynamic>;
   output<T>(
     schema: ZodType<T>,
     example: T & JsonValue,
-  ): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody>;
+  ): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody, IsDynamic>;
   output<T>(
     schema: ZodType<T>,
     example?: T & JsonValue,
-  ): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody> {
+  ): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody, IsDynamic> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       TQuery,
       T,
       HasAuth,
       NeedsBody,
-      HasBody
+      HasBody,
+      IsDynamic
     >;
     next._outputSchema = schema;
     if (example !== undefined) {
@@ -405,14 +452,15 @@ export class RouteBuilder<
    */
   inputExample(
     example: InputTypeFor<TBody, TQuery> & JsonObject,
-  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody> {
+  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       TQuery,
       TOutput,
       HasAuth,
       NeedsBody,
-      HasBody
+      HasBody,
+      IsDynamic
     >;
     next._inputExample = example;
     next._hasInputExample = true;
@@ -450,14 +498,15 @@ export class RouteBuilder<
    */
   outputExample(
     example: TOutput & JsonValue,
-  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody> {
+  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       TQuery,
       TOutput,
       HasAuth,
       NeedsBody,
-      HasBody
+      HasBody,
+      IsDynamic
     >;
     next._outputExample = example;
     next._hasOutputExample = true;
@@ -509,10 +558,10 @@ export class RouteBuilder<
    */
   validate(
     fn: (body: TBody) => void | Promise<void>,
-  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody> {
+  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic> {
     const next = this.fork();
     next._validateFn = fn;
-    return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody>;
+    return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic>;
   }
 
   // -------------------------------------------------------------------------
@@ -529,10 +578,10 @@ export class RouteBuilder<
    */
   settlement(
     lifecycle: SettlementLifecycle<TBody>,
-  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody> {
+  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic> {
     const next = this.fork();
     next._settlement = lifecycle;
-    return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody>;
+    return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic>;
   }
 
   // -------------------------------------------------------------------------
@@ -540,7 +589,7 @@ export class RouteBuilder<
   // -------------------------------------------------------------------------
 
   handler(
-    fn: HandlerArg<TBody, TQuery, HasAuth, NeedsBody, HasBody>,
+    fn: HandlerArg<TBody, TQuery, HasAuth, NeedsBody, HasBody, IsDynamic>,
   ): (request: NextRequest) => Promise<Response> {
     // The conditional `HandlerArg` type forces `fn` to be a function when state
     // is valid; the error-object branches block invalid calls at compile time,
@@ -563,11 +612,8 @@ export class RouteBuilder<
       throw new Error(`route '${this._key}': .settlement() requires a paid route`);
     }
     if (this._dynamicPrice && this._protocols.includes('x402')) {
-      // Handler-driven dynamic pricing on x402 requires the `upto` scheme —
-      // only `upto` permits the operator to claim less than the cap
-      // (Permit2Proxy enforces it on chain). Fixed schemes like `exact` would
-      // force the client to commit to maxPrice up front with no way to refund
-      // the unused portion.
+      // `upto` is the only scheme where the operator can claim less than the
+      // cap (Permit2Proxy enforces it on chain); fixed schemes can't refund.
       const hasUpto = this._deps.x402Accepts.some((accept) => accept.scheme === 'upto');
       if (!hasUpto) {
         throw new Error(
@@ -577,13 +623,12 @@ export class RouteBuilder<
       }
     }
     if (this._dynamicPrice && this._protocols.includes('mpp')) {
-      // Handler-driven dynamic pricing on MPP requires session mode —
-      // pull-mode `tempo.charge` commits the client to a fixed amount before
-      // the handler runs and can't honor a post-work `charge()` total.
+      // Pull-mode `tempo.charge` commits the client to a fixed amount before
+      // the handler runs, so dynamic pricing on MPP needs session mode.
       if (!this._deps.mppSessionConfig) {
         throw new Error(
           `route '${this._key}': .paid({ dynamic: true }) on an MPP route requires session mode. ` +
-            `Set RouterConfig.mpp.session = { tickCost?, unitType? } and provide mpp.feePayerKey.`,
+            `Set RouterConfig.mpp.session = {} and provide mpp.feePayerKey.`,
         );
       }
     }
@@ -624,12 +669,42 @@ export class RouteBuilder<
       validateFn: this._validateFn as ((body: unknown) => void | Promise<void>) | undefined,
       settlement: this._settlement as SettlementLifecycle | undefined,
       mppInfo: this._mppInfo,
+      tickCost: this._tickCost,
+      unitType: this._unitType,
     };
 
     // Register in registry
     this._registry.register(entry);
 
-    // Compile to request handler
     return createRequestHandler(entry, handlerFn as RouteHandler, this._deps);
   }
+}
+
+/**
+ * `.paid()` accepts two shapes: `(pricing, options?)` for static/body-driven
+ * dynamic pricing, or `({ dynamic: true, maxPrice, ... })` for handler-driven
+ * dynamic pricing where the cap doubles as the upfront-quoted price. This
+ * normalizes both into a single `(pricing, options)` pair.
+ */
+function resolvePaidArgs(
+  routeKey: string,
+  pricingOrOptions: PricingConfig | (PaidOptions & { dynamic: true; maxPrice: string }),
+  options?: PaidOptions,
+): { pricing: PricingConfig; resolvedOptions: PaidOptions | undefined } {
+  const isHandlerDynamicShape =
+    typeof pricingOrOptions === 'object' &&
+    pricingOrOptions !== null &&
+    typeof pricingOrOptions !== 'function' &&
+    !('tiers' in pricingOrOptions) &&
+    'dynamic' in pricingOrOptions &&
+    pricingOrOptions.dynamic;
+
+  if (isHandlerDynamicShape) {
+    const opts = pricingOrOptions as PaidOptions & { dynamic: true; maxPrice: string };
+    if (!opts.maxPrice) {
+      throw new Error(`route '${routeKey}': .paid({ dynamic: true }) requires maxPrice`);
+    }
+    return { pricing: opts.maxPrice, resolvedOptions: opts };
+  }
+  return { pricing: pricingOrOptions as PricingConfig, resolvedOptions: options };
 }

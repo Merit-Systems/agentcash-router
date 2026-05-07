@@ -7,6 +7,11 @@ if (!payeeAddress) {
 
 const CORBITS_FACILITATOR_URL = 'https://facilitator.corbits.dev';
 
+// USDC on Base — needed by the `upto` accept (the scheme reads the asset
+// metadata from the facilitator's /supported response to build Permit2
+// witnesses).
+const USDC_BASE_MAINNET = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+
 const mppConfig = process.env.MPP_SECRET_KEY
   ? {
       secretKey: process.env.MPP_SECRET_KEY,
@@ -14,6 +19,17 @@ const mppConfig = process.env.MPP_SECRET_KEY
       recipient: payeeAddress,
       rpcUrl: process.env.TEMPO_RPC_URL,
       feePayerKey: process.env.MPP_FEE_PAYER_KEY,
+      // Session mode: required for routes that opt into `dynamic: true` over
+      // MPP. The router registers `tempo.session({ sse: true })` alongside
+      // `tempo.charge`; channels persist across requests, vouchers cycle
+      // transparently. The `tickCost`/`unitType` here are deployment-level
+      // defaults — any `.paid({ dynamic: true })` route can override per-route
+      // via `tickCost`/`unitType` in PaidOptions (e.g. token-priced LLM
+      // routes set `tickCost: '0.0005', unitType: 'token'`).
+      session: {
+        tickCost: '0.0001',
+        unitType: 'unit',
+      },
     }
   : undefined;
 
@@ -26,7 +42,18 @@ export const router = createRouter({
       solana: CORBITS_FACILITATOR_URL,
     },
     accepts: [
-      { network: 'eip155:8453', payTo: payeeAddress },
+      // Static-priced routes use `exact` (the default scheme).
+      { scheme: 'exact', network: 'eip155:8453', payTo: payeeAddress },
+      // Dynamic-priced routes (`.paid({ dynamic: true })`) need `upto` so the
+      // operator can claim less than `maxPrice` post-handler. Permit2Proxy
+      // enforces the cap on chain.
+      {
+        scheme: 'upto',
+        network: 'eip155:8453',
+        payTo: payeeAddress,
+        asset: USDC_BASE_MAINNET,
+        decimals: 6,
+      },
       { network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', payTo: process.env.SOLANA_PAYEE_ADDRESS },
     ],
   },

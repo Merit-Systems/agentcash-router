@@ -35,9 +35,63 @@ Four auth modes, mutually exclusive (except `.apiKey()` composes with `.paid()`)
 ### `.paid(pricing)` — Payment required
 ```typescript
 .paid('0.01')                    // Static price
-.paid((body) => calcPrice(body)) // Dynamic pricing
+.paid((body) => calcPrice(body)) // Dynamic pricing (body-driven, pre-handler)
 .paid({ field: 'tier', tiers: { basic: { price: '0.01' } } }) // Tiered
+
+// Handler-driven dynamic pricing — the handler bills in tick units via charge().
+// One tick = `tickCost` USDC. Total billed = tickCost * sum(units).
+.paid({ dynamic: true, tickCost: '0.0005', unitType: 'token', maxPrice: '0.10' })
 ```
+
+#### Handler-driven dynamic (`.paid({ dynamic: true })`)
+
+The handler receives a `charge()` callback. The invariant:
+
+> **one `charge()` call === one tick === `tickCost` USDC === one route-defined unit**
+
+The route picks `tickCost` to match its billing unit (one token at $0.0005,
+one byte at $0.0000001, one frame at $0.001) and labels it via `unitType`.
+The handler counts units in domain terms — call `charge()` once per unit.
+Total billed is `tickCost * call_count`, capped at `maxPrice`.
+
+```typescript
+router
+  .route('llm/generate')
+  .paid({ dynamic: true, tickCost: '0.0005', unitType: 'token', maxPrice: '0.10' })
+  .body(z.object({ prompt: z.string() }))
+  .handler(async ({ body, charge }) => {
+    const { tokens, output } = await callLLM(body.prompt);
+    for (let i = 0; i < tokens; i++) await charge(); // bills tokens × $0.0005
+    return { output };
+  });
+```
+
+`tickCost` and `unitType` are per-route; they fall back to
+`RouterConfig.mpp.session.tickCost`/`unitType` when unset.
+
+**Streaming handlers** (`async function*`) bill via the same `charge()` API.
+Yields are pure data flow — they do *not* auto-bill. Each `charge()` call
+debits one voucher tick live; the handler can backpressure on
+`payment-need-voucher` mid-stream:
+
+```typescript
+router
+  .route('llm/stream')
+  .paid({ dynamic: true, tickCost: '0.0001', unitType: 'token', maxPrice: '0.05', protocols: ['mpp'] })
+  .body(z.object({ prompt: z.string() }))
+  .handler(async function* ({ body, charge }) {
+    for await (const token of streamLLM(body.prompt)) {
+      await charge();        // one tick = one token; blocks on need-voucher
+      yield token;
+    }
+    yield '[DONE]';            // free trailing event — no charge before it
+  });
+```
+
+The same handler shape works on both x402 `upto` (settles cumulative atomic
+amount; Permit2Proxy enforces ≤ maxPrice) and MPP sessions (per-tick voucher
+debits; channel persists across requests). Streaming requires MPP — x402 has
+no streaming primitive.
 
 ### `.siwx()` — Wallet identity required (no payment)
 ```typescript
