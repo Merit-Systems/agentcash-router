@@ -110,11 +110,32 @@ export interface ChallengeContribution {
 // Strategy
 // ---------------------------------------------------------------------------
 
+/**
+ * Pre-verify classification — strategies inspect the credential header before
+ * body parse / handler invocation and signal whether the orchestrator should
+ * bypass them. Used by MPP session channel-management credentials
+ * (close/topUp/bodyless open|voucher) which carry no body and don't need
+ * handler invocation: settle alone emits the channel-state receipt.
+ */
+export interface PreflightOutcome {
+  /** Skip body parse + validate + price quote for this request. */
+  skipBody: boolean;
+  /** Skip handler invocation; settle receives an empty 200 placeholder. */
+  skipHandler: boolean;
+}
+
 export interface PaymentStrategy {
   readonly protocol: ProtocolName;
 
   /** Header sniff: does this request carry a payment for me? */
   detects(request: Request): boolean;
+
+  /**
+   * Classify the credential before body parse. Strategies that don't need
+   * special orchestration return null. Returning a value short-circuits the
+   * standard pipeline per the flag values.
+   */
+  preflight?(request: Request, routeEntry: RouteEntry): PreflightOutcome | null;
 
   verify(args: VerifyArgs): Promise<VerifyOutcome>;
 

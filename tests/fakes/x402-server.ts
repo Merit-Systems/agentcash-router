@@ -20,7 +20,13 @@ function decimalToAtomic(amount: string, decimals: number): string {
 
 export class FakeX402Server {
   initialized = false;
-  settledPayments: Array<{ payload: unknown; requirements: unknown }> = [];
+  settledPayments: Array<{
+    payload: unknown;
+    requirements: unknown;
+    declaredExtensions?: Record<string, unknown>;
+    transportContext?: unknown;
+    overrides?: { amount?: string };
+  }> = [];
 
   constructor(_payeeAddress = KNOWN_PAYEE) {}
 
@@ -40,22 +46,25 @@ export class FakeX402Server {
     _ctx: unknown,
   ) {
     return options.map((option) => {
-      const isAssetAmount = typeof option.price === 'object';
+      const { price } = option;
       // AssetAmount.amount is already atomic (caller pre-converted using their
       // configured decimals). Money strings are decimal — convert here to mirror
       // upstream behavior so callers can assert on `amount` like they would
       // against the real scheme registry.
-      const atomic = isAssetAmount ? option.price.amount : decimalToAtomic(option.price, 6);
+      const atomic = typeof price === 'object' ? price.amount : decimalToAtomic(price, 6);
       return {
         scheme: option.scheme,
         network: option.network,
         amount: atomic,
         maxAmountRequired: atomic,
-        asset: isAssetAmount ? option.price.asset : 'mock-usdc',
+        asset: typeof price === 'object' ? price.asset : 'mock-usdc',
         resource: option.payTo,
         payTo: option.payTo,
         maxTimeoutSeconds: option.maxTimeoutSeconds ?? 300,
-        extra: { ...(option.extra ?? {}), ...(isAssetAmount ? (option.price.extra ?? {}) : {}) },
+        extra: {
+          ...(option.extra ?? {}),
+          ...(typeof price === 'object' ? (price.extra ?? {}) : {}),
+        },
       };
     });
   }
@@ -100,8 +109,20 @@ export class FakeX402Server {
     return { isValid: false, payer: null };
   }
 
-  async settlePayment(payload: unknown, requirements: unknown) {
-    this.settledPayments.push({ payload, requirements });
+  async settlePayment(
+    payload: unknown,
+    requirements: unknown,
+    declaredExtensions?: Record<string, unknown>,
+    transportContext?: unknown,
+    overrides?: { amount?: string },
+  ) {
+    this.settledPayments.push({
+      payload,
+      requirements,
+      declaredExtensions,
+      transportContext,
+      overrides,
+    });
     return {
       success: true,
       payer: KNOWN_PAYER,

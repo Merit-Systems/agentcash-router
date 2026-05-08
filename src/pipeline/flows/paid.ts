@@ -1,29 +1,29 @@
-import { NextResponse, type NextRequest } from 'next/server';
-import { verifyApiKey } from '../../auth/api-key.js';
+import { NextResponse } from 'next/server';
 import { selectPricing } from '../../pricing/index.js';
-import { atomicToDecimal, decimalToAtomic } from '../../pricing/atomic.js';
+import { atomicToDecimal } from '../../pricing/atomic.js';
+import { createTickMeter } from '../../pricing/tick-meter.js';
 import { firePluginHook } from '../../plugin.js';
 import { selectIncomingStrategy } from '../../protocols/index.js';
-import type { AlertFn, ChargeFn, HandlerPaymentContext } from '../../types.js';
+import type { AlertFn, HandlerPaymentContext } from '../../types.js';
 import { build402 } from '../challenge.js';
 import {
   errorMessage,
-  errorStatus,
   fail,
   finalize,
-  firePluginResponse,
   invoke,
-  parseBody,
   protocolInitError,
+  resolveBodyAndPrice,
+  resolveEarlyBody,
+  resolvePreflight,
+  runApiKeyGate,
   runBeforeSettle,
   runSettlementError,
   runSettledHandlerError,
-  runValidate,
   settleAndFinalizeRequest,
   settleAndFinalizeStream,
-  shouldParseBodyEarly,
   trySiwxFastPath,
   type FlowCtx,
+  type InvokeResult,
   type SettleScope,
 } from '../context/index.js';
 
@@ -31,18 +31,9 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   const { request, routeEntry, deps } = ctx;
 
   // ---- 1. Optional API key gate (composes with payment) ----
-  let account: unknown = undefined;
-  if (routeEntry.apiKeyResolver) {
-    const apiKeyResult = await verifyApiKey(request, routeEntry.apiKeyResolver);
-    if (!apiKeyResult.valid) return fail(ctx, 401, 'Invalid or missing API key');
-    account = apiKeyResult.account;
-    firePluginHook(deps.plugin, 'onAuthVerified', ctx.pluginCtx, {
-      authMode: 'apiKey',
-      wallet: null,
-      route: routeEntry.key,
-      account,
-    });
-  }
+  const apiKeyGate = await runApiKeyGate(ctx);
+  if (!apiKeyGate.ok) return apiKeyGate.response;
+  const { account } = apiKeyGate;
 
   // ---- 2. Pricing strategy (per-request to capture alert callback) ----
   const alertFn: AlertFn = (level, message, meta) => {
@@ -63,20 +54,11 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   // ---- 3. Incoming protocol detection ----
   const incomingStrategy = selectIncomingStrategy(request, routeEntry.protocols);
 
-  // ---- 4. Early body parse + validate (for dynamic pricing or validateFn) ----
-  let earlyBody: unknown = undefined;
-  if (shouldParseBodyEarly(incomingStrategy, routeEntry, pricing)) {
-    const earlyClone = request.clone() as NextRequest;
-    const earlyResult = await parseBody(earlyClone, routeEntry);
-    if (earlyResult.ok) {
-      earlyBody = earlyResult.data;
-      const validateErr = await runValidate(ctx, earlyBody);
-      if (validateErr) return validateErr;
-    } else {
-      firePluginResponse(ctx, earlyResult.response);
-      return earlyResult.response;
-    }
-  }
+  // ---- 4. Early body parse + validate (no-credential path only — used so the
+  //         402 advertises an accurate price and validate() rejects bad input). ----
+  const earlyResolution = await resolveEarlyBody({ ctx, pricing, incomingStrategy });
+  if (!earlyResolution.ok) return earlyResolution.response;
+  const { earlyBody } = earlyResolution;
 
   // ---- 5. SIWX entitlement fast-path (paid+SIWX) ----
   const siwxFastPath = await trySiwxFastPath(ctx, account);
@@ -89,36 +71,19 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
     return build402(ctx, pricing, earlyBody);
   }
 
-  // ---- 7. Payment present: full body parse + validate + price ----
-  const body = await parseBody(request, routeEntry);
-  if (!body.ok) {
-    firePluginResponse(ctx, body.response);
-    return body.response;
-  }
+  // ---- 6.5 Strategy preflight — runs only with a matched credential. MPP
+  //          channel-management credentials skip body + handler here. ----
+  const { skipBody, skipHandler } = resolvePreflight(incomingStrategy, request, routeEntry);
 
-  const validateErr = await runValidate(ctx, body.data);
-  if (validateErr) return validateErr;
-
-  if (!pricing) {
-    return fail(ctx, 500, 'Pricing not configured', body.data);
-  }
-
-  let price: string;
-  try {
-    price = await pricing.quote(body.data);
-  } catch (err) {
-    return fail(
-      ctx,
-      errorStatus(err, 500),
-      errorMessage(err, 'Price calculation failed'),
-      body.data,
-    );
-  }
+  // ---- 7. Payment present: body parse + validate + price ----
+  const bodyAndPrice = await resolveBodyAndPrice({ ctx, pricing, skipBody });
+  if (!bodyAndPrice.ok) return bodyAndPrice.response;
+  const { parsedBody, price } = bodyAndPrice;
 
   // ---- 8. Verify payment via the matched strategy ----
   const verifyOutcome = await incomingStrategy.verify({
     request,
-    body: body.data,
+    body: parsedBody,
     price,
     routeEntry,
     deps,
@@ -126,9 +91,9 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
 
   if (verifyOutcome.ok === false) {
     if (verifyOutcome.kind === 'config') {
-      return fail(ctx, 500, verifyOutcome.message, body.data);
+      return fail(ctx, 500, verifyOutcome.message, parsedBody);
     }
-    return build402(ctx, pricing, body.data);
+    return build402(ctx, pricing, parsedBody);
   }
 
   ctx.pluginCtx.setVerifiedWallet(verifyOutcome.wallet);
@@ -148,14 +113,20 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
       })
     : null;
 
-  const result = await invoke(
-    ctx,
-    verifyOutcome.wallet,
-    account,
-    body.data,
-    verifyOutcome.payment,
-    tickMeter?.charge,
-  );
+  const result: InvokeResult = skipHandler
+    ? {
+        kind: 'batch',
+        response: new NextResponse(null, { status: 200 }),
+        rawResult: undefined,
+      }
+    : await invoke(
+        ctx,
+        verifyOutcome.wallet,
+        account,
+        parsedBody,
+        verifyOutcome.payment,
+        tickMeter?.charge,
+      );
 
   if (result.kind === 'stream') {
     if (!tickMeter) {
@@ -163,7 +134,7 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
         ctx,
         500,
         `route '${routeEntry.key}': streaming handlers require .paid({ dynamic: true })`,
-        body.data,
+        parsedBody,
       );
     }
     return settleAndFinalizeStream({
@@ -172,7 +143,7 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
       verifyOutcome,
       source: result.source,
       account,
-      body: body.data,
+      body: parsedBody,
       bindChannelCharge: tickMeter.bindChannelCharge,
     });
   }
@@ -180,15 +151,20 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   const settleScope: SettleScope = {
     wallet: verifyOutcome.wallet,
     account,
-    body: body.data,
+    body: parsedBody,
     payment: verifyOutcome.payment,
     response: result.response,
     rawResult: result.rawResult,
     handlerError: result.handlerError,
   };
 
-  if (tickMeter && tickMeter.atomicTotal() === 0n) {
-    return finalize(ctx, result.response, result.rawResult, body.data);
+  // Meter-zero short-circuit: if a handler ran on a dynamic route and never
+  // billed, settle is skipped (the request was free). Doesn't apply when the
+  // handler was bypassed via preflight — settle still has work to do.
+  const handlerSkippedBilling =
+    !skipHandler && tickMeter !== null && tickMeter.atomicTotal() === 0n;
+  if (handlerSkippedBilling) {
+    return finalize(ctx, result.response, result.rawResult, parsedBody);
   }
 
   const billedAmount = tickMeter ? atomicToDecimal(tickMeter.atomicTotal()) : price;
@@ -199,7 +175,7 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
         HandlerPaymentContext & { status: 'settled' }
       >;
       await runSettledHandlerError(ctx, settledScope);
-      return finalize(ctx, result.response, result.rawResult, body.data);
+      return finalize(ctx, result.response, result.rawResult, parsedBody);
     }
     return settleAndFinalizeRequest({
       ctx,
@@ -207,13 +183,13 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
       verifyOutcome,
       scope: settleScope,
       rawResult: result.rawResult,
-      body: body.data,
+      body: parsedBody,
       billedAmount,
     });
   }
 
   if (result.response.status >= 400) {
-    return finalize(ctx, result.response, result.rawResult, body.data);
+    return finalize(ctx, result.response, result.rawResult, parsedBody);
   }
 
   const beforeErr = await runBeforeSettle(ctx, settleScope);
@@ -225,7 +201,7 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
     verifyOutcome,
     scope: settleScope,
     rawResult: result.rawResult,
-    body: body.data,
+    body: parsedBody,
     billedAmount,
     onSettleError: async (error, failMessage) => {
       await runSettlementError(ctx, settleScope, error, 'settle');
@@ -237,49 +213,3 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
     },
   });
 }
-
-/**
- * Per-request meter exposed to handlers as the `charge` callback.
- *
- * Each `charge()` call adds one tick (`tickCost` USDC) to the running total
- * and throws synchronously if the next tick would exceed `maxPrice`. When a
- * channel-charge callback has been bound (streaming MPP session settle),
- * every `charge()` call also debits one tick on the channel before resolving,
- * so `await charge()` can backpressure on payment-channel voucher refresh.
- */
-function createTickMeter(args: { tickCost: string; maxPrice: string | undefined; route: string }) {
-  const { tickCost, maxPrice, route } = args;
-  const tickAtomic = decimalToAtomic(tickCost);
-  if (tickAtomic <= 0n) {
-    throw new Error(`route '${route}': tickCost '${tickCost}' must be a positive decimal string`);
-  }
-  const capAtomic = maxPrice !== undefined ? decimalToAtomic(maxPrice) : null;
-  let ticks = 0;
-  let atomic = 0n;
-  let channelCharge: (() => Promise<void>) | null = null;
-
-  const charge: ChargeFn = async () => {
-    const nextAtomic = atomic + tickAtomic;
-    if (capAtomic !== null && nextAtomic > capAtomic) {
-      throw Object.assign(
-        new Error(
-          `route '${route}': charge() running total ($${atomicToDecimal(nextAtomic)}) exceeds maxPrice ($${atomicToDecimal(capAtomic)})`,
-        ),
-        { status: 400, code: 'CHARGE_OVER_CAP' as const },
-      );
-    }
-    ticks += 1;
-    atomic = nextAtomic;
-    if (channelCharge) await channelCharge();
-  };
-
-  return {
-    charge,
-    bindChannelCharge: (fn: (() => Promise<void>) | null) => {
-      channelCharge = fn;
-    },
-    tickCount: () => ticks,
-    atomicTotal: () => atomic,
-  };
-}
-

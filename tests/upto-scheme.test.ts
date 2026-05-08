@@ -218,6 +218,133 @@ describe('upto scheme', () => {
     });
   });
 
+  describe('dynamic pricing (handler-driven)', () => {
+    function makeDynamicEntry(): RouteEntry {
+      return {
+        key: 'test/dynamic-route',
+        authMode: 'paid',
+        pricing: '0.10', // = maxPrice when single-arg .paid({ dynamic, maxPrice })
+        protocols: ['x402'],
+        method: 'POST',
+        dynamicPrice: true,
+        maxPrice: '0.10',
+        tickCost: '0.0001',
+        unitType: 'token',
+      };
+    }
+
+    function makeUptoPayment(amount = '100000'): string {
+      return encodePaymentSignatureHeader({
+        x402Version: 2,
+        resource: { url: URL, method: 'POST' },
+        accepted: {
+          scheme: 'upto',
+          network: BASE_NETWORK,
+          amount,
+          asset: USDC_ASSET,
+          payTo: KNOWN_PAYEE,
+          maxTimeoutSeconds: 300,
+        },
+        payload: { payer: KNOWN_PAYER },
+      });
+    }
+
+    function makeUptoDeps(server: FakeX402Server): OrchestrateDeps {
+      return makeDeps(server, [
+        {
+          scheme: 'upto',
+          network: BASE_NETWORK,
+          payTo: KNOWN_PAYEE,
+          asset: USDC_ASSET,
+          decimals: 6,
+          maxTimeoutSeconds: 300,
+        },
+      ]);
+    }
+
+    it('forwards billed total as $-tagged settlement override when handler bills via charge()', async () => {
+      const server = new FakeX402Server();
+      const deps = makeUptoDeps(server);
+      const handler = createRequestHandler(
+        makeDynamicEntry(),
+        async ({ charge }) => {
+          // 3 ticks × $0.0001 = $0.0003
+          await charge!();
+          await charge!();
+          await charge!();
+          return { ok: true };
+        },
+        deps,
+      );
+
+      const res = await handler(
+        new NextRequest(URL, { method: 'POST', headers: { 'X-PAYMENT': makeUptoPayment() } }),
+      );
+
+      expect(res.status).toBe(200);
+      expect(server.settledPayments).toHaveLength(1);
+      expect(server.settledPayments[0]!.overrides).toEqual({ amount: '$0.0003' });
+    });
+
+    it('skips settle entirely when handler never calls charge() (free request)', async () => {
+      const server = new FakeX402Server();
+      const deps = makeUptoDeps(server);
+      const handler = createRequestHandler(makeDynamicEntry(), async () => ({ free: true }), deps);
+
+      const res = await handler(
+        new NextRequest(URL, { method: 'POST', headers: { 'X-PAYMENT': makeUptoPayment() } }),
+      );
+
+      expect(res.status).toBe(200);
+      expect(server.settledPayments).toHaveLength(0);
+    });
+
+    it('returns 400 with no settle when running total exceeds maxPrice', async () => {
+      const server = new FakeX402Server();
+      const deps = makeUptoDeps(server);
+      const handler = createRequestHandler(
+        // tickCost $0.05, maxPrice $0.05 → only one tick fits
+        { ...makeDynamicEntry(), tickCost: '0.05', maxPrice: '0.05' },
+        async ({ charge }) => {
+          await charge!();
+          await charge!(); // exceeds cap
+          return { ok: true };
+        },
+        deps,
+      );
+
+      const res = await handler(
+        new NextRequest(URL, {
+          method: 'POST',
+          headers: { 'X-PAYMENT': makeUptoPayment('50000') },
+        }),
+      );
+
+      expect(res.status).toBe(400);
+      expect(server.settledPayments).toHaveLength(0);
+    });
+
+    it('rejects streaming handlers (x402 has no settleStream)', async () => {
+      const server = new FakeX402Server();
+      const deps = makeUptoDeps(server);
+      const handler = createRequestHandler(
+        makeDynamicEntry(),
+        async function* ({ charge }) {
+          await charge!();
+          yield 'chunk';
+        },
+        deps,
+      );
+
+      const res = await handler(
+        new NextRequest(URL, { method: 'POST', headers: { 'X-PAYMENT': makeUptoPayment() } }),
+      );
+
+      expect(res.status).toBe(500);
+      expect(server.settledPayments).toHaveLength(0);
+    });
+  });
+
   describe('server registration', () => {
     it('registers UptoEvmScheme on the server for EVM networks', async () => {
       const { UptoEvmScheme } = await import('@x402/evm/upto/server');

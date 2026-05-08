@@ -6,15 +6,18 @@ import type {
   ChallengeArgs,
   ChallengeContribution,
   PaymentStrategy,
+  PreflightOutcome,
   SettleArgs,
   SettleOutcome,
   StreamSettleArgs,
   VerifyArgs,
   VerifyOutcome,
 } from '../types.js';
+import type { RouteEntry } from '../../types.js';
 import { readMppCredential } from './credential.js';
 import {
   buildSessionChallenge,
+  isChannelOnlyAction,
   settleSessionMode,
   verifySessionMode,
   type MppSessionToken,
@@ -30,6 +33,19 @@ export const mppStrategy: PaymentStrategy = {
   detects(request: Request): boolean {
     const auth = request.headers.get(HEADERS.AUTHORIZATION);
     return Boolean(auth && auth.startsWith(AUTH_SCHEME.MPP_PAYMENT));
+  },
+
+  preflight(request: Request, routeEntry: RouteEntry): PreflightOutcome | null {
+    const info = readMppCredential(request);
+    if (!info?.sessionAction) return null;
+    if (!isChannelOnlyAction(info, request)) return null;
+    // Sessions are only accepted on dynamic-priced routes (verify enforces);
+    // static routes will reject this credential at verify, so leave the
+    // standard pipeline in place rather than skipping body/handler needlessly.
+    if (!routeEntry.dynamicPrice) return null;
+    // Channel-management credentials carry no body and don't need handler
+    // invocation — settle's withReceipt() emits the channel-state ack directly.
+    return { skipBody: true, skipHandler: true };
   },
 
   async verify(args: VerifyArgs): Promise<VerifyOutcome> {

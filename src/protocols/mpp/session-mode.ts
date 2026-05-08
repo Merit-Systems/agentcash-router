@@ -33,10 +33,9 @@ export interface MppSessionToken {
   mode: 'session';
   /** mppx's verified handle; settle() invokes its `withReceipt` to wrap the response. */
   sessionResult: Extract<MppxMiddlewareResponse<Transport.Sse>, { status: 200 }>;
-  /** True for credentials that only advance channel state (close / topUp / bodyless open|voucher). */
-  isChannelOnly: boolean;
+  /** Parsed credential — settle re-derives channel-only status from this + the request. */
+  info: MppCredentialInfo;
   tickCost: string;
-  credential: MppCredentialInfo['credential'];
 }
 
 export async function verifySessionMode(
@@ -94,9 +93,8 @@ export async function verifySessionMode(
   const token: MppSessionToken = {
     mode: 'session',
     sessionResult: result,
-    isChannelOnly: isChannelOnlyAction(info, request),
+    info,
     tickCost,
-    credential: info.credential,
   };
 
   return {
@@ -116,10 +114,10 @@ export async function verifySessionMode(
  * transparently when the channel runs short.
  */
 export async function settleSessionMode(args: SettleArgs): Promise<SettleOutcome> {
-  const { response, payment, token, billedAmount } = args;
+  const { request, response, payment, token, billedAmount } = args;
   const sessionToken = token as MppSessionToken;
 
-  if (sessionToken.isChannelOnly) {
+  if (isChannelOnlyAction(sessionToken.info, request)) {
     const ack = sessionToken.sessionResult.withReceipt(
       new Response(null, { status: 200 }),
     ) as NextResponse;
@@ -214,7 +212,7 @@ async function cloneResponseAsText(response: Response): Promise<string> {
  * `open`/`voucher` requests with no body. (`open`/`voucher` *with* a body are
  * content requests that also advance the channel.)
  */
-function isChannelOnlyAction(info: MppCredentialInfo, request: Request): boolean {
+export function isChannelOnlyAction(info: MppCredentialInfo, request: Request): boolean {
   const action = info.sessionAction;
   if (!action) return false;
   if (action === 'close' || action === 'topUp') return true;
@@ -223,8 +221,8 @@ function isChannelOnlyAction(info: MppCredentialInfo, request: Request): boolean
 }
 
 function hasRequestBody(request: Request): boolean {
+  if (request.body === null) return false;
   const cl = request.headers.get('content-length');
-  if (cl !== null && cl !== '0') return true;
-  if (request.headers.has('transfer-encoding')) return true;
-  return false;
+  if (cl !== null && cl.trim() === '0') return false;
+  return true;
 }

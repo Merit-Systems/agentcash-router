@@ -88,9 +88,7 @@ export const x402Strategy: PaymentStrategy = {
       // Dynamic routes use upto and override the on-chain amount with the
       // post-handler total (Permit2Proxy enforces `actual ≤ permitted.amount`).
       // Static routes settle for the verified requirements amount.
-      const dynamicAmountOverride = routeEntry.dynamicPrice
-        ? { amount: billedAmount }
-        : undefined;
+      const dynamicAmountOverride = routeEntry.dynamicPrice ? { amount: billedAmount } : undefined;
       const settle = await settleX402Payment(
         deps.x402Server!,
         x402Token.payload,

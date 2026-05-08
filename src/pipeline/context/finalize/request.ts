@@ -25,16 +25,8 @@ export async function settleAndFinalizeRequest(args: {
   billedAmount: string;
   onSettleError?: (error: unknown, failMessage: string) => Promise<void>;
 }): Promise<NextResponse> {
-  const {
-    ctx,
-    strategy,
-    verifyOutcome,
-    scope,
-    rawResult,
-    body,
-    billedAmount,
-    onSettleError,
-  } = args;
+  const { ctx, strategy, verifyOutcome, scope, rawResult, body, billedAmount, onSettleError } =
+    args;
   const { request, routeEntry, deps } = ctx;
 
   const settle = await strategy.settle({
