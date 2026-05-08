@@ -66,8 +66,9 @@ router
   });
 ```
 
-`tickCost` and `unitType` are per-route; they fall back to
-`RouterConfig.mpp.session.tickCost`/`unitType` when unset.
+`tickCost` is required per-route on `.paid({ dynamic: true })` — the builder
+throws at registration if it's missing. `unitType` is optional (cosmetic
+label, defaults to undefined which mppx surfaces as plain ticks).
 
 **Streaming handlers** (`async function*`) bill via the same `charge()` API.
 Yields are pure data flow — they do *not* auto-bill. Each `charge()` call
