@@ -185,6 +185,11 @@ export function createRouter<const P extends Record<string, string> = Record<nev
           methods.push(
             tempo.session({
               currency: config.mpp.currency as `0x${string}`,
+              // USDC on Tempo has 6 decimals — required by mppx 0.6.16+ to
+              // convert decimal-dollar amounts (tickCost, suggestedDeposit)
+              // into atomic units. Without this, mppx falls back to a default
+              // that miscounts deposits by 1e6×.
+              decimals: 6,
               recipient: (config.mpp.recipient ?? config.payeeAddress) as `0x${string}`,
               getClient,
               account: feePayerAccount,
