@@ -22,14 +22,9 @@ const mppConfig = process.env.MPP_SECRET_KEY
       // Session mode: required for routes that opt into `dynamic: true` over
       // MPP. The router registers `tempo.session({ sse: true })` alongside
       // `tempo.charge`; channels persist across requests, vouchers cycle
-      // transparently. The `tickCost`/`unitType` here are deployment-level
-      // defaults — any `.paid({ dynamic: true })` route can override per-route
-      // via `tickCost`/`unitType` in PaidOptions (e.g. token-priced LLM
-      // routes set `tickCost: '0.0005', unitType: 'token'`).
-      session: {
-        tickCost: '0.0001',
-        unitType: 'unit',
-      },
+      // transparently. `tickCost`/`unitType` are required per-route in
+      // `.paid({ dynamic: true, tickCost, unitType, maxPrice })`.
+      session: {},
     }
   : undefined;
 

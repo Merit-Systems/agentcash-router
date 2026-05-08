@@ -107,6 +107,9 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     x402Accepts,
     mppx: null,
     tempoClient: null,
+    // Set synchronously from config so `.handler()` registration validation
+    // can check it without waiting on the async init below.
+    mppSessionConfig: config.mpp?.session ? {} : null,
   };
 
   // Async init — dynamic imports avoid require() which breaks Turbopack.
@@ -200,8 +203,6 @@ export function createRouter<const P extends Record<string, string> = Record<nev
           secretKey: config.mpp.secretKey,
           realm: new URL(resolvedBaseUrl).host,
         }) as unknown as (typeof deps)['mppx'];
-
-        deps.mppSessionConfig = config.mpp.session ? {} : null;
       } catch (err: unknown) {
         deps.mppx = null;
         deps.mppInitError = err instanceof Error ? err.message : String(err);
