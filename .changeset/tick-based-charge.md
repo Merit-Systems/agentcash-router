@@ -2,29 +2,36 @@
 '@agentcash/router': minor
 ---
 
-Tick-based handler-driven dynamic pricing.
+Add x402 `upto` and MPP payment-channel sessions.
 
-`charge` is now a no-arg event: `() => Promise<void>`. One call = one tick =
-`tickCost` USDC = one route-defined unit. Routes set `tickCost`/`unitType`
-per-route via `PaidOptions` (falls back to `RouterConfig.mpp.session`
-defaults). To bill N units, call `charge()` N times.
+**x402 `upto`** — handler-driven dynamic pricing on x402, with the cumulative
+atomic amount overriding `requirements.amount` at settle time. Permit2Proxy
+enforces `actual ≤ permitted.amount` on chain. Configure via
+`x402.accepts: [{ scheme: 'upto', network, asset, decimals }]`.
 
-This unifies the handler API across protocols: x402 `upto` settles the
-cumulative atomic amount (`tickCost * call_count`), and MPP sessions debit
-the channel one voucher tick per `charge()` call. Streaming handlers (`async
-function*`) drop mppx's auto-charge-per-yield in favor of bridging the
-handler's `charge()` directly to the session's `SessionController.charge`, so
-the handler is the single source of truth for billing — yields without a
-preceding `charge()` ship free.
+**MPP sessions** — long-lived payment channels (open / voucher / topUp / close)
+for dynamic-priced MPP routes. SSE streaming bridges the handler's `charge()`
+calls to per-tick channel debits, with `payment-need-voucher` back-pressure
+handled transparently by mppx.
 
-**Breaking change** for any route using `.paid({ dynamic: true })`. Migrate:
+**Tick-based `charge()` API** — `HandlerContext.charge` is a no-arg event:
+`() => Promise<void>`. One call = one tick = `tickCost` USDC = one
+route-defined unit (token, byte, frame). To bill N units, call `charge()` N
+times. Total billed is `tickCost * call_count`, capped at `maxPrice`. Calling
+`charge` zero times means the request runs free — no on-chain transfer.
 
-```diff
-- .paid({ dynamic: true, maxPrice: '0.10' })
-+ .paid({ dynamic: true, tickCost: '0.0005', unitType: 'token', maxPrice: '0.10' })
+```ts
+router
+  .route('llm/generate')
+  .paid({ dynamic: true, tickCost: '0.0005', unitType: 'token', maxPrice: '0.10' })
+  .body(z.object({ prompt: z.string() }))
   .handler(async ({ body, charge }) => {
-    const tokens = computeTokens(body);
--   await charge((tokens * 0.0005).toFixed(6));
-+   for (let i = 0; i < tokens; i++) await charge();
+    const { tokens, output } = await callLLM(body.prompt);
+    for (let i = 0; i < tokens; i++) await charge();
+    return { output };
   });
 ```
+
+`tickCost` is required at the route level on `.paid({ dynamic: true })` —
+the builder throws at registration if it's missing. Streaming handlers
+(`async function*`) follow the same `charge()` contract.
