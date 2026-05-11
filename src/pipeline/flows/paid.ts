@@ -10,13 +10,11 @@ import { runStaticPaidFlow } from './static/static-paid.js';
  * shared prefix.
  */
 export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
-  const dynamicPrice = ctx.routeEntry.dynamicPrice;
+  const dynamicPrice = ctx.routeEntry.dynamicPrice ?? false;
   switch (dynamicPrice) {
     case true:
       return runDynamicPaidFlow(ctx);
     case false:
       return runStaticPaidFlow(ctx);
-    default:
-      throw new Error(`Dynamic price is not a boolean: ${typeof dynamicPrice}`);
   }
 }

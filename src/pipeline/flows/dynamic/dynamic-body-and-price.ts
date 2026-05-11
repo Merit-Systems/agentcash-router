@@ -5,7 +5,6 @@ import {
   errorMessage,
   errorStatus,
   fail,
-  firePluginResponse,
   parseBody,
   runValidate,
   type FlowCtx,
@@ -41,11 +40,8 @@ export async function resolveDynamicBodyAndPrice(args: {
     };
   }
 
-  const body = await parseBody(ctx.request, ctx.routeEntry);
-  if (!body.ok) {
-    firePluginResponse(ctx, body.response);
-    return { ok: false, response: body.response };
-  }
+  const body = await parseBody(ctx);
+  if (!body.ok) return { ok: false, response: body.response };
 
   const validateErr = await runValidate(ctx, body.data);
   if (validateErr) {

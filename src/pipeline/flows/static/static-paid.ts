@@ -2,7 +2,6 @@ import type { NextResponse } from 'next/server';
 import { selectPricing } from '../../../pricing/index.js';
 import { firePluginHook } from '../../../plugin.js';
 import { selectIncomingStrategy } from '../../../protocols/index.js';
-import type { AlertFn } from '../../../types.js';
 import {
   fail,
   protocolInitError,
@@ -11,7 +10,7 @@ import {
   trySiwxFastPath,
   type FlowCtx,
 } from '../../context/index.js';
-import { invokeStatic } from './static-invoke.js';
+import { invokePaidStatic } from './static-invoke.js';
 import { buildStatic402 } from './static-402.js';
 import { resolveStaticBodyAndPrice } from './static-body-and-price.js';
 import { runStaticRequestFlow } from './static-request.js';
@@ -38,16 +37,14 @@ export async function runStaticPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   if (!apiKeyGate.ok) return apiKeyGate.response;
   const { account } = apiKeyGate;
 
-  const alertFn: AlertFn = (level, message, meta) => {
-    firePluginHook(deps.plugin, 'onAlert', ctx.pluginCtx, {
-      level,
-      message,
-      route: routeEntry.key,
-      meta,
-    });
-  };
   const pricing = selectPricing(routeEntry.pricing, {
-    alert: alertFn,
+    alert: (level, message, meta) =>
+      firePluginHook(deps.plugin, 'onAlert', ctx.pluginCtx, {
+        level,
+        message,
+        route: routeEntry.key,
+        meta,
+      }),
     maxPrice: routeEntry.maxPrice,
     minPrice: routeEntry.minPrice,
     route: routeEntry.key,
@@ -95,7 +92,7 @@ export async function runStaticPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
     network: verifyOutcome.payment.network,
   });
 
-  const result = await invokeStatic(
+  const result = await invokePaidStatic(
     ctx,
     verifyOutcome.wallet,
     account,

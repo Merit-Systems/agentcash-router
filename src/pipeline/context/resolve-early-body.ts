@@ -1,7 +1,6 @@
 import type { NextRequest, NextResponse } from 'next/server';
 import type { PricingStrategy } from '../../pricing/index.js';
 import type { PaymentStrategy } from '../../protocols/types.js';
-import { firePluginResponse } from './fire-plugin-response.js';
 import { parseBody } from './parse-body.js';
 import { runValidate } from './run-validate.js';
 import { shouldParseBodyEarly } from './should-parse-body-early.js';
@@ -41,11 +40,8 @@ export async function resolveEarlyBody(args: {
 
   // Case 2: body parse error
   const earlyClone = ctx.request.clone() as NextRequest;
-  const earlyResult = await parseBody(earlyClone, ctx.routeEntry);
-  if (!earlyResult.ok) {
-    firePluginResponse(ctx, earlyResult.response);
-    return { ok: false, response: earlyResult.response };
-  }
+  const earlyResult = await parseBody(ctx, earlyClone);
+  if (!earlyResult.ok) return { ok: false, response: earlyResult.response };
 
   // Case 3: validate() error
   const validateErr = await runValidate(ctx, earlyResult.data);

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { firePluginHook } from '../../../plugin.js';
 import { createChargeContext } from '../../../pricing/charge-context.js';
-import type { HandlerContext, HandlerPaymentContext } from '../../../types.js';
+import type { DynamicHandlerContext, HandlerPaymentContext } from '../../../types.js';
 import { HttpError } from '../../../types.js';
 import { parseQuery } from '../../context/parse-query.js';
 import type { DynamicInvokeResult, FlowCtx } from '../../context/types.js';
@@ -33,7 +33,7 @@ export async function invokeDynamic(
     route: ctx.routeEntry.key,
   });
 
-  const handlerCtx: HandlerContext = {
+  const handlerCtx: DynamicHandlerContext = {
     body: body as never,
     query: parseQuery(ctx.request, ctx.routeEntry) as never,
     request: ctx.request,

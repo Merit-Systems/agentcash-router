@@ -2,7 +2,6 @@ import type { NextResponse } from 'next/server';
 import { selectPricing } from '../../../pricing/index.js';
 import { firePluginHook } from '../../../plugin.js';
 import { selectIncomingStrategy } from '../../../protocols/index.js';
-import type { AlertFn } from '../../../types.js';
 import {
   fail,
   protocolInitError,
@@ -42,16 +41,14 @@ export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   if (!apiKeyGate.ok) return apiKeyGate.response;
   const { account } = apiKeyGate;
 
-  const alertFn: AlertFn = (level, message, meta) => {
-    firePluginHook(deps.plugin, 'onAlert', ctx.pluginCtx, {
-      level,
-      message,
-      route: routeEntry.key,
-      meta,
-    });
-  };
   const pricing = selectPricing(routeEntry.pricing, {
-    alert: alertFn,
+    alert: (level, message, meta) =>
+      firePluginHook(deps.plugin, 'onAlert', ctx.pluginCtx, {
+        level,
+        message,
+        route: routeEntry.key,
+        meta,
+      }),
     maxPrice: routeEntry.maxPrice,
     minPrice: routeEntry.minPrice,
     route: routeEntry.key,

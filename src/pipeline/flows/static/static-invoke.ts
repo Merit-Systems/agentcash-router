@@ -6,28 +6,46 @@ import { parseQuery } from '../../context/parse-query.js';
 import type { FlowCtx, StaticRequestResult } from '../../context/types.js';
 
 /**
- * Static-route handler invocation.
- *
- * Static routes have a fixed price (`billedAmount = quoted price`), so the
- * handler ctx has no `charge` callback and the result has no chargeContext.
+ * Static-paid-route handler invocation. The caller has verified payment and
+ * resolved the account (or undefined), so `wallet` and `payment` are non-null.
  *
  * Static handlers are always request-shaped (never streams) — the builder
  * rejects async generator handlers at registration time when pricing is
  * static. The runtime assertion below is defense-in-depth in case a wrapped
  * handler slips past the builder check.
- *
- * `payment` is nullable so the free-route tail (`runHandlerOnly`) can share
- * this function: paid/static passes a verified `HandlerPaymentContext`, free
- * routes pass `null`.
  */
-export async function invokeStatic(
+export function invokePaidStatic(
+  ctx: FlowCtx,
+  wallet: string,
+  account: unknown,
+  body: unknown,
+  payment: HandlerPaymentContext,
+): Promise<StaticRequestResult> {
+  return runHandler(ctx, buildHandlerCtx(ctx, wallet, account, body, payment));
+}
+
+/**
+ * Unauthenticated handler invocation — used by unprotected, apiKey-only,
+ * siwx-only flows, and the paid+SIWX entitlement fast-path. No payment
+ * context; `wallet` is null for unprotected/api-key, set for siwx flows.
+ */
+export function invokeUnauthed(
+  ctx: FlowCtx,
+  wallet: string | null,
+  account: unknown,
+  body: unknown,
+): Promise<StaticRequestResult> {
+  return runHandler(ctx, buildHandlerCtx(ctx, wallet, account, body, null));
+}
+
+function buildHandlerCtx(
   ctx: FlowCtx,
   wallet: string | null,
   account: unknown,
   body: unknown,
   payment: HandlerPaymentContext | null,
-): Promise<StaticRequestResult> {
-  const handlerCtx: HandlerContext = {
+): HandlerContext {
+  return {
     body: body as never,
     query: parseQuery(ctx.request, ctx.routeEntry) as never,
     request: ctx.request,
@@ -46,7 +64,9 @@ export async function invokeStatic(
     },
     setVerifiedWallet: (addr) => ctx.pluginCtx.setVerifiedWallet(addr),
   };
+}
 
+async function runHandler(ctx: FlowCtx, handlerCtx: HandlerContext): Promise<StaticRequestResult> {
   let returned: unknown;
   try {
     returned = ctx.handler(handlerCtx);

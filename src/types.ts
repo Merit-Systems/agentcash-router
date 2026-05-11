@@ -291,8 +291,18 @@ export interface HandlerContext<TBody = undefined, TQuery = undefined> {
   account: unknown;
   alert: AlertFn;
   setVerifiedWallet: (addr: string) => void;
-  /** Present only on `.paid({ dynamic: true, maxPrice })` routes. */
-  charge?: ChargeFn;
+}
+
+/**
+ * Handler context for `.paid({ dynamic: true })` routes. Adds the required
+ * `charge()` callback the handler uses to bill in tick units; static routes
+ * never receive this — their price is the server's quoted amount.
+ */
+export interface DynamicHandlerContext<
+  TBody = undefined,
+  TQuery = undefined,
+> extends HandlerContext<TBody, TQuery> {
+  charge: ChargeFn;
 }
 
 // ---------------------------------------------------------------------------

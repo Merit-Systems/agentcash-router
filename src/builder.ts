@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import type { ZodType } from 'zod';
 import type {
-  ChargeFn,
+  DynamicHandlerContext,
   HandlerContext,
   RouteEntry,
   PricingConfig,
@@ -50,16 +50,18 @@ type InputTypeFor<TBody, TQuery> = [TBody] extends [undefined]
  * generic classes (structurally identical instance types collapse).
  */
 /**
- * On dynamic-priced routes (`.paid({ dynamic: true })`) the handler context's
- * `charge` callback is *required* — the orchestrator always attaches it at
- * runtime, so handler-authors don't need non-null assertions to call it.
+ * On dynamic-priced routes (`.paid({ dynamic: true })`) the handler receives a
+ * `DynamicHandlerContext` whose `charge()` callback is required — the
+ * orchestrator always attaches it at runtime, so handler-authors don't need
+ * non-null assertions to call it.
  *
- * On static-priced routes, `charge` stays absent from the type entirely (the
- * server's quoted price is what's charged; there's nothing to call).
+ * On static-priced routes, the handler receives the base `HandlerContext`
+ * with no `charge` field — the server's quoted price is what's charged;
+ * there's nothing to call.
  */
 type HandlerCtxFor<TBody, TQuery, IsDynamic extends boolean> = IsDynamic extends true
-  ? Omit<HandlerContext<TBody, TQuery>, 'charge'> & { charge: ChargeFn }
-  : Omit<HandlerContext<TBody, TQuery>, 'charge'>;
+  ? DynamicHandlerContext<TBody, TQuery>
+  : HandlerContext<TBody, TQuery>;
 
 type HandlerArg<
   TBody,

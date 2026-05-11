@@ -25,12 +25,11 @@ export async function runSiwxOnlyFlow(ctx: FlowCtx): Promise<NextResponse> {
   // return 400 immediately instead of presenting the SIWX challenge.
   if (routeEntry.validateFn && routeEntry.bodySchema && !request.headers.get(HEADERS.SIWX)) {
     const earlyClone = request.clone() as NextRequest;
-    const earlyBody = await parseBody(earlyClone, routeEntry);
+    const earlyBody = await parseBody(ctx, earlyClone);
     if (earlyBody.ok) {
       const validateErr = await runValidate(ctx, earlyBody.data);
       if (validateErr) return validateErr;
     } else {
-      firePluginResponse(ctx, earlyBody.response);
       return earlyBody.response;
     }
   }

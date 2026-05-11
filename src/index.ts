@@ -324,6 +324,7 @@ export type {
 } from './config.js';
 export type {
   HandlerContext,
+  DynamicHandlerContext,
   RouterConfig,
   DiscoveryConfig,
   RouteEntry,
