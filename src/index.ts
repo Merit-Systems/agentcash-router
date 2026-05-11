@@ -148,26 +148,24 @@ export function createRouter<const P extends Record<string, string> = Record<nev
         const getClient = async () => deps.tempoClient!;
 
         // `operatorAccount` signs server-side on-chain operations (close,
-        // settle). Its address MUST equal `recipient`/payee — mppx's close
-        // handler enforces sender == payee and silently 402s on mismatch.
-        // `feePayerAccount` sponsors gas on behalf of clients; gated by
-        // `sponsorFees` (default true for backcompat).
+        // settle). Address MUST equal `recipient`/payee — mppx's close
+        // handler enforces sender === payee on settle.
         //
-        // Legacy: if `operatorKey` is unset we fall back to `feePayerKey` so
-        // existing single-key configs (operator == fee payer == payee) keep
-        // working.
-        const operatorKeyHex = config.mpp.operatorKey ?? config.mpp.feePayerKey;
-        let operatorAccount: { address: string } | undefined;
-        if (operatorKeyHex) {
-          const { privateKeyToAccount } = await import('viem/accounts');
-          operatorAccount = privateKeyToAccount(operatorKeyHex as `0x${string}`);
-        }
-        const sponsorFees = config.mpp.sponsorFees !== false;
-        let feePayerAccount: { address: string } | undefined;
-        if (sponsorFees && config.mpp.feePayerKey) {
-          const { privateKeyToAccount } = await import('viem/accounts');
-          feePayerAccount = privateKeyToAccount(config.mpp.feePayerKey as `0x${string}`);
-        }
+        // `feePayerAccount` is optional. When set, it sponsors gas for
+        // client-signed open/topUp txs (better UX — clients don't need
+        // native fee currency on Tempo). Omit to skip sponsorship; clients
+        // then pay their own gas.
+        //
+        // Same-address collision (operatorKey === feePayerKey) is caught
+        // upstream in `mppConfigIssues` — Tempo rejects fee-delegated txs
+        // with sender === feePayer on the server-signed close/settle path.
+        const { privateKeyToAccount } = await import('viem/accounts');
+        const operatorAccount = config.mpp.operatorKey
+          ? privateKeyToAccount(config.mpp.operatorKey as `0x${string}`)
+          : undefined;
+        const feePayerAccount = config.mpp.feePayerKey
+          ? privateKeyToAccount(config.mpp.feePayerKey as `0x${string}`)
+          : undefined;
 
         // Sessions require operator.address === recipient. Fail loudly here
         // rather than letting every close attempt return a generic 402.
@@ -207,7 +205,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
         const realm = new URL(resolvedBaseUrl).host;
         const mppConfig = config.mpp;
         // Sessions need a server-side signing account to settle closes.
-        // Fee sponsorship is independent — gated on `sponsorFees`.
+        // Fee sponsorship is independent — present iff `feePayerKey` is set.
         const sessionEnabled = !!(mppConfig.session && operatorAccount);
         const sharedSessionParams = {
           currency: mppConfig.currency as `0x${string}`,

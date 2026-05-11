@@ -243,6 +243,15 @@ MPP payment verification requires an **authenticated** Tempo RPC endpoint. The p
 
 Alternatively, pass `rpcUrl` in the `mpp` config object to `createRouter()`. Without either, MPP on-chain verification fails with "unauthorized: authentication required".
 
+### MPP Server Wallets: `operatorKey` and `feePayerKey`
+
+Two distinct roles, two distinct wallets:
+
+- **`mpp.operatorKey`** — signs server-side on-chain ops (channel close/settle). Required for sessions. Its derived address **must equal `recipient`/payee** because mppx's close handler asserts `sender === payee` on settle.
+- **`mpp.feePayerKey`** *(optional)* — sponsors gas for client-signed open/topUp txs. Omit to disable sponsorship; clients then pay their own gas.
+
+**The two MUST resolve to different addresses when both are set.** Tempo rejects fee-delegated txs where `sender === feePayer` with `-32000 "fee payer cannot resolve to sender"`. This bites the server-signed close/settle path. The router validates the addresses at `createRouter()` time and throws `mpp_operator_equals_fee_payer` if they collide — production `next build` fails fast; dev surfaces a logged error.
+
 ### CDP Environment Variables
 
 Without these keys, the default facilitator cannot authenticate with CDP:

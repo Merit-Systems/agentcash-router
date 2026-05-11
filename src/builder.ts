@@ -644,7 +644,7 @@ export class RouteBuilder<
       if (!this._deps.mppSessionConfig) {
         throw new Error(
           `route '${this._key}': .paid({ dynamic: true }) on an MPP route requires session mode. ` +
-            `Set RouterConfig.mpp.session = {} and provide mpp.feePayerKey.`,
+            `Set RouterConfig.mpp.session = {} and provide mpp.operatorKey.`,
         );
       }
     }

@@ -270,6 +270,51 @@ describe('validateRouterConfig', () => {
     ]);
   });
 
+  it('rejects MPP configs where operatorKey and feePayerKey resolve to the same address', () => {
+    const SAME_KEY = `0x${'2'.repeat(64)}`;
+    const issues = getRouterConfigIssues(
+      makeConfig({
+        protocols: ['mpp'],
+        mpp: {
+          secretKey: 'secret',
+          currency: TEMPO_USDC_CURRENCY,
+          rpcUrl: 'https://tempo.example.com',
+          operatorKey: SAME_KEY,
+          feePayerKey: SAME_KEY,
+        },
+      }),
+      { env: {} },
+    );
+
+    expect(issues).toContainEqual({
+      code: 'mpp_operator_equals_fee_payer',
+      protocol: 'mpp',
+      message: expect.stringContaining(
+        'MPP operatorKey and feePayerKey resolve to the same address',
+      ),
+    });
+  });
+
+  it('accepts MPP configs with operatorKey and feePayerKey on distinct addresses', () => {
+    const OP_KEY = `0x${'2'.repeat(64)}`;
+    const FP_KEY = `0x${'3'.repeat(64)}`;
+    const issues = getRouterConfigIssues(
+      makeConfig({
+        protocols: ['mpp'],
+        mpp: {
+          secretKey: 'secret',
+          currency: TEMPO_USDC_CURRENCY,
+          rpcUrl: 'https://tempo.example.com',
+          operatorKey: OP_KEY,
+          feePayerKey: FP_KEY,
+        },
+      }),
+      { env: {} },
+    );
+
+    expect(issues.filter((i) => i.protocol === 'mpp')).toEqual([]);
+  });
+
   it('rejects placeholder payment recipients', () => {
     const issues = getRouterConfigIssues(
       makeConfig({

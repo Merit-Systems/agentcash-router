@@ -471,37 +471,32 @@ export interface RouterConfig {
     rpcUrl?: string;
     /**
      * Private key of the server's operator account. Signs on-chain channel
-     * operations (close, settle, top-up acceptance). Required for sessions.
+     * close/settle. Required when `session` is configured.
      *
      * **Address must equal `recipient`/payee.** mppx's close handler asserts
      * `sender === payee` on settle — a mismatch causes every close attempt
      * to be rejected and reissued as a fresh 402. The router validates this
      * at init and throws clearly if they differ.
      *
-     * Falls back to `feePayerKey` if unset (legacy alias).
-     *
      * Must be a hex-encoded private key (e.g. `0xabc123...`).
      */
     operatorKey?: string;
     /**
-     * Private key of the fee-sponsor account. Pays transaction gas on behalf
-     * of clients when `sponsorFees` is true (default).
+     * Private key of the fee-sponsor account. When set, pays transaction gas
+     * on behalf of clients for channel open/topUp (so clients don't need to
+     * hold native fee currency on Tempo).
      *
-     * Legacy: also used as the operator/signing account when `operatorKey`
-     * is unset. New code should use `operatorKey` for that role.
+     * **Must resolve to a different address than `operatorKey`.** Tempo's
+     * RPC rejects fee-delegated transactions where `sender === feePayer`
+     * with `-32000 "fee payer cannot resolve to sender"`. The router
+     * enforces this at init.
+     *
+     * Omit to disable sponsorship — clients then pay their own gas (in USDC
+     * on Tempo). The operator key still pays its own gas for close/settle.
      *
      * Must be a hex-encoded private key (e.g. `0xabc123...`).
      */
     feePayerKey?: string;
-    /**
-     * Whether the fee payer (`feePayerKey`) sponsors transaction fees for
-     * clients. Default `true` for backward compatibility.
-     *
-     * When `false`, clients pay their own gas (in USDC on Tempo). Useful
-     * for demos and self-serve setups where you don't want to fund a sponsor
-     * wallet. The operator key still signs channel-close transactions.
-     */
-    sponsorFees?: boolean;
     /**
      * Persistent store for transaction hash replay protection.
      *
@@ -540,8 +535,7 @@ export interface RouterConfig {
      * cost and unit label are declared per-route via
      * `.paid({ dynamic: true, tickCost, unitType })`.
      *
-     * Also requires `mpp.feePayerKey` (the operator account signs channel
-     * close/settle).
+     * Also requires `mpp.operatorKey` (signs channel close/settle).
      */
     session?: {
       /**

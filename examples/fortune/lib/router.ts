@@ -18,10 +18,12 @@ const mppConfig = process.env.MPP_SECRET_KEY
       currency: '0x20c000000000000000000000b9537d11c60e8b50',
       recipient: payeeAddress,
       rpcUrl: process.env.TEMPO_RPC_URL,
-      // operatorKey signs server-side on-chain ops (channel close/settle).
-      // Its derived address MUST equal `recipient`/payee. Fee sponsorship
-      // requires `feePayerKey` to be a DIFFERENT wallet (Tempo's
-      // fee-delegated txs reject sender === fee-payer).
+      // operatorKey signs server-side close/settle; address must equal
+      // `recipient`/payee. feePayerKey is optional — when set, sponsors
+      // client gas for channel open/topUp. Tempo rejects fee-delegated txs
+      // where sender === feePayer, so the two MUST be distinct wallets
+      // (the router throws at init if they collide). Omit feePayerKey to
+      // disable sponsorship; clients then pay their own gas.
       operatorKey: process.env.MPP_OPERATOR_KEY,
       feePayerKey: process.env.MPP_FEE_PAYER_KEY,
       // Session mode: required for routes that opt into `dynamic: true` over

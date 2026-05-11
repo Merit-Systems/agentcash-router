@@ -1,3 +1,4 @@
+import { privateKeyToAccount } from 'viem/accounts';
 import type { PaidOptions, ProtocolType, RouterConfig, X402AcceptConfig } from './types.js';
 import { BASE_NETWORK, SOLANA_MAINNET_NETWORK } from './constants.js';
 import { isEvmNetwork } from './protocols/x402/evm.js';
@@ -25,6 +26,8 @@ export type RouterConfigIssueCode =
   | 'invalid_mpp_recipient'
   | 'missing_mpp_rpc_url'
   | 'invalid_mpp_fee_payer_key'
+  | 'invalid_mpp_operator_key'
+  | 'mpp_operator_equals_fee_payer'
   | 'missing_mpp_default_store_env';
 
 export interface RouterConfigIssue {
@@ -362,6 +365,39 @@ function validateMppConfig(config: RouterConfig, env: RouterEnv): RouterConfigIs
       protocol: 'mpp',
       message: 'MPP feePayerKey must be a 0x-prefixed 32-byte EVM private key.',
     });
+  }
+
+  if (mpp.operatorKey && !isEvmPrivateKey(mpp.operatorKey)) {
+    issues.push({
+      code: 'invalid_mpp_operator_key',
+      protocol: 'mpp',
+      message: 'MPP operatorKey must be a 0x-prefixed 32-byte EVM private key.',
+    });
+  }
+
+  // Tempo rejects fee-delegated txs where `sender === feePayer`
+  // (`-32000 fee payer cannot resolve to sender`) — bites channel
+  // close/settle, which is server-signed. Catch the collision at
+  // config time rather than letting close attempts 402 at runtime.
+  if (
+    mpp.operatorKey &&
+    mpp.feePayerKey &&
+    isEvmPrivateKey(mpp.operatorKey) &&
+    isEvmPrivateKey(mpp.feePayerKey)
+  ) {
+    const opAddr = privateKeyToAccount(mpp.operatorKey as `0x${string}`).address.toLowerCase();
+    const fpAddr = privateKeyToAccount(mpp.feePayerKey as `0x${string}`).address.toLowerCase();
+    if (opAddr === fpAddr) {
+      issues.push({
+        code: 'mpp_operator_equals_fee_payer',
+        protocol: 'mpp',
+        message:
+          `MPP operatorKey and feePayerKey resolve to the same address (${opAddr}). ` +
+          `Tempo rejects fee-delegated txs with sender === feePayer, so channel ` +
+          `close/settle would fail at runtime. Either use two distinct wallets, ` +
+          `or omit feePayerKey to disable gas sponsorship (clients then pay their own gas).`,
+      });
+    }
   }
 
   if (mpp.useDefaultStore && !mpp.store && (!env.KV_REST_API_URL || !env.KV_REST_API_TOKEN)) {
