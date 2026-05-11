@@ -1,30 +1,32 @@
 import { NextResponse } from 'next/server';
-import type { ChargeFn, HandlerContext, HandlerPaymentContext } from '../../types.js';
-import { HttpError } from '../../types.js';
-import { firePluginHook } from '../../plugin.js';
-import { parseQuery } from './parse-query.js';
-import type { FlowCtx, InvokeResult } from './types.js';
+import { firePluginHook } from '../../../plugin.js';
+import type { HandlerContext, HandlerPaymentContext } from '../../../types.js';
+import { HttpError } from '../../../types.js';
+import { parseQuery } from '../../context/parse-query.js';
+import type { FlowCtx, StaticRequestResult } from '../../context/types.js';
 
 /**
- * Build the handler's context and call it, then dispatch on what came back:
+ * Static-route handler invocation.
  *
- *   - sync throw / rejected promise → batch error response
- *   - returned Response             → batch (passed through verbatim)
- *   - returned value                → batch (wrapped via NextResponse.json)
- *   - returned AsyncIterable        → stream (passed through to settleStream)
+ * Static routes have a fixed price (`billedAmount = quoted price`), so the
+ * handler ctx has no `charge` callback and the result has no chargeContext.
  *
- * The handler shape isn't known until we actually call it — `async (ctx) => x`
- * returns `Promise<x>`, but `async function* (ctx)` returns the async generator
- * synchronously without producing a Promise.
+ * Static handlers are always request-shaped (never streams) — the builder
+ * rejects async generator handlers at registration time when pricing is
+ * static. The runtime assertion below is defense-in-depth in case a wrapped
+ * handler slips past the builder check.
+ *
+ * `payment` is nullable so the free-route tail (`runHandlerOnly`) can share
+ * this function: paid/static passes a verified `HandlerPaymentContext`, free
+ * routes pass `null`.
  */
-export async function invoke(
+export async function invokeStatic(
   ctx: FlowCtx,
   wallet: string | null,
   account: unknown,
   body: unknown,
   payment: HandlerPaymentContext | null,
-  charge?: ChargeFn,
-): Promise<InvokeResult> {
+): Promise<StaticRequestResult> {
   const handlerCtx: HandlerContext = {
     body: body as never,
     query: parseQuery(ctx.request, ctx.routeEntry) as never,
@@ -43,7 +45,6 @@ export async function invoke(
       });
     },
     setVerifiedWallet: (addr) => ctx.pluginCtx.setVerifiedWallet(addr),
-    ...(charge ? { charge } : {}),
   };
 
   let returned: unknown;
@@ -53,10 +54,13 @@ export async function invoke(
     return errorResult(error);
   }
 
-  // Async generators return their iterable synchronously, before any yield runs.
-  // A regular `async (ctx) => x` returns a Promise, which we await as batch.
   if (isAsyncIterable(returned) && !isThenable(returned)) {
-    return { kind: 'stream', source: returned as AsyncIterable<unknown> };
+    return errorResult(
+      new HttpError(
+        `route '${ctx.routeEntry.key}': streaming handlers require .paid({ dynamic: true })`,
+        500,
+      ),
+    );
   }
 
   let rawResult: unknown;
@@ -68,12 +72,10 @@ export async function invoke(
 
   const response =
     rawResult instanceof Response ? (rawResult as NextResponse) : NextResponse.json(rawResult);
-  return { kind: 'batch', response, rawResult };
+  return { response, rawResult };
 }
 
-function errorResult(error: unknown): InvokeResult {
-  // Match safeCallHandler's tolerance: HttpError or any object with a
-  // numeric `.status` field. Default to 500.
+function errorResult(error: unknown): StaticRequestResult {
   const status =
     error instanceof HttpError
       ? error.status
@@ -82,7 +84,6 @@ function errorResult(error: unknown): InvokeResult {
         : 500;
   const message = error instanceof Error ? error.message : 'Internal error';
   return {
-    kind: 'batch',
     response: NextResponse.json({ success: false, error: message }, { status }),
     rawResult: undefined,
     handlerError: error,

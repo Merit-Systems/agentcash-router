@@ -1,41 +1,46 @@
-import { NextResponse } from 'next/server';
+import type { NextResponse } from 'next/server';
 import { selectPricing } from '../../pricing/index.js';
-import { atomicToDecimal } from '../../pricing/atomic.js';
-import { createTickMeter } from '../../pricing/tick-meter.js';
 import { firePluginHook } from '../../plugin.js';
 import { selectIncomingStrategy } from '../../protocols/index.js';
-import type { AlertFn, HandlerPaymentContext } from '../../types.js';
+import type { AlertFn } from '../../types.js';
 import { build402 } from '../challenge.js';
 import {
-  errorMessage,
   fail,
-  finalize,
-  invoke,
   protocolInitError,
   resolveBodyAndPrice,
   resolveEarlyBody,
   resolvePreflight,
   runApiKeyGate,
-  runBeforeSettle,
-  runSettlementError,
-  runSettledHandlerError,
-  settleAndFinalizeRequest,
-  settleAndFinalizeStream,
   trySiwxFastPath,
   type FlowCtx,
-  type InvokeResult,
-  type SettleScope,
 } from '../context/index.js';
+import { invokeDynamic } from './dynamic/dynamic-invoke.js';
+import { runDynamicRequestFlow } from './dynamic/dynamic-request.js';
+import { runDynamicStreamFlow } from './dynamic/dynamic-stream.js';
+import { runChannelMgmtFlow } from './paid-channel-mgmt.js';
+import { invokeStatic } from './static/static-invoke.js';
+import { runStaticRequestFlow } from './static/static-request.js';
 
+/**
+ * Paid-route entry point. Owns the shared prefix (gates, pricing, protocol
+ * selection, body parse, validate, verify) then forks on `routeEntry.dynamicPrice`:
+ *
+ *   - skipHandler (preflight channel-mgmt credential) → runChannelMgmtFlow
+ *   - dynamic route:
+ *       - invokeDynamic → stream   → runDynamicStreamFlow
+ *       - invokeDynamic → request  → runDynamicRequestFlow
+ *   - static route:
+ *       - invokeStatic            → runStaticRequestFlow (streams blocked at builder)
+ *
+ * Each lifecycle owns its full settlement story; this file just routes.
+ */
 export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   const { request, routeEntry, deps } = ctx;
 
-  // ---- 1. Optional API key gate (composes with payment) ----
   const apiKeyGate = await runApiKeyGate(ctx);
   if (!apiKeyGate.ok) return apiKeyGate.response;
   const { account } = apiKeyGate;
 
-  // ---- 2. Pricing strategy (per-request to capture alert callback) ----
   const alertFn: AlertFn = (level, message, meta) => {
     firePluginHook(deps.plugin, 'onAlert', ctx.pluginCtx, {
       level,
@@ -51,36 +56,31 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
     route: routeEntry.key,
   });
 
-  // ---- 3. Incoming protocol detection ----
   const incomingStrategy = selectIncomingStrategy(request, routeEntry.protocols);
 
-  // ---- 4. Early body parse + validate (no-credential path only — used so the
-  //         402 advertises an accurate price and validate() rejects bad input). ----
   const earlyResolution = await resolveEarlyBody({ ctx, pricing, incomingStrategy });
   if (!earlyResolution.ok) return earlyResolution.response;
   const { earlyBody } = earlyResolution;
 
-  // ---- 5. SIWX entitlement fast-path (paid+SIWX) ----
   const siwxFastPath = await trySiwxFastPath(ctx, account);
   if (siwxFastPath) return siwxFastPath;
 
-  // ---- 6. No payment header → 402 challenge ----
   if (!incomingStrategy) {
     const initError = protocolInitError(routeEntry, deps);
     if (initError) return fail(ctx, 500, initError);
     return build402(ctx, pricing, earlyBody);
   }
 
-  // ---- 6.5 Strategy preflight — runs only with a matched credential. MPP
-  //          channel-management credentials skip body + handler here. ----
   const { skipBody, skipHandler } = resolvePreflight(incomingStrategy, request, routeEntry);
 
-  // ---- 7. Payment present: body parse + validate + price ----
+  if (skipHandler) {
+    return runChannelMgmtFlow({ ctx, strategy: incomingStrategy, account, pricing, skipBody });
+  }
+
   const bodyAndPrice = await resolveBodyAndPrice({ ctx, pricing, skipBody });
   if (!bodyAndPrice.ok) return bodyAndPrice.response;
   const { parsedBody, price } = bodyAndPrice;
 
-  // ---- 8. Verify payment via the matched strategy ----
   const verifyOutcome = await incomingStrategy.verify({
     request,
     body: parsedBody,
@@ -104,112 +104,50 @@ export async function runPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
     network: verifyOutcome.payment.network,
   });
 
-  const tickMeter = routeEntry.dynamicPrice
-    ? createTickMeter({
-        // builder.ts guarantees tickCost is set when dynamicPrice is true
-        tickCost: routeEntry.tickCost!,
-        maxPrice: routeEntry.maxPrice,
-        route: routeEntry.key,
-      })
-    : null;
-
-  const result: InvokeResult = skipHandler
-    ? {
-        kind: 'batch',
-        response: new NextResponse(null, { status: 200 }),
-        rawResult: undefined,
-      }
-    : await invoke(
-        ctx,
-        verifyOutcome.wallet,
-        account,
-        parsedBody,
-        verifyOutcome.payment,
-        tickMeter?.charge,
-      );
-
-  if (result.kind === 'stream') {
-    if (!tickMeter) {
-      return fail(
-        ctx,
-        500,
-        `route '${routeEntry.key}': streaming handlers require .paid({ dynamic: true })`,
-        parsedBody,
-      );
-    }
-    return settleAndFinalizeStream({
+  if (routeEntry.dynamicPrice) {
+    const result = await invokeDynamic(
       ctx,
-      strategy: incomingStrategy,
-      verifyOutcome,
-      source: result.source,
+      verifyOutcome.wallet,
       account,
-      body: parsedBody,
-      bindChannelCharge: tickMeter.bindChannelCharge,
-    });
-  }
-
-  const settleScope: SettleScope = {
-    wallet: verifyOutcome.wallet,
-    account,
-    body: parsedBody,
-    payment: verifyOutcome.payment,
-    response: result.response,
-    rawResult: result.rawResult,
-    handlerError: result.handlerError,
-  };
-
-  // Meter-zero short-circuit: if a handler ran on a dynamic route and never
-  // billed, settle is skipped (the request was free). Doesn't apply when the
-  // handler was bypassed via preflight — settle still has work to do.
-  const handlerSkippedBilling =
-    !skipHandler && tickMeter !== null && tickMeter.atomicTotal() === 0n;
-  if (handlerSkippedBilling) {
-    return finalize(ctx, result.response, result.rawResult, parsedBody);
-  }
-
-  const billedAmount = tickMeter ? atomicToDecimal(tickMeter.atomicTotal()) : price;
-
-  if (verifyOutcome.alreadySettled) {
-    if (result.response.status >= 400) {
-      const settledScope = settleScope as SettleScope<
-        HandlerPaymentContext & { status: 'settled' }
-      >;
-      await runSettledHandlerError(ctx, settledScope);
-      return finalize(ctx, result.response, result.rawResult, parsedBody);
+      parsedBody,
+      verifyOutcome.payment,
+    );
+    switch (result.kind) {
+      case 'stream':
+        return runDynamicStreamFlow({
+          ctx,
+          strategy: incomingStrategy,
+          verifyOutcome,
+          account,
+          body: parsedBody,
+          result,
+        });
+      case 'request':
+        return runDynamicRequestFlow({
+          ctx,
+          strategy: incomingStrategy,
+          verifyOutcome,
+          account,
+          body: parsedBody,
+          result,
+        });
     }
-    return settleAndFinalizeRequest({
-      ctx,
-      strategy: incomingStrategy,
-      verifyOutcome,
-      scope: settleScope,
-      rawResult: result.rawResult,
-      body: parsedBody,
-      billedAmount,
-    });
   }
 
-  if (result.response.status >= 400) {
-    return finalize(ctx, result.response, result.rawResult, parsedBody);
-  }
-
-  const beforeErr = await runBeforeSettle(ctx, settleScope);
-  if (beforeErr) return beforeErr;
-
-  return settleAndFinalizeRequest({
+  const result = await invokeStatic(
+    ctx,
+    verifyOutcome.wallet,
+    account,
+    parsedBody,
+    verifyOutcome.payment,
+  );
+  return runStaticRequestFlow({
     ctx,
     strategy: incomingStrategy,
     verifyOutcome,
-    scope: settleScope,
-    rawResult: result.rawResult,
+    account,
     body: parsedBody,
-    billedAmount,
-    onSettleError: async (error, failMessage) => {
-      await runSettlementError(ctx, settleScope, error, 'settle');
-      firePluginHook(deps.plugin, 'onAlert', ctx.pluginCtx, {
-        level: 'critical' as const,
-        message: `${incomingStrategy.protocol} ${failMessage}: ${errorMessage(error, 'unknown')}`,
-        route: routeEntry.key,
-      });
-    },
+    price,
+    result,
   });
 }

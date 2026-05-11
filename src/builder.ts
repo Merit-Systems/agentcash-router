@@ -632,6 +632,15 @@ export class RouteBuilder<
         );
       }
     }
+    // Streaming handlers (async generators) require per-chunk metering, which
+    // only dynamic pricing supports. Catch the mismatch at registration so
+    // devs see it on first build rather than at first request.
+    if (isAsyncGeneratorFunction(handlerFn) && !this._dynamicPrice) {
+      throw new Error(
+        `route '${this._key}': streaming handlers (async function*) require .paid({ dynamic: true }) — ` +
+          `static/free routes can't meter per-chunk billing.`,
+      );
+    }
 
     validateExamples(
       this._key,
@@ -678,6 +687,15 @@ export class RouteBuilder<
 
     return createRequestHandler(entry, handlerFn as RouteHandler, this._deps);
   }
+}
+
+/**
+ * Detect async generator functions (`async function*`). The constructor name
+ * is the only reliable cross-realm check — `instanceof` fails across module
+ * boundaries on the `AsyncGeneratorFunction` constructor.
+ */
+function isAsyncGeneratorFunction(fn: unknown): boolean {
+  return typeof fn === 'function' && fn.constructor?.name === 'AsyncGeneratorFunction';
 }
 
 /**

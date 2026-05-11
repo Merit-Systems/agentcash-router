@@ -6,13 +6,21 @@
  * a new pipeline helper means a new file plus one line here.
  */
 
-export type { FlowCtx, RouterDeps, ParseBodyResult, InvokeResult, SettleScope } from './types.js';
+export type {
+  FlowCtx,
+  RouterDeps,
+  ParseBodyResult,
+  DynamicInvokeResult,
+  DynamicRequestResult,
+  DynamicStreamResult,
+  StaticRequestResult,
+  SettleScope,
+} from './types.js';
 
 export { preflight } from './preflight.js';
 export { parseBody } from './parse-body.js';
 export { parseQuery } from './parse-query.js';
 export { runValidate } from './run-validate.js';
-export { invoke } from './invoke.js';
 export { runHandlerOnly } from './run-handler-only.js';
 export { finalize } from './finalize/index.js';
 export { fail } from './fail.js';

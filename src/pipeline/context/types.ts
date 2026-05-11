@@ -1,5 +1,6 @@
 import type { NextRequest, NextResponse } from 'next/server';
 import type { Transport } from 'mppx/server';
+import type { ChargeContext } from '../../pricing/charge-context.js';
 import type {
   HandlerContext,
   HandlerPaymentContext,
@@ -100,26 +101,40 @@ export type ParseBodyResult = { ok: true; data: unknown } | { ok: false; respons
 /**
  * Result of invoking the user's handler.
  *
- * Most handlers are batch (return a value or Response); the orchestrator gets
- * back `{ kind: 'batch', response, ... }` and runs the normal settle path.
+ * Two axes: pricing (static vs dynamic) and response shape (request vs stream).
+ * The static × stream cell is impossible — streaming requires per-chunk
+ * metering, which only dynamic pricing supports. The builder rejects async
+ * generator handlers on static routes at registration time.
  *
- * Streaming handlers (`async function*`) return an AsyncIterable that hasn't
- * been consumed yet; the orchestrator gets back `{ kind: 'stream', source }`
- * and routes to the strategy's `settleStream` method instead, which feeds the
- * iterable into mppx's `Sse.serve()` (or rejects if the strategy doesn't
- * support streaming).
+ *                request                stream
+ *   static   →  StaticRequestResult    (impossible)
+ *   dynamic  →  DynamicRequestResult   DynamicStreamResult
+ *
+ * Static has a single shape (no `kind` discriminator needed). Dynamic carries
+ * `chargeContext` on every variant — stream uses `bindChannelCharge`, request
+ * uses `atomicTotal()` for `billedAmount`.
  */
-export type InvokeResult =
-  | {
-      kind: 'batch';
-      response: NextResponse;
-      rawResult: unknown;
-      handlerError?: unknown;
-    }
-  | {
-      kind: 'stream';
-      source: AsyncIterable<unknown>;
-    };
+export type StaticRequestResult = {
+  response: NextResponse;
+  rawResult: unknown;
+  handlerError?: unknown;
+};
+
+export type DynamicRequestResult = {
+  kind: 'request';
+  response: NextResponse;
+  rawResult: unknown;
+  handlerError?: unknown;
+  chargeContext: ChargeContext;
+};
+
+export type DynamicStreamResult = {
+  kind: 'stream';
+  source: AsyncIterable<unknown>;
+  chargeContext: ChargeContext;
+};
+
+export type DynamicInvokeResult = DynamicRequestResult | DynamicStreamResult;
 
 export interface SettleScope<TPayment extends HandlerPaymentContext = HandlerPaymentContext> {
   wallet: string;

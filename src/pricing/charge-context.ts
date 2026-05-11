@@ -2,7 +2,7 @@ import type { ChargeFn } from '../types.js';
 import { atomicToDecimal, decimalToAtomic } from './atomic.js';
 
 /**
- * Per-request meter exposed to handlers as the `charge` callback.
+ * Per-request charge context exposed to handlers as the `charge` callback.
  *
  * Each `charge()` call adds one tick (`tickCost` USDC) to the running total
  * and throws synchronously if the next tick would exceed `maxPrice`. When a
@@ -10,7 +10,7 @@ import { atomicToDecimal, decimalToAtomic } from './atomic.js';
  * every `charge()` call also debits one tick on the channel before resolving,
  * so `await charge()` can backpressure on payment-channel voucher refresh.
  */
-export function createTickMeter(args: {
+export function createChargeContext(args: {
   tickCost: string;
   maxPrice: string | undefined;
   route: string;
@@ -50,4 +50,4 @@ export function createTickMeter(args: {
   };
 }
 
-export type TickMeter = ReturnType<typeof createTickMeter>;
+export type ChargeContext = ReturnType<typeof createChargeContext>;

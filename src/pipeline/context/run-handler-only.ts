@@ -1,8 +1,7 @@
-import { NextResponse } from 'next/server';
-import { fail } from './fail.js';
+import type { NextResponse } from 'next/server';
+import { invokeStatic } from '../flows/static/static-invoke.js';
 import { finalize } from './finalize/index.js';
 import { firePluginResponse } from './fire-plugin-response.js';
-import { invoke } from './invoke.js';
 import { parseBody } from './parse-body.js';
 import { runValidate } from './run-validate.js';
 import type { FlowCtx } from './types.js';
@@ -11,8 +10,9 @@ import type { FlowCtx } from './types.js';
  * No-payment tail used by unprotected, apiKey-only, siwx-only flows, and the
  * paid+SIWX entitlement fast-path: parse body → validate → invoke → finalize.
  *
- * Streaming handlers are rejected here — they require a payment-channel session
- * to meter chunks against, so they can't run on free routes.
+ * Streaming handlers are blocked at builder-registration time on any route
+ * without `.paid({ dynamic: true })`, so this path only ever sees request-
+ * shaped results. `invokeStatic` carries a defense-in-depth runtime guard.
  */
 export async function runHandlerOnly(
   ctx: FlowCtx,
@@ -28,14 +28,6 @@ export async function runHandlerOnly(
   const validateErr = await runValidate(ctx, body.data);
   if (validateErr) return validateErr;
 
-  const result = await invoke(ctx, wallet, account, body.data, null);
-  if (result.kind === 'stream') {
-    return fail(
-      ctx,
-      500,
-      `route '${ctx.routeEntry.key}': streaming handlers require a paid route with MPP session mode`,
-      body.data,
-    );
-  }
+  const result = await invokeStatic(ctx, wallet, account, body.data, null);
   return finalize(ctx, result.response, result.rawResult, body.data);
 }

@@ -137,9 +137,16 @@ export interface PaymentStrategy {
    */
   preflight?(request: Request, routeEntry: RouteEntry): PreflightOutcome | null;
 
+  /** Called before the handler is invoked to verify the payment.
+   * If no payment is detected, the strategy returns a 402 challenge.
+   */
   verify(args: VerifyArgs): Promise<VerifyOutcome>;
 
-  /** Called only after handler returned a 2xx response. */
+  /** Called only after handler returned a 2xx response and verify() resolves with a valid payment.
+   * 
+   * settle is responsible for confirming the payment and returning a 200 response.
+   * In some cases, the money is moved on-chain at this point.
+   */
   settle(args: SettleArgs): Promise<SettleOutcome>;
 
   /**
