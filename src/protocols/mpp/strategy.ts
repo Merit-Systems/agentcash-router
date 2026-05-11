@@ -102,9 +102,7 @@ export const mppStrategy: PaymentStrategy = {
       { status: 200 }
     >;
     const { bindChannelCharge, source: handlerStream } = args;
-    async function* forwardHandlerStreamWithChannelDebit(
-      channel: Session.Sse.SessionController,
-    ) {
+    async function* forwardHandlerStreamWithChannelDebit(channel: Session.Sse.SessionController) {
       bindChannelCharge(channel.charge);
       try {
         for await (const chunk of handlerStream) {
