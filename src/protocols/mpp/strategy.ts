@@ -35,41 +35,38 @@ export const mppStrategy: PaymentStrategy = {
     return Boolean(auth && auth.startsWith(AUTH_SCHEME.MPP_PAYMENT));
   },
 
-  preflight(request: Request, routeEntry: RouteEntry): PreflightOutcome | null {
+  preflightDynamic(request: Request, _routeEntry: RouteEntry): PreflightOutcome | null {
     const info = readMppCredential(request);
     if (!info?.sessionAction) return null;
     if (!isChannelOnlyAction(info, request)) return null;
-    // Sessions are only accepted on dynamic-priced routes (verify enforces);
-    // static routes will reject this credential at verify, so leave the
-    // standard pipeline in place rather than skipping body/handler needlessly.
-    if (!routeEntry.dynamicPrice) return null;
     // Channel-management credentials carry no body and don't need handler
     // invocation — settle's withReceipt() emits the channel-state ack directly.
     return { skipBody: true, skipHandler: true };
   },
 
-  async verify(args: VerifyArgs): Promise<VerifyOutcome> {
+  async verifyStatic(args: VerifyArgs): Promise<VerifyOutcome> {
     const info = readMppCredential(args.request);
     if (!info) return { ok: false, kind: 'invalid' };
 
-    const isSessionCredential = Boolean(info.sessionAction);
-    const requiresSession = args.routeEntry.dynamicPrice ?? false;
-
-    if (isSessionCredential) {
-      // Sessions on fixed-price routes aren't wired today; for now they're
-      // accepted only on dynamic routes (the 402 advertises sessions there).
-      if (!requiresSession) return { ok: false, kind: 'invalid' };
-      return verifySessionMode(args, info);
-    }
-
-    // Dynamic routes can't accept charge credentials — they commit the client
-    // to a fixed amount before the handler runs.
-    if (requiresSession) return { ok: false, kind: 'invalid' };
+    // Static routes can't accept session credentials — sessions are only
+    // advertised on dynamic routes' 402 challenges.
+    if (info.sessionAction) return { ok: false, kind: 'invalid' };
 
     if (info.payloadType === 'transaction' && args.deps.tempoClient) {
       return verifyTxMode(args, info);
     }
     return verifyHashMode(args, info);
+  },
+
+  async verifyDynamic(args: VerifyArgs): Promise<VerifyOutcome> {
+    const info = readMppCredential(args.request);
+    if (!info) return { ok: false, kind: 'invalid' };
+
+    // Dynamic routes only accept session credentials — charge credentials
+    // commit the client to a fixed amount before the handler runs.
+    if (!info.sessionAction) return { ok: false, kind: 'invalid' };
+
+    return verifySessionMode(args, info);
   },
 
   async settle(args: SettleArgs): Promise<SettleOutcome> {
@@ -125,28 +122,39 @@ export const mppStrategy: PaymentStrategy = {
     return { ok: true, response: sse, settledPayment };
   },
 
-  async buildChallenge(args: ChallengeArgs): Promise<ChallengeContribution> {
+  async buildChallengeStatic(args: ChallengeArgs): Promise<ChallengeContribution> {
+    return buildChargeChallenge(args);
+  },
+
+  async buildChallengeDynamic(args: ChallengeArgs): Promise<ChallengeContribution> {
     if (!args.deps.mppx) return {};
 
-    if (args.routeEntry.dynamicPrice && args.deps.mppx.session && args.deps.mppSessionConfig) {
+    if (args.deps.mppx.session && args.deps.mppSessionConfig) {
       return buildSessionChallenge({
         ...args,
         suggestedDeposit: args.routeEntry.maxPrice ?? args.price,
       });
     }
 
-    try {
-      const result = await args.deps.mppx.charge({ amount: args.price })(args.request);
-      if (result.status === 402) {
-        const wwwAuth = result.challenge.headers.get(HEADERS.WWW_AUTHENTICATE);
-        if (wwwAuth) return { headers: { [HEADERS.WWW_AUTHENTICATE]: wwwAuth } };
-      }
-    } catch (err) {
-      console.warn(
-        `[router] MPP challenge build failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      throw err;
-    }
-    return {};
+    // Fall back to a charge challenge when sessions aren't configured.
+    return buildChargeChallenge(args);
   },
 };
+
+async function buildChargeChallenge(args: ChallengeArgs): Promise<ChallengeContribution> {
+  if (!args.deps.mppx) return {};
+
+  try {
+    const result = await args.deps.mppx.charge({ amount: args.price })(args.request);
+    if (result.status === 402) {
+      const wwwAuth = result.challenge.headers.get(HEADERS.WWW_AUTHENTICATE);
+      if (wwwAuth) return { headers: { [HEADERS.WWW_AUTHENTICATE]: wwwAuth } };
+    }
+  } catch (err) {
+    console.warn(
+      `[router] MPP challenge build failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    throw err;
+  }
+  return {};
+}

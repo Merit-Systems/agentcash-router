@@ -30,55 +30,10 @@ export const x402Strategy: PaymentStrategy = {
     );
   },
 
-  async verify(args: VerifyArgs): Promise<VerifyOutcome> {
-    const { request, body, price, routeEntry, deps } = args;
-
-    if (!deps.x402Server) {
-      const reason = deps.x402InitError
-        ? `x402 facilitator initialization failed: ${deps.x402InitError}`
-        : 'x402 server not initialized — ensure @x402/core, @x402/evm, and @coinbase/x402 are installed';
-      console.error(`[router] ${routeEntry.key}: ${reason}`);
-      return { ok: false, kind: 'config', message: reason };
-    }
-
-    const accepts = await resolveX402Accepts(
-      request,
-      routeEntry,
-      deps.x402Accepts,
-      deps.payeeAddress,
-      body,
-    );
-    const verifyResult = await verifyX402Payment({
-      server: deps.x402Server,
-      request,
-      price,
-      accepts,
-    });
-    if (!verifyResult?.valid) return { ok: false, kind: 'invalid' };
-
-    const wallet = normalizeWalletAddress(verifyResult.payer);
-    const matchedNetwork = getRequirementNetwork(verifyResult.requirements, deps.network);
-    const matchedRecipient = getRequirementRecipient(verifyResult.requirements);
-
-    const payment: HandlerPaymentContext = {
-      protocol: 'x402',
-      status: 'verified',
-      payer: wallet,
-      amount: price,
-      network: matchedNetwork,
-      ...(matchedRecipient ? { recipient: matchedRecipient } : {}),
-    };
-
-    return {
-      ok: true,
-      wallet,
-      payment,
-      token: {
-        payload: verifyResult.payload,
-        requirements: verifyResult.requirements,
-      } satisfies X402Token,
-    };
-  },
+  // x402 verify is mode-agnostic — the upto vs exact distinction lives in
+  // settle (dynamicAmountOverride) and challenge construction, not verify.
+  verifyStatic: (args: VerifyArgs) => verifyX402(args),
+  verifyDynamic: (args: VerifyArgs) => verifyX402(args),
 
   async settle(args: SettleArgs): Promise<SettleOutcome> {
     const { response, payment, token, deps, routeEntry, billedAmount } = args;
@@ -132,32 +87,88 @@ export const x402Strategy: PaymentStrategy = {
     }
   },
 
-  async buildChallenge(args: ChallengeArgs): Promise<ChallengeContribution> {
-    const { request, routeEntry, body, price, extensions, deps } = args;
-
-    if (!deps.x402Server) return {};
-
-    const accepts = await resolveX402Accepts(
-      request,
-      routeEntry,
-      deps.x402Accepts,
-      deps.payeeAddress,
-      body,
-    );
-
-    const { encoded } = await buildX402Challenge({
-      server: deps.x402Server,
-      routeEntry,
-      request,
-      price,
-      accepts,
-      facilitatorsByNetwork: deps.x402FacilitatorsByNetwork,
-      extensions,
-    });
-
-    return { headers: { [HEADERS.X402_PAYMENT_REQUIRED]: encoded } };
-  },
+  // x402 challenge construction is mode-agnostic — the upto vs exact
+  // distinction lives in the requirements scheme, decided in buildX402Challenge
+  // off `routeEntry.dynamicPrice`. Both methods delegate to the same builder.
+  buildChallengeStatic: (args: ChallengeArgs) => buildX402ChallengeContribution(args),
+  buildChallengeDynamic: (args: ChallengeArgs) => buildX402ChallengeContribution(args),
 };
+
+async function buildX402ChallengeContribution(args: ChallengeArgs): Promise<ChallengeContribution> {
+  const { request, routeEntry, body, price, extensions, deps } = args;
+
+  if (!deps.x402Server) return {};
+
+  const accepts = await resolveX402Accepts(
+    request,
+    routeEntry,
+    deps.x402Accepts,
+    deps.payeeAddress,
+    body,
+  );
+
+  const { encoded } = await buildX402Challenge({
+    server: deps.x402Server,
+    routeEntry,
+    request,
+    price,
+    accepts,
+    facilitatorsByNetwork: deps.x402FacilitatorsByNetwork,
+    extensions,
+  });
+
+  return { headers: { [HEADERS.X402_PAYMENT_REQUIRED]: encoded } };
+}
+
+async function verifyX402(args: VerifyArgs): Promise<VerifyOutcome> {
+  const { request, body, price, routeEntry, deps } = args;
+
+  if (!deps.x402Server) {
+    const reason = deps.x402InitError
+      ? `x402 facilitator initialization failed: ${deps.x402InitError}`
+      : 'x402 server not initialized — ensure @x402/core, @x402/evm, and @coinbase/x402 are installed';
+    console.error(`[router] ${routeEntry.key}: ${reason}`);
+    return { ok: false, kind: 'config', message: reason };
+  }
+
+  const accepts = await resolveX402Accepts(
+    request,
+    routeEntry,
+    deps.x402Accepts,
+    deps.payeeAddress,
+    body,
+  );
+  const verifyResult = await verifyX402Payment({
+    server: deps.x402Server,
+    request,
+    price,
+    accepts,
+  });
+  if (!verifyResult?.valid) return { ok: false, kind: 'invalid' };
+
+  const wallet = normalizeWalletAddress(verifyResult.payer);
+  const matchedNetwork = getRequirementNetwork(verifyResult.requirements, deps.network);
+  const matchedRecipient = getRequirementRecipient(verifyResult.requirements);
+
+  const payment: HandlerPaymentContext = {
+    protocol: 'x402',
+    status: 'verified',
+    payer: wallet,
+    amount: price,
+    network: matchedNetwork,
+    ...(matchedRecipient ? { recipient: matchedRecipient } : {}),
+  };
+
+  return {
+    ok: true,
+    wallet,
+    payment,
+    token: {
+      payload: verifyResult.payload,
+      requirements: verifyResult.requirements,
+    } satisfies X402Token,
+  };
+}
 
 function getRequirementNetwork(requirements: unknown, fallback: string): string {
   const network = (requirements as { network?: unknown } | null)?.network;

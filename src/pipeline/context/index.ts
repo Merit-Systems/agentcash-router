@@ -35,8 +35,6 @@ export { grantEntitlementIfSiwx } from './grant-entitlement.js';
 export { trySiwxFastPath } from './try-siwx-fast-path.js';
 export { errorStatus, errorMessage, handlerFailureError } from './errors.js';
 export { shouldParseBodyEarly } from './should-parse-body-early.js';
-export { resolvePreflight } from './resolve-preflight.js';
-export { resolveBodyAndPrice } from './resolve-body-and-price.js';
 export { resolveEarlyBody } from './resolve-early-body.js';
 export { runApiKeyGate } from './run-api-key-gate.js';
 export { protocolInitError } from './protocol-init-error.js';
