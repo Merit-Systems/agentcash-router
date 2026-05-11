@@ -13,6 +13,7 @@ import { createLlmsTxtHandler } from './discovery/llms-txt.js';
 import { getConfiguredX402Accepts } from './protocols/x402/accepts.js';
 import { BASE_NETWORK } from './constants.js';
 import { RouterConfigError, formatRouterConfigIssues, getRouterConfigIssues } from './config.js';
+import { getMppxRequestContext, getMppxStreamingContext } from './mppx-init.js';
 // ---------------------------------------------------------------------------
 // ServiceRouter
 // ---------------------------------------------------------------------------
@@ -109,7 +110,9 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     tempoClient: null,
     // Set synchronously from config so `.handler()` registration validation
     // can check it without waiting on the async init below.
-    mppSessionConfig: config.mpp?.session ? {} : null,
+    mppSessionConfig: config.mpp?.session
+      ? { depositMultiplier: config.mpp.session.depositMultiplier ?? 10 }
+      : null,
   };
 
   // Async init — dynamic imports avoid require() which breaks Turbopack.
@@ -144,10 +147,42 @@ export function createRouter<const P extends Record<string, string> = Record<nev
         deps.tempoClient = createClient({ chain: tempoChain, transport: http(rpcUrl) });
         const getClient = async () => deps.tempoClient!;
 
-        let feePayerAccount: unknown;
-        if (config.mpp.feePayerKey) {
+        // `operatorAccount` signs server-side on-chain operations (close,
+        // settle). Its address MUST equal `recipient`/payee — mppx's close
+        // handler enforces sender == payee and silently 402s on mismatch.
+        // `feePayerAccount` sponsors gas on behalf of clients; gated by
+        // `sponsorFees` (default true for backcompat).
+        //
+        // Legacy: if `operatorKey` is unset we fall back to `feePayerKey` so
+        // existing single-key configs (operator == fee payer == payee) keep
+        // working.
+        const operatorKeyHex = config.mpp.operatorKey ?? config.mpp.feePayerKey;
+        let operatorAccount: { address: string } | undefined;
+        if (operatorKeyHex) {
+          const { privateKeyToAccount } = await import('viem/accounts');
+          operatorAccount = privateKeyToAccount(operatorKeyHex as `0x${string}`);
+        }
+        const sponsorFees = config.mpp.sponsorFees !== false;
+        let feePayerAccount: { address: string } | undefined;
+        if (sponsorFees && config.mpp.feePayerKey) {
           const { privateKeyToAccount } = await import('viem/accounts');
           feePayerAccount = privateKeyToAccount(config.mpp.feePayerKey as `0x${string}`);
+        }
+
+        // Sessions require operator.address === recipient. Fail loudly here
+        // rather than letting every close attempt return a generic 402.
+        if (config.mpp.session && operatorAccount) {
+          const recipient = (config.mpp.recipient ?? config.payeeAddress)?.toLowerCase();
+          const opAddr = operatorAccount.address.toLowerCase();
+          if (recipient && opAddr !== recipient) {
+            throw new Error(
+              `MPP session config mismatch: operator address ${operatorAccount.address} ` +
+                `must equal recipient/payee ${recipient}. ` +
+                `mppx's channel-close handler asserts sender === payee. ` +
+                `Set mpp.operatorKey to the private key for ${recipient}, or set ` +
+                `mpp.recipient/payeeAddress to ${operatorAccount.address}.`,
+            );
+          }
         }
 
         let resolvedStore = config.mpp.store;
@@ -165,49 +200,48 @@ export function createRouter<const P extends Record<string, string> = Record<nev
           resolvedStore = Store.upstash(createUpstashRest(kvUrl, kvToken));
         }
 
-        // `tempo.charge` handles fixed-amount push-mode payments. When a
-        // session config is supplied we also register `tempo.session`, which
-        // brings payment-channel sessions (open / voucher / close) — required
-        // for any flow that needs a post-handler amount commitment over MPP.
-        // Sessions need a signing account for on-chain close/settle; reuse
-        // `feePayerAccount` (same operator wallet plays both roles).
-        const methods: unknown[] = [
-          tempo.charge({
-            currency: config.mpp.currency as `0x${string}`,
-            recipient: (config.mpp.recipient ?? config.payeeAddress) as `0x${string}`,
-            getClient,
-            ...(feePayerAccount ? { feePayer: feePayerAccount } : {}),
-            ...(resolvedStore ? { store: resolvedStore } : {}),
-          } as Parameters<typeof tempo.charge>[0]),
-        ];
+        // Build two mppx instances sharing store + secretKey + realm so
+        // channel state and challenge HMACs are interchangeable. mppx routes
+        // by (method-name, intent), so two `tempo.session` methods can't
+        // coexist in one instance — hence the split (see ./mppx-init.ts).
+        const realm = new URL(resolvedBaseUrl).host;
+        const mppConfig = config.mpp;
+        // Sessions need a server-side signing account to settle closes.
+        // Fee sponsorship is independent — gated on `sponsorFees`.
+        const sessionEnabled = !!(mppConfig.session && operatorAccount);
+        const sharedSessionParams = {
+          currency: mppConfig.currency as `0x${string}`,
+          // USDC on Tempo has 6 decimals — required by mppx 0.6.16+ to
+          // convert decimal-dollar amounts (tickCost, suggestedDeposit)
+          // into atomic units. Without this, mppx falls back to a default
+          // that miscounts deposits by 1e6×.
+          decimals: 6,
+          recipient: (mppConfig.recipient ?? config.payeeAddress) as `0x${string}`,
+          getClient,
+          ...(operatorAccount ? { account: operatorAccount } : {}),
+          ...(feePayerAccount ? { feePayer: feePayerAccount } : {}),
+          ...(resolvedStore ? { store: resolvedStore } : {}),
+        };
+        const mppxArgs = {
+          Mppx,
+          tempo,
+          mppConfig,
+          payeeAddress: config.payeeAddress ?? '',
+          getClient,
+          feePayerAccount,
+          resolvedStore,
+          sessionEnabled,
+          sharedSessionParams,
+          realm,
+        };
+        const primary = getMppxRequestContext(mppxArgs);
+        const streaming = getMppxStreamingContext(mppxArgs);
 
-        if (config.mpp.session && feePayerAccount) {
-          methods.push(
-            tempo.session({
-              currency: config.mpp.currency as `0x${string}`,
-              // USDC on Tempo has 6 decimals — required by mppx 0.6.16+ to
-              // convert decimal-dollar amounts (tickCost, suggestedDeposit)
-              // into atomic units. Without this, mppx falls back to a default
-              // that miscounts deposits by 1e6×.
-              decimals: 6,
-              recipient: (config.mpp.recipient ?? config.payeeAddress) as `0x${string}`,
-              getClient,
-              account: feePayerAccount,
-              feePayer: feePayerAccount,
-              sse: true,
-              ...(resolvedStore ? { store: resolvedStore } : {}),
-            } as unknown as Parameters<typeof tempo.session>[0]),
-          );
-        }
-
-        // `Mppx.create`'s return type is generic over the methods array; our
-        // RouterDeps interface declares only the surface we call. Cast through
-        // unknown to bridge — both shapes coexist at runtime.
-        deps.mppx = Mppx.create({
-          methods: methods as Parameters<typeof Mppx.create>[0]['methods'],
-          secretKey: config.mpp.secretKey,
-          realm: new URL(resolvedBaseUrl).host,
-        }) as unknown as (typeof deps)['mppx'];
+        deps.mppx = {
+          charge: primary.charge,
+          ...(primary.session ? { sessionRequest: primary.session } : {}),
+          ...(streaming?.session ? { sessionStream: streaming.session } : {}),
+        };
       } catch (err: unknown) {
         deps.mppx = null;
         deps.mppInitError = err instanceof Error ? err.message : String(err);
@@ -324,7 +358,7 @@ export type {
 } from './config.js';
 export type {
   HandlerContext,
-  DynamicHandlerContext,
+  StreamingHandlerContext,
   RouterConfig,
   DiscoveryConfig,
   RouteEntry,

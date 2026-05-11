@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { firePluginHook } from '../../../plugin.js';
-import { createChargeContext } from '../../../pricing/charge-context.js';
-import type { DynamicHandlerContext, HandlerPaymentContext } from '../../../types.js';
+import { createChargeContext, type ChargeContext } from '../../../pricing/charge-context.js';
+import type {
+  HandlerContext,
+  HandlerPaymentContext,
+  StreamingHandlerContext,
+} from '../../../types.js';
 import { HttpError } from '../../../types.js';
 import { parseQuery } from '../../context/parse-query.js';
 import type { DynamicInvokeResult, FlowCtx } from '../../context/types.js';
@@ -9,12 +13,15 @@ import type { DynamicInvokeResult, FlowCtx } from '../../context/types.js';
 /**
  * Dynamic-route handler invocation.
  *
- * Mints a per-request `chargeContext` and exposes `charge()` to the handler.
- * Classifies the handler's return value into request (single response) or
- * stream (async iterable) — both variants carry the same non-null
- * `chargeContext`, so downstream lifecycles never null-check it:
- *   - request → `atomicTotal()` for `billedAmount`
- *   - stream  → `bindChannelCharge` to thread per-tick debits through mppx
+ * Splits cleanly on `routeEntry.streaming`:
+ *   - streaming=true  → handler is `async function*`; mint a `chargeContext`
+ *                       and expose `charge()` on the context. Return shape is
+ *                       `kind: 'stream'` carrying the iterable + chargeContext
+ *                       (settleStream binds per-tick channel debits).
+ *   - streaming=false → handler is `async (ctx) => value`; no `charge` in
+ *                       context (request-mode dynamic bills exactly `tickCost`
+ *                       per request via mppx's non-SSE auto-charge). Return
+ *                       shape is `kind: 'request'` with no chargeContext.
  *
  * `routeEntry.dynamicPrice` is true at this point (builder.ts guarantees
  * `tickCost` is set when dynamic). The dispatcher gates on `dynamicPrice`
@@ -27,13 +34,16 @@ export async function invokeDynamic(
   body: unknown,
   payment: HandlerPaymentContext,
 ): Promise<DynamicInvokeResult> {
-  const chargeContext = createChargeContext({
-    tickCost: ctx.routeEntry.tickCost!,
-    maxPrice: ctx.routeEntry.maxPrice,
-    route: ctx.routeEntry.key,
-  });
+  const streaming = ctx.routeEntry.streaming === true;
+  const chargeContext: ChargeContext | null = streaming
+    ? createChargeContext({
+        tickCost: ctx.routeEntry.tickCost!,
+        maxPrice: ctx.routeEntry.maxPrice,
+        route: ctx.routeEntry.key,
+      })
+    : null;
 
-  const handlerCtx: DynamicHandlerContext = {
+  const baseHandlerCtx: HandlerContext = {
     body: body as never,
     query: parseQuery(ctx.request, ctx.routeEntry) as never,
     request: ctx.request,
@@ -51,8 +61,12 @@ export async function invokeDynamic(
       });
     },
     setVerifiedWallet: (addr) => ctx.pluginCtx.setVerifiedWallet(addr),
-    charge: chargeContext.charge,
   };
+
+  const handlerCtx: HandlerContext | StreamingHandlerContext =
+    chargeContext !== null
+      ? ({ ...baseHandlerCtx, charge: chargeContext.charge } as StreamingHandlerContext)
+      : baseHandlerCtx;
 
   let returned: unknown;
   try {
@@ -60,10 +74,16 @@ export async function invokeDynamic(
   } catch (error) {
     return errorResult(error, chargeContext);
   }
-
-  // Async generators return their iterable synchronously, before any yield runs.
-  // A regular `async (ctx) => x` returns a Promise, which we await as request.
   if (isAsyncIterable(returned) && !isThenable(returned)) {
+    if (!chargeContext) {
+      return errorResult(
+        new HttpError(
+          'route returned an async iterable from a non-streaming handler — declare with `async function*` to opt into streaming',
+          500,
+        ),
+        null,
+      );
+    }
     return {
       kind: 'stream',
       source: returned as AsyncIterable<unknown>,
@@ -80,13 +100,10 @@ export async function invokeDynamic(
 
   const response =
     rawResult instanceof Response ? (rawResult as NextResponse) : NextResponse.json(rawResult);
-  return { kind: 'request', response, rawResult, chargeContext };
+  return { kind: 'request', response, rawResult };
 }
 
-function errorResult(
-  error: unknown,
-  chargeContext: ReturnType<typeof createChargeContext>,
-): DynamicInvokeResult {
+function errorResult(error: unknown, chargeContext: ChargeContext | null): DynamicInvokeResult {
   const status =
     error instanceof HttpError
       ? error.status
@@ -94,12 +111,12 @@ function errorResult(
         ? ((error as Record<string, unknown>).status as number)
         : 500;
   const message = error instanceof Error ? error.message : 'Internal error';
+  void chargeContext;
   return {
     kind: 'request',
     response: NextResponse.json({ success: false, error: message }, { status }),
     rawResult: undefined,
     handlerError: error,
-    chargeContext,
   };
 }
 

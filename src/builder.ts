@@ -1,8 +1,8 @@
 import type { NextRequest } from 'next/server';
 import type { ZodType } from 'zod';
 import type {
-  DynamicHandlerContext,
   HandlerContext,
+  StreamingHandlerContext,
   RouteEntry,
   PricingConfig,
   PaidOptions,
@@ -50,18 +50,32 @@ type InputTypeFor<TBody, TQuery> = [TBody] extends [undefined]
  * generic classes (structurally identical instance types collapse).
  */
 /**
- * On dynamic-priced routes (`.paid({ dynamic: true })`) the handler receives a
- * `DynamicHandlerContext` whose `charge()` callback is required — the
- * orchestrator always attaches it at runtime, so handler-authors don't need
- * non-null assertions to call it.
+ * Handler shape options at the `.handler(fn)` call site.
  *
- * On static-priced routes, the handler receives the base `HandlerContext`
- * with no `charge` field — the server's quoted price is what's charged;
- * there's nothing to call.
+ * - Static / dynamic-request handlers receive the base `HandlerContext` and
+ *   return a value. They bill at the server's quoted price (static) or
+ *   exactly `tickCost` per request (dynamic-request).
+ * - Streaming dynamic handlers are async generators that receive a
+ *   `StreamingHandlerContext` whose `charge()` callback meters per-unit
+ *   billing — one tick per call.
+ *
+ * Discrimination is by return type at the call site: a `Promise<...>` return
+ * picks the request shape (no `charge` in ctx); an `AsyncIterable<...>` return
+ * picks the streaming shape (with `charge`). TypeScript narrows the ctx
+ * parameter to match.
+ *
+ * Streaming is only valid on dynamic routes (`IsDynamic=true`); the builder
+ * rejects async generators on static routes at runtime as well.
  */
-type HandlerCtxFor<TBody, TQuery, IsDynamic extends boolean> = IsDynamic extends true
-  ? DynamicHandlerContext<TBody, TQuery>
-  : HandlerContext<TBody, TQuery>;
+type RequestHandlerFn<TBody, TQuery> = (ctx: HandlerContext<TBody, TQuery>) => Promise<unknown>;
+
+type StreamingHandlerFn<TBody, TQuery> = (
+  ctx: StreamingHandlerContext<TBody, TQuery>,
+) => AsyncIterable<unknown>;
+
+type HandlerFnFor<TBody, TQuery, IsDynamic extends boolean> = IsDynamic extends true
+  ? RequestHandlerFn<TBody, TQuery> | StreamingHandlerFn<TBody, TQuery>
+  : RequestHandlerFn<TBody, TQuery>;
 
 type HandlerArg<
   TBody,
@@ -75,7 +89,7 @@ type HandlerArg<
     ? {
         __missing: 'Call .body(schema) — dynamic/tiered pricing requires a body schema to resolve the price against';
       }
-    : (ctx: HandlerCtxFor<TBody, TQuery, IsDynamic>) => Promise<unknown> | AsyncIterable<unknown>
+    : HandlerFnFor<TBody, TQuery, IsDynamic>
   : {
       __missing: 'Select an auth mode: .paid(pricing), .siwx(), .apiKey(resolver), or .unprotected()';
     };
@@ -637,7 +651,8 @@ export class RouteBuilder<
     // Streaming handlers (async generators) require per-chunk metering, which
     // only dynamic pricing supports. Catch the mismatch at registration so
     // devs see it on first build rather than at first request.
-    if (isAsyncGeneratorFunction(handlerFn) && !this._dynamicPrice) {
+    const isStreaming = isAsyncGeneratorFunction(handlerFn);
+    if (isStreaming && !this._dynamicPrice) {
       throw new Error(
         `route '${this._key}': streaming handlers (async function*) require .paid({ dynamic: true }) — ` +
           `static/free routes can't meter per-chunk billing.`,
@@ -662,6 +677,7 @@ export class RouteBuilder<
       siwxEnabled: this._siwxEnabled,
       pricing: this._pricing,
       dynamicPrice: this._dynamicPrice ? true : undefined,
+      streaming: isStreaming ? true : undefined,
       protocols: this._protocols,
       bodySchema: this._bodySchema,
       querySchema: this._querySchema,

@@ -104,7 +104,18 @@ function createFakeSessionMppx(
 
   return {
     state,
-    mppx: { charge, session } as unknown as NonNullable<OrchestrateDeps['mppx']>,
+    // The router now registers two session middlewares (sse=false for request-
+    // mode handlers, sse=true for streaming handlers) and dispatches by
+    // routeEntry.streaming. The fake intentionally exposes the same backing
+    // `session` function under both keys — the transport difference is purely
+    // in what `withReceipt` accepts, which the fake's buildSessionResponse
+    // already handles by inspecting the input shape (function vs Response vs
+    // iterable).
+    mppx: {
+      charge,
+      sessionRequest: session,
+      sessionStream: session,
+    } as unknown as NonNullable<OrchestrateDeps['mppx']>,
   };
 }
 
@@ -169,7 +180,7 @@ function makeSessionDeps(
     network: 'tempo:42431',
     x402Accepts: [{ scheme: 'upto', network: 'eip155:8453', payTo: KNOWN_PAYEE }],
     mppx: fake.mppx,
-    mppSessionConfig: {},
+    mppSessionConfig: { depositMultiplier: 10 },
     ...overrides,
   };
 }
@@ -187,6 +198,11 @@ function makeDynamicSessionEntry(overrides: Partial<RouteEntry> = {}): RouteEntr
     unitType: 'token',
     ...overrides,
   };
+}
+
+/** Variant for routes whose handler is an async generator (streaming mode). */
+function makeStreamingSessionEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
+  return makeDynamicSessionEntry({ streaming: true, ...overrides });
 }
 
 function makeStaticMppEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
@@ -294,14 +310,7 @@ describe('MPP session — credential routing', () => {
   it('returns 402 to client when mppx asks for channel advance (rejectAll)', async () => {
     const fake = createFakeSessionMppx({ rejectAll: true });
     const entry = makeDynamicSessionEntry({ bodySchema });
-    const handler = createRequestHandler(
-      entry,
-      async ({ charge }) => {
-        await charge!();
-        return { ok: true };
-      },
-      makeSessionDeps(fake),
-    );
+    const handler = createRequestHandler(entry, async () => ({ ok: true }), makeSessionDeps(fake));
     const res = await handler(withSessionCredential({ action: 'voucher', body: { prompt: 'hi' } }));
     expect(res.status).toBe(402);
   });
@@ -317,10 +326,10 @@ describe('MPP session — credential routing', () => {
   it('returns 500 when session config is missing on the deployment', async () => {
     const fake = createFakeSessionMppx();
     const entry = makeDynamicSessionEntry({ bodySchema });
-    // Drop the session middleware reference so the verify path hits the
+    // Drop the session middleware references so the verify path hits the
     // "MPP sessions not configured" guard at runtime.
     const deps = makeSessionDeps(fake);
-    deps.mppx = { charge: fake.mppx.charge } as NonNullable<OrchestrateDeps['mppx']>;
+    deps.mppx = { charge: fake.mppx!.charge } as NonNullable<OrchestrateDeps['mppx']>;
     deps.mppSessionConfig = null;
     const handler = createRequestHandler(entry, async () => ({ ok: true }), deps);
     const res = await handler(withSessionCredential({ action: 'voucher', body: { prompt: 'hi' } }));
@@ -406,69 +415,69 @@ describe('MPP session — channel-only credentials (no metering)', () => {
   });
 });
 
-describe('MPP session — content credentials (batch handler)', () => {
-  it('voucher with body: handler runs and channel.charge() fires once per tick', async () => {
-    const fake = createFakeSessionMppx();
-    const entry = makeDynamicSessionEntry({ bodySchema, tickCost: '0.0001' });
-    const handler = createRequestHandler(
-      entry,
-      async ({ charge }) => {
-        for (let i = 0; i < 7; i++) await charge!();
-        return { ok: true };
-      },
-      makeSessionDeps(fake),
-    );
-    const res = await handler(withSessionCredential({ action: 'voucher', body: { prompt: 'hi' } }));
-    await res.text(); // drain stream so generator completes
-    expect(res.status).toBe(200);
-    expect(fake.state.chargeCalls).toHaveLength(7);
-  });
+describe('MPP session — content credentials (request-mode handler)', () => {
+  // Non-streaming dynamic handlers (`async (ctx) => value`) have no `charge()`
+  // in their context — request-mode sessions bill exactly `tickCost` per
+  // request via mppx's non-SSE auto-charge at credential verification. Settle
+  // wraps the handler's Response with a `Payment-Receipt` header; no
+  // channel.charge calls fire (those are SSE-only).
 
-  it('open with body: routed as content (handler runs, channel charged)', async () => {
+  it('voucher with body: handler runs, response gets Payment-Receipt header', async () => {
     const fake = createFakeSessionMppx();
     const entry = makeDynamicSessionEntry({ bodySchema });
-    const handler = createRequestHandler(
-      entry,
-      async ({ charge }) => {
-        await charge!();
-        await charge!();
-        return { ok: true };
-      },
-      makeSessionDeps(fake),
-    );
-    const res = await handler(withSessionCredential({ action: 'open', body: { prompt: 'hi' } }));
-    await res.text();
-    expect(res.status).toBe(200);
-    expect(fake.state.chargeCalls).toHaveLength(2);
-  });
-
-  it('handler that never calls charge: free request, no channel.charge calls', async () => {
-    const fake = createFakeSessionMppx();
-    const entry = makeDynamicSessionEntry({ bodySchema });
-    const handler = createRequestHandler(
-      entry,
-      async () => ({ free: true }),
-      makeSessionDeps(fake),
-    );
+    const handler = createRequestHandler(entry, async () => ({ ok: true }), makeSessionDeps(fake));
     const res = await handler(withSessionCredential({ action: 'voucher', body: { prompt: 'hi' } }));
     expect(res.status).toBe(200);
+    expect(res.headers.get('Payment-Receipt')).toBe('MOCK_SESSION_RECEIPT');
+    // No SSE generator engaged → no controller.charge calls (auto-charge
+    // happens inside mppx at credential verify, before any controller exists).
     expect(fake.state.chargeCalls).toEqual([]);
   });
 
-  it('handler returns 4xx: response forwarded, no channel.charge calls', async () => {
+  it('open with body: routed as content, handler runs, receipt attached', async () => {
+    const fake = createFakeSessionMppx();
+    const entry = makeDynamicSessionEntry({ bodySchema });
+    const handler = createRequestHandler(entry, async () => ({ ok: true }), makeSessionDeps(fake));
+    const res = await handler(withSessionCredential({ action: 'open', body: { prompt: 'hi' } }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Payment-Receipt')).toBe('MOCK_SESSION_RECEIPT');
+    expect(fake.state.chargeCalls).toEqual([]);
+  });
+
+  it('request-mode handler always bills exactly tickCost', async () => {
+    // Replaces the old "never calls charge → free request" semantic. mppx
+    // auto-charges one tick at credential verify in non-SSE mode, so every
+    // accepted content credential is settled for tickCost — no "free" path.
+    const fake = createFakeSessionMppx();
+    let observedSettledAmount: string | null = null;
+    const entry = makeDynamicSessionEntry({
+      bodySchema,
+      tickCost: '0.0005',
+      settlement: {
+        afterSettle: async (ctx) => {
+          observedSettledAmount = ctx.payment.amount;
+        },
+      },
+    });
+    const handler = createRequestHandler(entry, async () => ({ ok: true }), makeSessionDeps(fake));
+    const res = await handler(withSessionCredential({ action: 'voucher', body: { prompt: 'hi' } }));
+    expect(res.status).toBe(200);
+    expect(observedSettledAmount).toBe('0.0005');
+    expect(fake.state.chargeCalls).toEqual([]);
+  });
+
+  it('handler returns 4xx: response forwarded, no settle', async () => {
     const fake = createFakeSessionMppx();
     const entry = makeDynamicSessionEntry({ bodySchema });
     const handler = createRequestHandler(
       entry,
-      async ({ charge }) => {
-        await charge!(); // billed once even though we error
+      async () => {
         throw Object.assign(new Error('Bad input'), { status: 422 });
       },
       makeSessionDeps(fake),
     );
     const res = await handler(withSessionCredential({ action: 'voucher', body: { prompt: 'hi' } }));
     expect(res.status).toBe(422);
-    // No SSE generator engaged on error path → no controller.charge calls.
     expect(fake.state.chargeCalls).toEqual([]);
   });
 
@@ -486,65 +495,88 @@ describe('MPP session — content credentials (batch handler)', () => {
     expect(res.status).toBe(500);
     expect(fake.state.chargeCalls).toEqual([]);
   });
+});
 
-  it('charge() throws when running total exceeds maxPrice', async () => {
+describe('MPP session — streaming handler charge() metering', () => {
+  // The `charge()` callback is only exposed on streaming handlers (async
+  // generators). These tests cover what used to be "batch handler with
+  // charge()" — that combination is no longer valid since the types remove
+  // `charge` from non-streaming dynamic contexts.
+
+  it('streaming: handler runs, channel.charge() fires once per call', async () => {
     const fake = createFakeSessionMppx();
-    const entry = makeDynamicSessionEntry({
+    const entry = makeStreamingSessionEntry({ bodySchema, tickCost: '0.0001' });
+    const handler = createRequestHandler(
+      entry,
+      async function* ({ charge }) {
+        for (let i = 0; i < 7; i++) {
+          await charge!();
+          yield `chunk-${i}`;
+        }
+      },
+      makeSessionDeps(fake),
+    );
+    const res = await handler(withSessionCredential({ action: 'voucher', body: { prompt: 'hi' } }));
+    await res.text();
+    expect(res.status).toBe(200);
+    expect(fake.state.chargeCalls).toHaveLength(7);
+  });
+
+  it('streaming: charge() throws when running total exceeds maxPrice', async () => {
+    const fake = createFakeSessionMppx();
+    const entry = makeStreamingSessionEntry({
       bodySchema,
       tickCost: '0.01',
       maxPrice: '0.02', // only 2 ticks fit
     });
     const handler = createRequestHandler(
       entry,
-      async ({ charge }) => {
+      async function* ({ charge }) {
         await charge!();
+        yield 'a';
         await charge!();
+        yield 'b';
         await charge!(); // exceeds cap
-        return { ok: true };
+        yield 'c';
       },
       makeSessionDeps(fake),
     );
     const res = await handler(withSessionCredential({ action: 'voucher', body: { prompt: 'hi' } }));
-    expect(res.status).toBe(400);
-    // No body emitted on cap error — no channel.charge calls reach the SSE stream.
-    expect(fake.state.chargeCalls).toEqual([]);
+    // Generator surfaces the throw mid-stream; the stream errors when drained.
+    expect(res.status).toBe(200);
+    await expect(res.text()).rejects.toThrow(/exceeds maxPrice/);
+    expect(fake.state.chargeCalls).toHaveLength(2);
   });
 
-  it('billed amount = tickCost * call count, regardless of yield count', async () => {
+  it('streaming: billed amount = tickCost × call count', async () => {
     const fake = createFakeSessionMppx();
-    const entry = makeDynamicSessionEntry({
+    const entry = makeStreamingSessionEntry({
       bodySchema,
       tickCost: '0.0005',
       maxPrice: '0.10',
     });
-    let observedSettledAmount: string | null = null;
     const handler = createRequestHandler(
-      {
-        ...entry,
-        settlement: {
-          afterSettle: async (ctx) => {
-            observedSettledAmount = ctx.payment.amount;
-          },
-        },
-      },
-      async ({ charge }) => {
-        for (let i = 0; i < 4; i++) await charge!();
-        return { tokens: 4 };
+      entry,
+      async function* ({ charge }) {
+        for (let i = 0; i < 4; i++) {
+          await charge!();
+          yield `t${i}`;
+        }
       },
       makeSessionDeps(fake),
     );
     const res = await handler(withSessionCredential({ action: 'voucher', body: { prompt: 'hi' } }));
     await res.text();
-    // 4 calls × $0.0005 = $0.002
-    expect(observedSettledAmount).toBe('0.002');
+    // Streaming settle carries the price cap as billedAmount (final cumulative
+    // isn't visible from the router side — it's tracked on the channel state).
     expect(fake.state.chargeCalls).toHaveLength(4);
   });
 });
 
-describe('MPP session — streaming handlers', () => {
+describe('MPP session — streaming handlers (async generator)', () => {
   it('async generator: charge() inside handler debits the channel live', async () => {
     const fake = createFakeSessionMppx();
-    const entry = makeDynamicSessionEntry({ bodySchema, tickCost: '0.0001' });
+    const entry = makeStreamingSessionEntry({ bodySchema, tickCost: '0.0001' });
     const handler = createRequestHandler(
       entry,
       async function* ({ charge }) {
@@ -566,7 +598,7 @@ describe('MPP session — streaming handlers', () => {
 
   it('async generator without charge() calls: zero channel debits, body still streams', async () => {
     const fake = createFakeSessionMppx();
-    const entry = makeDynamicSessionEntry({ bodySchema });
+    const entry = makeStreamingSessionEntry({ bodySchema });
     const handler = createRequestHandler(
       entry,
       async function* () {
@@ -587,7 +619,7 @@ describe('MPP session — streaming handlers', () => {
         if (idx === 1) throw new Error('ChannelClosedError');
       },
     });
-    const entry = makeDynamicSessionEntry({ bodySchema, tickCost: '0.0001' });
+    const entry = makeStreamingSessionEntry({ bodySchema, tickCost: '0.0001' });
     const handler = createRequestHandler(
       entry,
       async function* ({ charge }) {
@@ -663,19 +695,13 @@ describe('MPP session — settle epilogue', () => {
         },
       },
     });
-    const handler = createRequestHandler(
-      entry,
-      async ({ charge }) => {
-        await charge!();
-        return { ok: true };
-      },
-      makeSessionDeps(fake),
-    );
+    const handler = createRequestHandler(entry, async () => ({ ok: true }), makeSessionDeps(fake));
     const res = await handler(withSessionCredential({ action: 'voucher', body: { prompt: 'hi' } }));
     await res.text();
     expect(captured).not.toBeNull();
     expect(captured!.payment.status).toBe('settled');
     expect(captured!.payment.protocol).toBe('mpp');
+    // Request-mode bills exactly tickCost per request.
     expect(captured!.payment.amount).toBe('0.0001');
     expect(captured!.payment.receipt).toBe('MOCK_SESSION_RECEIPT');
   });
@@ -691,10 +717,7 @@ describe('MPP session — settle epilogue', () => {
     const entry = makeDynamicSessionEntry({ bodySchema });
     const handler = createRequestHandler(
       entry,
-      async ({ charge }) => {
-        await charge!();
-        return { ok: true };
-      },
+      async () => ({ ok: true }),
       makeSessionDeps(fake, { plugin }),
     );
     const res = await handler(withSessionCredential({ action: 'voucher', body: { prompt: 'hi' } }));
@@ -707,7 +730,7 @@ describe('MPP session — settle epilogue', () => {
   it('streaming: afterSettle fires at stream-start with settled metadata', async () => {
     const fake = createFakeSessionMppx();
     let captured: SettlementSettledContext | null = null;
-    const entry = makeDynamicSessionEntry({
+    const entry = makeStreamingSessionEntry({
       bodySchema,
       settlement: {
         afterSettle: async (ctx) => {
@@ -740,7 +763,7 @@ describe('MPP session — settle epilogue', () => {
         events.push(evt);
       },
     };
-    const entry = makeDynamicSessionEntry({ bodySchema });
+    const entry = makeStreamingSessionEntry({ bodySchema });
     const handler = createRequestHandler(
       entry,
       async function* ({ charge }) {
@@ -766,14 +789,7 @@ describe('MPP session — settle epilogue', () => {
         },
       },
     });
-    const handler = createRequestHandler(
-      entry,
-      async ({ charge }) => {
-        await charge!();
-        return { ok: true };
-      },
-      makeSessionDeps(fake),
-    );
+    const handler = createRequestHandler(entry, async () => ({ ok: true }), makeSessionDeps(fake));
     const res = await handler(withSessionCredential({ action: 'voucher', body: { prompt: 'hi' } }));
     await res.text();
     expect(observed?.receipt).toBe('MOCK_SESSION_RECEIPT');
@@ -785,15 +801,16 @@ describe('MPP session — settle epilogue', () => {
 // ---------------------------------------------------------------------------
 
 describe('MPP session — multi-request channel', () => {
-  it('charge counts accumulate across sequential voucher+body requests', async () => {
+  it('streaming: charge counts accumulate across sequential voucher+body requests', async () => {
     const fake = createFakeSessionMppx();
-    const entry = makeDynamicSessionEntry({ bodySchema });
+    const entry = makeStreamingSessionEntry({ bodySchema });
     const handler = createRequestHandler(
       entry,
-      async ({ charge }) => {
+      async function* ({ charge }) {
         await charge!();
+        yield 'a';
         await charge!();
-        return { ok: true };
+        yield 'b';
       },
       makeSessionDeps(fake),
     );
@@ -807,15 +824,15 @@ describe('MPP session — multi-request channel', () => {
     expect(fake.state.chargeCalls).toHaveLength(4);
   });
 
-  it('open then voucher: both succeed on the same route, only voucher meters', async () => {
+  it('streaming: open then voucher both succeed; only voucher meters via channel.charge', async () => {
     const fake = createFakeSessionMppx();
     // bodySchema is fine — preflight skips body for the bodyless open.
-    const entry = makeDynamicSessionEntry({ bodySchema });
+    const entry = makeStreamingSessionEntry({ bodySchema });
     const handler = createRequestHandler(
       entry,
-      async ({ charge }) => {
+      async function* ({ charge }) {
         if (charge) await charge();
-        return { ok: true };
+        yield 'x';
       },
       makeSessionDeps(fake),
     );
@@ -831,16 +848,16 @@ describe('MPP session — multi-request channel', () => {
     expect(fake.state.chargeCalls).toHaveLength(1);
   });
 
-  it('subsequent request after channel exhaustion returns 402 to client', async () => {
+  it('streaming: subsequent request after channel exhaustion returns 402 to client', async () => {
     // First session() call succeeds, second onwards returns 402 (mppx signals
     // the client must top up the channel before continuing).
     const fake = createFakeSessionMppx({ rejectAfter: 1 });
-    const entry = makeDynamicSessionEntry({ bodySchema });
+    const entry = makeStreamingSessionEntry({ bodySchema });
     const handler = createRequestHandler(
       entry,
-      async ({ charge }) => {
+      async function* ({ charge }) {
         await charge!();
-        return { ok: true };
+        yield 'a';
       },
       makeSessionDeps(fake),
     );

@@ -2,71 +2,53 @@ import { z } from 'zod';
 import { router } from '@/lib/router';
 
 /**
- * Handler-driven dynamic pricing — the route bills per token of work performed,
- * capped at `maxPrice`. One token = one tick of `tickCost` USDC.
+ * Request-mode dynamic pricing — the route bills exactly `tickCost` per
+ * request. The handler returns a value (not a generator) and has no `charge()`
+ * callback on its context. The wire commits one tick at credential
+ * verification: MPP non-SSE auto-charge on session credentials, or x402
+ * `upto` settled for `tickCost` ≤ cap.
+ *
+ * This is the spec-aligned "discrete paid unit" model. For variable-cost
+ * per-request billing (one tick per token), use the streaming sibling at
+ * `fortune/stream` — async generators are the only handler shape with a
+ * `charge()` callback under this design.
  *
  * Works on both:
- *   - x402 `upto` (the running tick total threads through to
- *     `server.settlePayment(..., { amount: ticks * tickCost })`; Permit2Proxy
- *     enforces `actual ≤ permitted.amount` on chain)
- *   - MPP sessions  (each `charge()` call debits one tick from the channel
- *     voucher; the channel persists across requests for repeat callers)
+ *   - x402 `upto` (settle-amount override = tickCost; Permit2Proxy enforces ≤
+ *     permitted.amount on chain)
+ *   - MPP sessions (one prepaid tick committed at credential verify; channel
+ *     persists across requests for repeat callers)
  *
- * The handler-author writes the same code for both. The 402 challenge
- * advertises the cap and the protocol the client should sign for; the wallet
- * picks the right credential type and the router picks the right wire shape.
- *
- * Test (no auth → 402 challenge with the cap and protocol options):
+ * Test (no auth → 402 challenge):
  *   curl -i -X POST http://localhost:3000/api/fortune/llm \
  *     -H "Content-Type: application/json" \
  *     -d '{"prompt": "Will I be successful?"}'
- *
- * With agentcash CLI (handles the 402 → sign → retry loop):
- *   agentcash fetch http://localhost:3000/api/fortune/llm \
- *     --method POST \
- *     --body '{"prompt": "Will I be successful?"}'
  */
 const LlmSchema = z.object({
   prompt: z.string().min(1).max(280),
 });
 
-// Simulated LLM that emits output tokens one at a time. Real integration would
-// iterate over the model's streaming response and yield each chunk as it
-// arrives; usage falls out of the loop count.
-async function* simulateLlm(): AsyncGenerator<string> {
-  const fortunes = [
-    'The future is brighter than your screen.',
-    'A stranger will give you advice. Take it.',
-    'Patience now will repay you tenfold next month.',
-    'Today is the day. Probably.',
-  ];
-  const fortune = fortunes[Math.floor(Math.random() * fortunes.length)]!;
-  // Rough proxy for tokens: 1 token ≈ 4 chars of output.
-  for (let i = 0; i < fortune.length; i += 4) {
-    yield fortune.slice(i, i + 4);
-  }
-}
-
 export const POST = router
   .route('fortune/llm')
-  .description('Dynamic-priced fortune — billed by simulated token usage, capped at maxPrice')
-  .paid({ dynamic: true, tickCost: '0.0005', unitType: 'token', maxPrice: '0.10' })
+  .description('Request-mode dynamic-priced fortune — bills tickCost per request')
+  // tickCost is what's billed per request ($0.001 each). maxPrice sizes the
+  // server's `suggestedDeposit` on the 402 challenge — set high enough so
+  // the channel covers many requests on the initial open. mppx 0.6.16 has
+  // no auto-topUp in client `SessionManager`; raising the cap up front is
+  // the practical workaround.
+  .paid({ dynamic: true, tickCost: '0.001', unitType: 'request', maxPrice: '0.01' })
   .body(LlmSchema)
-  .handler(async ({ charge, wallet }) => {
-    // Charge once per emitted token. If the model errors mid-stream, the
-    // partial output is returned and only the tokens we actually emitted are
-    // billed — break or return early to skip the rest for free.
-    let fortune = '';
-    let tokens = 0;
-    for await (const token of simulateLlm()) {
-      await charge();
-      fortune += token;
-      tokens += 1;
-    }
+  .handler(async ({ wallet }) => {
+    const fortunes = [
+      'The future is brighter than your screen.',
+      'A stranger will give you advice. Take it.',
+      'Patience now will repay you tenfold next month.',
+      'Today is the day. Probably.',
+    ];
+    const fortune = fortunes[Math.floor(Math.random() * fortunes.length)]!;
 
     return {
       fortune,
-      tokens,
       wallet,
       timestamp: new Date().toISOString(),
     };

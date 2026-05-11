@@ -1,7 +1,9 @@
 import type { NextResponse } from 'next/server';
+import type { Transport } from 'mppx/server';
 import type { Session } from 'mppx/tempo';
 import { AUTH_SCHEME, HEADERS } from '../../headers.js';
 import type { HandlerPaymentContext } from '../../types.js';
+import type { MppxMiddlewareResponse } from '../../pipeline/context/types.js';
 import type {
   ChallengeArgs,
   ChallengeContribution,
@@ -39,8 +41,10 @@ export const mppStrategy: PaymentStrategy = {
     const info = readMppCredential(request);
     if (!info?.sessionAction) return null;
     if (!isChannelOnlyAction(info, request)) return null;
-    // Channel-management credentials carry no body and don't need handler
-    // invocation — settle's withReceipt() emits the channel-state ack directly.
+    // Channel-management credentials (close/topUp, plus bodyless open/voucher
+    // POSTs — including the SSE loop's mid-stream voucher) are control
+    // messages: settle's withReceipt() emits the channel-state ack directly
+    // with no handler invocation.
     return { skipBody: true, skipHandler: true };
   },
 
@@ -76,36 +80,42 @@ export const mppStrategy: PaymentStrategy = {
    * Streaming settle: piggy-back the handler's async iterable onto an SSE
    * channel. We bridge the handler's `charge()` callback to mppx's per-tick
    * channel debit so each `charge()` reserves voucher headroom in real time;
-   * yields stay pure data flow. Only valid on session credentials.
+   * yields stay pure data flow. Only valid on streaming session credentials
+   * (verifySessionMode used the SSE-transport mppx instance).
    */
   async settleStream(args: StreamSettleArgs): Promise<SettleOutcome> {
     const token = args.token as AnyMppToken;
-    if (token.mode !== 'session') {
+    if (token.mode !== 'session' || !token.streaming) {
       return {
         ok: false,
-        error: new Error('streaming requires an MPP session credential'),
-        failMessage: 'streaming requires an MPP session credential',
+        error: new Error('streaming requires a streaming-mode MPP session credential'),
+        failMessage: 'streaming requires a streaming-mode MPP session credential',
         failStatus: 400,
       };
     }
     const sessionToken = token as MppSessionToken;
+    // verifySessionMode produced this from the SSE-transport mppx instance —
+    // narrow to the SSE-flavored `withReceipt` so the generator-factory
+    // overload is in scope.
+    const sseResult = sessionToken.sessionResult as Extract<
+      MppxMiddlewareResponse<Transport.Sse>,
+      { status: 200 }
+    >;
     const { bindChannelCharge, source: handlerStream } = args;
-
-    const forwardHandlerStreamWithChannelDebit = (channel: Session.Sse.SessionController) =>
-      (async function* () {
-        bindChannelCharge(channel.charge);
-        try {
-          for await (const chunk of handlerStream) {
-            yield typeof chunk === 'string' ? chunk : JSON.stringify(chunk);
-          }
-        } finally {
-          bindChannelCharge(null);
+    async function* forwardHandlerStreamWithChannelDebit(
+      channel: Session.Sse.SessionController,
+    ) {
+      bindChannelCharge(channel.charge);
+      try {
+        for await (const chunk of handlerStream) {
+          yield typeof chunk === 'string' ? chunk : JSON.stringify(chunk);
         }
-      })();
+      } finally {
+        bindChannelCharge(null);
+      }
+    }
 
-    const sse = sessionToken.sessionResult.withReceipt(
-      forwardHandlerStreamWithChannelDebit,
-    ) as NextResponse;
+    const sse = sseResult.withReceipt(forwardHandlerStreamWithChannelDebit) as NextResponse;
     sse.headers.set('Cache-Control', 'private');
 
     // The cumulative amount isn't known until the stream ends; carry the cap.
@@ -123,16 +133,44 @@ export const mppStrategy: PaymentStrategy = {
 
     // Dynamic routes prefer session challenges when sessions are configured;
     // static routes always use charge. Both fall back to charge.
-    if (args.routeEntry.dynamicPrice && args.deps.mppx.session && args.deps.mppSessionConfig) {
+    const sessionsConfigured =
+      args.deps.mppSessionConfig && (args.deps.mppx.sessionRequest || args.deps.mppx.sessionStream);
+    if (args.routeEntry.dynamicPrice && sessionsConfigured) {
+      const tickCost = args.routeEntry.tickCost;
+      // Prefer the route's explicit cap, fall back to tickCost × depositMultiplier
+      // (default 10), final fallback to the current price.
+      const computedDeposit =
+        tickCost !== undefined
+          ? multiplyDecimal(tickCost, args.deps.mppSessionConfig!.depositMultiplier)
+          : undefined;
+      const suggestedDeposit = args.routeEntry.maxPrice ?? computedDeposit ?? args.price;
       return buildSessionChallenge({
         ...args,
-        suggestedDeposit: args.routeEntry.maxPrice ?? args.price,
+        suggestedDeposit,
       });
     }
 
     return buildChargeChallenge(args);
   },
 };
+
+/**
+ * Decimal-string × integer multiplication. We avoid Number here so deposits
+ * like `0.0005 × 10 = 0.005` come out exact instead of `0.004999999...`.
+ * Both inputs are constrained: tickCost is a positive decimal validated at
+ * builder time, multiplier is a positive integer from config.
+ */
+function multiplyDecimal(decimal: string, factor: number): string {
+  if (!Number.isFinite(factor) || factor <= 0) return decimal;
+  const [whole, fraction = ''] = decimal.split('.');
+  const scaled = (BigInt(whole + fraction) * BigInt(factor)).toString();
+  const decimals = fraction.length;
+  if (decimals === 0) return scaled;
+  const padded = scaled.padStart(decimals + 1, '0');
+  const intPart = padded.slice(0, padded.length - decimals);
+  const fracPart = padded.slice(padded.length - decimals).replace(/0+$/, '');
+  return fracPart ? `${intPart}.${fracPart}` : intPart;
+}
 
 async function buildChargeChallenge(args: ChallengeArgs): Promise<ChallengeContribution> {
   if (!args.deps.mppx) return {};

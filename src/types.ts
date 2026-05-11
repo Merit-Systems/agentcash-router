@@ -268,15 +268,19 @@ export interface SettlementLifecycle<TBody = unknown> {
 }
 
 /**
- * Bills the request one tick at a time. One call adds one `tickCost` USDC tick
- * to the running total; zero calls leaves the request free. Total billed is
- * capped at `maxPrice` — exceeding the cap throws synchronously at the
- * offending call site.
+ * Bills one tick (`tickCost` USDC) per call. Total is capped at `maxPrice`
+ * — exceeding the cap throws synchronously at the offending call site.
  *
- * On MPP session routes each tick reserves voucher headroom; in streaming
- * handlers `await charge()` may block on `payment-need-voucher` when the
- * channel runs short. On x402 `upto` routes the cumulative atomic amount
- * lands verbatim in the on-chain settle.
+ * Only available on **streaming** dynamic handlers (`async function*`). MPP
+ * session streams thread this through to per-tick voucher debits; `await
+ * charge()` may block on `payment-need-voucher` when the channel runs short.
+ * x402 `upto` routes use the cumulative atomic amount as the on-chain settle.
+ *
+ * Request-mode dynamic handlers do NOT receive `charge()` — the wire bills
+ * exactly `tickCost` per request via mppx's non-SSE auto-charge (or the
+ * upfront x402 `upto` cap settled for `tickCost`). To meter per-token/byte
+ * billing in a non-streaming handler, return the value upfront and use an
+ * async generator handler instead.
  */
 export type ChargeFn = () => Promise<void>;
 
@@ -294,11 +298,14 @@ export interface HandlerContext<TBody = undefined, TQuery = undefined> {
 }
 
 /**
- * Handler context for `.paid({ dynamic: true })` routes. Adds the required
- * `charge()` callback the handler uses to bill in tick units; static routes
- * never receive this — their price is the server's quoted amount.
+ * Handler context for streaming `.paid({ dynamic: true })` handlers (async
+ * generators). Adds the `charge()` callback the handler invokes once per
+ * unit (token/byte/frame) billed.
+ *
+ * Non-streaming dynamic handlers receive the base `HandlerContext` — they
+ * always bill exactly `tickCost` per request and have no `charge` callback.
  */
-export interface DynamicHandlerContext<
+export interface StreamingHandlerContext<
   TBody = undefined,
   TQuery = undefined,
 > extends HandlerContext<TBody, TQuery> {
@@ -350,8 +357,16 @@ export interface RouteEntry {
    */
   siwxEnabled?: boolean;
   pricing?: PricingConfig;
-  /** When true the settled amount is decided by the handler's `charge()` calls, capped at `maxPrice`. */
+  /** When true the route is dynamic-priced; bills `tickCost` per request (request-mode) or per `charge()` call (streaming). */
   dynamicPrice?: boolean;
+  /**
+   * True iff the handler is an async generator (`async function*`). Streaming
+   * handlers settle through the per-tick SSE flow; non-streaming dynamic
+   * handlers bill exactly `tickCost` per request and settle through plain
+   * HTTP (MPP) / static x402 paths. Set by the builder at `.handler(fn)`
+   * registration time.
+   */
+  streaming?: boolean;
   protocols: ProtocolType[];
   bodySchema?: ZodType;
   querySchema?: ZodType;
@@ -455,11 +470,38 @@ export interface RouterConfig {
     /** Tempo RPC URL for on-chain verification. Falls back to TEMPO_RPC_URL env var. */
     rpcUrl?: string;
     /**
-     * Private key of the account that sponsors transaction fees.
-     * When set, clients don't need gas tokens — the server pays fees on their behalf.
+     * Private key of the server's operator account. Signs on-chain channel
+     * operations (close, settle, top-up acceptance). Required for sessions.
+     *
+     * **Address must equal `recipient`/payee.** mppx's close handler asserts
+     * `sender === payee` on settle — a mismatch causes every close attempt
+     * to be rejected and reissued as a fresh 402. The router validates this
+     * at init and throws clearly if they differ.
+     *
+     * Falls back to `feePayerKey` if unset (legacy alias).
+     *
+     * Must be a hex-encoded private key (e.g. `0xabc123...`).
+     */
+    operatorKey?: string;
+    /**
+     * Private key of the fee-sponsor account. Pays transaction gas on behalf
+     * of clients when `sponsorFees` is true (default).
+     *
+     * Legacy: also used as the operator/signing account when `operatorKey`
+     * is unset. New code should use `operatorKey` for that role.
+     *
      * Must be a hex-encoded private key (e.g. `0xabc123...`).
      */
     feePayerKey?: string;
+    /**
+     * Whether the fee payer (`feePayerKey`) sponsors transaction fees for
+     * clients. Default `true` for backward compatibility.
+     *
+     * When `false`, clients pay their own gas (in USDC on Tempo). Useful
+     * for demos and self-serve setups where you don't want to fund a sponsor
+     * wallet. The operator key still signs channel-close transactions.
+     */
+    sponsorFees?: boolean;
     /**
      * Persistent store for transaction hash replay protection.
      *
@@ -492,14 +534,30 @@ export interface RouterConfig {
     useDefaultStore?: boolean;
     /**
      * Enables MPP payment-channel sessions. When set, the router registers
-     * `tempo.session` alongside `tempo.charge` so dynamic-priced routes can
-     * verify and settle session credentials. Per-tick cost and unit label are
-     * declared per-route via `.paid({ dynamic: true, tickCost, unitType })`.
+     * `tempo.session` (non-SSE, for request-mode dynamic handlers) AND
+     * `tempo.session({ sse: true })` (for streaming dynamic handlers) so
+     * dynamic-priced routes can verify and settle session credentials. Per-tick
+     * cost and unit label are declared per-route via
+     * `.paid({ dynamic: true, tickCost, unitType })`.
      *
      * Also requires `mpp.feePayerKey` (the operator account signs channel
      * close/settle).
      */
-    session?: Record<string, never>;
+    session?: {
+      /**
+       * Suggested-deposit multiplier for the 402 challenge on dynamic routes.
+       * The client is asked to deposit `tickCost × depositMultiplier` USDC
+       * into the channel — covers N requests of `tickCost` before requiring a
+       * topUp. Higher values reduce on-chain topUp frequency at the cost of
+       * larger client deposits per channel.
+       *
+       * Routes can override via `.paid({ dynamic: true, maxPrice })` — when
+       * `maxPrice` is set it takes precedence over `tickCost × depositMultiplier`.
+       *
+       * @default 10
+       */
+      depositMultiplier?: number;
+    };
   };
   /**
    * Payment protocols to accept on paid routes unless a route overrides them.

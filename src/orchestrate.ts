@@ -1,5 +1,5 @@
 import type { NextRequest, NextResponse } from 'next/server';
-import type { HandlerContext, RouteEntry } from './types.js';
+import type { HandlerContext, RouteEntry, StreamingHandlerContext } from './types.js';
 import { preflight, type RouterDeps } from './pipeline/context/index.js';
 import { runApiKeyOnlyFlow } from './pipeline/flows/api-key-only.js';
 import { runPaidFlow } from './pipeline/flows/paid.js';
@@ -12,18 +12,20 @@ export type { RouterDeps } from './pipeline/context/index.js';
 
 /**
  * Route handler shape — either a batch handler that returns a value, or a
- * streaming handler that yields chunks.
+ * streaming handler that yields chunks. Discriminated by return type so the
+ * `ctx` parameter narrows at the call site:
  *
- * `Promise<unknown>` covers normal `async (ctx) => result` handlers (the
- * orchestrator settles once after the promise resolves).
- *
- * `AsyncIterable<unknown>` covers `async function* (ctx) { yield ... }`
- * handlers — supported only on routes whose protocol can stream
- * (today: MPP session SSE-mode). The orchestrator pipes the iterable through
- * mppx's session SSE serve loop with a charge per yield (or per `charge()`
- * call inside the generator).
+ * - `Promise<unknown>` → request-mode handler, receives base `HandlerContext`
+ *   (no `charge` callback — request-mode dynamic bills exactly `tickCost`
+ *   per request, static bills the quoted price).
+ * - `AsyncIterable<unknown>` → streaming handler, receives
+ *   `StreamingHandlerContext` whose `charge` callback debits one tick per
+ *   call. Supported only on routes whose protocol can stream (today: MPP
+ *   session SSE).
  */
-export type RouteHandler = (ctx: HandlerContext) => Promise<unknown> | AsyncIterable<unknown>;
+export type RouteHandler =
+  | ((ctx: HandlerContext) => Promise<unknown>)
+  | ((ctx: StreamingHandlerContext) => AsyncIterable<unknown>);
 
 /**
  * Compile a route registration into a Next.js request handler.

@@ -59,23 +59,38 @@ export interface RouterDeps {
   mppx?: {
     charge: MppxMiddleware<{ amount: string }, Transport.Http>;
     /**
-     * Session-mode middleware. Present iff `RouterConfig.mpp.session` was
-     * configured. Uses mppx's SSE transport — the 200-branch's `withReceipt`
-     * accepts a Response, an async generator, or a generator factory; mppx
-     * auto-converts iterables to Server-Sent Events with per-tick voucher
-     * charging.
+     * Request-mode session middleware (non-SSE). Bills exactly one tick per
+     * request via mppx's auto-charge at credential verification. Used for
+     * dynamic-priced routes whose handler is a regular async function — the
+     * wire is plain HTTP with a `Payment-Receipt` header. Present iff
+     * `RouterConfig.mpp.session` was configured.
      */
-    session?: MppxMiddleware<
+    sessionRequest?: MppxMiddleware<
+      { amount: string; unitType?: string; suggestedDeposit?: string },
+      Transport.Http
+    >;
+    /**
+     * Streaming-mode session middleware (SSE). The 200-branch's `withReceipt`
+     * accepts an async generator factory; mppx auto-converts iterables to
+     * Server-Sent Events with per-tick voucher charging — one `channel.charge()`
+     * call inside the generator bills one additional tick beyond the prepaid
+     * first. Used for dynamic-priced routes whose handler is an async generator
+     * (`async function*`). Present iff `RouterConfig.mpp.session` was
+     * configured.
+     */
+    sessionStream?: MppxMiddleware<
       { amount: string; unitType?: string; suggestedDeposit?: string },
       Transport.Sse
     >;
   } | null;
   /**
-   * Presence flag — set by `createRouter` when `RouterConfig.mpp.session` is
-   * configured, null otherwise. Used to gate dynamic-priced MPP routes at
-   * registration time.
+   * Resolved session config — set by `createRouter` when `RouterConfig.mpp.session`
+   * is configured, null otherwise. Carries the `depositMultiplier` used for the
+   * 402 challenge's `suggestedDeposit` on dynamic routes (default 10). Used to
+   * gate dynamic-priced MPP routes at registration time and to compute the
+   * advertised deposit at challenge time.
    */
-  mppSessionConfig?: Record<string, never> | null;
+  mppSessionConfig?: { depositMultiplier: number } | null;
   tempoClient?: import('viem').Client | null;
 }
 
@@ -110,9 +125,10 @@ export type ParseBodyResult = { ok: true; data: unknown } | { ok: false; respons
  *   static   →  StaticRequestResult    (impossible)
  *   dynamic  →  DynamicRequestResult   DynamicStreamResult
  *
- * Static has a single shape (no `kind` discriminator needed). Dynamic carries
- * `chargeContext` on every variant — stream uses `bindChannelCharge`, request
- * uses `atomicTotal()` for `billedAmount`.
+ * Static and dynamic-request have no `chargeContext` — both bill at the
+ * server's quoted price (static) or exactly `tickCost` per request (dynamic-
+ * request, via mppx's non-SSE session auto-charge). Streaming carries a
+ * `chargeContext` so `settleStream` can bind per-tick channel debits.
  */
 export type StaticRequestResult = {
   response: NextResponse;
@@ -125,7 +141,6 @@ export type DynamicRequestResult = {
   response: NextResponse;
   rawResult: unknown;
   handlerError?: unknown;
-  chargeContext: ChargeContext;
 };
 
 export type DynamicStreamResult = {

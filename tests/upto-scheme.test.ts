@@ -262,20 +262,14 @@ describe('upto scheme', () => {
       ]);
     }
 
-    it('forwards billed total as $-tagged settlement override when handler bills via charge()', async () => {
+    it('request-mode: forwards tickCost as $-tagged settlement override', async () => {
+      // Request-mode dynamic handlers have no `charge()` callback — every
+      // accepted request bills exactly `tickCost`. The settlement override
+      // forwards `tickCost` to the x402 server so Permit2Proxy settles for
+      // that amount (≤ the upto cap).
       const server = new FakeX402Server();
       const deps = makeUptoDeps(server);
-      const handler = createRequestHandler(
-        makeDynamicEntry(),
-        async ({ charge }) => {
-          // 3 ticks × $0.0001 = $0.0003
-          await charge!();
-          await charge!();
-          await charge!();
-          return { ok: true };
-        },
-        deps,
-      );
+      const handler = createRequestHandler(makeDynamicEntry(), async () => ({ ok: true }), deps);
 
       const res = await handler(
         new NextRequest(URL, { method: 'POST', headers: { 'X-PAYMENT': makeUptoPayment() } }),
@@ -283,53 +277,19 @@ describe('upto scheme', () => {
 
       expect(res.status).toBe(200);
       expect(server.settledPayments).toHaveLength(1);
-      expect(server.settledPayments[0]!.overrides).toEqual({ amount: '$0.0003' });
+      expect(server.settledPayments[0]!.overrides).toEqual({ amount: '$0.0001' });
     });
 
-    it('skips settle entirely when handler never calls charge() (free request)', async () => {
-      const server = new FakeX402Server();
-      const deps = makeUptoDeps(server);
-      const handler = createRequestHandler(makeDynamicEntry(), async () => ({ free: true }), deps);
-
-      const res = await handler(
-        new NextRequest(URL, { method: 'POST', headers: { 'X-PAYMENT': makeUptoPayment() } }),
-      );
-
-      expect(res.status).toBe(200);
-      expect(server.settledPayments).toHaveLength(0);
-    });
-
-    it('returns 400 with no settle when running total exceeds maxPrice', async () => {
+    it('streaming: forwards billed total as $-tagged settlement override', async () => {
+      // x402 has no native streaming wrapper — the strategy rejects async
+      // generator handlers at settleStream. This test guards that the rejection
+      // is clean (500, no settle) rather than crashing or silently billing.
       const server = new FakeX402Server();
       const deps = makeUptoDeps(server);
       const handler = createRequestHandler(
-        // tickCost $0.05, maxPrice $0.05 → only one tick fits
-        { ...makeDynamicEntry(), tickCost: '0.05', maxPrice: '0.05' },
-        async ({ charge }) => {
-          await charge!();
-          await charge!(); // exceeds cap
-          return { ok: true };
-        },
-        deps,
-      );
-
-      const res = await handler(
-        new NextRequest(URL, {
-          method: 'POST',
-          headers: { 'X-PAYMENT': makeUptoPayment('50000') },
-        }),
-      );
-
-      expect(res.status).toBe(400);
-      expect(server.settledPayments).toHaveLength(0);
-    });
-
-    it('rejects streaming handlers (x402 has no settleStream)', async () => {
-      const server = new FakeX402Server();
-      const deps = makeUptoDeps(server);
-      const handler = createRequestHandler(
-        makeDynamicEntry(),
+        { ...makeDynamicEntry(), streaming: true },
         async function* ({ charge }) {
+          await charge!();
           await charge!();
           yield 'chunk';
         },

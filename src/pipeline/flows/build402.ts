@@ -3,12 +3,7 @@ import type { PricingStrategy } from '../../pricing/index.js';
 import { firePluginHook } from '../../plugin.js';
 import { getAllowedStrategies } from '../../protocols/index.js';
 import { buildChallengeExtensions } from '../challenge-extensions.js';
-import {
-  errorMessage,
-  errorStatus,
-  firePluginResponse,
-  type FlowCtx,
-} from '../context/index.js';
+import { errorMessage, errorStatus, firePluginResponse, type FlowCtx } from '../context/index.js';
 
 /**
  * Build a 402 challenge for a paid route (static or dynamic). Composes

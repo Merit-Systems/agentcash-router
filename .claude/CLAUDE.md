@@ -38,42 +38,46 @@ Four auth modes, mutually exclusive (except `.apiKey()` composes with `.paid()`)
 .paid((body) => calcPrice(body)) // Dynamic pricing (body-driven, pre-handler)
 .paid({ field: 'tier', tiers: { basic: { price: '0.01' } } }) // Tiered
 
-// Handler-driven dynamic pricing — the handler bills in tick units via charge().
-// One tick = `tickCost` USDC. Total billed = tickCost * sum(units).
+// Handler-driven dynamic pricing — request-mode bills exactly tickCost;
+// streaming handlers (async function*) bill per `charge()` call.
 .paid({ dynamic: true, tickCost: '0.0005', unitType: 'token', maxPrice: '0.10' })
 ```
 
 #### Handler-driven dynamic (`.paid({ dynamic: true })`)
 
-The handler receives a `charge()` callback. The invariant:
+The handler shape determines the billing model and wire transport:
+
+**Request-mode** — `async (ctx) => value`. Bills exactly `tickCost` per
+request. No `charge()` on the context — the wire commitment is fixed at
+credential verification (mppx's non-SSE auto-charge for MPP, or x402 `upto`
+settled for `tickCost`). This is the spec-aligned "discrete paid unit" mode
+per `paymentauth.org/draft-tempo-session-00`.
+
+```typescript
+router
+  .route('llm/summarize')
+  .paid({ dynamic: true, tickCost: '0.01', unitType: 'request', maxPrice: '0.01' })
+  .body(z.object({ prompt: z.string() }))
+  .handler(async ({ body }) => {
+    const summary = await callLLM(body.prompt);
+    return { summary }; // always bills $0.01
+  });
+```
+
+For variable-cost-per-request billing, use the streaming shape below —
+splitting work into yields lets `charge()` meter per unit.
+
+**Streaming mode** — `async function* (ctx)`. Receives a `charge()` callback;
+one call adds one tick. The invariant:
 
 > **one `charge()` call === one tick === `tickCost` USDC === one route-defined unit**
 
 The route picks `tickCost` to match its billing unit (one token at $0.0005,
 one byte at $0.0000001, one frame at $0.001) and labels it via `unitType`.
-The handler counts units in domain terms — call `charge()` once per unit.
-Total billed is `tickCost * call_count`, capped at `maxPrice`.
-
-```typescript
-router
-  .route('llm/generate')
-  .paid({ dynamic: true, tickCost: '0.0005', unitType: 'token', maxPrice: '0.10' })
-  .body(z.object({ prompt: z.string() }))
-  .handler(async ({ body, charge }) => {
-    const { tokens, output } = await callLLM(body.prompt);
-    for (let i = 0; i < tokens; i++) await charge(); // bills tokens × $0.0005
-    return { output };
-  });
-```
-
-`tickCost` is required per-route on `.paid({ dynamic: true })` — the builder
-throws at registration if it's missing. `unitType` is optional (cosmetic
-label, defaults to undefined which mppx surfaces as plain ticks).
-
-**Streaming handlers** (`async function*`) bill via the same `charge()` API.
-Yields are pure data flow — they do *not* auto-bill. Each `charge()` call
-debits one voucher tick live; the handler can backpressure on
-`payment-need-voucher` mid-stream:
+Total billed is `tickCost × call_count`, capped at `maxPrice`. (Internally:
+mppx auto-charges one prepaid tick at credential verify and marks it; the
+first `charge()` consumes the prepaid without an extra debit, then subsequent
+calls bill fresh ticks live.)
 
 ```typescript
 router
@@ -89,10 +93,33 @@ router
   });
 ```
 
+**Type safety**: TypeScript discriminates by the handler signature.
+Request-mode handlers do not have `charge` on their context — calling it is
+a compile-time error. Only streaming handlers receive the
+`StreamingHandlerContext` with `charge`.
+
+`tickCost` is required per-route on `.paid({ dynamic: true })` — the builder
+throws at registration if it's missing. `unitType` is optional (cosmetic
+label, defaults to undefined which mppx surfaces as plain ticks).
+
+**Transport selection**: the router auto-picks the wire format from the
+handler shape. Request-mode handlers go through plain HTTP with a
+`Payment-Receipt` header (mppx's `tempo.session({ sse: false })`). Streaming
+handlers go through SSE with inline per-tick voucher events
+(`tempo.session({ sse: true })`). Two mppx instances run side-by-side
+sharing the same store, secretKey, and realm so channel state and challenge
+HMACs are interchangeable.
+
 The same handler shape works on both x402 `upto` (settles cumulative atomic
 amount; Permit2Proxy enforces ≤ maxPrice) and MPP sessions (per-tick voucher
 debits; channel persists across requests). Streaming requires MPP — x402 has
 no streaming primitive.
+
+**`suggestedDeposit` on MPP session 402 challenges**: defaults to
+`tickCost × RouterConfig.mpp.session.depositMultiplier` (default `10`), or
+the route's `maxPrice` when set. Raise the multiplier at deployment level to
+cover more requests per channel, or set `maxPrice` per-route when a single
+request can exceed the default budget.
 
 ### `.siwx()` — Wallet identity required (no payment)
 ```typescript
