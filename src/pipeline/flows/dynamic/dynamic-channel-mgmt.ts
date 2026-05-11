@@ -11,19 +11,19 @@ import {
   type FlowCtx,
   type SettleScope,
 } from '../../context/index.js';
-import { buildDynamic402 } from './dynamic-402.js';
+import { build402 } from '../build402.js';
 import { resolveDynamicBodyAndPrice } from './dynamic-body-and-price.js';
 
 /**
  * MPP channel-management lifecycle (close, topUp, bodyless open|voucher).
  *
- * Reached when `strategy.preflightDynamic()` flags `skipHandler: true`. No
- * handler runs and no body is parsed; the strategy's `settle()` emits a
- * channel-state ack via mppx's `withReceipt`. `billedAmount` is "0" — these
- * credentials advance the channel nonce but don't bill content.
+ * Reached when `strategy.preflight()` flags `skipHandler: true`. No handler
+ * runs and no body is parsed; the strategy's `settle()` emits a channel-state
+ * ack via mppx's `withReceipt`. `billedAmount` is "0" — these credentials
+ * advance the channel nonce but don't bill content.
  *
  * Channel-mgmt is dynamic-only — static-priced MPP routes don't advertise
- * sessions and `verifyStatic` rejects session credentials.
+ * sessions and `verify` rejects session credentials on static routes.
  *
  * `runBeforeSettle` and `onSettleError` still fire so route hooks see the
  * channel-management traffic and any settle failure escalates the same way as
@@ -43,7 +43,7 @@ export async function runDynamicChannelMgmtFlow(args: {
   if (!bodyAndPrice.ok) return bodyAndPrice.response;
   const { parsedBody, price } = bodyAndPrice;
 
-  const verifyOutcome = await strategy.verifyDynamic({
+  const verifyOutcome = await strategy.verify({
     request,
     body: parsedBody,
     price,
@@ -55,7 +55,7 @@ export async function runDynamicChannelMgmtFlow(args: {
     if (verifyOutcome.kind === 'config') {
       return fail(ctx, 500, verifyOutcome.message, parsedBody);
     }
-    return buildDynamic402(ctx, pricing, parsedBody);
+    return build402(ctx, pricing, parsedBody);
   }
 
   ctx.pluginCtx.setVerifiedWallet(verifyOutcome.wallet);

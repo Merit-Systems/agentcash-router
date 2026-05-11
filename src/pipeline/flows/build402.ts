@@ -1,25 +1,27 @@
 import { NextResponse } from 'next/server';
-import type { PricingStrategy } from '../../../pricing/index.js';
-import { firePluginHook } from '../../../plugin.js';
-import { getAllowedStrategies } from '../../../protocols/index.js';
-import { buildChallengeExtensions } from '../../challenge-extensions.js';
+import type { PricingStrategy } from '../../pricing/index.js';
+import { firePluginHook } from '../../plugin.js';
+import { getAllowedStrategies } from '../../protocols/index.js';
+import { buildChallengeExtensions } from '../challenge-extensions.js';
 import {
   errorMessage,
   errorStatus,
   firePluginResponse,
   type FlowCtx,
-} from '../../context/index.js';
+} from '../context/index.js';
 
 /**
- * Build a 402 challenge for a dynamic-priced route. Composes contributions
- * from every allowed payment protocol strategy via `buildChallengeDynamic`.
+ * Build a 402 challenge for a paid route (static or dynamic). Composes
+ * contributions from every allowed payment protocol strategy via
+ * `buildChallenge`; the strategy reads `routeEntry.dynamicPrice` itself to
+ * pick its sub-protocol mode.
  *
  * Returns:
  *   - 402 with PAYMENT-REQUIRED + WWW-Authenticate (per allowed protocols)
  *   - 500 if x402 challenge construction fails (without it, clients can't pay)
  *   - error response if pricing fails with no maxPrice fallback
  */
-export async function buildDynamic402(
+export async function build402(
   ctx: FlowCtx,
   pricing: PricingStrategy | null,
   body: unknown | undefined,
@@ -49,7 +51,7 @@ export async function buildDynamic402(
 
   for (const strategy of getAllowedStrategies(ctx.routeEntry.protocols)) {
     try {
-      const contribution = await strategy.buildChallengeDynamic({
+      const contribution = await strategy.buildChallenge({
         request: ctx.request,
         routeEntry: ctx.routeEntry,
         body,

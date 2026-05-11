@@ -35,7 +35,7 @@ export const mppStrategy: PaymentStrategy = {
     return Boolean(auth && auth.startsWith(AUTH_SCHEME.MPP_PAYMENT));
   },
 
-  preflightDynamic(request: Request, _routeEntry: RouteEntry): PreflightOutcome | null {
+  preflight(request: Request, _routeEntry: RouteEntry): PreflightOutcome | null {
     const info = readMppCredential(request);
     if (!info?.sessionAction) return null;
     if (!isChannelOnlyAction(info, request)) return null;
@@ -44,9 +44,16 @@ export const mppStrategy: PaymentStrategy = {
     return { skipBody: true, skipHandler: true };
   },
 
-  async verifyStatic(args: VerifyArgs): Promise<VerifyOutcome> {
+  async verify(args: VerifyArgs): Promise<VerifyOutcome> {
     const info = readMppCredential(args.request);
     if (!info) return { ok: false, kind: 'invalid' };
+
+    if (args.routeEntry.dynamicPrice) {
+      // Dynamic routes only accept session credentials — charge credentials
+      // commit the client to a fixed amount before the handler runs.
+      if (!info.sessionAction) return { ok: false, kind: 'invalid' };
+      return verifySessionMode(args, info);
+    }
 
     // Static routes can't accept session credentials — sessions are only
     // advertised on dynamic routes' 402 challenges.
@@ -56,17 +63,6 @@ export const mppStrategy: PaymentStrategy = {
       return verifyTxMode(args, info);
     }
     return verifyHashMode(args, info);
-  },
-
-  async verifyDynamic(args: VerifyArgs): Promise<VerifyOutcome> {
-    const info = readMppCredential(args.request);
-    if (!info) return { ok: false, kind: 'invalid' };
-
-    // Dynamic routes only accept session credentials — charge credentials
-    // commit the client to a fixed amount before the handler runs.
-    if (!info.sessionAction) return { ok: false, kind: 'invalid' };
-
-    return verifySessionMode(args, info);
   },
 
   async settle(args: SettleArgs): Promise<SettleOutcome> {
@@ -122,21 +118,18 @@ export const mppStrategy: PaymentStrategy = {
     return { ok: true, response: sse, settledPayment };
   },
 
-  async buildChallengeStatic(args: ChallengeArgs): Promise<ChallengeContribution> {
-    return buildChargeChallenge(args);
-  },
-
-  async buildChallengeDynamic(args: ChallengeArgs): Promise<ChallengeContribution> {
+  async buildChallenge(args: ChallengeArgs): Promise<ChallengeContribution> {
     if (!args.deps.mppx) return {};
 
-    if (args.deps.mppx.session && args.deps.mppSessionConfig) {
+    // Dynamic routes prefer session challenges when sessions are configured;
+    // static routes always use charge. Both fall back to charge.
+    if (args.routeEntry.dynamicPrice && args.deps.mppx.session && args.deps.mppSessionConfig) {
       return buildSessionChallenge({
         ...args,
         suggestedDeposit: args.routeEntry.maxPrice ?? args.price,
       });
     }
 
-    // Fall back to a charge challenge when sessions aren't configured.
     return buildChargeChallenge(args);
   },
 };

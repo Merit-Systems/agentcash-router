@@ -10,7 +10,7 @@ import {
   trySiwxFastPath,
   type FlowCtx,
 } from '../../context/index.js';
-import { buildDynamic402 } from './dynamic-402.js';
+import { build402 } from '../build402.js';
 import { resolveDynamicBodyAndPrice } from './dynamic-body-and-price.js';
 import { runDynamicChannelMgmtFlow } from './dynamic-channel-mgmt.js';
 import { invokeDynamic } from './dynamic-invoke.js';
@@ -28,10 +28,10 @@ import { runDynamicStreamFlow } from './dynamic-stream.js';
  *   2. pricing + protocol strategy selection
  *   3. early body parse (for accurate 402 quotes / validate)
  *   4. SIWX entitlement fast-path
- *   5. no-credential → buildDynamic402
- *   6. preflightDynamic (channel-mgmt credentials skip handler)
+ *   5. no-credential → build402
+ *   6. preflight (channel-mgmt credentials skip handler)
  *   7. resolveDynamicBodyAndPrice (with skipBody)
- *   8. verifyDynamic (rejects charge credentials)
+ *   8. verify (rejects charge credentials on dynamic routes)
  *   9. invokeDynamic → stream or request lifecycle
  */
 export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
@@ -66,7 +66,7 @@ export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   if (!incomingStrategy) {
     const initError = protocolInitError(routeEntry, deps);
     if (initError) return fail(ctx, 500, initError);
-    return buildDynamic402(ctx, pricing, earlyBody);
+    return build402(ctx, pricing, earlyBody);
   }
 
   const { skipBody, skipHandler } = resolveDynamicPreflight(incomingStrategy, request, routeEntry);
@@ -85,7 +85,7 @@ export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   if (!bodyAndPrice.ok) return bodyAndPrice.response;
   const { parsedBody, price } = bodyAndPrice;
 
-  const verifyOutcome = await incomingStrategy.verifyDynamic({
+  const verifyOutcome = await incomingStrategy.verify({
     request,
     body: parsedBody,
     price,
@@ -97,7 +97,7 @@ export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
     if (verifyOutcome.kind === 'config') {
       return fail(ctx, 500, verifyOutcome.message, parsedBody);
     }
-    return buildDynamic402(ctx, pricing, parsedBody);
+    return build402(ctx, pricing, parsedBody);
   }
 
   ctx.pluginCtx.setVerifiedWallet(verifyOutcome.wallet);

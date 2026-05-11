@@ -11,7 +11,7 @@ import {
   type FlowCtx,
 } from '../../context/index.js';
 import { invokePaidStatic } from './static-invoke.js';
-import { buildStatic402 } from './static-402.js';
+import { build402 } from '../build402.js';
 import { resolveStaticBodyAndPrice } from './static-body-and-price.js';
 import { runStaticRequestFlow } from './static-request.js';
 
@@ -25,9 +25,9 @@ import { runStaticRequestFlow } from './static-request.js';
  *   2. pricing + protocol strategy selection
  *   3. early body parse (for accurate 402 quotes / validate)
  *   4. SIWX entitlement fast-path
- *   5. no-credential → buildStatic402
+ *   5. no-credential → build402
  *   6. resolveStaticBodyAndPrice (no skipBody — channel-mgmt is dynamic-only)
- *   7. verifyStatic (rejects session credentials)
+ *   7. verify (rejects session credentials on static routes)
  *   8. invokeStatic → runStaticRequestFlow
  */
 export async function runStaticPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
@@ -62,14 +62,14 @@ export async function runStaticPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   if (!incomingStrategy) {
     const initError = protocolInitError(routeEntry, deps);
     if (initError) return fail(ctx, 500, initError);
-    return buildStatic402(ctx, pricing, earlyBody);
+    return build402(ctx, pricing, earlyBody);
   }
 
   const bodyAndPrice = await resolveStaticBodyAndPrice({ ctx, pricing });
   if (!bodyAndPrice.ok) return bodyAndPrice.response;
   const { parsedBody, price } = bodyAndPrice;
 
-  const verifyOutcome = await incomingStrategy.verifyStatic({
+  const verifyOutcome = await incomingStrategy.verify({
     request,
     body: parsedBody,
     price,
@@ -81,7 +81,7 @@ export async function runStaticPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
     if (verifyOutcome.kind === 'config') {
       return fail(ctx, 500, verifyOutcome.message, parsedBody);
     }
-    return buildStatic402(ctx, pricing, parsedBody);
+    return build402(ctx, pricing, parsedBody);
   }
 
   ctx.pluginCtx.setVerifiedWallet(verifyOutcome.wallet);

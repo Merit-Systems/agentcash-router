@@ -1,3 +1,4 @@
+import type { PaymentRequirements } from '@x402/core/types';
 import type { HandlerPaymentContext } from '../../types.js';
 import { HEADERS } from '../../headers.js';
 import { normalizeWalletAddress } from '../../auth/normalize-wallet.js';
@@ -17,7 +18,7 @@ import { verifyX402Payment } from './verify.js';
 
 interface X402Token {
   payload: unknown;
-  requirements: import('@x402/core/types').PaymentRequirements;
+  requirements: PaymentRequirements;
 }
 
 export const x402Strategy: PaymentStrategy = {
@@ -30,95 +31,13 @@ export const x402Strategy: PaymentStrategy = {
     );
   },
 
-  // x402 verify is mode-agnostic — the upto vs exact distinction lives in
-  // settle (dynamicAmountOverride) and challenge construction, not verify.
-  verifyStatic: (args: VerifyArgs) => verifyX402(args),
-  verifyDynamic: (args: VerifyArgs) => verifyX402(args),
-
-  async settle(args: SettleArgs): Promise<SettleOutcome> {
-    const { response, payment, token, deps, routeEntry, billedAmount } = args;
-    const x402Token = token as X402Token;
-
-    try {
-      // Dynamic routes use upto and override the on-chain amount with the
-      // post-handler total (Permit2Proxy enforces `actual ≤ permitted.amount`).
-      // Static routes settle for the verified requirements amount.
-      const dynamicAmountOverride = routeEntry.dynamicPrice ? { amount: billedAmount } : undefined;
-      const settle = await settleX402Payment(
-        deps.x402Server!,
-        x402Token.payload,
-        x402Token.requirements,
-        dynamicAmountOverride,
-      );
-      if (!settle.result?.success) {
-        const reason = settle.result?.errorReason || 'x402 settlement returned success=false';
-        const error = new Error(reason) as Error & { errorReason?: string };
-        error.errorReason = reason;
-        throw error;
-      }
-
-      response.headers.set(HEADERS.X402_PAYMENT_RESPONSE, settle.encoded);
-      response.headers.set('Cache-Control', 'private');
-
-      const transaction = String(settle.result?.transaction ?? '');
-      const settledPayment: HandlerPaymentContext & { status: 'settled' } = {
-        ...payment,
-        status: 'settled',
-        amount: billedAmount,
-        ...(transaction ? { transaction } : {}),
-      };
-
-      return { ok: true, response, settledPayment };
-    } catch (err) {
-      const errObj = err as {
-        message?: string;
-        errorReason?: string;
-        response?: { status?: number; data?: unknown; body?: unknown };
-      };
-      console.error('Settlement failed', {
-        message: err instanceof Error ? err.message : String(err),
-        route: args.routeEntry.key,
-        network: payment.network,
-        errorReason: errObj.errorReason,
-        facilitatorStatus: errObj.response?.status,
-        facilitatorBody: errObj.response?.data ?? errObj.response?.body,
-      });
-      return { ok: false, error: err, failMessage: 'Settlement failed' };
-    }
-  },
-
-  // x402 challenge construction is mode-agnostic — the upto vs exact
-  // distinction lives in the requirements scheme, decided in buildX402Challenge
-  // off `routeEntry.dynamicPrice`. Both methods delegate to the same builder.
-  buildChallengeStatic: (args: ChallengeArgs) => buildX402ChallengeContribution(args),
-  buildChallengeDynamic: (args: ChallengeArgs) => buildX402ChallengeContribution(args),
+  // x402 verify and buildChallenge are mode-agnostic — the upto vs exact
+  // distinction lives in settle (dynamicAmountOverride) and in the requirements
+  // scheme picked by buildX402Challenge, both keyed off `routeEntry.dynamicPrice`.
+  verify: (args: VerifyArgs) => verifyX402(args),
+  settle: (args: SettleArgs) => settleX402(args),
+  buildChallenge: (args: ChallengeArgs) => buildX402ChallengeContribution(args),
 };
-
-async function buildX402ChallengeContribution(args: ChallengeArgs): Promise<ChallengeContribution> {
-  const { request, routeEntry, body, price, extensions, deps } = args;
-
-  if (!deps.x402Server) return {};
-
-  const accepts = await resolveX402Accepts(
-    request,
-    routeEntry,
-    deps.x402Accepts,
-    deps.payeeAddress,
-    body,
-  );
-
-  const { encoded } = await buildX402Challenge({
-    server: deps.x402Server,
-    routeEntry,
-    request,
-    price,
-    accepts,
-    facilitatorsByNetwork: deps.x402FacilitatorsByNetwork,
-    extensions,
-  });
-
-  return { headers: { [HEADERS.X402_PAYMENT_REQUIRED]: encoded } };
-}
 
 async function verifyX402(args: VerifyArgs): Promise<VerifyOutcome> {
   const { request, body, price, routeEntry, deps } = args;
@@ -147,16 +66,15 @@ async function verifyX402(args: VerifyArgs): Promise<VerifyOutcome> {
   if (!verifyResult?.valid) return { ok: false, kind: 'invalid' };
 
   const wallet = normalizeWalletAddress(verifyResult.payer);
-  const matchedNetwork = getRequirementNetwork(verifyResult.requirements, deps.network);
-  const matchedRecipient = getRequirementRecipient(verifyResult.requirements);
+  const { network, payTo } = verifyResult.requirements;
 
   const payment: HandlerPaymentContext = {
     protocol: 'x402',
     status: 'verified',
     payer: wallet,
     amount: price,
-    network: matchedNetwork,
-    ...(matchedRecipient ? { recipient: matchedRecipient } : {}),
+    network,
+    ...(payTo ? { recipient: payTo } : {}),
   };
 
   return {
@@ -170,12 +88,81 @@ async function verifyX402(args: VerifyArgs): Promise<VerifyOutcome> {
   };
 }
 
-function getRequirementNetwork(requirements: unknown, fallback: string): string {
-  const network = (requirements as { network?: unknown } | null)?.network;
-  return typeof network === 'string' ? network : fallback;
+async function settleX402(args: SettleArgs): Promise<SettleOutcome> {
+  const { response, payment, token, deps, routeEntry, billedAmount } = args;
+  const { payload, requirements } = token as X402Token;
+
+  // Dynamic routes use upto and override the on-chain amount with the
+  // post-handler total (Permit2Proxy enforces `actual ≤ permitted.amount`).
+  // Static routes settle for the verified requirements amount.
+  const override = routeEntry.dynamicPrice ? { amount: billedAmount } : undefined;
+
+  try {
+    const settle = await settleX402Payment(deps.x402Server!, payload, requirements, override);
+    if (!settle.result?.success) {
+      throw Object.assign(
+        new Error(settle.result?.errorReason ?? 'x402 settlement returned success=false'),
+        { errorReason: settle.result?.errorReason },
+      );
+    }
+
+    response.headers.set(HEADERS.X402_PAYMENT_RESPONSE, settle.encoded);
+    response.headers.set('Cache-Control', 'private');
+
+    const transaction = String(settle.result.transaction ?? '');
+    const settledPayment: HandlerPaymentContext & { status: 'settled' } = {
+      ...payment,
+      status: 'settled',
+      amount: billedAmount,
+      ...(transaction ? { transaction } : {}),
+    };
+
+    return { ok: true, response, settledPayment };
+  } catch (err) {
+    logSettleFailure(err, routeEntry.key, payment.network);
+    return { ok: false, error: err, failMessage: 'Settlement failed' };
+  }
 }
 
-function getRequirementRecipient(requirements: unknown): string | undefined {
-  const payTo = (requirements as { payTo?: unknown } | null)?.payTo;
-  return typeof payTo === 'string' ? payTo : undefined;
+async function buildX402ChallengeContribution(args: ChallengeArgs): Promise<ChallengeContribution> {
+  const { request, routeEntry, body, price, extensions, deps } = args;
+
+  if (!deps.x402Server) return {};
+
+  const accepts = await resolveX402Accepts(
+    request,
+    routeEntry,
+    deps.x402Accepts,
+    deps.payeeAddress,
+    body,
+  );
+
+  const { encoded } = await buildX402Challenge({
+    server: deps.x402Server,
+    routeEntry,
+    request,
+    price,
+    accepts,
+    facilitatorsByNetwork: deps.x402FacilitatorsByNetwork,
+    extensions,
+  });
+
+  return { headers: { [HEADERS.X402_PAYMENT_REQUIRED]: encoded } };
+}
+
+interface FacilitatorErrorShape {
+  errorReason?: string;
+  response?: { status?: number; data?: unknown; body?: unknown };
+}
+
+function logSettleFailure(err: unknown, route: string, network: string): void {
+  const facilitator = (err ?? {}) as FacilitatorErrorShape;
+  console.error('Settlement failed', {
+    message: err instanceof Error ? err.message : String(err),
+    route,
+    network,
+    errorReason: facilitator.errorReason,
+    facilitatorStatus: facilitator.response?.status,
+    facilitatorBody: facilitator.response?.data ?? facilitator.response?.body,
+  });
 }

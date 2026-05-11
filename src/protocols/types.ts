@@ -131,30 +131,24 @@ export interface PaymentStrategy {
   detects(request: Request): boolean;
 
   /**
-   * Dynamic-route credential preflight. Strategies inspect the credential
-   * header before body parse / handler invocation and signal whether the
-   * orchestrator should bypass them — used by MPP session channel-management
-   * credentials (close/topUp/bodyless open|voucher) which carry no body and
-   * don't need handler invocation. Static routes never call this.
-   *
-   * Strategies that don't need special orchestration return null or leave
-   * this unset.
+   * Credential preflight. Strategies inspect the credential header before body
+   * parse / handler invocation and signal whether the orchestrator should
+   * bypass them — used by MPP session channel-management credentials
+   * (close/topUp/bodyless open|voucher) which carry no body and don't need
+   * handler invocation. Only called on dynamic-priced routes today; strategies
+   * that don't need special orchestration leave this unset.
    */
-  preflightDynamic?(request: Request, routeEntry: RouteEntry): PreflightOutcome | null;
+  preflight?(request: Request, routeEntry: RouteEntry): PreflightOutcome | null;
 
   /**
-   * Verify a payment for a static-priced route. The strategy must reject
-   * credentials that are only meaningful on dynamic-priced routes (e.g. MPP
-   * session credentials).
+   * Verify a payment. The strategy reads `args.routeEntry.dynamicPrice` to
+   * decide which credential shapes are acceptable:
+   *   - dynamic routes must reject credentials that commit the client to a
+   *     fixed amount before the handler runs (e.g. MPP charge credentials),
+   *   - static routes must reject credentials only meaningful on dynamic
+   *     routes (e.g. MPP session credentials).
    */
-  verifyStatic(args: VerifyArgs): Promise<VerifyOutcome>;
-
-  /**
-   * Verify a payment for a dynamic-priced route. The strategy must reject
-   * credentials that commit the client to a fixed amount before the handler
-   * runs (e.g. MPP charge credentials).
-   */
-  verifyDynamic(args: VerifyArgs): Promise<VerifyOutcome>;
+  verify(args: VerifyArgs): Promise<VerifyOutcome>;
 
   /** Called only after handler returned a 2xx response and verify() resolves with a valid payment.
    *
@@ -170,9 +164,10 @@ export interface PaymentStrategy {
    */
   settleStream?(args: StreamSettleArgs): Promise<SettleOutcome>;
 
-  /** Contribute this protocol's piece to a static-route 402 challenge. */
-  buildChallengeStatic(args: ChallengeArgs): Promise<ChallengeContribution>;
-
-  /** Contribute this protocol's piece to a dynamic-route 402 challenge. */
-  buildChallengeDynamic(args: ChallengeArgs): Promise<ChallengeContribution>;
+  /**
+   * Contribute this protocol's piece to a 402 challenge. The strategy reads
+   * `args.routeEntry.dynamicPrice` if it needs to choose between sub-protocol
+   * modes (e.g. MPP session vs charge).
+   */
+  buildChallenge(args: ChallengeArgs): Promise<ChallengeContribution>;
 }
