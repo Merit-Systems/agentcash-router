@@ -12,6 +12,7 @@ import type { ResolvedX402Facilitator } from '../../protocols/x402/facilitators.
 import type { NonceStore } from '../../auth/nonce.js';
 import type { EntitlementStore } from '../../auth/entitlement.js';
 import type { PluginContext, RequestMeta, RouterPlugin } from '../../plugin.js';
+import type { ReportFn } from '../../alert.js';
 
 export type MppxMiddlewareResponse<T extends Transport.AnyTransport> =
   | { status: 402; challenge: Transport.ChallengeOutputOf<T> }
@@ -56,6 +57,7 @@ export interface FlowCtx {
   request: NextRequest;
   meta: RequestMeta;
   pluginCtx: PluginContext;
+  report: ReportFn;
 }
 
 export type ParseBodyResult = { ok: true; data: unknown } | { ok: false; response: NextResponse };

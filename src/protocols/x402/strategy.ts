@@ -1,6 +1,7 @@
 import type { PaymentRequirements } from '@x402/core/types';
 import { PERMIT2_ADDRESS } from '@x402/evm';
 import type { HandlerPaymentContext } from '../../types.js';
+import type { ReportFn } from '../../alert.js';
 import { HEADERS } from '../../headers.js';
 import { normalizeWalletAddress } from '../../auth/normalize-wallet.js';
 import type {
@@ -58,13 +59,13 @@ export const x402Strategy: PaymentStrategy = {
 };
 
 async function verifyX402(args: VerifyArgs): Promise<VerifyOutcome> {
-  const { request, body, price, routeEntry, deps } = args;
+  const { request, body, price, routeEntry, deps, report } = args;
 
   if (!deps.x402Server) {
     const reason = deps.x402InitError
       ? `x402 facilitator initialization failed: ${deps.x402InitError}`
       : 'x402 server not initialized — ensure @x402/core, @x402/evm, and @coinbase/x402 are installed';
-    console.error(`[router] ${routeEntry.key}: ${reason}`);
+    report('error', reason);
     return { ok: false, kind: 'config', message: reason };
   }
 
@@ -80,6 +81,7 @@ async function verifyX402(args: VerifyArgs): Promise<VerifyOutcome> {
     request,
     price,
     accepts,
+    report,
   });
   if (!verifyResult?.valid) {
     const failure = verifyResult?.failure;
@@ -120,7 +122,7 @@ async function verifyX402(args: VerifyArgs): Promise<VerifyOutcome> {
 }
 
 async function settleX402(args: SettleArgs): Promise<SettleOutcome> {
-  const { response, payment, token, deps, routeEntry, billedAmount } = args;
+  const { response, payment, token, deps, routeEntry, billedAmount, report } = args;
   const { payload, requirements } = token as X402Token;
 
   const override = routeEntry.dynamicPrice ? { amount: billedAmount } : undefined;
@@ -147,13 +149,13 @@ async function settleX402(args: SettleArgs): Promise<SettleOutcome> {
 
     return { ok: true, response, settledPayment };
   } catch (err) {
-    logSettleFailure(err, routeEntry.key, payment.network);
+    reportSettleFailure(report, err, payment.network);
     return { ok: false, error: err, failMessage: 'Settlement failed' };
   }
 }
 
 async function buildX402ChallengeContribution(args: ChallengeArgs): Promise<ChallengeContribution> {
-  const { request, routeEntry, body, price, extensions, deps } = args;
+  const { request, routeEntry, body, price, extensions, deps, report } = args;
 
   if (!deps.x402Server) return {};
 
@@ -173,6 +175,7 @@ async function buildX402ChallengeContribution(args: ChallengeArgs): Promise<Chal
     accepts,
     facilitatorsByNetwork: deps.x402FacilitatorsByNetwork,
     extensions,
+    report,
   });
 
   return { headers: { [HEADERS.X402_PAYMENT_REQUIRED]: encoded } };
@@ -183,11 +186,10 @@ interface FacilitatorErrorShape {
   response?: { status?: number; data?: unknown; body?: unknown };
 }
 
-function logSettleFailure(err: unknown, route: string, network: string): void {
+function reportSettleFailure(report: ReportFn, err: unknown, network: string): void {
   const facilitator = (err ?? {}) as FacilitatorErrorShape;
-  console.error('Settlement failed', {
-    message: err instanceof Error ? err.message : String(err),
-    route,
+  report('error', 'Settlement failed', {
+    error: err instanceof Error ? err.message : String(err),
     network,
     errorReason: facilitator.errorReason,
     facilitatorStatus: facilitator.response?.status,

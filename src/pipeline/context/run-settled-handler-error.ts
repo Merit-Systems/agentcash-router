@@ -1,4 +1,3 @@
-import { firePluginHook } from '../../plugin.js';
 import type { HandlerPaymentContext } from '../../types.js';
 import { errorMessage, handlerFailureError } from './errors.js';
 import { settlementContext } from './settlement-context.js';
@@ -15,11 +14,6 @@ export async function runSettledHandlerError(
     await hook({ ...settlementContext(ctx, scope), error });
   } catch (hookError) {
     const message = errorMessage(hookError, 'Settled handler error hook failed');
-    console.error(`[router] ${ctx.routeEntry.key}: onSettledHandlerError failed: ${message}`);
-    firePluginHook(ctx.deps.plugin, 'onAlert', ctx.pluginCtx, {
-      level: 'error' as const,
-      message: `Settled handler error hook failed: ${message}`,
-      route: ctx.routeEntry.key,
-    });
+    ctx.report('error', `Settled handler error hook failed: ${message}`);
   }
 }

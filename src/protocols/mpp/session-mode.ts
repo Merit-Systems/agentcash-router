@@ -143,7 +143,7 @@ export async function settleSessionMode(args: SettleArgs): Promise<SettleOutcome
 export async function buildSessionChallenge(
   args: ChallengeArgs & { suggestedDeposit: string },
 ): Promise<ChallengeContribution> {
-  const { request, deps, suggestedDeposit, routeEntry } = args;
+  const { request, deps, suggestedDeposit, routeEntry, report } = args;
   if (!deps.mppSessionConfig) return {};
   const streaming = routeEntry.streaming === true;
   const middleware = streaming ? deps.mppx?.sessionStream : deps.mppx?.sessionRequest;
@@ -164,8 +164,9 @@ export async function buildSessionChallenge(
       if (wwwAuth) return { headers: { [HEADERS.WWW_AUTHENTICATE]: wwwAuth } };
     }
   } catch (err) {
-    console.warn(
-      `[router] MPP session challenge build failed: ${err instanceof Error ? err.message : String(err)}`,
+    report(
+      'warn',
+      `MPP session challenge build failed: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
   }

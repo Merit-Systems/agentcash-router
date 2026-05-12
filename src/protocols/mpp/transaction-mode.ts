@@ -18,7 +18,7 @@ export async function verifyTxMode(
 ): Promise<
   VerifySuccess | { ok: false; kind: 'invalid' } | { ok: false; kind: 'config'; message: string }
 > {
-  const { deps, price, routeEntry } = args;
+  const { deps, price, report } = args;
   if (!deps.tempoClient) {
     return {
       ok: false,
@@ -41,7 +41,7 @@ export async function verifyTxMode(
     } as never);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[router] ${routeEntry.key}: MPP simulation failed — ${message}`);
+    report('warn', `MPP simulation failed: ${message}`);
     return { ok: false, kind: 'invalid' };
   }
 
@@ -65,7 +65,7 @@ export async function verifyTxMode(
 }
 
 export async function settleTxMode(args: SettleArgs): Promise<SettleOutcome> {
-  const { request, response, payment, deps, routeEntry } = args;
+  const { request, response, payment, deps, report } = args;
 
   if (!deps.mppx) {
     return {
@@ -81,7 +81,7 @@ export async function settleTxMode(args: SettleArgs): Promise<SettleOutcome> {
     result = await deps.mppx.charge({ amount: payment.amount })(request);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[router] ${routeEntry.key}: MPP broadcast failed after handler: ${message}`);
+    report('error', `MPP broadcast failed after handler: ${message}`);
     return {
       ok: false,
       error: err,
@@ -99,7 +99,7 @@ export async function settleTxMode(args: SettleArgs): Promise<SettleOutcome> {
       mppResult: result,
       challenge: result.challenge,
     });
-    console.error(`[router] ${routeEntry.key}: MPP payment failed after handler — ${detail}`);
+    report('error', `MPP payment failed after handler: ${detail}`);
     return {
       ok: false,
       error: settlementError,

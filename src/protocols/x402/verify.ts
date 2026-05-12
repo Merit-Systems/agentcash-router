@@ -1,6 +1,7 @@
 import type { PaymentPayload, PaymentRequirements } from '@x402/core/types';
 import { VerifyError } from '@x402/core/types';
 import type { X402ResolvedAccept, X402Server } from '../../types.js';
+import type { ReportFn } from '../../alert.js';
 import { HEADERS } from '../../headers.js';
 import { buildExpectedRequirements } from './requirements.js';
 
@@ -9,6 +10,7 @@ interface VerifyPaymentOptions {
   request: Request;
   price: string;
   accepts: X402ResolvedAccept[];
+  report?: ReportFn;
 }
 
 export interface VerifyPaymentFailure {
@@ -19,10 +21,10 @@ export interface VerifyPaymentFailure {
 }
 
 export async function verifyX402Payment(opts: VerifyPaymentOptions) {
-  const { server, request, price, accepts } = opts;
+  const { server, request, price, accepts, report } = opts;
   const payload = await readPaymentPayload(request);
   if (!payload) return null;
-  const requirements = await buildExpectedRequirements(server, request, price, accepts);
+  const requirements = await buildExpectedRequirements(server, request, price, accepts, report);
   const matching = findVerifiableRequirements(server, requirements, payload);
   const accepted = payload.x402Version === 2 ? payload.accepted : undefined;
   if (!matching) {
