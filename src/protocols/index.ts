@@ -10,12 +10,10 @@ const STRATEGIES: Record<'x402' | 'mpp', PaymentStrategy> = {
   mpp: mppStrategy,
 };
 
-/** Get the strategy for a named protocol. */
 export function getPaymentStrategy(protocol: 'x402' | 'mpp'): PaymentStrategy {
   return STRATEGIES[protocol];
 }
 
-/** Find the strategy whose `detects()` matches this request, restricted to allowed protocols. */
 export function selectIncomingStrategy(
   request: Request,
   allowed: readonly ('x402' | 'mpp')[],
@@ -27,7 +25,6 @@ export function selectIncomingStrategy(
   return null;
 }
 
-/** All strategies allowed by the route, in iteration order. */
 export function getAllowedStrategies(allowed: readonly ('x402' | 'mpp')[]): PaymentStrategy[] {
   return allowed.map((name) => STRATEGIES[name]);
 }

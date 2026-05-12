@@ -3,13 +3,19 @@ import { VerifyError } from '@x402/core/types';
 import type { X402ResolvedAccept, X402Server } from '../../types.js';
 import { HEADERS } from '../../headers.js';
 import { buildExpectedRequirements } from './requirements.js';
-import { VerifyFailure } from '../types.js';
 
 interface VerifyPaymentOptions {
   server: X402Server;
   request: Request;
   price: string;
   accepts: X402ResolvedAccept[];
+}
+
+export interface VerifyPaymentFailure {
+  reason: string;
+  message?: string;
+  payer?: string;
+  accepted?: PaymentRequirements;
 }
 
 export async function verifyX402Payment(opts: VerifyPaymentOptions) {
@@ -31,8 +37,6 @@ export async function verifyX402Payment(opts: VerifyPaymentOptions) {
   try {
     verify = await server.verifyPayment(payload, matching);
   } catch (err: unknown) {
-    // VerifyError from @x402/core with 4xx statusCode (e.g. insufficient_funds)
-    // is a client payment issue → 402 challenge, not 500. Other errors re-throw.
     if (err instanceof VerifyError && err.statusCode >= 400 && err.statusCode < 500) {
       return invalidPaymentVerification({
         reason: err.invalidReason ?? 'verify_error',
@@ -107,7 +111,7 @@ async function readPaymentPayload(request: Request): Promise<PaymentPayload | nu
   return decodePaymentSignatureHeader(paymentHeader);
 }
 
-function invalidPaymentVerification(failure: VerifyFailure | undefined) {
+function invalidPaymentVerification(failure?: VerifyPaymentFailure) {
   return {
     valid: false as const,
     payload: null,

@@ -3,7 +3,6 @@ import { firePluginResponse } from '../fire-plugin-response.js';
 import { fireProviderQuota } from '../fire-provider-quota.js';
 import type { FlowCtx } from '../types.js';
 
-/** Post-handler finalization: provider quota + plugin onResponse. */
 export function finalize(
   ctx: FlowCtx,
   response: NextResponse,

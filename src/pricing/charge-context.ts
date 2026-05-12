@@ -1,15 +1,6 @@
 import type { ChargeFn } from '../types.js';
 import { atomicToDecimal, decimalToAtomic } from './atomic.js';
 
-/**
- * Per-request charge context exposed to handlers as the `charge` callback.
- *
- * Each `charge()` call adds one tick (`tickCost` USDC) to the running total
- * and throws synchronously if the next tick would exceed `maxPrice`. When a
- * channel-charge callback has been bound (streaming MPP session settle),
- * every `charge()` call also debits one tick on the channel before resolving,
- * so `await charge()` can backpressure on payment-channel voucher refresh.
- */
 export function createChargeContext(args: {
   tickCost: string;
   maxPrice: string | undefined;

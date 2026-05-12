@@ -3,7 +3,6 @@ import type { X402ResolvedAccept, X402Server } from '../../types.js';
 import { buildEvmExactOptions, buildEvmUptoOptions, isEvmNetwork } from './evm.js';
 import { buildSolanaExactOptions, isSolanaRequirement } from './solana.js';
 
-/** All SDK-handled requirements (EVM exact/upto, Solana exact) plus custom-scheme requirements. */
 export async function buildExpectedRequirements(
   server: X402Server,
   request: Request,
@@ -15,12 +14,6 @@ export async function buildExpectedRequirements(
   return [...sdkRequirements, ...customRequirements];
 }
 
-/**
- * Build requirements for accepts whose scheme is registered with the local
- * `x402ResourceServer` instance: EVM exact, EVM upto, Solana exact. Each
- * registered scheme produces a fully-enriched requirement without an HTTP
- * roundtrip to the facilitator's (non-standard) `/accepts` endpoint.
- */
 async function buildSdkHandledRequirements(
   server: X402Server,
   request: Request,
@@ -71,7 +64,6 @@ function buildCustomRequirements(
     .map((accept) => buildCustomRequirement(price, accept));
 }
 
-/** EVM exact + upto and Solana exact are built locally by registered schemes. */
 function isSdkHandled(accept: X402ResolvedAccept): boolean {
   if (isEvmNetwork(accept.network)) {
     return accept.scheme === 'exact' || accept.scheme === 'upto';

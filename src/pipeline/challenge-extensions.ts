@@ -2,23 +2,12 @@ import { buildSIWXExtension } from '../auth/siwx.js';
 import { firePluginHook } from '../plugin.js';
 import type { FlowCtx } from './context/index.js';
 
-/**
- * Build the bazaar discovery extension (input/output JSON Schemas) plus an
- * optional SIWX extension for paid+SIWX routes. The SIWX-only challenge has
- * a different shape and is built in flows/siwx-only.ts.
- */
 export async function buildChallengeExtensions(
   ctx: FlowCtx,
 ): Promise<Record<string, unknown> | undefined> {
   const { routeEntry } = ctx;
   let extensions: Record<string, unknown> | undefined;
 
-  // Bazaar: embed input/output JSON Schema in the 402 challenge so discovery
-  // tools can tell callers what fields to send. `unrepresentable: 'any'`
-  // handles .transform()/.refine() schemas gracefully.
-  //
-  // `output` is only emitted when an `outputExample` is registered — bazaar
-  // gates the whole output block on example presence.
   try {
     const { z } = await import('zod');
     const { declareDiscoveryExtension } = await import('@x402/extensions/bazaar');
@@ -65,7 +54,7 @@ export async function buildChallengeExtensions(
         };
       }
     } catch {
-      // SIWX extension is optional enrichment for 402 challenges
+      /* optional enrichment */
     }
   }
 

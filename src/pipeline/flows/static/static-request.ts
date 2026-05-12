@@ -12,27 +12,6 @@ import {
 } from '../../context/index.js';
 import type { FlowCtx, SettleScope, StaticRequestResult } from '../../context/types.js';
 
-/**
- * Static request lifecycle.
- *
- * The handler returned a value/Response synchronously (static routes can't
- * stream — the builder rejects async-generator handlers at registration).
- * Pricing is fixed — `billedAmount` equals the quoted `price`; there is no
- * chargeContext.
- *
- * Static routes can have payment already settled at verify time (MPP hash —
- * money is already on chain). Decision tree:
- *
- *   - alreadySettled (MPP hash):
- *       - 4xx → runSettledHandlerError, finalize (money already moved on-chain;
- *         the user hook decides whether to enqueue refund/compensation)
- *       - 2xx → settleAndFinalizeRequest (no onSettleError; settle failure
- *         here is a credential-refresh problem, not a money-loss problem)
- *   - verified-but-not-settled (x402 exact, MPP transaction):
- *       - 4xx → finalize, no settle (no money moves on handler error)
- *       - 2xx → runBeforeSettle (may abort), then settleAndFinalizeRequest
- *               with onSettleError (settle-failure means money in limbo).
- */
 export async function runStaticRequestFlow(args: {
   ctx: FlowCtx;
   strategy: PaymentStrategy;

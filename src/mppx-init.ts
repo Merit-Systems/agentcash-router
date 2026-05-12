@@ -23,32 +23,15 @@ type SessionMethod<T extends Transport.AnyTransport> = MppxMiddleware<
   T
 >;
 
-/**
- * Request-mode mppx instance, refined with the method shorthands we
- * register. Extends the native `Mppx.Mppx` instance type so consumers can
- * treat it as a real mppx context, but adds typed access to `charge` and
- * (optional) `session` rather than going through `mppx['tempo/charge']`.
- */
 export type MppxRequestContext = MppxNS.Mppx<MppxNS.Methods, Transport.Http> & {
   charge: ChargeMethod;
   session?: SessionMethod<Transport.Http>;
 };
 
-/**
- * Streaming-mode mppx instance — same shape, but `session` returns SSE
- * responses. Always carries `session` (the instance is only built when
- * sessions are enabled).
- */
 export type MppxStreamingContext = MppxNS.Mppx<MppxNS.Methods, Transport.Sse> & {
   session: SessionMethod<Transport.Sse>;
 };
 
-/**
- * Request-mode mppx instance: `tempo.charge` (static push-payment) plus the
- * non-SSE `tempo.session` (request-mode dynamic — one tick per request,
- * returned via a Payment-Receipt header). Session method is included only
- * when sessions are enabled (`config.mpp.session` + `feePayerAccount`).
- */
 export function getMppxRequestContext(args: MppxContextArgs): MppxRequestContext {
   const {
     Mppx,
@@ -86,13 +69,6 @@ export function getMppxRequestContext(args: MppxContextArgs): MppxRequestContext
   return instance as unknown as MppxRequestContext;
 }
 
-/**
- * Streaming-mode mppx instance: SSE-only `tempo.session` for async-generator
- * handlers (per-yield voucher events spliced into the SSE stream). Returns
- * `null` when sessions aren't enabled. Shares store/secretKey/realm with the
- * request-mode instance so channel state and challenge HMACs are
- * interchangeable.
- */
 export function getMppxStreamingContext(args: MppxContextArgs): MppxStreamingContext | null {
   if (!args.sessionEnabled) return null;
   const { Mppx, tempo, mppConfig, sharedSessionParams, realm } = args;

@@ -14,9 +14,6 @@ import { getConfiguredX402Accepts } from './protocols/x402/accepts.js';
 import { BASE_NETWORK } from './constants.js';
 import { RouterConfigError, formatRouterConfigIssues, getRouterConfigIssues } from './config.js';
 import { getMppxRequestContext, getMppxStreamingContext } from './mppx-init.js';
-// ---------------------------------------------------------------------------
-// ServiceRouter
-// ---------------------------------------------------------------------------
 
 export interface MonitorEntry {
   provider: string;
@@ -39,10 +36,6 @@ export interface ServiceRouter<TPriceKeys extends string = never> {
   monitors(): MonitorEntry[];
   registry: RouteRegistry;
 }
-
-// ---------------------------------------------------------------------------
-// createRouter
-// ---------------------------------------------------------------------------
 
 export function createRouter<const P extends Record<string, string> = Record<never, string>>(
   config: RouterConfig & { prices?: P },
@@ -73,8 +66,6 @@ export function createRouter<const P extends Record<string, string> = Record<nev
 
   if (protocolConfigIssues.length > 0) {
     for (const issue of protocolConfigIssues) console.error(`[router] ${issue.message}`);
-    // Throw in production to fail `next build`. In development, errors are
-    // stored per-protocol and surfaced as clean JSON 500s at request time.
     if (process.env.NODE_ENV === 'production') {
       throw new RouterConfigError(protocolConfigIssues);
     }
@@ -82,8 +73,6 @@ export function createRouter<const P extends Record<string, string> = Record<nev
 
   const resolvedBaseUrl = config.baseUrl.replace(/\/+$/, '');
 
-  // Plugin init: non-fatal, but properly handle async rejections.
-  // RouterPlugin.init may return void or Promise<void>.
   if (config.plugin?.init) {
     try {
       const result = config.plugin.init({ origin: resolvedBaseUrl });
@@ -91,7 +80,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
         (result as Promise<void>).catch(() => {});
       }
     } catch {
-      // Plugin init failure is non-fatal
+      /* non-fatal */
     }
   }
 
@@ -108,18 +97,12 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     x402Accepts,
     mppx: null,
     tempoClient: null,
-    // Set synchronously from config so `.handler()` registration validation
-    // can check it without waiting on the async init below.
     mppSessionConfig: config.mpp?.session
       ? { depositMultiplier: config.mpp.session.depositMultiplier ?? 10 }
       : null,
   };
 
-  // Async init — dynamic imports avoid require() which breaks Turbopack.
-  // Config errors (caught above) skip runtime init and just set the error field.
-  // Every request handler awaits deps.initPromise.
   deps.initPromise = (async () => {
-    // ---- x402 ----
     if (x402ConfigError) {
       deps.x402InitError = x402ConfigError;
     } else {
@@ -135,7 +118,6 @@ export function createRouter<const P extends Record<string, string> = Record<nev
       }
     }
 
-    // ---- MPP ----
     if (mppConfigError) {
       deps.mppInitError = mppConfigError;
     } else if (config.mpp) {
@@ -147,18 +129,6 @@ export function createRouter<const P extends Record<string, string> = Record<nev
         deps.tempoClient = createClient({ chain: tempoChain, transport: http(rpcUrl) });
         const getClient = async () => deps.tempoClient!;
 
-        // `operatorAccount` signs server-side on-chain operations (close,
-        // settle). Address MUST equal `recipient`/payee — mppx's close
-        // handler enforces sender === payee on settle.
-        //
-        // `feePayerAccount` is optional. When set, it sponsors gas for
-        // client-signed open/topUp txs (better UX — clients don't need
-        // native fee currency on Tempo). Omit to skip sponsorship; clients
-        // then pay their own gas.
-        //
-        // Same-address collision (operatorKey === feePayerKey) is caught
-        // upstream in `mppConfigIssues` — Tempo rejects fee-delegated txs
-        // with sender === feePayer on the server-signed close/settle path.
         const { privateKeyToAccount } = await import('viem/accounts');
         const operatorAccount = config.mpp.operatorKey
           ? privateKeyToAccount(config.mpp.operatorKey as `0x${string}`)
@@ -167,8 +137,6 @@ export function createRouter<const P extends Record<string, string> = Record<nev
           ? privateKeyToAccount(config.mpp.feePayerKey as `0x${string}`)
           : undefined;
 
-        // Sessions require operator.address === recipient. Fail loudly here
-        // rather than letting every close attempt return a generic 402.
         if (config.mpp.session && operatorAccount) {
           const recipient = (config.mpp.recipient ?? config.payeeAddress)?.toLowerCase();
           const opAddr = operatorAccount.address.toLowerCase();
@@ -198,21 +166,11 @@ export function createRouter<const P extends Record<string, string> = Record<nev
           resolvedStore = Store.upstash(createUpstashRest(kvUrl, kvToken));
         }
 
-        // Build two mppx instances sharing store + secretKey + realm so
-        // channel state and challenge HMACs are interchangeable. mppx routes
-        // by (method-name, intent), so two `tempo.session` methods can't
-        // coexist in one instance — hence the split (see ./mppx-init.ts).
         const realm = new URL(resolvedBaseUrl).host;
         const mppConfig = config.mpp;
-        // Sessions need a server-side signing account to settle closes.
-        // Fee sponsorship is independent — present iff `feePayerKey` is set.
         const sessionEnabled = !!(mppConfig.session && operatorAccount);
         const sharedSessionParams = {
           currency: mppConfig.currency as `0x${string}`,
-          // USDC on Tempo has 6 decimals — required by mppx 0.6.16+ to
-          // convert decimal-dollar amounts (tickCost, suggestedDeposit)
-          // into atomic units. Without this, mppx falls back to a default
-          // that miscounts deposits by 1e6×.
           decimals: 6,
           recipient: (mppConfig.recipient ?? config.payeeAddress) as `0x${string}`,
           getClient,
@@ -327,10 +285,6 @@ function normalizePath(path: string): string {
   normalized = normalized.replace(/^api\/+/, '');
   return normalized.replace(/\/+$/, '');
 }
-
-// ---------------------------------------------------------------------------
-// Re-exports
-// ---------------------------------------------------------------------------
 
 export { HttpError } from './types.js';
 export {

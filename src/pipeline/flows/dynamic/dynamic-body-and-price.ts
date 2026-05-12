@@ -14,17 +14,6 @@ export type DynamicBodyAndPriceResolution =
   | { ok: true; parsedBody: unknown; price: string }
   | { ok: false; response: NextResponse };
 
-/**
- * Dynamic-route body + price resolution. Five exit cases:
- *
- *   1. `skipBody` (channel-management credentials) — bypass body work; return
- *      a surrogate price drawn from the route's cap. Settle won't bill content
- *      for these credentials, so the price is metadata-only.
- *   2. body parse error — return the parser's 400/415 response.
- *   3. validate() error — return the validator's response.
- *   4. no pricing configured — 500.
- *   5. price-quote throws (or happy path) — surface as the error's status.
- */
 export async function resolveDynamicBodyAndPrice(args: {
   ctx: FlowCtx;
   pricing: PricingStrategy | null;

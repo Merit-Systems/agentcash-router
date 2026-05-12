@@ -4,17 +4,6 @@ import { fail } from '../fail.js';
 import type { FlowCtx, SettleScope } from '../types.js';
 import { runPostSettleEpilogue } from './epilogue.js';
 
-/**
- * Runs `strategy.settle()` for batch (non-streaming) responses and the shared
- * post-settle epilogue. Used by every batch settle path: x402 static and
- * dynamic (`upto`), MPP transaction-payload, MPP hash-payload, and MPP
- * session-payload non-streaming.
- *
- * Pass `onSettleError` from verified-but-not-settled callers; settle failure
- * there leaves money in limbo and warrants onSettlementError + a critical
- * alert. AlreadySettled callers omit it — settle failure is a credential
- * refresh problem and the path just bails.
- */
 export async function settleAndFinalizeRequest(args: {
   ctx: FlowCtx;
   strategy: PaymentStrategy;

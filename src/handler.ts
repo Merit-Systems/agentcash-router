@@ -12,10 +12,6 @@ export async function safeCallHandler(
     return NextResponse.json(result);
   } catch (error) {
     options.onError?.(error);
-    // Framework tolerance: accept both HttpError and the universal
-    // Object.assign(new Error(), { status }) pattern. Every Node.js
-    // ecosystem (Express, Koa, Hono) respects .status on thrown errors.
-    // A framework that forces a specific error class is a trap.
     const status =
       error instanceof HttpError
         ? error.status

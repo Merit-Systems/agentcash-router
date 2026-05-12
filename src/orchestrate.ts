@@ -10,37 +10,10 @@ import { runUnprotectedFlow } from './pipeline/flows/unprotected.js';
 export type OrchestrateDeps = RouterDeps;
 export type { RouterDeps } from './pipeline/context/index.js';
 
-/**
- * Route handler shape — either a batch handler that returns a value, or a
- * streaming handler that yields chunks. Discriminated by return type so the
- * `ctx` parameter narrows at the call site:
- *
- * - `Promise<unknown>` → request-mode handler, receives base `HandlerContext`
- *   (no `charge` callback — request-mode dynamic bills exactly `tickCost`
- *   per request, static bills the quoted price).
- * - `AsyncIterable<unknown>` → streaming handler, receives
- *   `StreamingHandlerContext` whose `charge` callback debits one tick per
- *   call. Supported only on routes whose protocol can stream (today: MPP
- *   session SSE).
- */
 export type RouteHandler =
   | ((ctx: HandlerContext) => Promise<unknown>)
   | ((ctx: StreamingHandlerContext) => AsyncIterable<unknown>);
 
-/**
- * Compile a route registration into a Next.js request handler.
- *
- * The dispatcher picks one of four flows based on the route shape:
- *   - unprotected:           no auth, no payment
- *   - apiKey-only:           static API key, no payment
- *   - siwx-only:             pure wallet identity, no payment
- *   - paid:                  any pricing — also handles optional apiKey gate
- *                            and SIWX entitlement fast-path
- *
- * Each flow is self-contained in `pipeline/flows/`. The protocol-specific bits
- * (verify, settle, challenge construction) are in `protocols/{x402,mpp}/` behind
- * the `PaymentStrategy` interface.
- */
 export function createRequestHandler(
   routeEntry: RouteEntry,
   handler: RouteHandler,
@@ -51,8 +24,6 @@ export function createRequestHandler(
     const ctx = preflight(routeEntry, handler, deps, request);
 
     if (routeEntry.authMode === 'unprotected') return runUnprotectedFlow(ctx);
-    // Pure SIWX takes precedence over pricing — authMode='siwx' is identity-only,
-    // any pricing field on the route is ignored (matches pre-refactor behavior).
     if (routeEntry.authMode === 'siwx') return runSiwxOnlyFlow(ctx);
     if (routeEntry.pricing) return runPaidFlow(ctx);
     if (routeEntry.apiKeyResolver) return runApiKeyOnlyFlow(ctx);

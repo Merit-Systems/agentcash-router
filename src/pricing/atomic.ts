@@ -1,5 +1,3 @@
-/** Decimal-dollar ↔ atomic-USDC conversion. USDC has 6 decimals on every chain. */
-
 export const USDC_DECIMALS = 6;
 
 export function decimalToAtomic(amount: string): bigint {

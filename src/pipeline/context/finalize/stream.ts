@@ -4,13 +4,6 @@ import { fail } from '../fail.js';
 import type { FlowCtx } from '../types.js';
 import { runPostSettleEpilogue } from './epilogue.js';
 
-/**
- * Runs `strategy.settleStream()` for streaming responses and the same
- * post-settle epilogue as the request path. The settled amount carries the
- * cap or last-known total — cumulative voucher debits aren't finalized until
- * the channel closes, but `afterSettle` and `onPaymentSettled` fire at
- * stream-start so app-owned ledgers can record the request.
- */
 export async function settleAndFinalizeStream(args: {
   ctx: FlowCtx;
   strategy: PaymentStrategy;

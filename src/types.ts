@@ -2,9 +2,12 @@ import type { FacilitatorConfig } from '@x402/core/http';
 import type { NextRequest, NextResponse } from 'next/server';
 import type { ZodType } from 'zod';
 import type { Store } from 'mppx';
-// ---------------------------------------------------------------------------
-// Errors
-// ---------------------------------------------------------------------------
+import type {
+  PaymentRequired,
+  PaymentRequirements,
+  SettleResponse,
+  VerifyResponse,
+} from '@x402/core/types';
 
 export class HttpError extends Error {
   constructor(
@@ -15,10 +18,6 @@ export class HttpError extends Error {
     this.name = 'HttpError';
   }
 }
-
-// ---------------------------------------------------------------------------
-// Alerting
-// ---------------------------------------------------------------------------
 
 export type AlertLevel = 'info' | 'warn' | 'error' | 'critical';
 
@@ -31,26 +30,9 @@ export interface AlertEvent {
 
 export type AlertFn = (level: AlertLevel, message: string, meta?: Record<string, unknown>) => void;
 
-// ---------------------------------------------------------------------------
-// JSON values
-// ---------------------------------------------------------------------------
-
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
 export type JsonObject = { [key: string]: JsonValue };
-
-// ---------------------------------------------------------------------------
-// x402 server interface
-// ---------------------------------------------------------------------------
-
-// Typed interface for x402ResourceServer using @x402/core's own types.
-// Enforces correct method names, async signatures, and array vs single arg.
-import type {
-  PaymentRequired,
-  PaymentRequirements,
-  SettleResponse,
-  VerifyResponse,
-} from '@x402/core/types';
 
 export interface X402Server {
   initialize(): Promise<void>;
@@ -90,10 +72,6 @@ export interface X402Server {
   ): Promise<SettleResponse>;
 }
 
-// ---------------------------------------------------------------------------
-// Protocol / Auth
-// ---------------------------------------------------------------------------
-
 export type ProtocolType = 'x402' | 'mpp';
 export type AuthMode = 'paid' | 'siwx' | 'apiKey' | 'unprotected';
 export type RouteMethod = 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH';
@@ -117,10 +95,6 @@ export interface RouteDefinition<K extends string = string> {
    */
   method?: RouteMethod;
 }
-
-// ---------------------------------------------------------------------------
-// Pricing
-// ---------------------------------------------------------------------------
 
 export interface TierConfig {
   price: string;
@@ -201,10 +175,6 @@ export interface PaidOptions {
   unitType?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Handler context
-// ---------------------------------------------------------------------------
-
 export type PaymentStatus = 'verified' | 'settled';
 
 export interface HandlerPaymentContext {
@@ -269,21 +239,6 @@ export interface SettlementLifecycle<TBody = unknown> {
   onSettlementError?: (ctx: SettlementErrorContext<TBody>) => void | Promise<void>;
 }
 
-/**
- * Bills one tick (`tickCost` USDC) per call. Total is capped at `maxPrice`
- * — exceeding the cap throws synchronously at the offending call site.
- *
- * Only available on **streaming** dynamic handlers (`async function*`). MPP
- * session streams thread this through to per-tick voucher debits; `await
- * charge()` may block on `payment-need-voucher` when the channel runs short.
- * x402 `upto` routes use the cumulative atomic amount as the on-chain settle.
- *
- * Request-mode dynamic handlers do NOT receive `charge()` — the wire bills
- * exactly `tickCost` per request via mppx's non-SSE auto-charge (or the
- * upfront x402 `upto` cap settled for `tickCost`). To meter per-token/byte
- * billing in a non-streaming handler, return the value upfront and use an
- * async generator handler instead.
- */
 export type ChargeFn = () => Promise<void>;
 
 export interface HandlerContext<TBody = undefined, TQuery = undefined> {
@@ -301,11 +256,7 @@ export interface HandlerContext<TBody = undefined, TQuery = undefined> {
 
 /**
  * Handler context for streaming `.paid({ dynamic: true })` handlers (async
- * generators). Adds the `charge()` callback the handler invokes once per
- * unit (token/byte/frame) billed.
- *
- * Non-streaming dynamic handlers receive the base `HandlerContext` — they
- * always bill exactly `tickCost` per request and have no `charge` callback.
+ * generators). Adds `charge()` — call once per billable unit.
  */
 export interface StreamingHandlerContext<
   TBody = undefined,
@@ -313,10 +264,6 @@ export interface StreamingHandlerContext<
 > extends HandlerContext<TBody, TQuery> {
   charge: ChargeFn;
 }
-
-// ---------------------------------------------------------------------------
-// Provider monitoring
-// ---------------------------------------------------------------------------
 
 export type OveragePolicy = 'same-rate' | 'increased-rate' | 'hard-stop';
 export type QuotaLevel = 'healthy' | 'warn' | 'critical';
@@ -345,10 +292,6 @@ export interface ProviderQuotaEvent {
   overage: OveragePolicy;
   message: string;
 }
-
-// ---------------------------------------------------------------------------
-// Route registry entry
-// ---------------------------------------------------------------------------
 
 export interface RouteEntry {
   key: string;
@@ -410,10 +353,6 @@ export interface RouteEntry {
   unitType?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Discovery config
-// ---------------------------------------------------------------------------
-
 export interface DiscoveryConfig {
   title: string;
   version: string;
@@ -426,10 +365,6 @@ export interface DiscoveryConfig {
   /** Override the OpenAPI `servers` URL. Defaults to `RouterConfig.baseUrl`. Use when the public API hostname differs from the payment realm URL. */
   serverUrl?: string;
 }
-
-// ---------------------------------------------------------------------------
-// Router config
-// ---------------------------------------------------------------------------
 
 export interface RouterConfig {
   payeeAddress?: string;

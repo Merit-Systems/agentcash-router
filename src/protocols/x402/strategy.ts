@@ -15,16 +15,9 @@ import type {
 import { resolveX402Accepts } from './accepts.js';
 import { buildX402Challenge } from './challenge.js';
 import { settleX402Payment } from './settle.js';
-import { verifyX402Payment, type X402VerifyFailure } from './verify.js';
+import { verifyX402Payment, type VerifyPaymentFailure } from './verify.js';
 
-/**
- * Build a human-readable, actionable failure message for a verify rejection.
- * For `permit2_allowance_required` (the dominant Permit2-witness failure mode,
- * hit by both upto and Permit2-witness exact schemes), names the exact wallet,
- * asset, and minimum amount the user must approve — and recommends MAX_UINT256
- * so the approval is one-time.
- */
-function formatVerifyFailureMessage(failure: X402VerifyFailure): string {
+function formatVerifyFailureMessage(failure: VerifyPaymentFailure): string {
   if (failure.reason === 'permit2_allowance_required') {
     const wallet = failure.payer ?? '<the payer wallet>';
     const asset = failure.accepted?.asset ?? '<the asset>';
@@ -59,9 +52,6 @@ export const x402Strategy: PaymentStrategy = {
     );
   },
 
-  // x402 verify and buildChallenge are mode-agnostic — the upto vs exact
-  // distinction lives in settle (dynamicAmountOverride) and in the requirements
-  // scheme picked by buildX402Challenge, both keyed off `routeEntry.dynamicPrice`.
   verify: (args: VerifyArgs) => verifyX402(args),
   settle: (args: SettleArgs) => settleX402(args),
   buildChallenge: (args: ChallengeArgs) => buildX402ChallengeContribution(args),
@@ -133,9 +123,6 @@ async function settleX402(args: SettleArgs): Promise<SettleOutcome> {
   const { response, payment, token, deps, routeEntry, billedAmount } = args;
   const { payload, requirements } = token as X402Token;
 
-  // Dynamic routes use upto and override the on-chain amount with the
-  // post-handler total (Permit2Proxy enforces `actual ≤ permitted.amount`).
-  // Static routes settle for the verified requirements amount.
   const override = routeEntry.dynamicPrice ? { amount: billedAmount } : undefined;
 
   try {

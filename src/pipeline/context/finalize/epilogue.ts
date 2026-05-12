@@ -10,10 +10,6 @@ import { finalize } from './response.js';
 export type SettleSuccess = Extract<SettleOutcome, { ok: true }>;
 export type SettledScope = SettleScope<HandlerPaymentContext & { status: 'settled' }>;
 
-/**
- * Shared post-settle epilogue: SIWX entitlement grant, `onPaymentSettled`
- * plugin hook, `afterSettle` lifecycle hook, then `finalize`.
- */
 export async function runPostSettleEpilogue(args: {
   ctx: FlowCtx;
   strategy: PaymentStrategy;

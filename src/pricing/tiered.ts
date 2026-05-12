@@ -34,7 +34,7 @@ export class TieredPricing implements PricingStrategy {
       try {
         return this.quote(body);
       } catch {
-        // Fall through to max
+        /* fall through to max */
       }
     }
     return Promise.resolve(this.maxTierPrice());

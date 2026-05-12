@@ -1,21 +1,3 @@
-/**
- * MPP session-payload mode (payment-channel sessions).
- *
- * The client opens a channel with a `suggestedDeposit` escrow, server bills
- * per-voucher commitments. Dispatch by `routeEntry.streaming`:
- *
- *   - request-mode (`streaming` false/undefined) → mppx's non-SSE session
- *     middleware (`sessionRequest`). One tick per request, auto-charged at
- *     credential verification. `withReceipt(response)` attaches a
- *     `Payment-Receipt` HTTP header to the handler's response. This is the
- *     spec-aligned "discrete paid unit" mode.
- *   - stream-mode (`streaming` true) → mppx's SSE session middleware
- *     (`sessionStream`). One prepaid tick at verify + per-yield `channel.charge()`
- *     debits in the SSE serve loop. `withReceipt(generator)` wraps the
- *     handler's async iterable as Server-Sent Events with inline voucher
- *     events.
- */
-
 import type { NextResponse } from 'next/server';
 import type { Transport } from 'mppx/server';
 import { HEADERS } from '../../headers.js';
@@ -34,17 +16,10 @@ import type { MppCredentialInfo } from './credential.js';
 
 export interface MppSessionToken {
   mode: 'session';
-  /** True if the route is a streaming async-generator handler (SSE transport). */
   streaming: boolean;
-  /**
-   * mppx's verified handle. Discriminated by `streaming`: SSE for streaming
-   * routes (settle wraps a generator), HTTP for request-mode routes (settle
-   * wraps the handler's Response).
-   */
   sessionResult:
     | Extract<MppxMiddlewareResponse<Transport.Sse>, { status: 200 }>
     | Extract<MppxMiddlewareResponse<Transport.Http>, { status: 200 }>;
-  /** Parsed credential — settle re-derives channel-only status from this + the request. */
   info: MppCredentialInfo;
   tickCost: string;
 }
@@ -67,22 +42,11 @@ export async function verifySessionMode(
     };
   }
 
-  // builder.ts guarantees tickCost is set on dynamic-priced routes; verify is
-  // only reached for session credentials, which the strategy gates to dynamic.
   const tickCost = routeEntry.tickCost!;
   const unitType = routeEntry.unitType;
   const streaming = routeEntry.streaming === true;
   const middleware = streaming ? deps.mppx.sessionStream : deps.mppx.sessionRequest;
 
-  // For channel-only credentials (close/topUp, plus the SSE loop's bodyless
-  // mid-stream voucher), strip the body from the request handed to mppx so
-  // its `captureRequestBodyProbe` reports `hasBody: false` — otherwise mppx's
-  // `isSessionContentRequest` heuristic auto-charges a tick on the voucher
-  // POST (Session.js:172-183), which consumes the headroom the active SSE
-  // serve loop just reserved and crashes it with "reserved voucher coverage
-  // is no longer available". mppx's `input.body !== null` check is the
-  // upstream version of the same Next.js misclassification we fix locally
-  // in `isChannelOnlyAction` / `hasRequestBody`.
   const middlewareRequest = isChannelOnlyAction(info, request)
     ? new Request(request.url, { method: request.method, headers: request.headers })
     : request;
@@ -93,12 +57,6 @@ export async function verifySessionMode(
       amount: tickCost,
       unitType,
       suggestedDeposit: price,
-      // mppx HMAC-binds the challenge over `opaque`, so the verify-side
-      // middleware needs the same `meta` as the build-side
-      // (`buildSessionChallenge`) — otherwise the credential's `opaque` won't
-      // match the route's declared requirements and mppx rejects with
-      // `invalid_challenge: credential opaque does not match this route's
-      // requirements`. Keep both call sites in lock-step.
       ...(streaming ? { meta: { streaming: 'true' } } : {}),
     })(middlewareRequest);
   } catch (err) {
@@ -111,14 +69,6 @@ export async function verifySessionMode(
   }
 
   if (result.status === 402) {
-    // mppx's HTTP transport serializes RFC 9457 problem details into the
-    // challenge body when it rejects a credential (see mppx's
-    // server/Transport.js — `application/problem+json` with `{type, title,
-    // status, detail, challengeId}`). Hoist that into a `VerifyFailure` so
-    // `build402` can echo the reason/message in the 402 body; otherwise the
-    // client just sees an empty 402 with a renewed challenge and no
-    // diagnostic — the same silent-failure trap that bit the x402 upto
-    // path until `verifyX402Payment` started propagating its failures.
     const failure = await readMppxProblemDetails(result.challenge);
     return { ok: false, kind: 'invalid', failure };
   }
@@ -150,25 +100,10 @@ export async function verifySessionMode(
   };
 }
 
-/**
- * Settle path for non-streaming dynamic session routes. mppx's non-SSE
- * `tempo.session` auto-charges exactly `tickCost` at credential verification
- * (the "discrete paid unit" model per the mpp spec). Settle just wraps the
- * handler's Response with the `Payment-Receipt` header — no draining, no SSE
- * framing.
- *
- * Channel-management credentials (close/topUp/bodyless open|voucher) skip
- * the handler upstream via `preflight()`; settle still attaches the receipt
- * header on a 200 placeholder so the client gets the channel-state ack.
- */
 export async function settleSessionMode(args: SettleArgs): Promise<SettleOutcome> {
   const { request, response, payment, token, billedAmount } = args;
   const sessionToken = token as MppSessionToken;
 
-  // Channel-only actions (close/topUp/bodyless open|voucher) come back as a
-  // 200 placeholder upstream regardless of whether the route is streaming —
-  // they just emit a channel-state receipt with no body. `withReceipt(Response)`
-  // works on both SSE and HTTP transports.
   if (isChannelOnlyAction(sessionToken.info, request)) {
     const wrapped = (sessionToken.sessionResult.withReceipt as (r: Response) => Response)(
       new Response(null, { status: 200 }),
@@ -180,10 +115,6 @@ export async function settleSessionMode(args: SettleArgs): Promise<SettleOutcome
     };
   }
 
-  // Content credentials on streaming routes are handled by `settleStream`
-  // upstream (the handler returned an async iterable). If one ever reaches
-  // here it's a wiring bug — surface clearly rather than silently producing
-  // a non-streaming response on a stream-configured channel.
   if (sessionToken.streaming) {
     return {
       ok: false,
@@ -209,12 +140,6 @@ export async function settleSessionMode(args: SettleArgs): Promise<SettleOutcome
   return { ok: true, response: wrapped, settledPayment };
 }
 
-/**
- * Returns the WWW-Authenticate header for an MPP session 402. `suggestedDeposit`
- * is the escrow amount — defaults to `tickCost × depositMultiplier` (configured
- * via `RouterConfig.mpp.session.depositMultiplier`, default 10), or the route's
- * `maxPrice` when set. tickCost/unitType come from the route.
- */
 export async function buildSessionChallenge(
   args: ChallengeArgs & { suggestedDeposit: string },
 ): Promise<ChallengeContribution> {
@@ -232,9 +157,6 @@ export async function buildSessionChallenge(
       amount: tickCost,
       unitType,
       suggestedDeposit,
-      // Surface the transport on the challenge so clients can pick mppx.sse vs
-      // request-mode without inferring from handler shape. mppx serializes this
-      // as `opaque` on WWW-Authenticate and HMAC-binds it (tamper-evident).
       ...(streaming ? { meta: { streaming: 'true' } } : {}),
     })(request);
     if (result.status === 402) {
@@ -250,32 +172,6 @@ export async function buildSessionChallenge(
   return {};
 }
 
-/**
- * Channel-only credentials are control messages that must NOT invoke the
- * route handler — settle just emits a channel-state ack on a 200 placeholder.
- *
- * Classification by `(action, routeEntry, request body presence)`:
- *  - `close` / `topUp`           → always channel-only (never carry content).
- *  - `open` / `voucher` with no body → channel-only. Bodyless opens come from
- *    `SessionManager.open({ deposit })` style explicit channel opens. Bodyless
- *    vouchers are the SSE serve loop's mid-stream top-up: the loop emits
- *    `payment-need-voucher` and the client replies with `Authorization: <cred>`
- *    and no body.
- *  - `open` / `voucher` with body → content request. The handler runs and
- *    pays one tick from the channel (mppx auto-charges at credential verify).
- *
- * `hasRequestBody` is spec-correct: per RFC 7230, a request without
- * Content-Length AND without Transfer-Encoding has no body framing. This is
- * the case for mppx's mid-stream voucher POSTs from `SessionManager.sse`,
- * which use plain `fetch(url, { method: 'POST', headers: { Authorization }})`
- * with no body. Older sniff heuristics that defaulted to "has body" when
- * `request.body !== null` misclassified those (Next.js's NextRequest exposes
- * a non-null empty ReadableStream for bodyless POSTs), causing the router to
- * invoke the handler a second time — spawning a competing `Sse.serve` loop
- * that races the original for channel headroom and fails with "reserved
- * voucher coverage is no longer available". Don't trust body-stream identity;
- * trust the framing headers.
- */
 export function isChannelOnlyAction(info: MppCredentialInfo, request: Request): boolean {
   const action = info.sessionAction;
   if (!action) return false;
@@ -284,17 +180,6 @@ export function isChannelOnlyAction(info: MppCredentialInfo, request: Request): 
   return false;
 }
 
-/**
- * Translate mppx's RFC 9457 problem-details body (emitted on credential-reject
- * 402s from `mppx/server`'s Http transport) into a `VerifyFailure` the pipeline
- * can echo back to the client via `build402`. We never want to surface a bare
- * `kind: 'invalid'` with no diagnostic — clients then see an empty 402 with a
- * renewed challenge and no way to know what went wrong.
- *
- * Mapping: `type` URI's slug → snake-case `reason`; `detail`/`title` → `message`.
- * Defensive on every field — mppx may emit no body (initial challenge issuance)
- * or a non-JSON body if a future transport changes shape.
- */
 async function readMppxProblemDetails(challenge: Response): Promise<VerifyFailure> {
   let body = '';
   try {
@@ -328,12 +213,6 @@ async function readMppxProblemDetails(challenge: Response): Promise<VerifyFailur
   return message ? { reason, message } : { reason };
 }
 
-/**
- * Spec-correct body-presence check, framing-only. Returns true iff the HTTP
- * request explicitly declares a body via Content-Length > 0 or
- * Transfer-Encoding. Absent both = no body, regardless of whether
- * `request.body` is null or an empty ReadableStream.
- */
 function hasRequestBody(request: Request): boolean {
   const cl = request.headers.get('content-length');
   if (cl !== null) {

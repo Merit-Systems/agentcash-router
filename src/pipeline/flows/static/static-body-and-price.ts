@@ -13,17 +13,6 @@ export type StaticBodyAndPriceResolution =
   | { ok: true; parsedBody: unknown; price: string }
   | { ok: false; response: NextResponse };
 
-/**
- * Static-route body + price resolution. Four exit cases:
- *
- *   1. body parse error — return the parser's 400/415 response.
- *   2. validate() error — return the validator's response.
- *   3. no pricing configured — 500.
- *   4. price-quote throws (or happy path) — surface as the error's status.
- *
- * No `skipBody` branch — channel-management credentials are dynamic-only, so
- * static routes always parse the body and quote a real price.
- */
 export async function resolveStaticBodyAndPrice(args: {
   ctx: FlowCtx;
   pricing: PricingStrategy | null;

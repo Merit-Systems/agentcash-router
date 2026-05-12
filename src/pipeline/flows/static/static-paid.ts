@@ -15,21 +15,6 @@ import { build402 } from '../build402.js';
 import { resolveStaticBodyAndPrice } from './static-body-and-price.js';
 import { runStaticRequestFlow } from './static-request.js';
 
-/**
- * Static-priced paid-route entry point. Price is fixed (or body-derived once)
- * — `billedAmount == price`. Handlers are always request-shaped (never
- * streams; the builder rejects async generators on static routes).
- *
- * Pipeline:
- *   1. apiKeyGate
- *   2. pricing + protocol strategy selection
- *   3. early body parse (for accurate 402 quotes / validate)
- *   4. SIWX entitlement fast-path
- *   5. no-credential → build402
- *   6. resolveStaticBodyAndPrice (no skipBody — channel-mgmt is dynamic-only)
- *   7. verify (rejects session credentials on static routes)
- *   8. invokeStatic → runStaticRequestFlow
- */
 export async function runStaticPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   const { request, routeEntry, deps } = ctx;
 

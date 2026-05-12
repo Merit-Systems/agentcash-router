@@ -1,21 +1,3 @@
-/**
- * MPP-SIWX: wallet identity auth via MPP challenge-response at $0.
- *
- * The MPP protocol's signed credential proves wallet identity without requiring
- * any funds to move. This lets tempo request handle identity-gated (free)
- * endpoints using its existing MPP signing flow — no SIWX implementation
- * needed on the client.
- *
- * Flow:
- * 1. Request arrives with no Authorization header.
- * 2. Server calls mppx.charge({ amount: '0' }) → 402 challenge.
- * 3. Server returns 402 with WWW-Authenticate: MPP <challenge> header.
- * 4. Client signs the challenge and retries with Authorization: MPP <credential>.
- * 5. Server verifies: mppx.charge({ amount: '0' }) now returns 200.
- * 6. Server extracts wallet from did:pkh credential source, passes to handler.
- *
- * No settlement step — amount is $0, nothing moves.
- */
 
 import { walletFromDid } from './credential.js';
 import { Credential } from 'mppx';

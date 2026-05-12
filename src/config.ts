@@ -375,10 +375,6 @@ function validateMppConfig(config: RouterConfig, env: RouterEnv): RouterConfigIs
     });
   }
 
-  // Tempo rejects fee-delegated txs where `sender === feePayer`
-  // (`-32000 fee payer cannot resolve to sender`) — bites channel
-  // close/settle, which is server-signed. Catch the collision at
-  // config time rather than letting close attempts 402 at runtime.
   if (
     mpp.operatorKey &&
     mpp.feePayerKey &&

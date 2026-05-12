@@ -10,23 +10,6 @@ import { HttpError } from '../../../types.js';
 import { parseQuery } from '../../context/parse-query.js';
 import type { DynamicInvokeResult, FlowCtx } from '../../context/types.js';
 
-/**
- * Dynamic-route handler invocation.
- *
- * Splits cleanly on `routeEntry.streaming`:
- *   - streaming=true  → handler is `async function*`; mint a `chargeContext`
- *                       and expose `charge()` on the context. Return shape is
- *                       `kind: 'stream'` carrying the iterable + chargeContext
- *                       (settleStream binds per-tick channel debits).
- *   - streaming=false → handler is `async (ctx) => value`; no `charge` in
- *                       context (request-mode dynamic bills exactly `tickCost`
- *                       per request via mppx's non-SSE auto-charge). Return
- *                       shape is `kind: 'request'` with no chargeContext.
- *
- * `routeEntry.dynamicPrice` is true at this point (builder.ts guarantees
- * `tickCost` is set when dynamic). The dispatcher gates on `dynamicPrice`
- * before calling here.
- */
 export async function invokeDynamic(
   ctx: FlowCtx,
   wallet: string,

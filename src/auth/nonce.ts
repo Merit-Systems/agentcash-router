@@ -1,21 +1,11 @@
-/**
- * SIWX challenge expiry in milliseconds.
- * Currently not configurable per-route — this is a known limitation.
- * Future versions may add `siwx: { expiryMs }` to RouterConfig.
- */
-export const SIWX_CHALLENGE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
+/** SIWX challenge expiry in milliseconds. */
+export const SIWX_CHALLENGE_EXPIRY_MS = 5 * 60 * 1000;
 
 export interface NonceStore {
   check(nonce: string): Promise<boolean>;
 }
 
-/**
- * In-memory nonce store for development and testing.
- * NOT suitable for production serverless environments (Vercel, etc.)
- * where each function invocation gets fresh memory.
- *
- * For production, use `createRedisNonceStore()` with Upstash or ioredis.
- */
+/** In-memory nonce store for development and testing. Use `createRedisNonceStore()` in production. */
 export class MemoryNonceStore implements NonceStore {
   private seen = new Map<string, number>();
 
@@ -34,16 +24,8 @@ export class MemoryNonceStore implements NonceStore {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Redis Nonce Store
-// ---------------------------------------------------------------------------
-
 type RedisClientType = 'upstash' | 'ioredis';
 
-/**
- * Detect Redis client type from runtime properties.
- * Supports @upstash/redis and ioredis.
- */
 function detectRedisClientType(client: unknown): RedisClientType {
   if (!client || typeof client !== 'object') {
     throw new Error(
@@ -53,19 +35,15 @@ function detectRedisClientType(client: unknown): RedisClientType {
     );
   }
 
-  // ioredis has 'options' and 'status' properties
   if ('options' in client && 'status' in client) {
     return 'ioredis';
   }
 
-  // Upstash Redis client has a 'url' property
   const constructor = (client as object).constructor?.name;
   if (constructor === 'Redis' && 'url' in client) {
     return 'upstash';
   }
 
-  // Fallback: check if set() exists and assume Upstash-compatible
-  // Upstash is primary target (Vercel deployments)
   if (typeof (client as { set?: unknown }).set === 'function') {
     return 'upstash';
   }
@@ -84,23 +62,7 @@ export interface RedisNonceStoreOptions {
   ttlMs?: number;
 }
 
-/**
- * Create a Redis-backed nonce store for production SIWX replay protection.
- * Auto-detects client type (Upstash or ioredis) and uses appropriate API.
- *
- * @example
- * ```ts
- * // Upstash (Vercel)
- * import { Redis } from '@upstash/redis';
- * const redis = new Redis({ url: process.env.UPSTASH_URL, token: process.env.UPSTASH_TOKEN });
- * const nonceStore = createRedisNonceStore(redis);
- *
- * // ioredis
- * import Redis from 'ioredis';
- * const redis = new Redis(process.env.REDIS_URL);
- * const nonceStore = createRedisNonceStore(redis);
- * ```
- */
+/** Create a Redis-backed nonce store for production SIWX replay protection. Supports @upstash/redis and ioredis. */
 export function createRedisNonceStore(client: unknown, opts?: RedisNonceStoreOptions): NonceStore {
   const prefix = opts?.prefix ?? 'siwx:nonce:';
   const ttlSeconds = Math.ceil((opts?.ttlMs ?? SIWX_CHALLENGE_EXPIRY_MS) / 1000);
@@ -112,7 +74,6 @@ export function createRedisNonceStore(client: unknown, opts?: RedisNonceStoreOpt
       const key = `${prefix}${nonce}`;
 
       if (clientType === 'upstash') {
-        // Upstash: set(key, value, { ex, nx }) returns value if set, null if exists
         const redis = client as {
           set: (k: string, v: string, opts: { ex: number; nx: boolean }) => Promise<string | null>;
         };
@@ -121,7 +82,6 @@ export function createRedisNonceStore(client: unknown, opts?: RedisNonceStoreOpt
       }
 
       if (clientType === 'ioredis') {
-        // ioredis: set(key, value, 'EX', sec, 'NX') returns 'OK' if set, null if exists
         const redis = client as {
           set: (k: string, v: string, ex: 'EX', sec: number, nx: 'NX') => Promise<'OK' | null>;
         };
@@ -129,8 +89,7 @@ export function createRedisNonceStore(client: unknown, opts?: RedisNonceStoreOpt
         return result === 'OK';
       }
 
-      // Unreachable if detectRedisClientType works correctly
-      throw new Error('Unknown Redis client type');
+      throw new Error('Unknown Redis client type: detectRedisClientType returned unexpected value');
     },
   };
 }

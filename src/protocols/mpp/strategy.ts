@@ -41,10 +41,6 @@ export const mppStrategy: PaymentStrategy = {
     const info = readMppCredential(request);
     if (!info?.sessionAction) return null;
     if (!isChannelOnlyAction(info, request)) return null;
-    // Channel-management credentials (close/topUp, plus bodyless open/voucher
-    // POSTs — including the SSE loop's mid-stream voucher) are control
-    // messages: settle's withReceipt() emits the channel-state ack directly
-    // with no handler invocation.
     return { skipBody: true, skipHandler: true };
   },
 
@@ -53,14 +49,10 @@ export const mppStrategy: PaymentStrategy = {
     if (!info) return { ok: false, kind: 'invalid' };
 
     if (args.routeEntry.dynamicPrice) {
-      // Dynamic routes only accept session credentials — charge credentials
-      // commit the client to a fixed amount before the handler runs.
       if (!info.sessionAction) return { ok: false, kind: 'invalid' };
       return verifySessionMode(args, info);
     }
 
-    // Static routes can't accept session credentials — sessions are only
-    // advertised on dynamic routes' 402 challenges.
     if (info.sessionAction) return { ok: false, kind: 'invalid' };
 
     if (info.payloadType === 'transaction' && args.deps.tempoClient) {
@@ -76,13 +68,6 @@ export const mppStrategy: PaymentStrategy = {
     return settleHashMode(args);
   },
 
-  /**
-   * Streaming settle: piggy-back the handler's async iterable onto an SSE
-   * channel. We bridge the handler's `charge()` callback to mppx's per-tick
-   * channel debit so each `charge()` reserves voucher headroom in real time;
-   * yields stay pure data flow. Only valid on streaming session credentials
-   * (verifySessionMode used the SSE-transport mppx instance).
-   */
   async settleStream(args: StreamSettleArgs): Promise<SettleOutcome> {
     const token = args.token as AnyMppToken;
     if (token.mode !== 'session' || !token.streaming) {
@@ -94,9 +79,6 @@ export const mppStrategy: PaymentStrategy = {
       };
     }
     const sessionToken = token as MppSessionToken;
-    // verifySessionMode produced this from the SSE-transport mppx instance —
-    // narrow to the SSE-flavored `withReceipt` so the generator-factory
-    // overload is in scope.
     const sseResult = sessionToken.sessionResult as Extract<
       MppxMiddlewareResponse<Transport.Sse>,
       { status: 200 }
@@ -116,7 +98,6 @@ export const mppStrategy: PaymentStrategy = {
     const sse = sseResult.withReceipt(forwardHandlerStreamWithChannelDebit) as NextResponse;
     sse.headers.set('Cache-Control', 'private');
 
-    // The cumulative amount isn't known until the stream ends; carry the cap.
     const settledPayment: HandlerPaymentContext & { status: 'settled' } = {
       ...args.payment,
       status: 'settled',
@@ -129,14 +110,10 @@ export const mppStrategy: PaymentStrategy = {
   async buildChallenge(args: ChallengeArgs): Promise<ChallengeContribution> {
     if (!args.deps.mppx) return {};
 
-    // Dynamic routes prefer session challenges when sessions are configured;
-    // static routes always use charge. Both fall back to charge.
     const sessionsConfigured =
       args.deps.mppSessionConfig && (args.deps.mppx.sessionRequest || args.deps.mppx.sessionStream);
     if (args.routeEntry.dynamicPrice && sessionsConfigured) {
       const tickCost = args.routeEntry.tickCost;
-      // Prefer the route's explicit cap, fall back to tickCost × depositMultiplier
-      // (default 10), final fallback to the current price.
       const computedDeposit =
         tickCost !== undefined
           ? multiplyDecimal(tickCost, args.deps.mppSessionConfig!.depositMultiplier)
@@ -152,12 +129,6 @@ export const mppStrategy: PaymentStrategy = {
   },
 };
 
-/**
- * Decimal-string × integer multiplication. We avoid Number here so deposits
- * like `0.0005 × 10 = 0.005` come out exact instead of `0.004999999...`.
- * Both inputs are constrained: tickCost is a positive decimal validated at
- * builder time, multiplier is a positive integer from config.
- */
 function multiplyDecimal(decimal: string, factor: number): string {
   if (!Number.isFinite(factor) || factor <= 0) return decimal;
   const [whole, fraction = ''] = decimal.split('.');

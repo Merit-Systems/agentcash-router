@@ -3,11 +3,6 @@ import type { RouteEntry } from './types.js';
 export class RouteRegistry {
   private routes = new Map<string, RouteEntry>();
 
-  // Internal map key includes the HTTP method so that POST and DELETE on the
-  // same path coexist. Within the same path+method, last-write-wins is still
-  // intentional — Next.js module loading order is non-deterministic during
-  // build and discovery stubs may register the same route in either order.
-  // Prior art: ElysiaJS uses the same pattern (silent overwrite in router.history).
   private mapKey(entry: RouteEntry): string {
     return `${entry.key}:${entry.method}`;
   }
@@ -26,8 +21,6 @@ export class RouteRegistry {
     this.routes.set(k, entry);
   }
 
-  // Accepts either a compound key ("site/domain:DELETE") or a path-only key
-  // ("site/domain") — path-only returns the first registered method for that path.
   get(key: string): RouteEntry | undefined {
     const direct = this.routes.get(key);
     if (direct) return direct;
@@ -51,8 +44,6 @@ export class RouteRegistry {
 
   validate(expectedKeys?: string[]): void {
     if (!expectedKeys) return;
-    // expectedKeys are path-only (e.g. "site/domain") — check that at least
-    // one method is registered for each key.
     const registeredPathKeys = new Set([...this.routes.values()].map((e) => e.key));
     const missing = expectedKeys.filter((k) => !registeredPathKeys.has(k));
     if (missing.length > 0) {

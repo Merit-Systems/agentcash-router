@@ -1,11 +1,3 @@
-/**
- * Barrel export for the per-request context pipeline.
- *
- * Each helper lives in its own file under `pipeline/context/`. This index is
- * the single import surface used by flows and challenge construction. Adding
- * a new pipeline helper means a new file plus one line here.
- */
-
 export type {
   FlowCtx,
   RouterDeps,

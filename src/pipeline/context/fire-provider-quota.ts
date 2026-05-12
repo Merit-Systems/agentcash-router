@@ -35,7 +35,7 @@ export function fireProviderQuota(
 
     firePluginHook(ctx.deps.plugin, 'onProviderQuota', ctx.pluginCtx, event);
   } catch {
-    // Fire-and-forget
+    /* fire-and-forget */
   }
 }
 

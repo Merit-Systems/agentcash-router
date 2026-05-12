@@ -1,13 +1,3 @@
-/**
- * MPP transaction-payload mode.
- *
- * Flow:
- *   verify  → simulate the user-signed transaction via viem (no broadcast).
- *             A simulation revert means the user is never charged.
- *   settle  → broadcast and wait for on-chain confirmation. The merchant bears
- *             the risk of broadcast failure after the handler ran.
- */
-
 import type { NextResponse } from 'next/server';
 import { Transaction as TempoTransaction } from 'viem/tempo';
 import { call as viemCall } from 'viem/actions';
@@ -37,7 +27,6 @@ export async function verifyTxMode(
     };
   }
 
-  // Simulate to catch obvious reverts before invoking the handler.
   try {
     const serializedTx = (info.credential.payload as { signature: `0x${string}` }).signature;
     const transaction = TempoTransaction.deserialize(serializedTx) as {
@@ -87,7 +76,6 @@ export async function settleTxMode(args: SettleArgs): Promise<SettleOutcome> {
     };
   }
 
-  // Broadcast and confirm.
   let result: Awaited<ReturnType<ReturnType<typeof deps.mppx.charge>>>;
   try {
     result = await deps.mppx.charge({ amount: payment.amount })(request);

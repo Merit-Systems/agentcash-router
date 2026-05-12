@@ -3,11 +3,6 @@ import { errorMessage } from './errors.js';
 import { settlementContext } from './settlement-context.js';
 import type { FlowCtx, SettleScope } from './types.js';
 
-/**
- * Run user-supplied onSettlementError hook. Errors thrown by the hook are
- * logged and alerted but never re-thrown — the original settlement error has
- * already been handled by the caller.
- */
 export async function runSettlementError(
   ctx: FlowCtx,
   scope: SettleScope,

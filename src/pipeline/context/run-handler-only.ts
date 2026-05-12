@@ -5,14 +5,6 @@ import { parseBody } from './parse-body.js';
 import { runValidate } from './run-validate.js';
 import type { FlowCtx } from './types.js';
 
-/**
- * No-payment tail used by unprotected, apiKey-only, siwx-only flows, and the
- * paid+SIWX entitlement fast-path: parse body → validate → invoke → finalize.
- *
- * Streaming handlers are blocked at builder-registration time on any route
- * without `.paid({ dynamic: true })`, so this path only ever sees request-
- * shaped results. `invokeUnauthed` carries a defense-in-depth runtime guard.
- */
 export async function runHandlerOnly(
   ctx: FlowCtx,
   wallet: string | null,

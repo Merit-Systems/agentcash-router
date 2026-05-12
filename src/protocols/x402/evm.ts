@@ -34,19 +34,6 @@ export function buildEvmExactOptions(
     }));
 }
 
-/**
- * Build options for EVM `upto` accepts, ready to feed to
- * `x402ResourceServer.buildPaymentRequirementsFromOptions(...)`. The locally
- * registered `UptoEvmScheme` produces fully-enriched requirements (Permit2Proxy
- * address, asset transfer method, asset name/version, facilitator address)
- * without an HTTP `/accepts` roundtrip — CDP doesn't expose `/accepts`.
- *
- * `price` is passed as a plain decimal `Money` string so the scheme applies its
- * own asset/decimals defaults from the facilitator's `/supported` response.
- * Passing an explicit `AssetAmount` would short-circuit the lookup and leave
- * the requirement missing `facilitatorAddress`/`name`/`version`, which the
- * client SDK requires to construct the Permit2 witness.
- */
 export function buildEvmUptoOptions(
   accepts: readonly X402ResolvedAccept[],
   price: string,

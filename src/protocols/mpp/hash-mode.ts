@@ -1,15 +1,3 @@
-/**
- * MPP hash-payload mode.
- *
- * The transaction was pre-broadcast by the client; the credential carries the
- * hash and the mppx call simply verifies the on-chain receipt.
- *
- * Flow:
- *   verify  → mppx.charge() verifies the receipt is on-chain. Payment is
- *             already settled when verify returns successfully.
- *   settle  → withReceipt() attaches the Payment-Receipt header. No broadcast.
- */
-
 import type { NextResponse } from 'next/server';
 import type { Transport } from 'mppx/server';
 import { HEADERS } from '../../headers.js';
@@ -44,7 +32,6 @@ export async function verifyHashMode(
   try {
     chargeResult = await deps.mppx.charge({ amount: price })(request);
   } catch (err) {
-    // Treat charge() throwing as a config issue (RPC misconfigured, etc.)
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[router] ${routeEntry.key}: MPP charge failed: ${message}`);
     return { ok: false, kind: 'config', message: `MPP payment processing failed: ${message}` };
@@ -57,8 +44,6 @@ export async function verifyHashMode(
     return { ok: false, kind: 'invalid' };
   }
 
-  // Payment is already settled at verify time. Extract txHash from a dummy
-  // Response so we can populate the HandlerPaymentContext.
   const receiptHeader = (chargeResult.withReceipt(new Response()) as Response).headers.get(
     HEADERS.MPP_PAYMENT_RECEIPT,
   );

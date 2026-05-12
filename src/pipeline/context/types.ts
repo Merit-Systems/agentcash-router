@@ -13,35 +13,13 @@ import type { NonceStore } from '../../auth/nonce.js';
 import type { EntitlementStore } from '../../auth/entitlement.js';
 import type { PluginContext, RequestMeta, RouterPlugin } from '../../plugin.js';
 
-// ---------------------------------------------------------------------------
-// Mppx middleware shape
-// ---------------------------------------------------------------------------
-
-/**
- * Shape every mppx middleware returns: a curried verifier whose async result
- * is either a 402 challenge or a 200 with a transport-specific `withReceipt`
- * hook. Parameterized by `mppx/server`'s `Transport` so each method's
- * `withReceipt` argument set tracks the upstream definition exactly:
- *
- *   - `Transport.Http` → `withReceipt(response: Response)` only
- *   - `Transport.Sse`  → also accepts an async generator / generator factory
- *
- * Centralizing here avoids hand-rolling the shape in every consumer (siwx-mode,
- * hash-mode, session-mode, RouterDeps) and stays in lock-step with mppx
- * upstream — when they add a transport (MCP, etc.) we don't have to chase it.
- */
 export type MppxMiddlewareResponse<T extends Transport.AnyTransport> =
   | { status: 402; challenge: Transport.ChallengeOutputOf<T> }
   | { status: 200; withReceipt: Transport.WithReceipt<T> };
 
-/** Curried mppx middleware: `(options) → (Request) → Promise<MppxMiddlewareResponse>`. */
 export type MppxMiddleware<TOptions, T extends Transport.AnyTransport> = (
   options: TOptions,
 ) => (input: Request) => Promise<MppxMiddlewareResponse<T>>;
-
-// ---------------------------------------------------------------------------
-// RouterDeps — runtime dependencies threaded through every flow
-// ---------------------------------------------------------------------------
 
 export interface RouterDeps {
   x402Server: X402Server | null;
@@ -58,45 +36,18 @@ export interface RouterDeps {
   x402Accepts: X402AcceptConfig[];
   mppx?: {
     charge: MppxMiddleware<{ amount: string }, Transport.Http>;
-    /**
-     * Request-mode session middleware (non-SSE). Bills exactly one tick per
-     * request via mppx's auto-charge at credential verification. Used for
-     * dynamic-priced routes whose handler is a regular async function — the
-     * wire is plain HTTP with a `Payment-Receipt` header. Present iff
-     * `RouterConfig.mpp.session` was configured.
-     */
     sessionRequest?: MppxMiddleware<
       { amount: string; unitType?: string; suggestedDeposit?: string },
       Transport.Http
     >;
-    /**
-     * Streaming-mode session middleware (SSE). The 200-branch's `withReceipt`
-     * accepts an async generator factory; mppx auto-converts iterables to
-     * Server-Sent Events with per-tick voucher charging — one `channel.charge()`
-     * call inside the generator bills one additional tick beyond the prepaid
-     * first. Used for dynamic-priced routes whose handler is an async generator
-     * (`async function*`). Present iff `RouterConfig.mpp.session` was
-     * configured.
-     */
     sessionStream?: MppxMiddleware<
       { amount: string; unitType?: string; suggestedDeposit?: string },
       Transport.Sse
     >;
   } | null;
-  /**
-   * Resolved session config — set by `createRouter` when `RouterConfig.mpp.session`
-   * is configured, null otherwise. Carries the `depositMultiplier` used for the
-   * 402 challenge's `suggestedDeposit` on dynamic routes (default 10). Used to
-   * gate dynamic-priced MPP routes at registration time and to compute the
-   * advertised deposit at challenge time.
-   */
   mppSessionConfig?: { depositMultiplier: number } | null;
   tempoClient?: import('viem').Client | null;
 }
-
-// ---------------------------------------------------------------------------
-// FlowCtx — per-request context bundle
-// ---------------------------------------------------------------------------
 
 export interface FlowCtx {
   routeEntry: RouteEntry;
@@ -107,29 +58,8 @@ export interface FlowCtx {
   pluginCtx: PluginContext;
 }
 
-// ---------------------------------------------------------------------------
-// Result types
-// ---------------------------------------------------------------------------
-
 export type ParseBodyResult = { ok: true; data: unknown } | { ok: false; response: NextResponse };
 
-/**
- * Result of invoking the user's handler.
- *
- * Two axes: pricing (static vs dynamic) and response shape (request vs stream).
- * The static × stream cell is impossible — streaming requires per-chunk
- * metering, which only dynamic pricing supports. The builder rejects async
- * generator handlers on static routes at registration time.
- *
- *                request                stream
- *   static   →  StaticRequestResult    (impossible)
- *   dynamic  →  DynamicRequestResult   DynamicStreamResult
- *
- * Static and dynamic-request have no `chargeContext` — both bill at the
- * server's quoted price (static) or exactly `tickCost` per request (dynamic-
- * request, via mppx's non-SSE session auto-charge). Streaming carries a
- * `chargeContext` so `settleStream` can bind per-tick channel debits.
- */
 export type StaticRequestResult = {
   response: NextResponse;
   rawResult: unknown;

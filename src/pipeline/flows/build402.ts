@@ -6,17 +6,6 @@ import type { VerifyFailure } from '../../protocols/types.js';
 import { buildChallengeExtensions } from '../challenge-extensions.js';
 import { errorMessage, errorStatus, firePluginResponse, type FlowCtx } from '../context/index.js';
 
-/**
- * Build a 402 challenge for a paid route (static or dynamic). Composes
- * contributions from every allowed payment protocol strategy via
- * `buildChallenge`; the strategy reads `routeEntry.dynamicPrice` itself to
- * pick its sub-protocol mode.
- *
- * Returns:
- *   - 402 with PAYMENT-REQUIRED + WWW-Authenticate (per allowed protocols)
- *   - 500 if x402 challenge construction fails (without it, clients can't pay)
- *   - error response if pricing fails with no maxPrice fallback
- */
 export async function build402(
   ctx: FlowCtx,
   pricing: PricingStrategy | null,
@@ -38,10 +27,6 @@ export async function build402(
 
   const extensions = await buildChallengeExtensions(ctx);
 
-  // When this challenge is the result of a verify rejection, serialize the
-  // reason/message into the body so clients (e.g. the agentcash MCP's
-  // permit2-allowance detector) can recognize and surface the actual failure
-  // mode instead of treating it as an opaque renewed 402.
   const responseBody = failure
     ? JSON.stringify({ error: failure.message ?? null, reason: failure.reason })
     : null;
@@ -76,8 +61,6 @@ export async function build402(
         message,
         route: ctx.routeEntry.key,
       });
-      // x402 challenge failure is fatal — without PAYMENT-REQUIRED, clients can't pay.
-      // MPP challenge failure is logged but non-fatal — x402 still works.
       if (strategy.protocol === 'x402') {
         const errorResponse = NextResponse.json(
           { success: false, error: message },

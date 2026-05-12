@@ -14,21 +14,6 @@ import {
 import { build402 } from '../build402.js';
 import { resolveDynamicBodyAndPrice } from './dynamic-body-and-price.js';
 
-/**
- * MPP channel-management lifecycle (close, topUp, bodyless open|voucher).
- *
- * Reached when `strategy.preflight()` flags `skipHandler: true`. No handler
- * runs and no body is parsed; the strategy's `settle()` emits a channel-state
- * ack via mppx's `withReceipt`. `billedAmount` is "0" — these credentials
- * advance the channel nonce but don't bill content.
- *
- * Channel-mgmt is dynamic-only — static-priced MPP routes don't advertise
- * sessions and `verify` rejects session credentials on static routes.
- *
- * `runBeforeSettle` and `onSettleError` still fire so route hooks see the
- * channel-management traffic and any settle failure escalates the same way as
- * a content request.
- */
 export async function runDynamicChannelMgmtFlow(args: {
   ctx: FlowCtx;
   strategy: PaymentStrategy;

@@ -5,15 +5,6 @@ import { HttpError } from '../../../types.js';
 import { parseQuery } from '../../context/parse-query.js';
 import type { FlowCtx, StaticRequestResult } from '../../context/types.js';
 
-/**
- * Static-paid-route handler invocation. The caller has verified payment and
- * resolved the account (or undefined), so `wallet` and `payment` are non-null.
- *
- * Static handlers are always request-shaped (never streams) — the builder
- * rejects async generator handlers at registration time when pricing is
- * static. The runtime assertion below is defense-in-depth in case a wrapped
- * handler slips past the builder check.
- */
 export function invokePaidStatic(
   ctx: FlowCtx,
   wallet: string,
@@ -24,11 +15,6 @@ export function invokePaidStatic(
   return runHandler(ctx, buildHandlerCtx(ctx, wallet, account, body, payment));
 }
 
-/**
- * Unauthenticated handler invocation — used by unprotected, apiKey-only,
- * siwx-only flows, and the paid+SIWX entitlement fast-path. No payment
- * context; `wallet` is null for unprotected/api-key, set for siwx flows.
- */
 export function invokeUnauthed(
   ctx: FlowCtx,
   wallet: string | null,

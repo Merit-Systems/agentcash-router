@@ -18,22 +18,6 @@ import { resolveDynamicPreflight } from './dynamic-preflight.js';
 import { runDynamicRequestFlow } from './dynamic-request.js';
 import { runDynamicStreamFlow } from './dynamic-stream.js';
 
-/**
- * Dynamic-priced paid-route entry point. Handler bills via `charge()` calls;
- * settlement uses the running total (x402 `upto`) or per-tick voucher debits
- * (MPP session).
- *
- * Pipeline:
- *   1. apiKeyGate
- *   2. pricing + protocol strategy selection
- *   3. early body parse (for accurate 402 quotes / validate)
- *   4. SIWX entitlement fast-path
- *   5. no-credential → build402
- *   6. preflight (channel-mgmt credentials skip handler)
- *   7. resolveDynamicBodyAndPrice (with skipBody)
- *   8. verify (rejects charge credentials on dynamic routes)
- *   9. invokeDynamic → stream or request lifecycle
- */
 export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   const { request, routeEntry, deps } = ctx;
 

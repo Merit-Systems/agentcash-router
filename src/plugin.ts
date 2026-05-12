@@ -1,9 +1,5 @@
 import type { AlertEvent, ProviderQuotaEvent } from './types.js';
 
-// ---------------------------------------------------------------------------
-// Plugin event types
-// ---------------------------------------------------------------------------
-
 export interface RequestMeta {
   requestId: string;
   method: string;
@@ -71,10 +67,6 @@ export interface AuthEvent {
   account?: unknown;
 }
 
-// ---------------------------------------------------------------------------
-// RouterPlugin interface
-// ---------------------------------------------------------------------------
-
 export interface RouterPlugin {
   init?(config: { origin?: string }): void | Promise<void>;
   onRequest?(meta: RequestMeta): PluginContext;
@@ -87,10 +79,6 @@ export interface RouterPlugin {
   onAlert?(ctx: PluginContext, alert: AlertEvent): void;
   onProviderQuota?(ctx: PluginContext, event: ProviderQuotaEvent): void;
 }
-
-// ---------------------------------------------------------------------------
-// Default context (works without plugin)
-// ---------------------------------------------------------------------------
 
 export function createDefaultContext(meta: RequestMeta): PluginContext {
   const ctx: PluginContext = {
@@ -107,10 +95,6 @@ export function createDefaultContext(meta: RequestMeta): PluginContext {
   return ctx;
 }
 
-// ---------------------------------------------------------------------------
-// Safe hook invocation
-// ---------------------------------------------------------------------------
-
 export function firePluginHook(
   plugin: RouterPlugin | undefined,
   method: keyof RouterPlugin,
@@ -121,7 +105,6 @@ export function firePluginHook(
   if (typeof fn !== 'function') return undefined;
   try {
     const result = (fn as (...a: unknown[]) => unknown).apply(plugin, args);
-    // Catch async rejections — plugin hooks are fire-and-forget
     if (result && typeof (result as Promise<unknown>).catch === 'function') {
       (result as Promise<unknown>).catch((error) => {
         console.error(
@@ -131,17 +114,12 @@ export function firePluginHook(
     }
     return result;
   } catch (error) {
-    // Plugin errors are silently swallowed — fire and forget.
     console.error(
       `[router] ERROR ${method}: ${error instanceof Error ? error.message : String(error)}`,
     );
     return undefined;
   }
 }
-
-// ---------------------------------------------------------------------------
-// Console plugin
-// ---------------------------------------------------------------------------
 
 export function consolePlugin(): RouterPlugin {
   return {

@@ -5,11 +5,6 @@ import { runSettlementError } from './run-settlement-error.js';
 import { settlementContext } from './settlement-context.js';
 import type { FlowCtx, SettleScope } from './types.js';
 
-/**
- * Run user-supplied afterSettle hook. Errors are logged, alerted, and routed
- * through onSettlementError(phase='afterSettle'); the already-settled response
- * is unchanged.
- */
 export async function runAfterSettle(
   ctx: FlowCtx,
   scope: SettleScope<HandlerPaymentContext & { status: 'settled' }>,

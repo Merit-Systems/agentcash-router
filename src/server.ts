@@ -11,9 +11,6 @@ import { getConfiguredX402Networks } from './protocols/x402/accepts.js';
 import { withCachedGetSupported } from './protocols/x402/supported.js';
 
 export async function createX402Server(config: RouterConfig) {
-  // Dynamic ESM imports: peer deps are loaded lazily so the router can
-  // boot without them installed. await import() is bundler-safe (unlike
-  // require() which Turbopack's __require polyfill silently breaks).
   const { x402ResourceServer, HTTPFacilitatorClient } = await import('@x402/core/server');
   const { registerExactEvmScheme } = await import('@x402/evm/exact/server');
   const { bazaarResourceServerExtension } = await import('@x402/extensions/bazaar');
@@ -78,26 +75,12 @@ function createFacilitatorClients(
   });
 }
 
-/**
- * Stable identifier for caching. Different facilitators (CDP vs Corbits vs
- * self-hosted) advertise different `/supported` payloads, so URL is the
- * primary discriminator. Networks are appended so a single facilitator URL
- * serving multiple network groupings doesn't share a slot — sorted to keep
- * the key deterministic across instances.
- */
 function facilitatorCacheKey(group: ResolvedX402FacilitatorGroup): string {
   const url = group.config.url ?? 'default';
   const nets = [...group.networks].sort().join(',');
   return `${url}|${nets}`;
 }
 
-/**
- * Hardcoded kinds returned when `/supported` fails persistently. Covers the
- * `exact` scheme (works without facilitator metadata) and advertises `upto`
- * for EVM. `upto` requires `extra.facilitatorAddress` from a real `/supported`
- * response to construct Permit2 witnesses, so it degrades — the kind is
- * advertised but clients can't actually pay until `/supported` recovers.
- */
 function buildFallbackKinds(group: ResolvedX402FacilitatorGroup) {
   return group.networks.flatMap((network) => {
     const exactKind = {
