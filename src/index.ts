@@ -364,6 +364,3 @@ export type { SiwxErrorCode } from './auth/siwx.js';
 export { SIWX_ERROR_MESSAGES } from './auth/siwx.js';
 export { RouteBuilder } from './builder.js';
 export { RouteRegistry } from './registry.js';
-
-export type { SupportedKVStore } from './protocols/x402/supported.js';
-export { mppxStoreAdapter } from './protocols/x402/supported.js';

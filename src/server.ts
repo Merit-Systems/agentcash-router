@@ -1,4 +1,5 @@
 import type { FacilitatorConfig, FacilitatorClient } from '@x402/core/http';
+import type { SupportedResponse } from '@x402/core/types';
 import { filterEvmNetworks } from './protocols/x402/evm.js';
 import { filterSolanaNetworks } from './protocols/x402/solana.js';
 import type { RouterConfig, X402Server } from './types.js';
@@ -8,7 +9,6 @@ import {
   type ResolvedX402FacilitatorGroup,
 } from './protocols/x402/facilitators.js';
 import { getConfiguredX402Networks } from './protocols/x402/accepts.js';
-import { withCachedGetSupported } from './protocols/x402/supported.js';
 
 export async function createX402Server(config: RouterConfig) {
   const { x402ResourceServer, HTTPFacilitatorClient } = await import('@x402/core/server');
@@ -24,11 +24,7 @@ export async function createX402Server(config: RouterConfig) {
   );
   const evmNetworks = filterEvmNetworks(configuredNetworks);
   const svmNetworks = filterSolanaNetworks(configuredNetworks);
-  const facilitatorClients = createFacilitatorClients(
-    facilitatorsByNetwork,
-    HTTPFacilitatorClient,
-    config.x402?.supportedCache,
-  );
+  const facilitatorClients = createFacilitatorClients(facilitatorsByNetwork, HTTPFacilitatorClient);
   const server = new x402ResourceServer(
     facilitatorClients.length === 1 ? facilitatorClients[0] : facilitatorClients,
   );
@@ -59,29 +55,33 @@ export async function createX402Server(config: RouterConfig) {
 function createFacilitatorClients(
   facilitatorsByNetwork: ReturnType<typeof getResolvedX402Facilitators>,
   HTTPFacilitatorClient: new (config?: FacilitatorConfig) => FacilitatorClient,
-  cacheConfig: NonNullable<RouterConfig['x402']>['supportedCache'],
 ): FacilitatorClient[] {
   const groups = getResolvedX402FacilitatorGroups(facilitatorsByNetwork);
 
   return groups.map((group) => {
     const inner = new HTTPFacilitatorClient(group.config);
-    const fallbackKinds = buildFallbackKinds(group);
-    return withCachedGetSupported(inner, {
-      cacheKey: facilitatorCacheKey(group),
-      fallbackKinds,
-      store: cacheConfig?.store ?? null,
-      ttlMs: cacheConfig?.ttlMs,
-    });
+    const kinds = buildSupportedKinds(group);
+    return hardcodedSupportedClient(inner, kinds);
   });
 }
 
-function facilitatorCacheKey(group: ResolvedX402FacilitatorGroup): string {
-  const url = group.config.url ?? 'default';
-  const nets = [...group.networks].sort().join(',');
-  return `${url}|${nets}`;
+// getSupported() hits the facilitator on every cold start. On Vercel, N
+// simultaneous cold starts blast the facilitator and get 429'd. The router
+// only uses exact/upto on EVM and exact on Solana — all of which the CDP
+// facilitator supports — so we bypass the network call entirely. verify()
+// and settle() pass through to the real client.
+function hardcodedSupportedClient(
+  inner: FacilitatorClient,
+  kinds: SupportedResponse['kinds'],
+): FacilitatorClient {
+  return {
+    verify: inner.verify.bind(inner),
+    settle: inner.settle.bind(inner),
+    getSupported: async () => ({ kinds, extensions: [], signers: {} }),
+  };
 }
 
-function buildFallbackKinds(group: ResolvedX402FacilitatorGroup) {
+function buildSupportedKinds(group: ResolvedX402FacilitatorGroup): SupportedResponse['kinds'] {
   return group.networks.flatMap((network) => {
     const exactKind = {
       x402Version: 2 as const,
@@ -97,9 +97,10 @@ function buildFallbackKinds(group: ResolvedX402FacilitatorGroup) {
           }
         : {}),
     };
+    const uptoKind = { x402Version: 2 as const, scheme: 'upto' as const, network };
     if (group.family === 'evm') {
-      return [exactKind, { x402Version: 2 as const, scheme: 'upto' as const, network }];
+      return [exactKind, uptoKind];
     }
-    return [exactKind];
+    return [exactKind, uptoKind];
   });
 }

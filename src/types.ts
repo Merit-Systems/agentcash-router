@@ -380,19 +380,6 @@ export interface RouterConfig {
   x402?: {
     accepts?: X402AcceptConfig[];
     facilitators?: X402FacilitatorsConfig;
-    /**
-     * Cache layer for facilitator `/supported` responses (used by `upto` to
-     * read `facilitatorAddress` and asset metadata). Without a `store`, only
-     * per-process memoization applies — `M` cold-starting lambdas → `M` raw
-     * HTTP calls. Pass a shared KV here to coordinate across the fleet.
-     *
-     * mppx-shape stores can be wrapped via `mppxStoreAdapter` to satisfy
-     * `SupportedKVStore`.
-     */
-    supportedCache?: {
-      store?: import('./protocols/x402/supported.js').SupportedKVStore;
-      ttlMs?: number;
-    };
   };
   plugin?: import('./plugin.js').RouterPlugin;
   siwx?: {
