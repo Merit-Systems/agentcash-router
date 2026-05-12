@@ -1,4 +1,3 @@
-
 import { walletFromDid } from './credential.js';
 import { Credential } from 'mppx';
 import type { Transport } from 'mppx/server';

@@ -181,7 +181,7 @@ export function isChannelOnlyAction(info: MppCredentialInfo, request: Request): 
 }
 
 async function readMppxProblemDetails(challenge: Response): Promise<VerifyFailure> {
-  let body = '';
+  let body: string;
   try {
     body = await challenge.clone().text();
   } catch {
@@ -201,15 +201,13 @@ async function readMppxProblemDetails(challenge: Response): Promise<VerifyFailur
   const details = parsed as { type?: unknown; title?: unknown; detail?: unknown };
   const typeUri = typeof details.type === 'string' ? details.type : undefined;
   const slug = typeUri ? typeUri.split('/').pop() : undefined;
-  const reason = slug
-    ? slug.replace(/-/g, '_')
-    : 'mpp_session_invalid';
+  const reason = slug ? slug.replace(/-/g, '_') : 'mpp_session_invalid';
   const message =
     typeof details.detail === 'string' && details.detail.length > 0
       ? details.detail
       : typeof details.title === 'string'
-      ? details.title
-      : undefined;
+        ? details.title
+        : undefined;
   return message ? { reason, message } : { reason };
 }
 

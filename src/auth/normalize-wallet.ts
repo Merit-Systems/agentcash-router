@@ -3,7 +3,6 @@ export function normalizeWalletAddress(address: string): string {
   return isEvm ? normalizeEvmWalletAddress(address) : normalizeSolanaWalletAddress(address);
 }
 
-
 export function normalizeEvmWalletAddress(address: string): string {
   return address.toLowerCase();
 }

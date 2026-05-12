@@ -23,7 +23,6 @@ export interface VerifySuccess {
 export interface VerifyFailure {
   reason: string;
   message?: string;
-  
 }
 
 export type VerifyOutcome =
