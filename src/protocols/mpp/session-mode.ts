@@ -26,6 +26,7 @@ import type {
   SettleArgs,
   SettleOutcome,
   VerifyArgs,
+  VerifyFailure,
   VerifySuccess,
 } from '../types.js';
 import type { MppxMiddlewareResponse } from '../../pipeline/context/types.js';
@@ -52,7 +53,9 @@ export async function verifySessionMode(
   args: VerifyArgs,
   info: MppCredentialInfo,
 ): Promise<
-  VerifySuccess | { ok: false; kind: 'invalid' } | { ok: false; kind: 'config'; message: string }
+  | VerifySuccess
+  | { ok: false; kind: 'invalid'; failure?: VerifyFailure }
+  | { ok: false; kind: 'config'; message: string }
 > {
   const { request, deps, price, routeEntry } = args;
 
@@ -86,9 +89,18 @@ export async function verifySessionMode(
 
   let result: MppxMiddlewareResponse<Transport.Sse> | MppxMiddlewareResponse<Transport.Http>;
   try {
-    result = await middleware({ amount: tickCost, unitType, suggestedDeposit: price })(
-      middlewareRequest,
-    );
+    result = await middleware({
+      amount: tickCost,
+      unitType,
+      suggestedDeposit: price,
+      // mppx HMAC-binds the challenge over `opaque`, so the verify-side
+      // middleware needs the same `meta` as the build-side
+      // (`buildSessionChallenge`) — otherwise the credential's `opaque` won't
+      // match the route's declared requirements and mppx rejects with
+      // `invalid_challenge: credential opaque does not match this route's
+      // requirements`. Keep both call sites in lock-step.
+      ...(streaming ? { meta: { streaming: 'true' } } : {}),
+    })(middlewareRequest);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return {
@@ -99,7 +111,16 @@ export async function verifySessionMode(
   }
 
   if (result.status === 402) {
-    return { ok: false, kind: 'invalid' };
+    // mppx's HTTP transport serializes RFC 9457 problem details into the
+    // challenge body when it rejects a credential (see mppx's
+    // server/Transport.js — `application/problem+json` with `{type, title,
+    // status, detail, challengeId}`). Hoist that into a `VerifyFailure` so
+    // `build402` can echo the reason/message in the 402 body; otherwise the
+    // client just sees an empty 402 with a renewed challenge and no
+    // diagnostic — the same silent-failure trap that bit the x402 upto
+    // path until `verifyX402Payment` started propagating its failures.
+    const failure = await readMppxProblemDetails(result.challenge);
+    return { ok: false, kind: 'invalid', failure };
   }
 
   const mppRecipient = deps.mppRecipient ?? deps.payeeAddress;
@@ -211,6 +232,10 @@ export async function buildSessionChallenge(
       amount: tickCost,
       unitType,
       suggestedDeposit,
+      // Surface the transport on the challenge so clients can pick mppx.sse vs
+      // request-mode without inferring from handler shape. mppx serializes this
+      // as `opaque` on WWW-Authenticate and HMAC-binds it (tamper-evident).
+      ...(streaming ? { meta: { streaming: 'true' } } : {}),
     })(request);
     if (result.status === 402) {
       const wwwAuth = result.challenge.headers.get(HEADERS.WWW_AUTHENTICATE);
@@ -257,6 +282,50 @@ export function isChannelOnlyAction(info: MppCredentialInfo, request: Request): 
   if (action === 'close' || action === 'topUp') return true;
   if ((action === 'open' || action === 'voucher') && !hasRequestBody(request)) return true;
   return false;
+}
+
+/**
+ * Translate mppx's RFC 9457 problem-details body (emitted on credential-reject
+ * 402s from `mppx/server`'s Http transport) into a `VerifyFailure` the pipeline
+ * can echo back to the client via `build402`. We never want to surface a bare
+ * `kind: 'invalid'` with no diagnostic — clients then see an empty 402 with a
+ * renewed challenge and no way to know what went wrong.
+ *
+ * Mapping: `type` URI's slug → snake-case `reason`; `detail`/`title` → `message`.
+ * Defensive on every field — mppx may emit no body (initial challenge issuance)
+ * or a non-JSON body if a future transport changes shape.
+ */
+async function readMppxProblemDetails(challenge: Response): Promise<VerifyFailure> {
+  let body = '';
+  try {
+    body = await challenge.clone().text();
+  } catch {
+    return { reason: 'mpp_session_invalid' };
+  }
+  if (!body) return { reason: 'mpp_session_invalid' };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return { reason: 'mpp_session_invalid', message: body.slice(0, 500) };
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    return { reason: 'mpp_session_invalid' };
+  }
+  const details = parsed as { type?: unknown; title?: unknown; detail?: unknown };
+  const typeUri = typeof details.type === 'string' ? details.type : undefined;
+  const slug = typeUri ? typeUri.split('/').pop() : undefined;
+  const reason = slug
+    ? slug.replace(/-/g, '_')
+    : 'mpp_session_invalid';
+  const message =
+    typeof details.detail === 'string' && details.detail.length > 0
+      ? details.detail
+      : typeof details.title === 'string'
+      ? details.title
+      : undefined;
+  return message ? { reason, message } : { reason };
 }
 
 /**

@@ -46,6 +46,8 @@ interface SessionMppxState {
   lastAmount: string | null;
   /** Last `unitType` mppx.session() was invoked with. */
   lastUnitType: string | undefined | null;
+  /** Last `meta` mppx.session() was invoked with (serialized as `opaque` on the challenge). */
+  lastMeta: Record<string, string> | undefined;
 }
 
 function createFakeSessionMppx(
@@ -62,16 +64,23 @@ function createFakeSessionMppx(
     lastSuggestedDeposit: null,
     lastAmount: null,
     lastUnitType: null,
+    lastMeta: undefined,
   };
   let sessionCallCount = 0;
 
   const session =
-    (sessionOptions: { amount: string; unitType?: string; suggestedDeposit?: string }) =>
+    (sessionOptions: {
+      amount: string;
+      unitType?: string;
+      suggestedDeposit?: string;
+      meta?: Record<string, string>;
+    }) =>
     async (request: Request) => {
       if (options.throwOnSession) throw options.throwOnSession;
       state.lastAmount = sessionOptions.amount;
       state.lastUnitType = sessionOptions.unitType;
       state.lastSuggestedDeposit = sessionOptions.suggestedDeposit ?? null;
+      state.lastMeta = sessionOptions.meta;
 
       const callIndex = sessionCallCount++;
       const auth = request.headers.get('Authorization');
@@ -286,6 +295,31 @@ describe('MPP session — challenge', () => {
     await handler(new NextRequest('http://localhost:3000/api/test', { method: 'POST' }));
     expect(fake.state.lastAmount).toBe('0.0005');
     expect(fake.state.lastUnitType).toBe('frame');
+  });
+
+  // Streaming-mode routes (async generator handlers) require the client to
+  // connect via mppx.sse, not request-mode HTTP. Without a signal on the 402
+  // challenge, clients can't tell which transport to use — they'd have to
+  // probe and discover it only at the 200 response (after credential exchange).
+  //
+  // mppx's `meta` flows into Challenge.fromMethod and is serialized as the
+  // `opaque` field on WWW-Authenticate (HMAC-bound, tamper-evident). We tag
+  // streaming routes with `meta: { streaming: 'true' }`; request-mode routes
+  // pass no meta so the field stays absent (clients infer non-streaming).
+  it('streaming routes pass meta: { streaming: "true" } to mppx.session', async () => {
+    const fake = createFakeSessionMppx();
+    const entry = makeStreamingSessionEntry();
+    const handler = createRequestHandler(entry, async () => ({}), makeSessionDeps(fake));
+    await handler(new NextRequest('http://localhost:3000/api/test', { method: 'POST' }));
+    expect(fake.state.lastMeta).toEqual({ streaming: 'true' });
+  });
+
+  it('request-mode routes pass no meta (streaming flag absent)', async () => {
+    const fake = createFakeSessionMppx();
+    const entry = makeDynamicSessionEntry();
+    const handler = createRequestHandler(entry, async () => ({}), makeSessionDeps(fake));
+    await handler(new NextRequest('http://localhost:3000/api/test', { method: 'POST' }));
+    expect(fake.state.lastMeta).toBeUndefined();
   });
 });
 

@@ -30,9 +30,14 @@ export interface VerifySuccess {
   alreadySettled?: boolean;
 }
 
+export interface VerifyFailure {
+  reason: string;
+  message?: string;
+}
+
 export type VerifyOutcome =
   | VerifySuccess
-  | { ok: false; kind: 'invalid' } // client problem → 402 challenge
+  | { ok: false; kind: 'invalid'; failure?: VerifyFailure } // client problem → 402 challenge
   | { ok: false; kind: 'config'; message: string }; // server config → 500
 
 // ---------------------------------------------------------------------------

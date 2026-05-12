@@ -45,7 +45,12 @@ export type JsonObject = { [key: string]: JsonValue };
 
 // Typed interface for x402ResourceServer using @x402/core's own types.
 // Enforces correct method names, async signatures, and array vs single arg.
-import type { PaymentRequired, PaymentRequirements, SettleResponse } from '@x402/core/types';
+import type {
+  PaymentRequired,
+  PaymentRequirements,
+  SettleResponse,
+  VerifyResponse,
+} from '@x402/core/types';
 
 export interface X402Server {
   initialize(): Promise<void>;
@@ -74,10 +79,7 @@ export interface X402Server {
     payload: unknown,
   ): PaymentRequirements;
 
-  verifyPayment(
-    payload: unknown,
-    requirements: PaymentRequirements,
-  ): Promise<{ isValid: boolean; payer?: string }>;
+  verifyPayment(payload: unknown, requirements: PaymentRequirements): Promise<VerifyResponse>;
 
   settlePayment(
     payload: unknown,

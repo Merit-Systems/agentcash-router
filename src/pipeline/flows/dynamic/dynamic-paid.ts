@@ -97,7 +97,7 @@ export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
     if (verifyOutcome.kind === 'config') {
       return fail(ctx, 500, verifyOutcome.message, parsedBody);
     }
-    return build402(ctx, pricing, parsedBody);
+    return build402(ctx, pricing, parsedBody, verifyOutcome.failure);
   }
 
   ctx.pluginCtx.setVerifiedWallet(verifyOutcome.wallet);

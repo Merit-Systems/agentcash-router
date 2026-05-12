@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { PricingStrategy } from '../../pricing/index.js';
 import { firePluginHook } from '../../plugin.js';
 import { getAllowedStrategies } from '../../protocols/index.js';
+import type { VerifyFailure } from '../../protocols/types.js';
 import { buildChallengeExtensions } from '../challenge-extensions.js';
 import { errorMessage, errorStatus, firePluginResponse, type FlowCtx } from '../context/index.js';
 
@@ -20,6 +21,7 @@ export async function build402(
   ctx: FlowCtx,
   pricing: PricingStrategy | null,
   body: unknown | undefined,
+  failure?: VerifyFailure,
 ): Promise<NextResponse> {
   let challengePrice: string;
   try {
@@ -36,7 +38,15 @@ export async function build402(
 
   const extensions = await buildChallengeExtensions(ctx);
 
-  const response = new NextResponse(null, {
+  // When this challenge is the result of a verify rejection, serialize the
+  // reason/message into the body so clients (e.g. the agentcash MCP's
+  // permit2-allowance detector) can recognize and surface the actual failure
+  // mode instead of treating it as an opaque renewed 402.
+  const responseBody = failure
+    ? JSON.stringify({ error: failure.message ?? null, reason: failure.reason })
+    : null;
+
+  const response = new NextResponse(responseBody, {
     status: 402,
     headers: {
       'Content-Type': 'application/json',

@@ -106,7 +106,7 @@ export class FakeX402Server {
     if (payer === KNOWN_PAYER) {
       return { isValid: true, payer: KNOWN_PAYER };
     }
-    return { isValid: false, payer: null };
+    return { isValid: false };
   }
 
   async settlePayment(

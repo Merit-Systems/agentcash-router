@@ -1,4 +1,5 @@
 import type { PaymentRequirements } from '@x402/core/types';
+import { PERMIT2_ADDRESS } from '@x402/evm';
 import type { HandlerPaymentContext } from '../../types.js';
 import { HEADERS } from '../../headers.js';
 import { normalizeWalletAddress } from '../../auth/normalize-wallet.js';
@@ -14,7 +15,34 @@ import type {
 import { resolveX402Accepts } from './accepts.js';
 import { buildX402Challenge } from './challenge.js';
 import { settleX402Payment } from './settle.js';
-import { verifyX402Payment } from './verify.js';
+import { verifyX402Payment, type X402VerifyFailure } from './verify.js';
+
+/**
+ * Build a human-readable, actionable failure message for a verify rejection.
+ * For `permit2_allowance_required` (the dominant Permit2-witness failure mode,
+ * hit by both upto and Permit2-witness exact schemes), names the exact wallet,
+ * asset, and minimum amount the user must approve — and recommends MAX_UINT256
+ * so the approval is one-time.
+ */
+function formatVerifyFailureMessage(failure: X402VerifyFailure): string {
+  if (failure.reason === 'permit2_allowance_required') {
+    const wallet = failure.payer ?? '<the payer wallet>';
+    const asset = failure.accepted?.asset ?? '<the asset>';
+    const amount = failure.accepted?.amount ?? '<the required amount>';
+    const network = failure.accepted?.network ?? '<the payment network>';
+    return [
+      `Payment rejected: In order for Upto to charge, the wallet ${wallet} MUST approve Permit2 to spend ${asset} on ${network}.`,
+      `Required call (one-time, on-chain): ${asset}.approve(${PERMIT2_ADDRESS}, MAX_UINT256) from ${wallet}.`,
+      `Permit2 contract address: ${PERMIT2_ADDRESS}.`,
+      `Minimum allowance for this request: ${amount} (smallest units of ${asset}); use MAX_UINT256 to avoid re-approving on every future call.`,
+      `Alternative without an on-chain transaction: the merchant can adopt the EIP-2612 gas-sponsoring extension (https://docs.x402.org/extensions/eip2612-gas-sponsoring).`,
+    ].join(' ');
+  }
+  if (failure.message) {
+    return `Payment rejected (${failure.reason}): ${failure.message}`;
+  }
+  return `Payment rejected: ${failure.reason}`;
+}
 
 interface X402Token {
   payload: unknown;
@@ -63,7 +91,20 @@ async function verifyX402(args: VerifyArgs): Promise<VerifyOutcome> {
     price,
     accepts,
   });
-  if (!verifyResult?.valid) return { ok: false, kind: 'invalid' };
+  if (!verifyResult?.valid) {
+    const failure = verifyResult?.failure;
+    if (failure) {
+      return {
+        ok: false,
+        kind: 'invalid',
+        failure: {
+          reason: failure.reason,
+          message: formatVerifyFailureMessage(failure),
+        },
+      };
+    }
+    return { ok: false, kind: 'invalid' };
+  }
 
   const wallet = normalizeWalletAddress(verifyResult.payer);
   const { network, payTo } = verifyResult.requirements;
