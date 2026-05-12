@@ -12,7 +12,11 @@ import { createOpenAPIHandler } from './discovery/openapi.js';
 import { createLlmsTxtHandler } from './discovery/llms-txt.js';
 import { getConfiguredX402Accepts } from './protocols/x402/accepts.js';
 import { BASE_NETWORK } from './constants.js';
-import { RouterConfigError, formatRouterConfigIssues, getRouterConfigIssues } from './config.js';
+import {
+  RouterConfigError,
+  formatRouterConfigIssues,
+  getRouterConfigIssues,
+} from './config/index.js';
 import { initX402 } from './init/x402.js';
 import { initMpp } from './init/mpp.js';
 
@@ -213,13 +217,13 @@ export {
   paidOptionsForProtocols,
   validateRouterConfig,
   x402AcceptsFromEnv,
-} from './config.js';
+} from './config/index.js';
 export type {
   RouterConfigIssue,
   RouterConfigIssueCode,
   RouterConfigValidationOptions,
   RouterEnv,
-} from './config.js';
+} from './config/index.js';
 export type {
   HandlerContext,
   StreamingHandlerContext,
