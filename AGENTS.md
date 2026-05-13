@@ -53,19 +53,12 @@ src/
 
 ## Two entry points
 
-`createRouterFromEnv` is the paved road: reads `process.env`, validates every value, throws a single `RouterConfigError` with all problems at once. Auto-emits `exact` + `upto` accepts on Base, auto-adds Solana when `SOLANA_PAYEE_ADDRESS` is set, auto-enables MPP session mode when `MPP_OPERATOR_KEY` is set.
+Two ways to initialize, both publicly exported:
 
-```typescript
-import { createRouterFromEnv } from '@agentcash/router';
+- **`createRouterFromEnv(options)`** — paved road. Reads `process.env`, validates every value, throws a single `RouterConfigError` with all problems at once. Auto-emits `exact` + `upto` accepts on Base, auto-adds Solana when `SOLANA_PAYEE_ADDRESS` is set, auto-enables MPP session mode when `MPP_OPERATOR_KEY` is set.
+- **`createRouter(config)`** — lower-level. Caller passes a fully-built `RouterConfig`. Use when env doesn't cover the case (custom networks, multi-payee setups, non-standard assets, fully programmatic configs).
 
-export const router = createRouterFromEnv({
-  title: 'My API',
-  description: 'Pay-per-call search.',
-  guidance: '...',
-});
-```
-
-`createRouter` is the lower-level entry point. Use it when the caller needs to build `RouterConfig` programmatically (custom networks, multi-payee setups, non-standard assets). `routerConfigFromEnv` exposes the env-reading step on its own when the caller wants to inspect or augment the config before instantiation.
+Implementation: `createRouterFromEnv(options)` ≡ `createRouter(routerConfigFromEnv(options))`. `routerConfigFromEnv` is also exported, so consumers who want "env-derived base + programmatic tweaks" can spread the result and override fields before passing to `createRouter`.
 
 ## Environment variables
 

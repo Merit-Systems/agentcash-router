@@ -49,6 +49,10 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 
 ### 1. Create the router
 
+There are two ways to initialize. Pick one.
+
+**Option A — `createRouterFromEnv` (recommended).** Reads `process.env`, validates every value up front, and throws a single `RouterConfigError` with every problem at once. Auto-enables MPP when `MPP_SECRET_KEY` is set, auto-adds a Solana accept when `SOLANA_PAYEE_ADDRESS` is set, auto-enables MPP session mode when `MPP_OPERATOR_KEY` is set.
+
 ```typescript
 // lib/router.ts
 import { createRouterFromEnv } from '@agentcash/router';
@@ -60,7 +64,38 @@ export const router = createRouterFromEnv({
 });
 ```
 
-`createRouterFromEnv` reads `process.env`, validates everything up front, and throws a single `RouterConfigError` with every problem at once. It auto-enables MPP when `MPP_SECRET_KEY` is set and auto-adds a Solana accept when `SOLANA_PAYEE_ADDRESS` is set. For programmatic configuration (custom networks, multiple payees, etc.), build a `RouterConfig` manually and pass it to `createRouter`.
+**Option B — build a `RouterConfig` and pass it to `createRouter`.** Use this when you need custom networks, multiple payees, non-standard assets, or any setting `createRouterFromEnv` doesn't expose. `createRouter` runs the same validation against the `RouterConfig` shape.
+
+```typescript
+// lib/router.ts
+import { createRouter, BASE_MAINNET_NETWORK } from '@agentcash/router';
+
+export const router = createRouter({
+  baseUrl: 'https://api.example.com',
+  payeeAddress: '0x…',
+  network: BASE_MAINNET_NETWORK,
+  protocols: ['x402'],
+  x402: { accepts: [/* … */] },
+  discovery: {
+    title: 'My API',
+    version: '1.0.0',
+    description: 'Pay-per-call search.',
+    guidance: 'POST /search with { q: string }. Returns top 10 results.',
+  },
+});
+```
+
+For the env-driven base with programmatic tweaks, compose them: `routerConfigFromEnv` (also exported) returns the same `RouterConfig` that `createRouterFromEnv` builds internally — augment it, then pass to `createRouter`.
+
+```typescript
+import { createRouter, routerConfigFromEnv } from '@agentcash/router';
+
+const config = routerConfigFromEnv({ title: '…', description: '…', guidance: '…' });
+export const router = createRouter({
+  ...config,
+  x402: { ...config.x402, accepts: [/* add a custom accept */, ...(config.x402?.accepts ?? [])] },
+});
+```
 
 ### 2. Define routes
 
