@@ -10,7 +10,7 @@ import {
   MemoryEntitlementStore,
   createKvNonceStore,
   createKvEntitlementStore,
-  createKvStoreFromEnv,
+  resolveKvStore,
 } from './kv-store/index.js';
 import { createWellKnownHandler } from './discovery/well-known.js';
 import { createOpenAPIHandler } from './discovery/openapi.js';
@@ -51,7 +51,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   config: RouterConfig & { prices?: P },
 ): ServiceRouter<Extract<keyof P, string>> {
   const registry = new RouteRegistry();
-  const kvStore = config.kvStore ?? createKvStoreFromEnv();
+  const kvStore = resolveKvStore(config.kvStore);
   const nonceStore = kvStore ? createKvNonceStore(kvStore) : new MemoryNonceStore();
   const entitlementStore = kvStore
     ? createKvEntitlementStore(kvStore)
@@ -290,8 +290,6 @@ export type {
   KvMppStoreOptions,
 } from './kv-store/index.js';
 export {
-  createUpstashRestClient,
-  createKvStoreFromEnv,
   withPrefix,
   MemoryNonceStore,
   createKvNonceStore,

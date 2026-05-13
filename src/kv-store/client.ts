@@ -13,12 +13,12 @@ export type KvChange<R> =
   | { op: 'set'; value: unknown; result: R }
   | { op: 'delete'; result: R };
 
-interface UpstashResponse<T> {
+interface RestResponse<T> {
   result?: T;
   error?: string;
 }
 
-export function createUpstashRestClient(url: string, token: string): KvStore {
+function restKvStore(url: string, token: string): KvStore {
   const base = url.replace(/\/+$/, '');
   const authHeader = { Authorization: `Bearer ${token}` };
   const jsonHeaders = { ...authHeader, 'Content-Type': 'application/json' };
@@ -32,7 +32,7 @@ export function createUpstashRestClient(url: string, token: string): KvStore {
     if (!res.ok) {
       throw new Error(`[kv-store] ${command[0]} ${command[1] ?? ''}: ${res.status}`);
     }
-    const body = (await res.json()) as UpstashResponse<T>;
+    const body = (await res.json()) as RestResponse<T>;
     if (body.error) throw new Error(`[kv-store] ${command[0]}: ${body.error}`);
     return body.result ?? null;
   }
@@ -40,7 +40,7 @@ export function createUpstashRestClient(url: string, token: string): KvStore {
   async function get(key: string): Promise<unknown> {
     const res = await fetch(`${base}/get/${encodeURIComponent(key)}`, { headers: authHeader });
     if (!res.ok) throw new Error(`[kv-store] GET ${key}: ${res.status}`);
-    const { result } = (await res.json()) as UpstashResponse<unknown>;
+    const { result } = (await res.json()) as RestResponse<unknown>;
     return result ?? null;
   }
 
@@ -77,11 +77,28 @@ export function createUpstashRestClient(url: string, token: string): KvStore {
   return { get, set, del, setNxEx, sadd, sismember, update };
 }
 
-export function createKvStoreFromEnv(env: NodeJS.ProcessEnv = process.env): KvStore | undefined {
+function isRestConfig(input: unknown): input is { url: string; token: string } {
+  return (
+    typeof input === 'object' &&
+    input !== null &&
+    typeof (input as { url?: unknown }).url === 'string' &&
+    typeof (input as { token?: unknown }).token === 'string' &&
+    typeof (input as Partial<KvStore>).get !== 'function'
+  );
+}
+
+export function resolveKvStore(
+  input: KvStore | { url: string; token: string } | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): KvStore | undefined {
+  if (input) {
+    if (isRestConfig(input)) return restKvStore(input.url, input.token);
+    return input;
+  }
   const url = env.KV_REST_API_URL;
   const token = env.KV_REST_API_TOKEN;
-  if (!url || !token) return undefined;
-  return createUpstashRestClient(url, token);
+  if (url && token) return restKvStore(url, token);
+  return undefined;
 }
 
 export function withPrefix(kv: KvStore, prefix: string): KvStore {
