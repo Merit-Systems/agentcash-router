@@ -1,14 +1,11 @@
 import type { KvStore } from './client.js';
 
-/** SIWX challenge expiry in milliseconds. */
 export const SIWX_CHALLENGE_EXPIRY_MS = 5 * 60 * 1000;
 
 export interface NonceStore {
-  /** Returns `true` if the nonce is fresh (and marks it used); `false` if it has been seen. */
   check(nonce: string): Promise<boolean>;
 }
 
-/** In-memory nonce store for development and tests. Not durable across restarts. */
 export class MemoryNonceStore implements NonceStore {
   private seen = new Map<string, number>();
 
@@ -28,13 +25,10 @@ export class MemoryNonceStore implements NonceStore {
 }
 
 export interface KvNonceStoreOptions {
-  /** Key prefix. Default: `'siwx:nonce:'`. */
   prefix?: string;
-  /** TTL in milliseconds. Default: `SIWX_CHALLENGE_EXPIRY_MS` (5 minutes). */
   ttlMs?: number;
 }
 
-/** KV-backed nonce store. Uses `SET key val EX ttl NX` for atomic single-use semantics. */
 export function createKvNonceStore(kv: KvStore, options?: KvNonceStoreOptions): NonceStore {
   const prefix = options?.prefix ?? 'siwx:nonce:';
   const ttlSeconds = Math.ceil((options?.ttlMs ?? SIWX_CHALLENGE_EXPIRY_MS) / 1000);

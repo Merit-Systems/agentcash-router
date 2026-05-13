@@ -5,11 +5,9 @@ import { withPrefix } from './client.js';
 type MppStore = Store.Store;
 
 export interface KvMppStoreOptions {
-  /** Key prefix. Default: `'mpp:'`. */
   prefix?: string;
 }
 
-/** Build an mppx-compatible Store from a KvStore (namespaced under `'mpp:'` by default). */
 export async function createKvMppStore(
   kv: KvStore,
   options?: KvMppStoreOptions,

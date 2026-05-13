@@ -6,7 +6,6 @@ export interface EntitlementStore {
   grant(route: string, wallet: string): Promise<void>;
 }
 
-/** In-memory SIWX entitlement store for development and tests. Not durable across restarts. */
 export class MemoryEntitlementStore implements EntitlementStore {
   private readonly routeToWallets = new Map<string, Set<string>>();
 
@@ -28,11 +27,9 @@ export class MemoryEntitlementStore implements EntitlementStore {
 }
 
 export interface KvEntitlementStoreOptions {
-  /** Key prefix. Default: `'siwx:ent:'`. */
   prefix?: string;
 }
 
-/** KV-backed entitlement store. Uses Redis sets (one per route) for O(1) membership checks. */
 export function createKvEntitlementStore(
   kv: KvStore,
   options?: KvEntitlementStoreOptions,

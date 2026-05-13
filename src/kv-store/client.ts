@@ -1,26 +1,10 @@
-/**
- * KvStore — the single interface for talking to a Redis cache.
- *
- * All three router-internal stores (SIWX nonce, SIWX entitlement, MPP tx-hash
- * replay) consume this interface. Concrete impl: `createUpstashRestClient`,
- * which speaks the Upstash REST protocol with plain `fetch` (no SDK dep).
- *
- * Compatible with: Upstash Redis, Vercel KV (which exposes the Upstash REST API).
- */
 export interface KvStore {
-  /** Read a JSON-serialized value. Returns null if the key is missing. */
   get(key: string): Promise<unknown>;
-  /** Write a value (JSON-serialized). */
   set(key: string, value: unknown): Promise<void>;
-  /** Delete a key. */
   del(key: string): Promise<void>;
-  /** Atomic set-if-not-exists with TTL. Returns `true` if the key was set, `false` if it already existed. */
   setNxEx(key: string, value: unknown, ttlSeconds: number): Promise<boolean>;
-  /** Add a member to a set. */
   sadd(key: string, member: string): Promise<void>;
-  /** Test set membership. */
   sismember(key: string, member: string): Promise<boolean>;
-  /** Read-modify-write. Implemented as get-then-set on REST backends (not strictly atomic). */
   update<R>(key: string, fn: (current: unknown) => KvChange<R>): Promise<R>;
 }
 
@@ -34,7 +18,6 @@ interface UpstashResponse<T> {
   error?: string;
 }
 
-/** Build a KvStore that speaks Upstash REST over plain fetch — no SDK dependency. */
 export function createUpstashRestClient(url: string, token: string): KvStore {
   const base = url.replace(/\/+$/, '');
   const authHeader = { Authorization: `Bearer ${token}` };
@@ -94,7 +77,6 @@ export function createUpstashRestClient(url: string, token: string): KvStore {
   return { get, set, del, setNxEx, sadd, sismember, update };
 }
 
-/** Build a KvStore from `KV_REST_API_URL` + `KV_REST_API_TOKEN` env vars (Vercel KV / Upstash). Returns undefined if either is missing. */
 export function createKvStoreFromEnv(env: NodeJS.ProcessEnv = process.env): KvStore | undefined {
   const url = env.KV_REST_API_URL;
   const token = env.KV_REST_API_TOKEN;
@@ -102,7 +84,6 @@ export function createKvStoreFromEnv(env: NodeJS.ProcessEnv = process.env): KvSt
   return createUpstashRestClient(url, token);
 }
 
-/** Wrap a KvStore so every key is transparently prefixed. Used for namespacing per-feature. */
 export function withPrefix(kv: KvStore, prefix: string): KvStore {
   const k = (key: string) => `${prefix}${key}`;
   return {

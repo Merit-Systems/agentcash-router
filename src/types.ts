@@ -313,12 +313,7 @@ export interface RouterConfig {
     facilitators?: X402FacilitatorsConfig;
   };
   plugin?: import('./plugin.js').RouterPlugin;
-  /**
-   * Single KV cache used for SIWX nonce replay, SIWX entitlement, and MPP tx-hash replay.
-   * Each consumer gets its own key prefix (`siwx:nonce:`, `siwx:ent:`, `mpp:`).
-   * Omit to fall back to in-memory stores (unsafe in serverless). Auto-detected from
-   * `KV_REST_API_URL` + `KV_REST_API_TOKEN` env vars when not provided.
-   */
+  /** Single KV cache for SIWX nonce, SIWX entitlement, and MPP tx-hash replay (prefixed `siwx:nonce:`, `siwx:ent:`, `mpp:`). Auto-bootstraps from `KV_REST_API_URL` + `KV_REST_API_TOKEN`; falls back to in-memory when missing (unsafe in serverless). */
   kvStore?: import('./kv-store/index.js').KvStore;
   prices?: Record<string, string>;
   mpp?: {
