@@ -1,14 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  createUpstashRestClient,
-  createKvStoreFromEnv,
-  withPrefix,
-} from '../src/kv-store/index.js';
+import { resolveKvStore, withPrefix, type KvStore } from '../src/kv-store/index.js';
 
-describe('createUpstashRestClient', () => {
-  const url = 'https://us1-test.upstash.io';
-  const token = 'test-token-123';
+const url = 'https://us1-test.upstash.io';
+const token = 'test-token-123';
 
+function expectKvStore(input: unknown): KvStore {
+  if (!input) throw new Error('expected KvStore, got undefined');
+  return input as KvStore;
+}
+
+describe('resolveKvStore with { url, token }', () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -26,7 +27,7 @@ describe('createUpstashRestClient', () => {
       json: async () => ({ result: '{"foo":"bar"}' }),
     });
 
-    const client = createUpstashRestClient(url, token);
+    const client = expectKvStore(resolveKvStore({ url, token }));
     const result = await client.get('my-key');
 
     expect(fetchSpy).toHaveBeenCalledWith(`${url}/get/my-key`, {
@@ -41,7 +42,7 @@ describe('createUpstashRestClient', () => {
       json: async () => ({ result: null }),
     });
 
-    const client = createUpstashRestClient(url, token);
+    const client = expectKvStore(resolveKvStore({ url, token }));
     const result = await client.get('missing-key');
 
     expect(result).toBeNull();
@@ -53,7 +54,7 @@ describe('createUpstashRestClient', () => {
       json: async () => ({ result: 'OK' }),
     });
 
-    const client = createUpstashRestClient(url, token);
+    const client = expectKvStore(resolveKvStore({ url, token }));
     await client.set('my-key', { count: 42 });
 
     expect(fetchSpy).toHaveBeenCalledWith(url, {
@@ -69,7 +70,7 @@ describe('createUpstashRestClient', () => {
       json: async () => ({ result: 1 }),
     });
 
-    const client = createUpstashRestClient(url, token);
+    const client = expectKvStore(resolveKvStore({ url, token }));
     await client.del('my-key');
 
     expect(fetchSpy).toHaveBeenCalledWith(url, {
@@ -85,7 +86,7 @@ describe('createUpstashRestClient', () => {
       json: async () => ({ result: 'OK' }),
     });
 
-    const client = createUpstashRestClient(url, token);
+    const client = expectKvStore(resolveKvStore({ url, token }));
     const ok = await client.setNxEx('my-key', 1, 60);
 
     expect(fetchSpy).toHaveBeenCalledWith(url, {
@@ -102,7 +103,7 @@ describe('createUpstashRestClient', () => {
       json: async () => ({ result: null }),
     });
 
-    const client = createUpstashRestClient(url, token);
+    const client = expectKvStore(resolveKvStore({ url, token }));
     const ok = await client.setNxEx('my-key', 1, 60);
 
     expect(ok).toBe(false);
@@ -114,7 +115,7 @@ describe('createUpstashRestClient', () => {
       json: async () => ({ result: 1 }),
     });
 
-    const client = createUpstashRestClient(url, token);
+    const client = expectKvStore(resolveKvStore({ url, token }));
     await client.sadd('my-set', 'member-a');
 
     expect(fetchSpy).toHaveBeenCalledWith(url, {
@@ -130,7 +131,7 @@ describe('createUpstashRestClient', () => {
       json: async () => ({ result: 1 }),
     });
 
-    const client = createUpstashRestClient(url, token);
+    const client = expectKvStore(resolveKvStore({ url, token }));
     expect(await client.sismember('my-set', 'a')).toBe(true);
 
     fetchSpy.mockResolvedValueOnce({
@@ -146,7 +147,7 @@ describe('createUpstashRestClient', () => {
       json: async () => ({ result: null }),
     });
 
-    const client = createUpstashRestClient(`${url}///`, token);
+    const client = expectKvStore(resolveKvStore({ url: `${url}///`, token }));
     await client.get('key');
 
     expect(fetchSpy).toHaveBeenCalledWith(`${url}/get/key`, expect.any(Object));
@@ -155,25 +156,38 @@ describe('createUpstashRestClient', () => {
   it('throws on non-200 responses', async () => {
     fetchSpy.mockResolvedValueOnce({ ok: false, status: 401 });
 
-    const client = createUpstashRestClient(url, token);
+    const client = expectKvStore(resolveKvStore({ url, token }));
     await expect(client.get('key')).rejects.toThrow('[kv-store] GET key: 401');
   });
 });
 
-describe('createKvStoreFromEnv', () => {
-  it('returns undefined when env vars are missing', () => {
-    expect(createKvStoreFromEnv({})).toBeUndefined();
-    expect(createKvStoreFromEnv({ KV_REST_API_URL: 'x' })).toBeUndefined();
-    expect(createKvStoreFromEnv({ KV_REST_API_TOKEN: 'x' })).toBeUndefined();
+describe('resolveKvStore env fallback', () => {
+  it('returns undefined when both input and env vars are missing', () => {
+    expect(resolveKvStore(undefined, {})).toBeUndefined();
+    expect(resolveKvStore(undefined, { KV_REST_API_URL: 'x' })).toBeUndefined();
+    expect(resolveKvStore(undefined, { KV_REST_API_TOKEN: 'x' })).toBeUndefined();
   });
 
-  it('returns a KvStore when both env vars are present', () => {
-    const kv = createKvStoreFromEnv({
+  it('builds a KvStore from KV_REST_API_URL + KV_REST_API_TOKEN', () => {
+    const kv = resolveKvStore(undefined, {
       KV_REST_API_URL: 'https://example.upstash.io',
       KV_REST_API_TOKEN: 'tok',
     });
     expect(kv).toBeDefined();
     expect(typeof kv?.get).toBe('function');
+  });
+
+  it('passes through a custom KvStore implementation unchanged', () => {
+    const custom: KvStore = {
+      get: async () => null,
+      set: async () => {},
+      del: async () => {},
+      setNxEx: async () => true,
+      sadd: async () => {},
+      sismember: async () => false,
+      update: async (_k, fn) => fn(null).result as never,
+    };
+    expect(resolveKvStore(custom)).toBe(custom);
   });
 });
 

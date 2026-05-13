@@ -109,18 +109,27 @@ Redis/Upstash instance serves all three.
 
 `createRouter` reads `KV_REST_API_URL` + `KV_REST_API_TOKEN` from `process.env`
 automatically (Vercel KV and Upstash both set these). If both are present, it
-builds an Upstash REST client and wires it into every store. If either is
-missing, all three stores fall back to in-memory — fine for local dev, unsafe
-in serverless production. To inject a custom client, pass `kvStore` directly:
+builds an Upstash-compatible REST client and wires it into every store. If
+either is missing, all three stores fall back to in-memory — fine for local
+dev, unsafe in serverless production.
+
+To use REST credentials under a different env name, pass them as
+`{ url, token }`:
 
 ```typescript
-import { createRouter, createUpstashRestClient } from '@agentcash/router';
+import { createRouter } from '@agentcash/router';
 
 createRouter({
-  kvStore: createUpstashRestClient(process.env.MY_KV_URL!, process.env.MY_KV_TOKEN!),
+  kvStore: {
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+  },
   // ...
 });
 ```
+
+For a different backend entirely (Cloudflare KV, ioredis, etc.), implement the
+`KvStore` interface and pass your instance as `kvStore`.
 
 ## Quick Start
 
@@ -216,7 +225,7 @@ Creates a `ServiceRouter` instance.
 | `network` | `string` | `'eip155:8453'` | Blockchain network |
 | `plugin` | `RouterPlugin` | `undefined` | Observability plugin |
 | `prices` | `Record<string, string>` | `undefined` | Central pricing map (auto-applied) |
-| `kvStore` | `KvStore` | auto from `KV_REST_API_URL` + `KV_REST_API_TOKEN`, else memory | Single KV cache for SIWX nonce, SIWX entitlement, and MPP tx-hash replay |
+| `kvStore` | `KvStore \| { url, token }` | auto from `KV_REST_API_URL` + `KV_REST_API_TOKEN`, else memory | Single KV cache for SIWX nonce, SIWX entitlement, and MPP tx-hash replay |
 | `mpp` | `{ secretKey, currency, recipient?, rpcUrl?, feePayerKey?, session? }` | `undefined` | MPP config |
 | `protocols` | `('x402' \| 'mpp')[]` | `['x402']` | Default protocols for paid routes |
 | `strictRoutes` | `boolean` | `false` | Enforce `route({ path })` and prevent key/path divergence |

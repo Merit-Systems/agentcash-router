@@ -256,12 +256,24 @@ Two distinct roles, two distinct wallets:
 
 One KV cache backs all three persistent stores (SIWX nonce, SIWX entitlement, MPP tx-hash replay). Each consumer gets its own key prefix (`siwx:nonce:`, `siwx:ent:`, `mpp:`).
 
-- `KV_REST_API_URL` — Upstash REST endpoint (also set automatically by Vercel KV)
-- `KV_REST_API_TOKEN` — Upstash REST token
+Resolution order in `createRouter`:
 
-When both are present, `createRouter` auto-builds a fetch-based Upstash REST client (no SDK dependency) and uses it for all three stores. Missing either env var falls back to in-memory stores — fine for local dev, unsafe in serverless production. To inject a custom client, pass `kvStore` in `RouterConfig`.
+1. `kvStore: { url, token }` — build the REST client from those credentials.
+2. `kvStore: <KvStore>` — bring-your-own implementation (escape hatch for Cloudflare KV, ioredis, etc.).
+3. Omitted — auto-read `KV_REST_API_URL` + `KV_REST_API_TOKEN` from `process.env`.
+4. Env missing — fall back to in-memory stores (fine for local dev, unsafe in serverless production).
 
-The only file that talks to Redis is `src/kv-store/client.ts`. It speaks the Upstash REST protocol with plain `fetch`. If you need a different backend (raw TCP Redis, Cloudflare KV), implement the `KvStore` interface and pass it in.
+```typescript
+createRouter({
+  kvStore: {
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+  },
+  // ...
+});
+```
+
+The only file that talks to Redis is `src/kv-store/client.ts`. It speaks the Upstash REST protocol with plain `fetch` (also what Vercel KV exposes). If you need a different backend, implement the `KvStore` interface and pass it as `kvStore`.
 
 ### CDP Environment Variables
 
