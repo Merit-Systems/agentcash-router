@@ -2,6 +2,7 @@ import type { NextResponse } from 'next/server';
 import type { Transport } from 'mppx/server';
 import type { Session } from 'mppx/tempo';
 import { AUTH_SCHEME, HEADERS } from '../../headers.js';
+import { multiplyDecimal } from '../../pricing/format.js';
 import type { HandlerPaymentContext } from '../../types.js';
 import type { MppxMiddlewareResponse } from '../../pipeline/steps/types.js';
 import type {
@@ -128,18 +129,6 @@ export const mppStrategy: PaymentStrategy = {
     return buildChargeChallenge(args);
   },
 };
-
-function multiplyDecimal(decimal: string, factor: number): string {
-  if (!Number.isFinite(factor) || factor <= 0) return decimal;
-  const [whole, fraction = ''] = decimal.split('.');
-  const scaled = (BigInt(whole + fraction) * BigInt(factor)).toString();
-  const decimals = fraction.length;
-  if (decimals === 0) return scaled;
-  const padded = scaled.padStart(decimals + 1, '0');
-  const intPart = padded.slice(0, padded.length - decimals);
-  const fracPart = padded.slice(padded.length - decimals).replace(/0+$/, '');
-  return fracPart ? `${intPart}.${fracPart}` : intPart;
-}
 
 async function buildChargeChallenge(args: ChallengeArgs): Promise<ChallengeContribution> {
   if (!args.deps.mppx) return {};

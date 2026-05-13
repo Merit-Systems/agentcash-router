@@ -18,6 +18,7 @@ import type {
 import type { RouteRegistry } from './registry.js';
 import type { OrchestrateDeps, RouteHandler } from './pipeline/orchestrate.js';
 import { createRequestHandler } from './pipeline/orchestrate.js';
+import { isPositiveDecimal } from './pricing/format.js';
 import { validateExamples } from './validate-examples.js';
 
 type True = true;
@@ -243,29 +244,22 @@ export class RouteBuilder<
         if (!tierKey) {
           throw new Error(`route '${this._key}': tier key cannot be empty`);
         }
-        const tierPrice = parseFloat(tierConfig.price);
-        if (isNaN(tierPrice) || tierPrice <= 0) {
+        if (!isPositiveDecimal(tierConfig.price)) {
           throw new Error(
             `route '${this._key}': tier '${tierKey}' price '${tierConfig.price}' must be a positive decimal string`,
           );
         }
       }
     }
-    if (resolvedOptions?.maxPrice !== undefined) {
-      const parsed = parseFloat(resolvedOptions.maxPrice);
-      if (isNaN(parsed) || parsed <= 0) {
-        throw new Error(
-          `route '${this._key}': maxPrice '${resolvedOptions.maxPrice}' must be a positive decimal string`,
-        );
-      }
+    if (resolvedOptions?.maxPrice !== undefined && !isPositiveDecimal(resolvedOptions.maxPrice)) {
+      throw new Error(
+        `route '${this._key}': maxPrice '${resolvedOptions.maxPrice}' must be a positive decimal string`,
+      );
     }
-    if (resolvedOptions?.tickCost !== undefined) {
-      const parsed = parseFloat(resolvedOptions.tickCost);
-      if (isNaN(parsed) || parsed <= 0) {
-        throw new Error(
-          `route '${this._key}': tickCost '${resolvedOptions.tickCost}' must be a positive decimal string`,
-        );
-      }
+    if (resolvedOptions?.tickCost !== undefined && !isPositiveDecimal(resolvedOptions.tickCost)) {
+      throw new Error(
+        `route '${this._key}': tickCost '${resolvedOptions.tickCost}' must be a positive decimal string`,
+      );
     }
     if (next._dynamicPrice && !next._maxPrice) {
       throw new Error(`route '${this._key}': .paid({ dynamic: true }) requires maxPrice`);

@@ -5,6 +5,7 @@ import {
   DynamicPricing,
   TieredPricing,
 } from '../src/pricing/index.js';
+import { compareDecimals, decimalToAtomic, isPositiveDecimal } from '../src/pricing/format.js';
 
 describe('FixedPricing', () => {
   it('quote returns the configured price', async () => {
@@ -113,6 +114,60 @@ describe('TieredPricing', () => {
   it('rejects when no tier and no default', async () => {
     const p = new TieredPricing({ field: 'tier', tiers });
     await expect(p.quote({})).rejects.toMatchObject({ status: 400 });
+  });
+});
+
+describe('decimal formatting boundaries', () => {
+  it('rejects scientific notation', () => {
+    expect(() => decimalToAtomic('1e-7')).toThrow();
+    expect(isPositiveDecimal('1e-7')).toBe(false);
+  });
+
+  it('trims surrounding whitespace', () => {
+    expect(decimalToAtomic('  1  ')).toBe(1_000_000n);
+    expect(compareDecimals('  1  ', '1.00')).toBe(0);
+  });
+
+  it('rejects fractions beyond USDC decimal places', () => {
+    expect(() => decimalToAtomic('0.0000001')).toThrow();
+    expect(isPositiveDecimal('0.0000001')).toBe(false);
+  });
+
+  it('compares decimals precisely without float drift', () => {
+    expect(compareDecimals('0.3', '0.30000')).toBe(0);
+    expect(compareDecimals('0.1', '0.2')).toBe(-1);
+    expect(compareDecimals('0.000001', '0.000002')).toBe(-1);
+  });
+
+  it('caps dynamic pricing using bigint comparison (not float)', async () => {
+    const p = new DynamicPricing({
+      fn: () => '0.000001',
+      maxPrice: '1.00',
+    });
+    expect(await p.quote({})).toBe('0.000001');
+  });
+
+  it('caps malformed dynamic price strings to maxPrice', async () => {
+    const alerts: Array<{ level: string; message: string }> = [];
+    const p = new DynamicPricing({
+      fn: () => '1e-7',
+      maxPrice: '1.00',
+      alert: (level, message) => alerts.push({ level, message }),
+    });
+    expect(await p.quote({})).toBe('1.00');
+    expect(alerts.find((a) => a.level === 'warn')).toBeDefined();
+  });
+
+  it('selects highest tier via bigint comparison', async () => {
+    const p = new TieredPricing({
+      field: 'tier',
+      tiers: {
+        a: { price: '0.000001' },
+        b: { price: '0.000010' },
+        c: { price: '0.000005' },
+      },
+    });
+    expect(await p.challengeQuote(undefined)).toBe('0.000010');
   });
 });
 

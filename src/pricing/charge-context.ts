@@ -1,5 +1,5 @@
 import type { ChargeFn } from '../types.js';
-import { atomicToDecimal, decimalToAtomic } from './atomic.js';
+import { atomicToDecimal, decimalToAtomic } from './format.js';
 
 export function createChargeContext(args: {
   tickCost: string;

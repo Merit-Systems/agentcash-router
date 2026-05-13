@@ -1,6 +1,7 @@
 import type { PaymentRequirements } from '@x402/core/types';
 import type { X402ResolvedAccept, X402Server } from '../../types.js';
 import type { ReportFn } from '../../plugin/reporter.js';
+import { decimalToAtomic } from '../../pricing/format.js';
 import { buildEvmExactOptions, buildEvmUptoOptions, isEvmNetwork } from './evm.js';
 import { buildSolanaExactOptions, isSolanaRequirement } from './solana.js';
 
@@ -94,26 +95,10 @@ function buildCustomRequirement(price: string, accept: X402ResolvedAccept): Paym
   return {
     scheme: accept.scheme,
     network: accept.network as `${string}:${string}`,
-    amount: decimalToAtomicUnits(price, accept.decimals ?? 6),
+    amount: decimalToAtomic(price, accept.decimals ?? 6).toString(),
     asset: accept.asset,
     payTo: accept.payTo,
     maxTimeoutSeconds: accept.maxTimeoutSeconds ?? 300,
     extra: accept.extra ?? {},
   };
-}
-
-function decimalToAtomicUnits(amount: string, decimals: number): string {
-  const match = /^(?<whole>\d+)(?:\.(?<fraction>\d+))?$/.exec(amount);
-  if (!match?.groups) {
-    throw new Error(`Invalid decimal amount '${amount}'`);
-  }
-
-  const whole = match.groups.whole;
-  const fraction = match.groups.fraction ?? '';
-  if (fraction.length > decimals) {
-    throw new Error(`Amount '${amount}' exceeds ${decimals} decimal places`);
-  }
-
-  const normalized = `${whole}${fraction.padEnd(decimals, '0')}`.replace(/^0+(?=\d)/, '');
-  return normalized === '' ? '0' : normalized;
 }

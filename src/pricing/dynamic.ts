@@ -1,4 +1,5 @@
 import type { AlertFn } from '../types.js';
+import { compareDecimals } from './format.js';
 import type { PricingDescriptor, PricingStrategy } from './types.js';
 
 export type DynamicPricingFn = (body: unknown) => string | Promise<string>;
@@ -48,9 +49,13 @@ export class DynamicPricing implements PricingStrategy {
 
   private cap(raw: string, body: unknown): string {
     if (!this.opts.maxPrice) return raw;
-    const n = parseFloat(raw);
-    const max = parseFloat(this.opts.maxPrice);
-    if (!Number.isFinite(n) || n > max) {
+    let overCap: boolean;
+    try {
+      overCap = compareDecimals(raw, this.opts.maxPrice) > 0;
+    } catch {
+      overCap = true;
+    }
+    if (overCap) {
       this.alert('warn', `Price ${raw} exceeds maxPrice ${this.opts.maxPrice}, capping`, {
         calculated: raw,
         maxPrice: this.opts.maxPrice,

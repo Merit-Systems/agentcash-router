@@ -4,6 +4,7 @@ import type { RouteRegistry } from '../registry.js';
 import type { RouteEntry, DiscoveryConfig } from '../types.js';
 import { TEMPO_USDC_ADDRESS } from '../constants.js';
 import { HEADERS } from '../headers.js';
+import { compareDecimals } from '../pricing/format.js';
 import { resolveGuidance } from './utils/guidance.js';
 
 export function createOpenAPIHandler(
@@ -225,18 +226,17 @@ function buildPricingInfo(entry: RouteEntry): Record<string, unknown> | undefine
   }
 
   if ('tiers' in entry.pricing) {
-    const tierPrices = Object.values(entry.pricing.tiers).map((tier) => parseFloat(tier.price));
-    const min = Math.min(...tierPrices);
-    const max = Math.max(...tierPrices);
+    const tierPrices = Object.values(entry.pricing.tiers).map((tier) => tier.price);
+    const extrema = tierExtrema(tierPrices);
 
-    if (Number.isFinite(min) && Number.isFinite(max)) {
-      if (min === max) {
+    if (extrema) {
+      if (extrema.min === extrema.max) {
         return {
-          price: { mode: 'fixed', currency: 'USD', amount: String(min) },
+          price: { mode: 'fixed', currency: 'USD', amount: extrema.min },
         };
       }
       return {
-        price: { mode: 'dynamic', currency: 'USD', min: String(min), max: String(max) },
+        price: { mode: 'dynamic', currency: 'USD', min: extrema.min, max: extrema.max },
       };
     }
 
@@ -251,4 +251,19 @@ function buildPricingInfo(entry: RouteEntry): Record<string, unknown> | undefine
   }
 
   return undefined;
+}
+
+function tierExtrema(prices: string[]): { min: string; max: string } | null {
+  if (prices.length === 0) return null;
+  let min = prices[0];
+  let max = prices[0];
+  try {
+    for (const price of prices.slice(1)) {
+      if (compareDecimals(price, min) < 0) min = price;
+      if (compareDecimals(price, max) > 0) max = price;
+    }
+  } catch {
+    return null;
+  }
+  return { min, max };
 }
