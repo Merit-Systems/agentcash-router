@@ -1,14 +1,14 @@
 import type { NextRequest, NextResponse } from 'next/server';
-import type { HandlerContext, RouteEntry, StreamingHandlerContext } from './types.js';
-import { preflight, type RouterDeps } from './pipeline/context/index.js';
-import { runApiKeyOnlyFlow } from './pipeline/flows/api-key-only.js';
-import { runPaidFlow } from './pipeline/flows/paid.js';
-import { runSiwxOnlyFlow } from './pipeline/flows/siwx-only.js';
-import { runUnprotectedFlow } from './pipeline/flows/unprotected.js';
+import type { HandlerContext, RouteEntry, StreamingHandlerContext } from '../types.js';
+import { preflight, type RouterDeps } from './steps/index.js';
+import { runApiKeyOnlyFlow } from './flows/api-key-only.js';
+import { runPaidFlow } from './flows/paid.js';
+import { runSiwxOnlyFlow } from './flows/siwx-only.js';
+import { runUnprotectedFlow } from './flows/unprotected.js';
 
 /** @deprecated alias kept for downstream consumers; use `RouterDeps`. */
 export type OrchestrateDeps = RouterDeps;
-export type { RouterDeps } from './pipeline/context/index.js';
+export type { RouterDeps } from './steps/index.js';
 
 export type RouteHandler =
   | ((ctx: HandlerContext) => Promise<unknown>)

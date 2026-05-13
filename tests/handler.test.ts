@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { NextResponse } from 'next/server';
-import { safeCallHandler } from '../src/handler.js';
+import { safeCallHandler } from '../src/pipeline/handler.js';
 import { HttpError } from '../src/types.js';
 
 describe('safeCallHandler', () => {

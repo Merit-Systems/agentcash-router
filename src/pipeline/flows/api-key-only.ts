@@ -1,6 +1,6 @@
 import type { NextResponse } from 'next/server';
 import { verifyApiKey } from '../../auth/api-key.js';
-import { fail, fireAuthVerified, type FlowCtx, runHandlerOnly } from '../context/index.js';
+import { fail, fireAuthVerified, type FlowCtx, runHandlerOnly } from '../steps/index.js';
 
 export async function runApiKeyOnlyFlow(ctx: FlowCtx): Promise<NextResponse> {
   if (!ctx.routeEntry.apiKeyResolver) {

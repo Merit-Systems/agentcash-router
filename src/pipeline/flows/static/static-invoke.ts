@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { HandlerContext, HandlerPaymentContext } from '../../../types.js';
 import { HttpError } from '../../../types.js';
-import { parseQuery } from '../../context/parse-query.js';
-import type { FlowCtx, StaticRequestResult } from '../../context/types.js';
+import { parseQuery } from '../../steps/parse-query.js';
+import type { FlowCtx, StaticRequestResult } from '../../steps/types.js';
 
 export function invokePaidStatic(
   ctx: FlowCtx,

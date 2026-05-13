@@ -14,7 +14,7 @@ export async function initX402(
   if (configError) return { initError: configError };
 
   try {
-    const { createX402Server } = await import('../server.js');
+    const { createX402Server } = await import('./x402-server.js');
     const result = await createX402Server(config);
     await result.initPromise;
     return {

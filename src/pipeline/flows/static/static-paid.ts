@@ -9,7 +9,7 @@ import {
   runApiKeyGate,
   trySiwxFastPath,
   type FlowCtx,
-} from '../../context/index.js';
+} from '../../steps/index.js';
 import { invokePaidStatic } from './static-invoke.js';
 import { build402 } from '../build402.js';
 import { resolveStaticBodyAndPrice } from './static-body-and-price.js';

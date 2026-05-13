@@ -1,5 +1,5 @@
 import { buildSIWXExtension } from '../auth/siwx.js';
-import type { FlowCtx } from './context/index.js';
+import type { FlowCtx } from './steps/index.js';
 
 export async function buildChallengeExtensions(
   ctx: FlowCtx,

@@ -15,7 +15,7 @@ import {
   parseBody,
   runHandlerOnly,
   runValidate,
-} from '../context/index.js';
+} from '../steps/index.js';
 
 export async function runSiwxOnlyFlow(ctx: FlowCtx): Promise<NextResponse> {
   const { request, routeEntry, deps } = ctx;

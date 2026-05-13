@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import type { NextResponse } from 'next/server';
 import type { RouterConfig } from './types.js';
 import type { RouteDefinition, RouteMethod } from './types.js';
-import type { OrchestrateDeps } from './orchestrate.js';
+import type { OrchestrateDeps } from './pipeline/orchestrate.js';
 import { RouteRegistry } from './registry.js';
 import { RouteBuilder } from './builder.js';
 import {

@@ -1,5 +1,5 @@
 import type { NextResponse } from 'next/server';
-import type { FlowCtx } from '../pipeline/context/types.js';
+import type { FlowCtx } from '../pipeline/steps/types.js';
 import type { ProviderQuotaEvent, QuotaLevel } from '../types.js';
 import {
   type AuthEvent,

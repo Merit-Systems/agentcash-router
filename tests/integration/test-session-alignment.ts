@@ -14,13 +14,14 @@
  *   4. Channel close — explicit close-on-chain to reclaim the unspent
  *      deposit.
  *
- * Run with:
- *   pnpm tsx test-session-alignment.ts
+ * Run with (from repo root):
+ *   pnpm tsx tests/integration/test-session-alignment.ts
  *
- * Requires the dev server to be running at http://localhost:3100, with
- * MPP_FEE_PAYER_KEY configured in .env.local. The CLIENT account needs to
- * be funded with USDC on Tempo for the channel-open transaction to succeed
- * on chain — without funds the open step fails and we report at that point.
+ * Requires the fortune example's dev server running at http://localhost:3100
+ * (cd examples/fortune && pnpm dev) with MPP_FEE_PAYER_KEY configured in
+ * examples/fortune/.env.local. The CLIENT account needs to be funded with
+ * USDC on Tempo for the channel-open transaction to succeed on chain;
+ * without funds the open step fails and we report at that point.
  */
 
 import { createClient, http } from 'viem';
@@ -43,7 +44,8 @@ const TEMPO_RPC_URL =
 // a funded testnet/mainnet wallet. Falls back to a random throwaway key for
 // pure protocol smoke-testing (on-chain open will fail, but we'll see the
 // pre-open handshake up to that point).
-const CLIENT_KEY = (process.env.CLIENT_PRIVATE_KEY as `0x${string}` | undefined) ?? generatePrivateKey();
+const CLIENT_KEY =
+  (process.env.CLIENT_PRIVATE_KEY as `0x${string}` | undefined) ?? generatePrivateKey();
 const clientAccount = privateKeyToAccount(CLIENT_KEY);
 
 const banner = (s: string) => `\n${'='.repeat(72)}\n${s}\n${'='.repeat(72)}`;
@@ -62,7 +64,9 @@ async function describeChallenge(label: string, response: Response): Promise<voi
   console.log(`  status:           ${response.status}`);
   console.log(`  content-type:     ${response.headers.get('Content-Type')}`);
   const wwwAuth = response.headers.get('WWW-Authenticate');
-  console.log(`  WWW-Authenticate: ${wwwAuth?.slice(0, 220) ?? '(none)'}${(wwwAuth?.length ?? 0) > 220 ? '...' : ''}`);
+  console.log(
+    `  WWW-Authenticate: ${wwwAuth?.slice(0, 220) ?? '(none)'}${(wwwAuth?.length ?? 0) > 220 ? '...' : ''}`,
+  );
   try {
     const parsed = Challenge.fromResponse(response, {
       // We don't know which intent (charge vs session) the server picked; try
@@ -70,7 +74,9 @@ async function describeChallenge(label: string, response: Response): Promise<voi
       methods: [],
     });
     if (parsed) {
-      console.log(`  parsed.method:    ${(parsed as any).method?.name}/${(parsed as any).method?.intent}`);
+      console.log(
+        `  parsed.method:    ${(parsed as any).method?.name}/${(parsed as any).method?.intent}`,
+      );
       console.log(`  parsed.request:   ${JSON.stringify((parsed as any).request).slice(0, 220)}`);
     }
   } catch (err) {
@@ -120,7 +126,9 @@ async function runRequestModeFlow(): Promise<void> {
       });
       console.log(`  status:           ${res.status}`);
       console.log(`  content-type:     ${res.headers.get('Content-Type')}`);
-      console.log(`  Payment-Receipt:  ${res.headers.get('Payment-Receipt')?.slice(0, 80) ?? '(none)'}...`);
+      console.log(
+        `  Payment-Receipt:  ${res.headers.get('Payment-Receipt')?.slice(0, 80) ?? '(none)'}...`,
+      );
       console.log(`  channelId:        ${(res as any).channelId}`);
       console.log(`  cumulative:       ${(res as any).cumulative}`);
       const text = await res.text();
@@ -203,7 +211,9 @@ async function runStreamingFlow(): Promise<void> {
 }
 
 async function runTopUpFlow(): Promise<void> {
-  console.log(banner('Test 3 — Channel with multi-request headroom (top-up disabled in mppx 0.6.16)'));
+  console.log(
+    banner('Test 3 — Channel with multi-request headroom (top-up disabled in mppx 0.6.16)'),
+  );
 
   // NOTE: Originally a top-up test — server suggestedDeposit = $0.001 (one
   // request) and the client would auto-topUp on subsequent requests. But

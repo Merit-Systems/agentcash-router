@@ -6,8 +6,8 @@ import {
   runBeforeSettle,
   runSettlementError,
   settleAndFinalizeRequest,
-} from '../../context/index.js';
-import type { DynamicRequestResult, FlowCtx, SettleScope } from '../../context/types.js';
+} from '../../steps/index.js';
+import type { DynamicRequestResult, FlowCtx, SettleScope } from '../../steps/types.js';
 
 export async function runDynamicRequestFlow(args: {
   ctx: FlowCtx;

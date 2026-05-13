@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import type { HandlerContext, RouteEntry } from '../../types.js';
-import type { RouteHandler } from '../../orchestrate.js';
+import type { RouteHandler } from '../orchestrate.js';
 import { HEADERS } from '../../headers.js';
 import type { PluginContext, RequestMeta } from '../../plugin/index.js';
 import { createDefaultContext, firePluginHook } from '../../plugin/index.js';

@@ -8,8 +8,8 @@ import {
   runSettledHandlerError,
   runSettlementError,
   settleAndFinalizeRequest,
-} from '../../context/index.js';
-import type { FlowCtx, SettleScope, StaticRequestResult } from '../../context/types.js';
+} from '../../steps/index.js';
+import type { FlowCtx, SettleScope, StaticRequestResult } from '../../steps/types.js';
 
 export async function runStaticRequestFlow(args: {
   ctx: FlowCtx;

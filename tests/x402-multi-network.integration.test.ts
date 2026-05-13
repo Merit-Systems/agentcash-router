@@ -5,7 +5,7 @@ import {
   decodePaymentResponseHeader,
   encodePaymentSignatureHeader,
 } from '@x402/core/http';
-import { createRequestHandler, type OrchestrateDeps } from '../src/orchestrate.js';
+import { createRequestHandler, type OrchestrateDeps } from '../src/pipeline/orchestrate.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';

@@ -23,14 +23,15 @@
  *     request shows a new payload signature, and the facilitator settles
  *     on chain (or rejects without funds / Permit2 allowance).
  *
- * Run with:
- *   pnpm tsx test-x402-exact-upto.ts
+ * Run with (from repo root):
+ *   pnpm tsx tests/integration/test-x402-exact-upto.ts
  *
- * Requires the dev server running at http://localhost:3000 with the same
- * CDP / facilitator env it normally needs. On-chain settlement will only
- * succeed if CLIENT_PRIVATE_KEY is a USDC-funded Base wallet with Permit2
- * approval already set; without that, expect the request flow to reach
- * settlement and report whatever the facilitator returned.
+ * Requires the fortune example's dev server running at http://localhost:3000
+ * (cd examples/fortune && pnpm dev) with the same CDP / facilitator env it
+ * normally needs. On-chain settlement will only succeed if CLIENT_PRIVATE_KEY
+ * is a USDC-funded Base wallet with Permit2 approval already set; without
+ * that, expect the request flow to reach settlement and report whatever the
+ * facilitator returned.
  */
 
 import * as fs from 'node:fs';
@@ -40,11 +41,7 @@ import { base } from 'viem/chains';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { x402Client, x402HTTPClient } from '@x402/core/client';
 import { registerExactEvmScheme } from '@x402/evm/exact/client';
-import {
-  UptoEvmScheme,
-  createPermit2ApprovalTx,
-  erc20AllowanceAbi,
-} from '@x402/evm/upto/client';
+import { UptoEvmScheme, createPermit2ApprovalTx, erc20AllowanceAbi } from '@x402/evm/upto/client';
 import { decodePaymentRequiredHeader, decodePaymentResponseHeader } from '@x402/core/http';
 
 // tsx doesn't auto-load .env.local the way `next dev` does. Read it ourselves
@@ -90,7 +87,8 @@ const MIN_ALLOWANCE = 100_000n; // $0.10 in 6-decimal USDC
 // a funded Base mainnet wallet. Falls back to a random throwaway key for
 // pure protocol smoke-testing (on-chain settle will fail, but we'll see the
 // full client→challenge→payload→retry handshake up to that point).
-const CLIENT_KEY = (process.env.CLIENT_PRIVATE_KEY as `0x${string}` | undefined) ?? generatePrivateKey();
+const CLIENT_KEY =
+  (process.env.CLIENT_PRIVATE_KEY as `0x${string}` | undefined) ?? generatePrivateKey();
 const clientAccount = privateKeyToAccount(CLIENT_KEY);
 
 const banner = (s: string) => `\n${'='.repeat(72)}\n${s}\n${'='.repeat(72)}`;
@@ -447,7 +445,9 @@ async function main(): Promise<void> {
     await runUptoMultiRequestFlow();
   } else {
     console.log(banner('Skipping upto tests — Permit2 not approved'));
-    console.log(`Send USDC + a tiny amount of ETH to ${clientAccount.address} on Base, then retry.`);
+    console.log(
+      `Send USDC + a tiny amount of ETH to ${clientAccount.address} on Base, then retry.`,
+    );
   }
   console.log(banner('Done'));
 }
