@@ -1,5 +1,5 @@
 ---
-'@agentcash/router': major
+'@agentcash/router': minor
 ---
 
 Align MPP sessions with the spec's discrete-paid-unit convention. **Breaking
