@@ -1,13 +1,12 @@
 import type { Network, PaymentRequirements } from '@x402/core/types';
 import { isEvmNetwork } from './evm.js';
 import { isSolanaNetwork } from './solana.js';
+import { DEFAULT_SOLANA_FACILITATOR_URL } from '../../constants.js';
 import type {
   RouterConfig,
   X402FacilitatorTarget,
   X402RouterFacilitatorConfig,
 } from '../../types.js';
-
-export const DEFAULT_SOLANA_FACILITATOR_URL = 'https://facilitator.corbits.dev';
 
 export type NetworkFamily = 'evm' | 'solana';
 

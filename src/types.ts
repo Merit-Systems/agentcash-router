@@ -338,7 +338,7 @@ export interface RouterConfig {
   mpp?: {
     /** HMAC key for signing/verifying MPP challenge nonces. Persist across deploys — rotating invalidates outstanding 402 challenges. Falls back to `MPP_SECRET_KEY`. */
     secretKey: string;
-    /** Tempo currency contract address (0x-prefixed). Use `TEMPO_USDC_CURRENCY` for USDC on Tempo. */
+    /** Tempo currency contract address (0x-prefixed). Use `TEMPO_USDC_ADDRESS` for USDC on Tempo. */
     currency: string;
     /** MPP payee address (EVM). Overrides `payeeAddress` for MPP only. Required when `payeeAddress` is unset. MUST equal `operatorKey`'s derived address when `session` is enabled. */
     recipient?: string;

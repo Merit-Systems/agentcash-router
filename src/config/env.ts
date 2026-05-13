@@ -1,5 +1,5 @@
 import type { PaidOptions, ProtocolType, RouterConfig, X402AcceptConfig } from '../types.js';
-import { BASE_NETWORK, SOLANA_MAINNET_NETWORK } from '../constants.js';
+import { BASE_MAINNET_NETWORK, SOLANA_MAINNET_NETWORK } from '../constants.js';
 import type { RouterEnv } from './types.js';
 import { isEvmAddress, isEvmPrivateKey } from './validators/shared.js';
 
@@ -72,7 +72,7 @@ export function x402AcceptsFromEnv(
   const accepts: X402AcceptConfig[] = [
     {
       scheme: 'exact',
-      network: options.network ?? BASE_NETWORK,
+      network: options.network ?? BASE_MAINNET_NETWORK,
       payTo: payeeAddress,
     },
   ];

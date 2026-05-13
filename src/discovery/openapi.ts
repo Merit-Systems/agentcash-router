@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import type { RouteRegistry } from '../registry.js';
 import type { RouteEntry, DiscoveryConfig } from '../types.js';
-import { TEMPO_USDC_CURRENCY } from '../constants.js';
+import { TEMPO_USDC_ADDRESS } from '../constants.js';
 import { HEADERS } from '../headers.js';
 import { resolveGuidance } from './utils/guidance.js';
 
@@ -197,7 +197,7 @@ function toProtocolObject(
       mpp: {
         method: mppInfo?.method ?? 'tempo',
         intent: mppInfo?.intent ?? 'charge',
-        currency: mppInfo?.currency ?? TEMPO_USDC_CURRENCY,
+        currency: mppInfo?.currency ?? TEMPO_USDC_ADDRESS,
       },
     };
   }

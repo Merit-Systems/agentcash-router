@@ -9,7 +9,7 @@ import { createRouter } from '../src/index.js';
 import type { RouteEntry } from '../src/types.js';
 import type { ResolvedX402Facilitator } from '../src/protocols/x402/facilitators.js';
 
-const BASE_NETWORK = 'eip155:8453';
+const BASE_MAINNET_NETWORK = 'eip155:8453';
 const USDC_ASSET = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const URL = 'http://localhost:3000/api/test';
 
@@ -42,9 +42,9 @@ function makeDeps(
     nonceStore: new MemoryNonceStore(),
     entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: KNOWN_PAYEE,
-    network: BASE_NETWORK,
+    network: BASE_MAINNET_NETWORK,
     x402FacilitatorsByNetwork: {
-      [BASE_NETWORK]: makeFacilitator(BASE_NETWORK, 'https://cdp.example'),
+      [BASE_MAINNET_NETWORK]: makeFacilitator(BASE_MAINNET_NETWORK, 'https://cdp.example'),
     },
     x402Accepts: accepts,
   };
@@ -74,8 +74,8 @@ describe('upto scheme', () => {
         baseUrl: 'http://localhost:3000',
         x402: {
           accepts: [
-            { scheme: 'exact', network: BASE_NETWORK },
-            { scheme: 'upto', network: BASE_NETWORK, asset: USDC_ASSET, decimals: 6 },
+            { scheme: 'exact', network: BASE_MAINNET_NETWORK },
+            { scheme: 'upto', network: BASE_MAINNET_NETWORK, asset: USDC_ASSET, decimals: 6 },
           ],
         },
       });
@@ -98,7 +98,7 @@ describe('upto scheme', () => {
             payeeAddress: KNOWN_PAYEE,
             baseUrl: 'https://test.example.com',
             x402: {
-              accepts: [{ scheme: 'upto', network: BASE_NETWORK }],
+              accepts: [{ scheme: 'upto', network: BASE_MAINNET_NETWORK }],
             },
           });
         }).toThrow(/non-exact x402 accepts require an asset/);
@@ -114,10 +114,10 @@ describe('upto scheme', () => {
       await withPassThroughFacilitatorAccepts(async () => {
         const server = new FakeX402Server();
         const deps = makeDeps(server, [
-          { scheme: 'exact', network: BASE_NETWORK, payTo: KNOWN_PAYEE },
+          { scheme: 'exact', network: BASE_MAINNET_NETWORK, payTo: KNOWN_PAYEE },
           {
             scheme: 'upto',
-            network: BASE_NETWORK,
+            network: BASE_MAINNET_NETWORK,
             payTo: KNOWN_PAYEE,
             asset: USDC_ASSET,
             decimals: 6,
@@ -135,10 +135,10 @@ describe('upto scheme', () => {
         const uptoAccept = challenge.accepts.find((a) => a.scheme === 'upto');
 
         expect(exactAccept).toBeDefined();
-        expect(exactAccept!.network).toBe(BASE_NETWORK);
+        expect(exactAccept!.network).toBe(BASE_MAINNET_NETWORK);
 
         expect(uptoAccept).toBeDefined();
-        expect(uptoAccept!.network).toBe(BASE_NETWORK);
+        expect(uptoAccept!.network).toBe(BASE_MAINNET_NETWORK);
         // Asset comes from the registered UptoEvmScheme's network defaults
         // (real upstream picks USDC for Base); the fake stamps `mock-usdc`.
         expect(uptoAccept!.asset).toBeTruthy();
@@ -152,7 +152,7 @@ describe('upto scheme', () => {
         const deps = makeDeps(server, [
           {
             scheme: 'upto',
-            network: BASE_NETWORK,
+            network: BASE_MAINNET_NETWORK,
             payTo: KNOWN_PAYEE,
             asset: USDC_ASSET,
             decimals: 6,
@@ -178,10 +178,10 @@ describe('upto scheme', () => {
     it('verifies and settles upto payment', async () => {
       const server = new FakeX402Server();
       const deps = makeDeps(server, [
-        { scheme: 'exact', network: BASE_NETWORK, payTo: KNOWN_PAYEE },
+        { scheme: 'exact', network: BASE_MAINNET_NETWORK, payTo: KNOWN_PAYEE },
         {
           scheme: 'upto',
-          network: BASE_NETWORK,
+          network: BASE_MAINNET_NETWORK,
           payTo: KNOWN_PAYEE,
           asset: USDC_ASSET,
           decimals: 6,
@@ -194,7 +194,7 @@ describe('upto scheme', () => {
         resource: { url: URL, method: 'POST' },
         accepted: {
           scheme: 'upto',
-          network: BASE_NETWORK,
+          network: BASE_MAINNET_NETWORK,
           amount: '100000',
           asset: USDC_ASSET,
           payTo: KNOWN_PAYEE,
@@ -239,7 +239,7 @@ describe('upto scheme', () => {
         resource: { url: URL, method: 'POST' },
         accepted: {
           scheme: 'upto',
-          network: BASE_NETWORK,
+          network: BASE_MAINNET_NETWORK,
           amount,
           asset: USDC_ASSET,
           payTo: KNOWN_PAYEE,
@@ -253,7 +253,7 @@ describe('upto scheme', () => {
       return makeDeps(server, [
         {
           scheme: 'upto',
-          network: BASE_NETWORK,
+          network: BASE_MAINNET_NETWORK,
           payTo: KNOWN_PAYEE,
           asset: USDC_ASSET,
           decimals: 6,
@@ -315,7 +315,7 @@ describe('upto scheme', () => {
     it('UptoEvmScheme implements parsePrice', async () => {
       const { UptoEvmScheme } = await import('@x402/evm/upto/server');
       const scheme = new UptoEvmScheme();
-      const result = await scheme.parsePrice('0.10', BASE_NETWORK);
+      const result = await scheme.parsePrice('0.10', BASE_MAINNET_NETWORK);
       expect(result).toBeDefined();
       expect(result.amount).toBeDefined();
     });

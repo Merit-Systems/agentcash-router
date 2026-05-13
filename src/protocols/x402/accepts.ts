@@ -5,7 +5,7 @@ import type {
   X402AcceptConfig,
   X402ResolvedAccept,
 } from '../../types.js';
-import { BASE_NETWORK } from '../../constants.js';
+import { BASE_MAINNET_NETWORK } from '../../constants.js';
 
 async function resolvePayToValue(
   payTo: PayToConfig | undefined,
@@ -26,7 +26,7 @@ export function getConfiguredX402Accepts(config: RouterConfig): X402AcceptConfig
   return [
     {
       scheme: 'exact',
-      network: config.network ?? BASE_NETWORK,
+      network: config.network ?? BASE_MAINNET_NETWORK,
       payTo: config.payeeAddress,
     },
   ];

@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BASE_NETWORK,
+  BASE_MAINNET_NETWORK,
   DEFAULT_SOLANA_FACILITATOR_URL,
   RouterConfigError,
   SOLANA_MAINNET_NETWORK,
-  TEMPO_USDC_CURRENCY,
+  TEMPO_USDC_ADDRESS,
   routerConfigFromEnv,
   type CreateRouterFromEnvOptions,
 } from '../src/index.js';
-import { BASE_USDC_ASSET, BASE_USDC_DECIMALS } from '../src/constants.js';
+import { BASE_USDC_ADDRESS, BASE_USDC_DECIMALS } from '../src/constants.js';
 
 const PAYEE = '0x1234567890123456789012345678901234567890';
 const PAYEE_CHECKSUM = '0x123456789012345678901234567890123456789A';
@@ -16,12 +16,12 @@ const SOLANA_PAYEE = '9tCZP1W2jNYZjikmteU1HRrkoSGaRqcNs9ciLeQZb4a2';
 const FEE_PAYER_KEY = `0x${'1'.repeat(64)}`;
 const OPERATOR_KEY = `0x${'2'.repeat(64)}`;
 
-const BASE_EXACT_ACCEPT = { scheme: 'exact', network: BASE_NETWORK, payTo: PAYEE } as const;
+const BASE_EXACT_ACCEPT = { scheme: 'exact', network: BASE_MAINNET_NETWORK, payTo: PAYEE } as const;
 const BASE_UPTO_ACCEPT = {
   scheme: 'upto',
-  network: BASE_NETWORK,
+  network: BASE_MAINNET_NETWORK,
   payTo: PAYEE,
-  asset: BASE_USDC_ASSET,
+  asset: BASE_USDC_ADDRESS,
   decimals: BASE_USDC_DECIMALS,
 } as const;
 
@@ -51,7 +51,7 @@ describe('routerConfigFromEnv', () => {
 
     expect(config.payeeAddress).toBe(PAYEE);
     expect(config.baseUrl).toBe('https://api.example.com');
-    expect(config.network).toBe(BASE_NETWORK);
+    expect(config.network).toBe(BASE_MAINNET_NETWORK);
     expect(config.protocols).toEqual(['x402']);
     expect(config.x402?.accepts).toEqual([BASE_EXACT_ACCEPT, BASE_UPTO_ACCEPT]);
     expect(config.mpp).toBeUndefined();
@@ -104,7 +104,7 @@ describe('routerConfigFromEnv', () => {
       validOptions({
         env: validEnv({
           MPP_SECRET_KEY: 'secret',
-          MPP_CURRENCY: TEMPO_USDC_CURRENCY,
+          MPP_CURRENCY: TEMPO_USDC_ADDRESS,
           TEMPO_RPC_URL: 'https://tempo.example.com',
         }),
       }),
@@ -112,7 +112,7 @@ describe('routerConfigFromEnv', () => {
     expect(config.protocols).toEqual(['x402', 'mpp']);
     expect(config.mpp).toEqual({
       secretKey: 'secret',
-      currency: TEMPO_USDC_CURRENCY,
+      currency: TEMPO_USDC_ADDRESS,
       rpcUrl: 'https://tempo.example.com',
       recipient: PAYEE,
     });
@@ -123,7 +123,7 @@ describe('routerConfigFromEnv', () => {
       validOptions({
         env: validEnv({
           MPP_SECRET_KEY: 'secret',
-          MPP_CURRENCY: TEMPO_USDC_CURRENCY,
+          MPP_CURRENCY: TEMPO_USDC_ADDRESS,
           TEMPO_RPC_URL: 'https://tempo.example.com',
           MPP_FEE_PAYER_KEY: FEE_PAYER_KEY,
         }),
@@ -137,7 +137,7 @@ describe('routerConfigFromEnv', () => {
       validOptions({
         env: validEnv({
           MPP_SECRET_KEY: 'secret',
-          MPP_CURRENCY: TEMPO_USDC_CURRENCY,
+          MPP_CURRENCY: TEMPO_USDC_ADDRESS,
           TEMPO_RPC_URL: 'https://tempo.example.com',
           MPP_OPERATOR_KEY: OPERATOR_KEY,
         }),
@@ -153,7 +153,7 @@ describe('routerConfigFromEnv', () => {
         validOptions({
           env: validEnv({
             MPP_SECRET_KEY: 'secret',
-            MPP_CURRENCY: TEMPO_USDC_CURRENCY,
+            MPP_CURRENCY: TEMPO_USDC_ADDRESS,
             TEMPO_RPC_URL: 'https://tempo.example.com',
             MPP_OPERATOR_KEY: 'not-a-private-key',
           }),

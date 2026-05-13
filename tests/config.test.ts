@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { BASE_NETWORK, SOLANA_MAINNET_NETWORK, TEMPO_USDC_CURRENCY } from '../src/constants.js';
+import {
+  BASE_MAINNET_NETWORK,
+  SOLANA_MAINNET_NETWORK,
+  TEMPO_USDC_ADDRESS,
+} from '../src/constants.js';
 import {
   RouterConfigError,
   getRouterConfigIssues,
@@ -33,9 +37,9 @@ function makeConfig(overrides: Partial<RouterConfig> = {}): RouterConfig {
 
 describe('router config helpers', () => {
   it('exports stable network and currency constants', () => {
-    expect(BASE_NETWORK).toBe('eip155:8453');
+    expect(BASE_MAINNET_NETWORK).toBe('eip155:8453');
     expect(SOLANA_MAINNET_NETWORK).toBe('solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp');
-    expect(TEMPO_USDC_CURRENCY).toBe('0x20c000000000000000000000b9537d11c60e8b50');
+    expect(TEMPO_USDC_ADDRESS).toBe('0x20c000000000000000000000b9537d11c60e8b50');
   });
 
   it('builds x402 accepts from env without lowercasing Solana payees', () => {
@@ -47,7 +51,7 @@ describe('router config helpers', () => {
     ).toEqual([
       {
         scheme: 'exact',
-        network: BASE_NETWORK,
+        network: BASE_MAINNET_NETWORK,
         payTo: PAYEE,
       },
       {
@@ -69,7 +73,7 @@ describe('router config helpers', () => {
     ).toEqual([
       {
         scheme: 'exact',
-        network: BASE_NETWORK,
+        network: BASE_MAINNET_NETWORK,
         payTo: PAYEE,
       },
     ]);
@@ -100,7 +104,7 @@ describe('router config helpers', () => {
       mppFromEnv(
         {
           MPP_SECRET_KEY: 'secret',
-          MPP_CURRENCY: TEMPO_USDC_CURRENCY,
+          MPP_CURRENCY: TEMPO_USDC_ADDRESS,
           TEMPO_RPC_URL: 'https://tempo.example.com',
           MPP_FEE_PAYER_KEY: FEE_PAYER_KEY,
         },
@@ -108,7 +112,7 @@ describe('router config helpers', () => {
       ),
     ).toEqual({
       secretKey: 'secret',
-      currency: TEMPO_USDC_CURRENCY,
+      currency: TEMPO_USDC_ADDRESS,
       rpcUrl: 'https://tempo.example.com',
       recipient: PAYEE,
       feePayerKey: FEE_PAYER_KEY,
@@ -119,7 +123,7 @@ describe('router config helpers', () => {
     expect(() =>
       mppFromEnv({
         MPP_SECRET_KEY: 'secret',
-        MPP_CURRENCY: TEMPO_USDC_CURRENCY,
+        MPP_CURRENCY: TEMPO_USDC_ADDRESS,
         TEMPO_RPC_URL: 'https://tempo.example.com',
         MPP_FEE_PAYER_KEY: 'not-a-private-key',
       }),
@@ -131,7 +135,7 @@ describe('router config helpers', () => {
       mppFromEnv(
         {
           MPP_SECRET_KEY: 'secret',
-          MPP_CURRENCY: TEMPO_USDC_CURRENCY,
+          MPP_CURRENCY: TEMPO_USDC_ADDRESS,
           TEMPO_RPC_URL: 'https://tempo.example.com',
         },
         { feePayerKey: 'not-a-private-key' },
@@ -206,7 +210,7 @@ describe('validateRouterConfig', () => {
           protocols: ['mpp'],
           mpp: {
             secretKey: 'secret',
-            currency: TEMPO_USDC_CURRENCY,
+            currency: TEMPO_USDC_ADDRESS,
             rpcUrl: 'https://tempo.example.com',
           },
         }),
@@ -234,7 +238,7 @@ describe('validateRouterConfig', () => {
         code: 'invalid_mpp_currency',
         protocol: 'mpp',
         message:
-          'MPP currency must be a 0x-prefixed 20-byte Tempo currency address. Use TEMPO_USDC_CURRENCY for Tempo USDC.',
+          'MPP currency must be a 0x-prefixed 20-byte Tempo currency address. Use TEMPO_USDC_ADDRESS for Tempo USDC.',
       },
       {
         code: 'invalid_mpp_recipient',
@@ -250,7 +254,7 @@ describe('validateRouterConfig', () => {
         protocols: ['mpp'],
         mpp: {
           secretKey: 'secret',
-          currency: TEMPO_USDC_CURRENCY,
+          currency: TEMPO_USDC_ADDRESS,
           rpcUrl: 'https://tempo.example.com',
           feePayerKey: 'not-a-private-key',
         },
@@ -274,7 +278,7 @@ describe('validateRouterConfig', () => {
         protocols: ['mpp'],
         mpp: {
           secretKey: 'secret',
-          currency: TEMPO_USDC_CURRENCY,
+          currency: TEMPO_USDC_ADDRESS,
           rpcUrl: 'https://tempo.example.com',
           operatorKey: SAME_KEY,
           feePayerKey: SAME_KEY,
@@ -300,7 +304,7 @@ describe('validateRouterConfig', () => {
         protocols: ['mpp'],
         mpp: {
           secretKey: 'secret',
-          currency: TEMPO_USDC_CURRENCY,
+          currency: TEMPO_USDC_ADDRESS,
           rpcUrl: 'https://tempo.example.com',
           operatorKey: OP_KEY,
           feePayerKey: FP_KEY,
@@ -319,7 +323,7 @@ describe('validateRouterConfig', () => {
         protocols: ['x402', 'mpp'],
         mpp: {
           secretKey: 'secret',
-          currency: TEMPO_USDC_CURRENCY,
+          currency: TEMPO_USDC_ADDRESS,
           rpcUrl: 'https://tempo.example.com',
         },
       }),

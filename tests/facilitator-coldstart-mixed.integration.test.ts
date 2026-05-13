@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server';
 import { decodePaymentRequiredHeader } from '@x402/core/http';
 import { createRouter } from '../src/index.js';
 
-const BASE_NETWORK = 'eip155:8453';
+const BASE_MAINNET_NETWORK = 'eip155:8453';
 const SOLANA_NETWORK = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
 
 const servers: http.Server[] = [];
@@ -69,7 +69,7 @@ describe('mixed-network facilitator cold start', () => {
       protocols: ['x402'],
       x402: {
         accepts: [
-          { network: BASE_NETWORK, payTo: '0x0000000000000000000000000000000000000001' },
+          { network: BASE_MAINNET_NETWORK, payTo: '0x0000000000000000000000000000000000000001' },
           { network: SOLANA_NETWORK, payTo: '9tCZP1W2jNYZjikmteU1HRrkoSGaRqcNs9ciLeQZb4a2' },
         ],
         facilitators: {
@@ -103,7 +103,7 @@ describe('mixed-network facilitator cold start', () => {
 
     const challenge = decodePaymentRequiredHeader(header!);
     expect(challenge.accepts.map((accept) => accept.network)).toEqual([
-      BASE_NETWORK,
+      BASE_MAINNET_NETWORK,
       SOLANA_NETWORK,
     ]);
   });

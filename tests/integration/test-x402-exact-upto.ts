@@ -69,7 +69,7 @@ loadEnvFile(path.resolve(process.cwd(), '.env.local'));
 // `next dev` listens on 3000 by default; BASE_URL in .env.local controls the
 // router's challenge realm/discovery URL but not the actual listening port.
 const BASE_URL = process.env.TEST_BASE_URL ?? 'http://localhost:3000';
-const BASE_NETWORK = 'eip155:8453';
+const BASE_MAINNET_NETWORK = 'eip155:8453';
 const BASE_RPC_URL = process.env.BASE_RPC_URL ?? 'https://mainnet.base.org';
 
 // USDC on Base mainnet. The router's accepts also point at this address.
@@ -99,9 +99,9 @@ const sub = (s: string) => `\n--- ${s} ---`;
 function buildHttpClient() {
   const core = new x402Client();
   // EVM `exact` registers via the helper — covers both v2 (eip155:*) and v1.
-  registerExactEvmScheme(core, { signer: clientAccount, networks: [BASE_NETWORK] });
+  registerExactEvmScheme(core, { signer: clientAccount, networks: [BASE_MAINNET_NETWORK] });
   // EVM `upto` has no register helper (yet); register the scheme directly.
-  core.register(BASE_NETWORK, new UptoEvmScheme(clientAccount));
+  core.register(BASE_MAINNET_NETWORK, new UptoEvmScheme(clientAccount));
   return new x402HTTPClient(core);
 }
 
@@ -162,8 +162,8 @@ async function payAndRetry(
 ): Promise<Response> {
   // Per-call client lets us scope the scheme-preference policy locally.
   const core = new x402Client();
-  registerExactEvmScheme(core, { signer: clientAccount, networks: [BASE_NETWORK] });
-  core.register(BASE_NETWORK, new UptoEvmScheme(clientAccount));
+  registerExactEvmScheme(core, { signer: clientAccount, networks: [BASE_MAINNET_NETWORK] });
+  core.register(BASE_MAINNET_NETWORK, new UptoEvmScheme(clientAccount));
   core.registerPolicy((_, reqs) => reqs.filter((r) => r.scheme === preferScheme));
   const httpClient = new x402HTTPClient(core);
 
@@ -411,7 +411,7 @@ async function main(): Promise<void> {
   console.log(banner('Router x402 exact + upto smoke test'));
   console.log(`Server:        ${BASE_URL}`);
   console.log(`Client wallet: ${clientAccount.address}`);
-  console.log(`Network:       ${BASE_NETWORK} (Base mainnet, USDC)`);
+  console.log(`Network:       ${BASE_MAINNET_NETWORK} (Base mainnet, USDC)`);
 
   // Sanity-check the server is reachable.
   try {

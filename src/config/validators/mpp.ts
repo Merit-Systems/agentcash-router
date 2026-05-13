@@ -64,7 +64,7 @@ function checkCurrency({ mpp }: MppCheckArgs): RouterConfigIssue | null {
       code: 'invalid_mpp_currency',
       protocol: 'mpp',
       message:
-        'MPP currency must be a 0x-prefixed 20-byte Tempo currency address. Use TEMPO_USDC_CURRENCY for Tempo USDC.',
+        'MPP currency must be a 0x-prefixed 20-byte Tempo currency address. Use TEMPO_USDC_ADDRESS for Tempo USDC.',
     };
   }
   return null;

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { TEMPO_USDC_CURRENCY, createRouter } from '../src/index.js';
+import { TEMPO_USDC_ADDRESS, createRouter } from '../src/index.js';
 import type { RouterConfig } from '../src/types.js';
 
 describe('RouterConfig.protocols', () => {
@@ -13,7 +13,7 @@ describe('RouterConfig.protocols', () => {
 
   const validMppConfig = {
     secretKey: 'test-secret-key',
-    currency: TEMPO_USDC_CURRENCY,
+    currency: TEMPO_USDC_ADDRESS,
     rpcUrl: 'https://rpc.example.com',
   };
 
@@ -118,7 +118,7 @@ describe('RouterConfig.protocols', () => {
             ...baseConfig,
             baseUrl: 'https://test.example.com',
             protocols: ['mpp'],
-            mpp: { secretKey: 'test', currency: TEMPO_USDC_CURRENCY },
+            mpp: { secretKey: 'test', currency: TEMPO_USDC_ADDRESS },
           });
         }).toThrow(/Tempo RPC URL/);
       } finally {
@@ -217,7 +217,7 @@ describe('RouterConfig.protocols', () => {
         const router = createRouter({
           ...baseConfig,
           protocols: ['mpp'],
-          mpp: { secretKey: 'test', currency: TEMPO_USDC_CURRENCY },
+          mpp: { secretKey: 'test', currency: TEMPO_USDC_ADDRESS },
         });
         const handler = router
           .route('unpriced/route')
@@ -239,7 +239,7 @@ describe('RouterConfig.protocols', () => {
         protocols: ['mpp'],
         mpp: {
           secretKey: 'test',
-          currency: TEMPO_USDC_CURRENCY,
+          currency: TEMPO_USDC_ADDRESS,
           rpcUrl: 'https://rpc.example.com',
         },
       } as RouterConfig);
@@ -283,7 +283,7 @@ describe('RouterConfig.protocols', () => {
         const router = createRouter({
           ...baseConfig,
           protocols: ['mpp'],
-          mpp: { secretKey: 'test', currency: TEMPO_USDC_CURRENCY },
+          mpp: { secretKey: 'test', currency: TEMPO_USDC_ADDRESS },
         });
         router.route('test/route').handler(async () => ({}));
         const entry = router.registry.get('test/route');
@@ -374,7 +374,7 @@ describe('RouterConfig.protocols', () => {
         protocols: ['mpp'],
         mpp: {
           secretKey: 'test',
-          currency: TEMPO_USDC_CURRENCY,
+          currency: TEMPO_USDC_ADDRESS,
           recipient: '0x9876543210987654321098765432109876543210',
           rpcUrl: 'https://rpc.example.com',
         },

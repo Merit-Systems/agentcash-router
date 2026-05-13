@@ -16,7 +16,7 @@ import { createWellKnownHandler } from './discovery/well-known.js';
 import { createOpenAPIHandler } from './discovery/openapi.js';
 import { createLlmsTxtHandler } from './discovery/llms-txt.js';
 import { getConfiguredX402Accepts } from './protocols/x402/accepts.js';
-import { BASE_NETWORK } from './constants.js';
+import { BASE_MAINNET_NETWORK } from './constants.js';
 import {
   RouterConfigError,
   formatRouterConfigIssues,
@@ -57,7 +57,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   const entitlementStore = kvStore
     ? createKvEntitlementStore(kvStore)
     : new MemoryEntitlementStore();
-  const network = config.network ?? BASE_NETWORK;
+  const network = config.network ?? BASE_MAINNET_NETWORK;
   const x402Accepts = getConfiguredX402Accepts(config);
   const configIssues = getRouterConfigIssues(config, {
     requireCdpKeys: process.env.NODE_ENV === 'production',
@@ -253,7 +253,7 @@ function normalizePath(path: string): string {
  * | Var | Required | Purpose |
  * |-----|----------|---------|
  * | `MPP_SECRET_KEY` | when MPP is enabled | Server-side MPP secret. Presence toggles MPP on. |
- * | `MPP_CURRENCY` | when MPP is enabled | Tempo currency address. Use {@link TEMPO_USDC_CURRENCY} for Tempo USDC. |
+ * | `MPP_CURRENCY` | when MPP is enabled | Tempo currency address. Use {@link TEMPO_USDC_ADDRESS} for Tempo USDC. |
  * | `TEMPO_RPC_URL` | when MPP is enabled | Authenticated Tempo JSON-RPC endpoint. Public `rpc.tempo.xyz` returns 401. |
  * | `MPP_OPERATOR_KEY` | no | EVM private key that signs server-side close/settle. When set, session mode is enabled automatically (required for streaming + `.paid({ dynamic: true })` on MPP). Must resolve to the same address as the payee. |
  * | `MPP_FEE_PAYER_KEY` | no | EVM private key sponsoring gas for client-signed open/top-up txs. Must resolve to a different address than the operator. |
@@ -276,13 +276,14 @@ export function createRouterFromEnv<const P extends Record<string, string> = Rec
 
 export { HttpError } from './types.js';
 export {
-  BASE_NETWORK,
+  BASE_MAINNET_NETWORK,
   SOLANA_MAINNET_NETWORK,
-  TEMPO_USDC_CURRENCY,
-  ZERO_EVM_ADDRESS,
-  DEFAULT_SOLANA_FACILITATOR_URL,
-  BASE_USDC_ASSET,
+  BASE_USDC_ADDRESS,
   BASE_USDC_DECIMALS,
+  TEMPO_USDC_ADDRESS,
+  TEMPO_USDC_DECIMALS,
+  DEFAULT_SOLANA_FACILITATOR_URL,
+  ZERO_EVM_ADDRESS,
 } from './constants.js';
 export type {
   HandlerContext,

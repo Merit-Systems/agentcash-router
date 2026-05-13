@@ -8,8 +8,8 @@ import type {
 import type { RouterPlugin } from '../plugin/index.js';
 import type { KvStore } from '../kv-store/index.js';
 import {
-  BASE_NETWORK,
-  BASE_USDC_ASSET,
+  BASE_MAINNET_NETWORK,
+  BASE_USDC_ADDRESS,
   BASE_USDC_DECIMALS,
   DEFAULT_SOLANA_FACILITATOR_URL,
   SOLANA_MAINNET_NETWORK,
@@ -66,12 +66,10 @@ export interface CreateRouterFromEnvOptions<
  * Build a {@link RouterConfig} from environment variables.
  *
  * Validates every required value up front and throws a single
- * {@link RouterConfigError} containing all issues at once, so the consumer
- * fixes the env in one pass.
+ * {@link RouterConfigError} containing all issues at once.
  *
- * Use this when you need the config before constructing the router (e.g.,
- * for inspection or composition). Most consumers should call
- * {@link createRouterFromEnv} instead.
+ * Use this when you need the config before constructing the router.
+ * Most consumers should call {@link createRouterFromEnv} instead.
  */
 export function routerConfigFromEnv<
   const TPrices extends Record<string, string> = Record<never, string>,
@@ -157,7 +155,7 @@ export function routerConfigFromEnv<
         code: 'missing_mpp_currency',
         protocol: 'mpp',
         message:
-          'MPP_CURRENCY is required when MPP is enabled. Use TEMPO_USDC_CURRENCY for Tempo USDC.',
+          'MPP_CURRENCY is required when MPP is enabled. Use TEMPO_USDC_ADDRESS for Tempo USDC.',
       });
     } else if (!isEvmAddress(mppCurrency)) {
       issues.push({
@@ -222,12 +220,12 @@ export function routerConfigFromEnv<
   // Base USDC so `.paid('0.01')` and `.paid({ dynamic: true })` both work
   // without further config.
   const accepts: X402AcceptConfig[] = [
-    { scheme: 'exact', network: BASE_NETWORK, payTo: payeeAddress },
+    { scheme: 'exact', network: BASE_MAINNET_NETWORK, payTo: payeeAddress },
     {
       scheme: 'upto',
-      network: BASE_NETWORK,
+      network: BASE_MAINNET_NETWORK,
       payTo: payeeAddress,
-      asset: BASE_USDC_ASSET,
+      asset: BASE_USDC_ADDRESS,
       decimals: BASE_USDC_DECIMALS,
     },
   ];
@@ -258,7 +256,7 @@ export function routerConfigFromEnv<
   return {
     payeeAddress,
     baseUrl: baseUrl!,
-    network: BASE_NETWORK,
+    network: BASE_MAINNET_NETWORK,
     protocols,
     x402: {
       accepts,

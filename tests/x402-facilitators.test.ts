@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_SOLANA_FACILITATOR_URL,
   getAcceptsHeadersForFacilitator,
   getResolvedX402Facilitator,
   getResolvedX402Facilitators,
   getResolvedX402FacilitatorGroups,
 } from '../src/protocols/x402/facilitators.js';
+import { DEFAULT_SOLANA_FACILITATOR_URL } from '../src/constants.js';
 import type { RouterConfig } from '../src/types.js';
 
 const DEFAULT_CDP_FACILITATOR = 'https://x402.coinbase.com/facilitator';
-const BASE_NETWORK = 'eip155:8453';
+const BASE_MAINNET_NETWORK = 'eip155:8453';
 const SOLANA_NETWORK = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
 
 function makeConfig(overrides: Partial<RouterConfig> = {}): RouterConfig {
@@ -22,7 +22,7 @@ function makeConfig(overrides: Partial<RouterConfig> = {}): RouterConfig {
     },
     x402: {
       accepts: [
-        { network: BASE_NETWORK, payTo: '0x1234567890123456789012345678901234567890' },
+        { network: BASE_MAINNET_NETWORK, payTo: '0x1234567890123456789012345678901234567890' },
         { network: SOLANA_NETWORK, payTo: '9tCZP1W2jNYZjikmteU1HRrkoSGaRqcNs9ciLeQZb4a2' },
       ],
     },
@@ -34,9 +34,11 @@ describe('x402 facilitator resolution', () => {
   it('defaults Base to CDP and Solana to Corbits', () => {
     const config = makeConfig();
 
-    expect(getResolvedX402Facilitator(config, BASE_NETWORK, DEFAULT_CDP_FACILITATOR)).toEqual({
+    expect(
+      getResolvedX402Facilitator(config, BASE_MAINNET_NETWORK, DEFAULT_CDP_FACILITATOR),
+    ).toEqual({
       family: 'evm',
-      network: BASE_NETWORK,
+      network: BASE_MAINNET_NETWORK,
       url: DEFAULT_CDP_FACILITATOR,
       config: {
         url: DEFAULT_CDP_FACILITATOR,
@@ -56,7 +58,7 @@ describe('x402 facilitator resolution', () => {
     const config = makeConfig({
       x402: {
         accepts: [
-          { network: BASE_NETWORK, payTo: '0x1234567890123456789012345678901234567890' },
+          { network: BASE_MAINNET_NETWORK, payTo: '0x1234567890123456789012345678901234567890' },
           { network: SOLANA_NETWORK, payTo: '9tCZP1W2jNYZjikmteU1HRrkoSGaRqcNs9ciLeQZb4a2' },
         ],
         facilitators: {
@@ -67,11 +69,11 @@ describe('x402 facilitator resolution', () => {
 
     const facilitators = getResolvedX402Facilitators(
       config,
-      [BASE_NETWORK, SOLANA_NETWORK],
+      [BASE_MAINNET_NETWORK, SOLANA_NETWORK],
       DEFAULT_CDP_FACILITATOR,
     );
 
-    expect(facilitators[BASE_NETWORK]?.url).toBe(DEFAULT_CDP_FACILITATOR);
+    expect(facilitators[BASE_MAINNET_NETWORK]?.url).toBe(DEFAULT_CDP_FACILITATOR);
     expect(facilitators[SOLANA_NETWORK]?.url).toBe('https://solana.example');
   });
 
@@ -106,7 +108,7 @@ describe('x402 facilitator resolution', () => {
     const config = makeConfig({
       x402: {
         accepts: [
-          { network: BASE_NETWORK, payTo: '0x1234567890123456789012345678901234567890' },
+          { network: BASE_MAINNET_NETWORK, payTo: '0x1234567890123456789012345678901234567890' },
           { network: SOLANA_NETWORK, payTo: '9tCZP1W2jNYZjikmteU1HRrkoSGaRqcNs9ciLeQZb4a2' },
         ],
         facilitators: {
@@ -116,9 +118,11 @@ describe('x402 facilitator resolution', () => {
       },
     });
 
-    expect(getResolvedX402Facilitator(config, BASE_NETWORK, DEFAULT_CDP_FACILITATOR)).toEqual({
+    expect(
+      getResolvedX402Facilitator(config, BASE_MAINNET_NETWORK, DEFAULT_CDP_FACILITATOR),
+    ).toEqual({
       family: 'evm',
-      network: BASE_NETWORK,
+      network: BASE_MAINNET_NETWORK,
       url: 'https://evm.example',
       config: {
         url: 'https://evm.example',

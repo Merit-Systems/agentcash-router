@@ -90,7 +90,7 @@ The full list, by responsibility. `createRouterFromEnv` reads all of these; manu
 | Var | Required | Purpose |
 |-----|----------|---------|
 | `MPP_SECRET_KEY` | when MPP is enabled | Server-side MPP secret. Presence toggles MPP on. |
-| `MPP_CURRENCY` | when MPP is enabled | Tempo currency address. Use `TEMPO_USDC_CURRENCY`. |
+| `MPP_CURRENCY` | when MPP is enabled | Tempo currency address. Use `TEMPO_USDC_ADDRESS`. |
 | `TEMPO_RPC_URL` | when MPP is enabled | Authenticated Tempo RPC. Public `rpc.tempo.xyz` returns 401. |
 | `MPP_OPERATOR_KEY` | no | Signs server-side close/settle. When set, session mode is enabled automatically (required for `.paid({ dynamic: true })` over MPP). Address must equal the payee. |
 | `MPP_FEE_PAYER_KEY` | no | Sponsors client gas for channel open/topUp. Must resolve to a different address than the operator. |
