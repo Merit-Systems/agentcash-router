@@ -127,17 +127,13 @@ export const GET = router.route({ path: 'health' })
 ### 3. Auto-discovery
 
 ```typescript
-// app/.well-known/x402/route.ts
-import { router } from '@/lib/router';
-import '@/lib/routes-barrel';  // imports every route module
-export const GET = router.wellKnown();
-
 // app/openapi.json/route.ts
+import { router } from '@/lib/router';
+import '@/lib/routes-barrel';  // imports every route module so the registry is populated
 export const GET = router.openapi();
-
-// app/llms.txt/route.ts
-export const GET = router.llmsTxt();
 ```
+
+The barrel forces every route module to load before the discovery handler walks the registry — Next.js otherwise lazy-loads route files on first hit, and unloaded routes don't appear in the spec.
 
 ## Auth modes
 
@@ -165,7 +161,7 @@ router.route({ path: 'gated' })
 .paid('0.02')
 ```
 
-**Dynamic (body-driven).**
+**Args-driven.**
 ```typescript
 .paid((body) => calculateCost(body), { maxPrice: '5.00' })
 .body(genSchema)
@@ -220,43 +216,6 @@ router.route({ path: 'domain/register' })
 
 Pipeline order: `body parse -> validate -> 402 challenge -> payment -> handler`.
 
-## Handler context
-
-```typescript
-interface HandlerContext<TBody, TQuery> {
-  body: TBody;
-  query: TQuery;
-  request: NextRequest;
-  wallet: string | null;
-  payment: HandlerPaymentContext | null;
-  account: unknown;                      // from .apiKey() resolver
-  alert: AlertFn;
-  setVerifiedWallet: (addr: string) => void;
-}
-```
-
-`payment` is `null` for unprotected, API-key-only, and SIWX-only requests. For paid requests it carries `protocol`, `status`, `payer`, `amount`, `network`, and best-effort tx / receipt metadata.
-
-## Settlement hooks
-
-```typescript
-router.route({ path: 'render' })
-  .paid('0.10')
-  .body(schema)
-  .settlement({
-    beforeSettle: async ({ result }) => {
-      if (!isUsableResult(result)) {
-        throw Object.assign(new Error('Render failed'), { status: 502 });
-      }
-    },
-    afterSettle: async ({ payment, result }) => ledger.record({ tx: payment.transaction, result }),
-    onSettledHandlerError: async ({ payment, error }) => compensationQueue.enqueue({ receipt: payment.receipt, error }),
-  })
-  .handler(async ({ body }) => render(body));
-```
-
-`beforeSettle` can still abort the charge for x402 and MPP transaction-payload flows. `onSettledHandlerError` covers already-settled MPP requests whose handler errored; the router cannot generically refund because it does not hold merchant signing keys.
-
 ## Plugin
 
 ```typescript
@@ -269,7 +228,6 @@ const myPlugin: RouterPlugin = {
   onResponse(ctx, response) {},
   onError(ctx, error) {},
   onAlert(ctx, alert) {},
-  onProviderQuota(ctx, event) {},
 };
 
 export const router = createRouterFromEnv({
@@ -282,38 +240,3 @@ export const router = createRouterFromEnv({
 
 All hooks are optional and fire-and-forget; they never delay the response.
 
-## Provider monitoring
-
-For routes wrapping a third-party API with quota:
-
-```typescript
-router.route({ path: 'search' })
-  .paid('0.01')
-  .provider('exa', {
-    extractQuota: (result, headers) => ({
-      remaining: result.rateLimit?.remaining ?? null,
-      limit: result.rateLimit?.limit ?? null,
-    }),
-    warn: 100,
-    critical: 10,
-  })
-  .body(searchSchema)
-  .handler(async ({ body }) => exa.search(body));
-```
-
-`extractQuota` runs after each successful response (status < 400). Exceptions are swallowed; the plugin hook `onProviderQuota` fires with level `healthy` / `warn` / `critical`.
-
-For providers that need a separate health-check call, register a `monitor` function. Retrieve registered monitors with `router.monitors()` from a cron entry point.
-
-## Build and test
-
-```bash
-pnpm build       # tsup
-pnpm test        # vitest
-pnpm typecheck   # tsc --noEmit
-pnpm check       # format + lint + typecheck + build + test
-```
-
-## License
-
-MIT

@@ -46,7 +46,7 @@ src/
 - **Discovery visibility.** `authMode !== 'unprotected'` determines well-known visibility, not the protocol list. SIWX routes are discoverable.
 - **OpenAPI.** Merge paths for multi-method endpoints (GET + DELETE on same path). Never overwrite.
 - **Duplicate route keys.** Registry silently overwrites (last write wins) with a dev-only `console.warn`. This is intentional: Next.js module load order is non-deterministic, so stub + real handler may register either order.
-- **Dynamic pricing.** Body is parsed before the 402 challenge via `request.clone()` when pricing is a function. `maxPrice` is optional and acts as a cap and a fallback on pricing function errors.
+- **Args-driven pricing.** Body is parsed before the 402 challenge via `request.clone()` when pricing is a function. `maxPrice` is optional and acts as a cap and a fallback on pricing function errors.
 - **MPP operator vs fee-payer.** `mpp.operatorKey` and `mpp.feePayerKey` MUST resolve to different addresses. Tempo rejects fee-delegated txs where `sender === feePayer`. `createRouter` validates this at construction and throws `mpp_operator_equals_fee_payer`.
 - **MPP operator address.** Must equal `recipient` / payee. mppx's close handler asserts `sender === payee` on settle.
 - **Streaming requires MPP.** `.stream()` only works on MPP. x402 has no streaming primitive.
