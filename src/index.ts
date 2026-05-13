@@ -228,7 +228,45 @@ function normalizePath(path: string): string {
  * });
  * ```
  *
- * @see {@link CreateRouterFromEnvOptions} for the full list of recognised env vars.
+ * ## Environment variables
+ *
+ * ### x402
+ *
+ * | Var | Required | Purpose |
+ * |-----|----------|---------|
+ * | `X402_WALLET_ADDRESS` | yes | EVM payee for x402 payments (0x-prefixed, 20 bytes). Canonicalized to lowercase. |
+ * | `CDP_API_KEY_ID` | yes (production) | Coinbase Developer Platform key ID for the default EVM facilitator. |
+ * | `CDP_API_KEY_SECRET` | yes (production) | Coinbase Developer Platform key secret for the default EVM facilitator. |
+ *
+ * ### Solana
+ *
+ * | Var | Required | Purpose |
+ * |-----|----------|---------|
+ * | `SOLANA_PAYEE_ADDRESS` | no | When set, adds a Solana `exact` accept and enables Solana payments. |
+ * | `SOLANA_FACILITATOR_URL` | no | Override the Solana x402 facilitator. Defaults to {@link DEFAULT_SOLANA_FACILITATOR_URL}. |
+ *
+ * ### MPP
+ *
+ * MPP is enabled automatically when `MPP_SECRET_KEY` is set, or explicitly via
+ * the `protocols` option.
+ *
+ * | Var | Required | Purpose |
+ * |-----|----------|---------|
+ * | `MPP_SECRET_KEY` | when MPP is enabled | Server-side MPP secret. Presence toggles MPP on. |
+ * | `MPP_CURRENCY` | when MPP is enabled | Tempo currency address. Use {@link TEMPO_USDC_CURRENCY} for Tempo USDC. |
+ * | `TEMPO_RPC_URL` | when MPP is enabled | Authenticated Tempo JSON-RPC endpoint. Public `rpc.tempo.xyz` returns 401. |
+ * | `MPP_OPERATOR_KEY` | no | EVM private key that signs server-side close/settle. When set, session mode is enabled automatically (required for streaming + `.paid({ dynamic: true })` on MPP). Must resolve to the same address as the payee. |
+ * | `MPP_FEE_PAYER_KEY` | no | EVM private key sponsoring gas for client-signed open/top-up txs. Must resolve to a different address than the operator. |
+ *
+ * ### Other
+ *
+ * | Var | Required | Purpose |
+ * |-----|----------|---------|
+ * | `BASE_URL` | yes | Origin URL — 402 realm, OpenAPI server URL, MPP memo prefix. Must match the public domain. |
+ * | `KV_REST_API_URL` | no | Upstash / Vercel KV REST URL. Backs SIWX nonce, SIWX entitlement, MPP replay. Missing falls back to in-memory (unsafe in serverless production). |
+ * | `KV_REST_API_TOKEN` | no | Upstash / Vercel KV REST token (paired with `KV_REST_API_URL`). |
+ *
+ * @see {@link CreateRouterFromEnvOptions} for the discovery copy and non-env overrides.
  */
 export function createRouterFromEnv<const P extends Record<string, string> = Record<never, string>>(
   options: CreateRouterFromEnvOptions<P>,

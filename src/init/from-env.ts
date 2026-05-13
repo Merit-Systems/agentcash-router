@@ -19,39 +19,11 @@ import type { RouterConfigIssue } from '../config/types.js';
 import { isEvmAddress, isEvmPrivateKey } from '../config/validators/shared.js';
 
 /**
- * Options for {@link createRouterFromEnv} / {@link routerConfigFromEnv}.
+ * Discovery copy + non-env overrides for {@link createRouterFromEnv} /
+ * {@link routerConfigFromEnv}.
  *
- * The router reads payment and infrastructure settings from environment
- * variables. Pass the discovery copy (and any non-env overrides) here.
- *
- * ## Required env vars
- *
- * | Var | Purpose |
- * |-----|---------|
- * | `BASE_URL` | Origin URL — 402 realm, OpenAPI server, MPP memo prefix. Must match the public domain. |
- * | `X402_WALLET_ADDRESS` | EVM payee for x402 payments (0x-prefixed, 20 bytes). |
- *
- * ## Optional env vars
- *
- * | Var | Default | Purpose |
- * |-----|---------|---------|
- * | `SOLANA_PAYEE_ADDRESS` | _(none)_ | When set, adds a Solana `exact` accept and enables Solana payments. |
- * | `SOLANA_FACILITATOR_URL` | {@link DEFAULT_SOLANA_FACILITATOR_URL} | x402 Solana facilitator endpoint. |
- * | `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | _(required in production)_ | Coinbase EVM facilitator credentials. |
- * | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | _(in-memory fallback)_ | Upstash-shaped KV used for SIWX nonce, SIWX entitlement, MPP replay. |
- *
- * ## MPP env vars (only required when MPP is enabled)
- *
- * MPP is enabled automatically when `MPP_SECRET_KEY` is set, or explicitly via
- * the `protocols` option.
- *
- * | Var | Purpose |
- * |-----|---------|
- * | `MPP_SECRET_KEY` | Server-side MPP secret. Presence toggles MPP on. |
- * | `MPP_CURRENCY` | Tempo currency address (use {@link TEMPO_USDC_CURRENCY}). |
- * | `TEMPO_RPC_URL` | Authenticated Tempo JSON-RPC endpoint. |
- * | `MPP_FEE_PAYER_KEY` | _(optional)_ EVM private key sponsoring gas for client-signed open/top-up txs. |
- * | `MPP_OPERATOR_KEY` | _(optional)_ EVM private key that signs server-side close/settle. When set, MPP session mode is enabled automatically (required for streaming + `.paid({ dynamic: true })` on MPP). Must resolve to the same address as the payee. |
+ * Payment and infrastructure settings come from environment variables —
+ * see {@link createRouterFromEnv} for the full list of recognised env vars.
  */
 export interface CreateRouterFromEnvOptions<
   TPrices extends Record<string, string> = Record<never, string>,

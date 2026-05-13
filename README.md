@@ -12,33 +12,38 @@ pnpm add mppx  # optional, for MPP support
 
 ## Environment
 
-The recommended entry point reads its config from `process.env`. Set the vars below; everything else is derived.
+The recommended entry point reads its config from `process.env`. A copy-paste `.env.example` lives at the repo root.
 
-### Required
+### x402
 
-| Var | Purpose |
-|-----|---------|
-| `BASE_URL` | Your production origin (`https://api.example.com`). Load-bearing — used as the 402 realm, OpenAPI server URL, and MPP memo prefix. Must match the public domain. |
-| `X402_WALLET_ADDRESS` | EVM payee for x402 payments (`0x…`, 20 bytes). |
+| Var | Required | Purpose |
+|-----|----------|---------|
+| `X402_WALLET_ADDRESS` | yes | EVM payee for x402 payments (`0x…`, 20 bytes). Canonicalized to lowercase. |
+| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | yes (production) | Coinbase Developer Platform credentials for the default EVM facilitator. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
 
-### Optional
+### Solana
 
-| Var | Default | Purpose |
-|-----|---------|---------|
-| `SOLANA_PAYEE_ADDRESS` | _(none)_ | When set, adds a Solana `exact` accept so the router takes Solana payments. |
-| `SOLANA_FACILITATOR_URL` | `DEFAULT_SOLANA_FACILITATOR_URL` | x402 Solana facilitator endpoint. |
-| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | _(required in production)_ | Coinbase EVM facilitator credentials. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
-| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | _(in-memory fallback)_ | Upstash / Vercel KV. Used for SIWX nonce, SIWX entitlement, and MPP replay. In-memory fallback is unsafe in serverless production. |
+| Var | Required | Purpose |
+|-----|----------|---------|
+| `SOLANA_PAYEE_ADDRESS` | no | When set, adds a Solana `exact` accept so the router takes Solana payments. |
+| `SOLANA_FACILITATOR_URL` | no | Override the Solana x402 facilitator. Defaults to `DEFAULT_SOLANA_FACILITATOR_URL`. |
 
 ### MPP (auto-enabled when `MPP_SECRET_KEY` is set)
 
-| Var | Purpose |
-|-----|---------|
-| `MPP_SECRET_KEY` | Server-side MPP secret. Presence toggles MPP on. |
-| `MPP_CURRENCY` | Tempo currency address. Use `TEMPO_USDC_CURRENCY` for Tempo USDC. |
-| `TEMPO_RPC_URL` | Authenticated Tempo JSON-RPC endpoint. Public `rpc.tempo.xyz` returns 401. |
-| `MPP_FEE_PAYER_KEY` | Optional. EVM private key sponsoring gas for client-signed open/top-up txs. |
-| `MPP_OPERATOR_KEY` | Optional. Signs server-side close/settle. Must resolve to a different address than `MPP_FEE_PAYER_KEY` (Tempo rejects fee-delegated txs where `sender === feePayer`). |
+| Var | Required | Purpose |
+|-----|----------|---------|
+| `MPP_SECRET_KEY` | when MPP is enabled | Server-side MPP secret. Presence toggles MPP on. |
+| `MPP_CURRENCY` | when MPP is enabled | Tempo currency address. Use `TEMPO_USDC_CURRENCY` for Tempo USDC. |
+| `TEMPO_RPC_URL` | when MPP is enabled | Authenticated Tempo JSON-RPC endpoint. Public `rpc.tempo.xyz` returns 401. |
+| `MPP_OPERATOR_KEY` | no | Signs server-side close/settle. When set, MPP session mode is enabled automatically (required for streaming + `.paid({ dynamic: true })` on MPP). Address must equal the payee. |
+| `MPP_FEE_PAYER_KEY` | no | Sponsors client gas for channel open/topUp. Must resolve to a different address than `MPP_OPERATOR_KEY` (Tempo rejects fee-delegated txs where `sender === feePayer`). |
+
+### Other
+
+| Var | Required | Purpose |
+|-----|----------|---------|
+| `BASE_URL` | yes | Origin URL (`https://api.example.com`). Load-bearing — used as the 402 realm, OpenAPI server URL, and MPP memo prefix. Must match the public domain. |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | no | Upstash / Vercel KV. Backs SIWX nonce, SIWX entitlement, and MPP replay. In-memory fallback is unsafe in serverless production. |
 
 ## Quick start
 

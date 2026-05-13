@@ -69,33 +69,38 @@ export const router = createRouterFromEnv({
 
 ## Environment variables
 
-The full list, by responsibility. `createRouterFromEnv` reads all of these; manual `createRouter` callers can use them too but must wire them up.
+The full list, by responsibility. `createRouterFromEnv` reads all of these; manual `createRouter` callers can use them too but must wire them up. The canonical reference is the JSDoc on `createRouterFromEnv` plus `.env.example` at the repo root.
 
-### Required
+### x402
 
-| Var | Purpose |
-|-----|---------|
-| `BASE_URL` | Origin URL — 402 realm, OpenAPI server URL, MPP memo prefix. Load-bearing; must match the public domain. |
-| `X402_WALLET_ADDRESS` | EVM payee for x402 payments (0x-prefixed, 20 bytes). Canonicalized to lowercase. |
+| Var | Required | Purpose |
+|-----|----------|---------|
+| `X402_WALLET_ADDRESS` | yes | EVM payee for x402 payments (0x-prefixed, 20 bytes). Canonicalized to lowercase. |
+| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | yes (production) | Default `@coinbase/x402` facilitator auth. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
 
-### Optional
+### Solana
 
-| Var | Default | Purpose |
-|-----|---------|---------|
-| `SOLANA_PAYEE_ADDRESS` | _(none)_ | When set, adds a Solana `exact` accept. |
-| `SOLANA_FACILITATOR_URL` | `DEFAULT_SOLANA_FACILITATOR_URL` | Solana x402 facilitator endpoint. |
-| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | _(required in production)_ | Default `@coinbase/x402` facilitator auth. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
-| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | _(in-memory fallback)_ | Upstash / Vercel KV. Backs SIWX nonce, SIWX entitlement, MPP replay. Missing either falls back to in-memory (unsafe in serverless production). |
+| Var | Required | Purpose |
+|-----|----------|---------|
+| `SOLANA_PAYEE_ADDRESS` | no | When set, adds a Solana `exact` accept. |
+| `SOLANA_FACILITATOR_URL` | no | Override the Solana x402 facilitator. Defaults to `DEFAULT_SOLANA_FACILITATOR_URL`. |
 
 ### MPP (enabled by `MPP_SECRET_KEY`)
 
-| Var | Purpose |
-|-----|---------|
-| `MPP_SECRET_KEY` | Server-side MPP secret. Presence toggles MPP on. |
-| `MPP_CURRENCY` | Tempo currency address. Use `TEMPO_USDC_CURRENCY`. |
-| `TEMPO_RPC_URL` | Authenticated Tempo RPC. Public `rpc.tempo.xyz` returns 401. |
-| `MPP_OPERATOR_KEY` | Signs server-side close/settle. When set, session mode is enabled (required for `.paid({ dynamic: true })` over MPP). Address must equal the payee. |
-| `MPP_FEE_PAYER_KEY` | Sponsors client gas for channel open/topUp. Must resolve to a different address than the operator. |
+| Var | Required | Purpose |
+|-----|----------|---------|
+| `MPP_SECRET_KEY` | when MPP is enabled | Server-side MPP secret. Presence toggles MPP on. |
+| `MPP_CURRENCY` | when MPP is enabled | Tempo currency address. Use `TEMPO_USDC_CURRENCY`. |
+| `TEMPO_RPC_URL` | when MPP is enabled | Authenticated Tempo RPC. Public `rpc.tempo.xyz` returns 401. |
+| `MPP_OPERATOR_KEY` | no | Signs server-side close/settle. When set, session mode is enabled automatically (required for `.paid({ dynamic: true })` over MPP). Address must equal the payee. |
+| `MPP_FEE_PAYER_KEY` | no | Sponsors client gas for channel open/topUp. Must resolve to a different address than the operator. |
+
+### Other
+
+| Var | Required | Purpose |
+|-----|----------|---------|
+| `BASE_URL` | yes | Origin URL — 402 realm, OpenAPI server URL, MPP memo prefix. Load-bearing; must match the public domain. |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | no | Upstash / Vercel KV. Backs SIWX nonce, SIWX entitlement, MPP replay. Missing either falls back to in-memory (unsafe in serverless production). |
 
 ## Build and test
 
