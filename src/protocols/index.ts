@@ -3,16 +3,11 @@ import { mppStrategy } from './mpp/strategy.js';
 import { x402Strategy } from './x402/strategy.js';
 
 export type { PaymentStrategy } from './types.js';
-export { detectProtocol } from './detect.js';
 
 const STRATEGIES: Record<'x402' | 'mpp', PaymentStrategy> = {
   x402: x402Strategy,
   mpp: mppStrategy,
 };
-
-export function getPaymentStrategy(protocol: 'x402' | 'mpp'): PaymentStrategy {
-  return STRATEGIES[protocol];
-}
 
 export function selectIncomingStrategy(
   request: Request,

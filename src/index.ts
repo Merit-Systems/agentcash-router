@@ -25,7 +25,7 @@ import {
 import { initX402 } from './init/x402.js';
 import { initMpp } from './init/mpp.js';
 
-export interface MonitorEntry {
+interface MonitorEntry {
   provider: string;
   route: string;
   monitor: () => Promise<import('./types.js').QuotaInfo | null>;
@@ -217,88 +217,16 @@ export {
   TEMPO_USDC_CURRENCY,
   ZERO_EVM_ADDRESS,
 } from './constants.js';
-export {
-  RouterConfigError,
-  formatRouterConfigIssues,
-  getRouterConfigIssues,
-  mppFromEnv,
-  paidOptionsForProtocols,
-  validateRouterConfig,
-  x402AcceptsFromEnv,
-} from './config/index.js';
-export type {
-  RouterConfigIssue,
-  RouterConfigIssueCode,
-  RouterConfigValidationOptions,
-  RouterEnv,
-} from './config/index.js';
 export type {
   HandlerContext,
-  StreamingHandlerContext,
   RouterConfig,
   DiscoveryConfig,
-  RouteEntry,
-  PricingConfig,
   PaidOptions,
-  MppProtocolInfo,
   ProtocolType,
-  AuthMode,
-  AlertFn,
-  AlertLevel,
-  AlertEvent,
-  HandlerPaymentContext,
-  SettlementLifecycle,
   SettlementLifecycleContext,
   SettlementSettledContext,
-  SettledHandlerErrorContext,
   SettlementErrorContext,
-  TierConfig,
-  PaymentStatus,
-  ProviderConfig,
-  ProviderQuotaEvent,
-  QuotaInfo,
-  QuotaLevel,
-  OveragePolicy,
-  X402Server,
-  X402AcceptConfig,
-  X402ResolvedAccept,
-  X402RouterFacilitatorConfig,
   X402FacilitatorsConfig,
-  X402FacilitatorTarget,
-  PayToConfig,
 } from './types.js';
-
-export { consolePlugin } from './plugin/index.js';
-export type {
-  RouterPlugin,
-  PluginContext,
-  RequestMeta,
-  AuthEvent,
-  PaymentEvent,
-  SettlementEvent,
-  ResponseMeta,
-  ErrorEvent,
-} from './plugin/index.js';
-
-export type {
-  KvStore,
-  KvChange,
-  NonceStore,
-  KvNonceStoreOptions,
-  EntitlementStore,
-  KvEntitlementStoreOptions,
-  KvMppStoreOptions,
-} from './kv-store/index.js';
-export {
-  withPrefix,
-  MemoryNonceStore,
-  createKvNonceStore,
-  SIWX_CHALLENGE_EXPIRY_MS,
-  MemoryEntitlementStore,
-  createKvEntitlementStore,
-  createKvMppStore,
-} from './kv-store/index.js';
-export type { SiwxErrorCode } from './auth/siwx.js';
-export { SIWX_ERROR_MESSAGES } from './auth/siwx.js';
-export { RouteBuilder } from './builder.js';
-export { RouteRegistry } from './registry.js';
+export type { RouterPlugin } from './plugin/index.js';
+export type { KvStore } from './kv-store/index.js';

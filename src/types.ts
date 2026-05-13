@@ -29,7 +29,7 @@ export interface AlertEvent {
 
 export type AlertFn = (level: AlertLevel, message: string, meta?: Record<string, unknown>) => void;
 
-export type JsonPrimitive = string | number | boolean | null;
+type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
 export type JsonObject = { [key: string]: JsonValue };
 
@@ -328,7 +328,7 @@ export interface RouterConfig {
     /** Per-chain facilitator overrides (`evm`/`solana`). Defaults to the Coinbase facilitator on EVM; set `solana` to accept Solana payments. */
     facilitators?: X402FacilitatorsConfig;
   };
-  /** Observability hook receiving request/auth/payment/settlement events. Use `consolePlugin` for dev, or implement `RouterPlugin` for structured logs/analytics. */
+  /** Observability hook receiving request/auth/payment/settlement events. Implement `RouterPlugin` for structured logs/analytics. */
   plugin?: import('./plugin/index.js').RouterPlugin;
   /** Single KV cache for SIWX nonce, SIWX entitlement, and MPP tx-hash replay (prefixed `siwx:nonce:`, `siwx:ent:`, `mpp:`). Pass `{ url, token }` for an Upstash-compatible REST endpoint (Upstash, Vercel KV), or a custom `KvStore` implementation. Omitted: auto-bootstraps from `KV_REST_API_URL` + `KV_REST_API_TOKEN`; falls back to in-memory when missing (unsafe in serverless). */
   kvStore?: import('./kv-store/index.js').KvStore | { url: string; token: string };

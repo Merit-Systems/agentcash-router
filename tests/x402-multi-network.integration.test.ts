@@ -10,7 +10,7 @@ import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
 import type { RouteEntry } from '../src/types.js';
-import type { ResolvedX402Facilitator } from '../src/x402-facilitators.js';
+import type { ResolvedX402Facilitator } from '../src/protocols/x402/facilitators.js';
 
 interface SettledRequirements {
   scheme?: string;

@@ -1,16 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { BASE_NETWORK, SOLANA_MAINNET_NETWORK, TEMPO_USDC_CURRENCY } from '../src/constants.js';
 import {
-  BASE_NETWORK,
   RouterConfigError,
-  SOLANA_MAINNET_NETWORK,
-  TEMPO_USDC_CURRENCY,
   getRouterConfigIssues,
   mppFromEnv,
   paidOptionsForProtocols,
   validateRouterConfig,
   x402AcceptsFromEnv,
-} from '../src/index.js';
-import type { RouterConfig } from '../src/index.js';
+} from '../src/config/index.js';
+import type { RouterConfig } from '../src/types.js';
 
 const PAYEE = '0x1234567890123456789012345678901234567890';
 const SOLANA_PAYEE = '9tCZP1W2jNYZjikmteU1HRrkoSGaRqcNs9ciLeQZb4a2';

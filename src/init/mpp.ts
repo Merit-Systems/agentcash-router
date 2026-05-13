@@ -1,6 +1,6 @@
 import type { Client } from 'viem';
 import type { RouterConfig } from '../types.js';
-import type { RouterDeps } from '../pipeline/steps/index.js';
+import type { RouterDeps } from '../pipeline/steps/types.js';
 import type { KvStore } from '../kv-store/index.js';
 import { getMppxRequestContext, getMppxStreamingContext } from './mppx.js';
 import { createKvMppStore } from '../kv-store/index.js';

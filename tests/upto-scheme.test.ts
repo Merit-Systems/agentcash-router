@@ -7,7 +7,7 @@ import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
 import { createRouter } from '../src/index.js';
 import type { RouteEntry } from '../src/types.js';
-import type { ResolvedX402Facilitator } from '../src/x402-facilitators.js';
+import type { ResolvedX402Facilitator } from '../src/protocols/x402/facilitators.js';
 
 const BASE_NETWORK = 'eip155:8453';
 const USDC_ASSET = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';

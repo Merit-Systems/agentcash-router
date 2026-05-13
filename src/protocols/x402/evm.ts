@@ -1,4 +1,4 @@
-import type { Network, PaymentRequirements } from '@x402/core/types';
+import type { Network } from '@x402/core/types';
 import type { X402ResolvedAccept } from '../../types.js';
 
 export function isEvmNetwork(network: string): network is `eip155:${string}` {
@@ -7,10 +7,6 @@ export function isEvmNetwork(network: string): network is `eip155:${string}` {
 
 export function filterEvmNetworks(networks: readonly string[]): Network[] {
   return networks.filter(isEvmNetwork) as Network[];
-}
-
-export function allNetworksAreEvm(networks: readonly string[]): boolean {
-  return networks.length > 0 && networks.every(isEvmNetwork);
 }
 
 export function buildEvmExactOptions(
@@ -64,8 +60,4 @@ export function buildEvmUptoOptions(
         : {}),
       ...(accept.extra ? { extra: accept.extra } : {}),
     }));
-}
-
-export function isEvmRequirement(requirement: PaymentRequirements): boolean {
-  return isEvmNetwork(requirement.network);
 }
