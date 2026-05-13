@@ -23,14 +23,15 @@
  *     request shows a new payload signature, and the facilitator settles
  *     on chain (or rejects without funds / Permit2 allowance).
  *
- * Run with:
- *   pnpm tsx test-x402-exact-upto.ts
+ * Run with (from repo root):
+ *   pnpm tsx tests/integration/test-x402-exact-upto.ts
  *
- * Requires the dev server running at http://localhost:3000 with the same
- * CDP / facilitator env it normally needs. On-chain settlement will only
- * succeed if CLIENT_PRIVATE_KEY is a USDC-funded Base wallet with Permit2
- * approval already set; without that, expect the request flow to reach
- * settlement and report whatever the facilitator returned.
+ * Requires the fortune example's dev server running at http://localhost:3000
+ * (cd examples/fortune && pnpm dev) with the same CDP / facilitator env it
+ * normally needs. On-chain settlement will only succeed if CLIENT_PRIVATE_KEY
+ * is a USDC-funded Base wallet with Permit2 approval already set; without
+ * that, expect the request flow to reach settlement and report whatever the
+ * facilitator returned.
  */
 
 import * as fs from 'node:fs';

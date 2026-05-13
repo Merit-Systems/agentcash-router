@@ -14,13 +14,14 @@
  *   4. Channel close — explicit close-on-chain to reclaim the unspent
  *      deposit.
  *
- * Run with:
- *   pnpm tsx test-session-alignment.ts
+ * Run with (from repo root):
+ *   pnpm tsx tests/integration/test-session-alignment.ts
  *
- * Requires the dev server to be running at http://localhost:3100, with
- * MPP_FEE_PAYER_KEY configured in .env.local. The CLIENT account needs to
- * be funded with USDC on Tempo for the channel-open transaction to succeed
- * on chain — without funds the open step fails and we report at that point.
+ * Requires the fortune example's dev server running at http://localhost:3100
+ * (cd examples/fortune && pnpm dev) with MPP_FEE_PAYER_KEY configured in
+ * examples/fortune/.env.local. The CLIENT account needs to be funded with
+ * USDC on Tempo for the channel-open transaction to succeed on chain;
+ * without funds the open step fails and we report at that point.
  */
 
 import { createClient, http } from 'viem';
