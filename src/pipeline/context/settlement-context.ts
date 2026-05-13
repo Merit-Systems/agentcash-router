@@ -1,10 +1,6 @@
 import type { HandlerPaymentContext } from '../../types.js';
 import type { FlowCtx, SettleScope } from './types.js';
 
-/**
- * Build the SettlementLifecycleContext object passed to user-facing settlement
- * hooks. Shared by all four hook runners.
- */
 export function settlementContext<TPayment extends HandlerPaymentContext>(
   ctx: FlowCtx,
   scope: SettleScope<TPayment>,

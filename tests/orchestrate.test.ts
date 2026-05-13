@@ -381,10 +381,11 @@ describe('probe request (no auth header)', () => {
     const res = await handler(req);
     expect(res.status).toBe(402);
     expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
-    // Decode the challenge to verify the price is the tier price, not maxPrice
+    // Decode the challenge to verify the price is the tier price, not maxPrice.
+    // Real x402 challenges advertise atomic units (USDC 6 decimals → 0.02 = 20000).
     const encoded = res.headers.get('PAYMENT-REQUIRED')!;
     const challenge = JSON.parse(Buffer.from(encoded, 'base64').toString());
-    expect(challenge.accepts[0].amount ?? challenge.accepts[0].maxAmountRequired).toBe('0.02');
+    expect(challenge.accepts[0].amount ?? challenge.accepts[0].maxAmountRequired).toBe('20000');
   });
 });
 
@@ -759,11 +760,13 @@ describe('x402 paid route', () => {
     const res = await handler(makePaymentRequest({ query: 'test' }));
 
     expect(res.status).toBe(200);
+    // capturedPayment.amount is the orchestrator's decimal-form quoted price;
+    // requirements.amount is the on-the-wire atomic form (USDC 6 decimals).
     expect(capturedPayment?.amount).toBe('10.00');
     expect(
       (server.settledPayments[0].requirements as { amount?: string; maxAmountRequired?: string })
         .amount,
-    ).toBe('10.00');
+    ).toBe('10000000');
   });
 
   it('runs beforeSettle and skips x402 settlement when it rejects', async () => {

@@ -6,12 +6,6 @@ import { firePluginHook } from '../../plugin.js';
 import { runHandlerOnly } from './run-handler-only.js';
 import type { FlowCtx } from './types.js';
 
-/**
- * Paid+SIWX entitlement fast-path. If the request carries a valid SIWX header
- * and the wallet already holds an entitlement for this route, skip the payment
- * flow and run the handler directly. Returns null to fall through to payment
- * verification when any precondition is missing — invalid SIWX never fails fast.
- */
 export async function trySiwxFastPath(
   ctx: FlowCtx,
   account: unknown,

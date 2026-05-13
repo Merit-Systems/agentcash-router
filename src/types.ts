@@ -2,9 +2,12 @@ import type { FacilitatorConfig } from '@x402/core/http';
 import type { NextRequest, NextResponse } from 'next/server';
 import type { ZodType } from 'zod';
 import type { Store } from 'mppx';
-// ---------------------------------------------------------------------------
-// Errors
-// ---------------------------------------------------------------------------
+import type {
+  PaymentRequired,
+  PaymentRequirements,
+  SettleResponse,
+  VerifyResponse,
+} from '@x402/core/types';
 
 export class HttpError extends Error {
   constructor(
@@ -15,10 +18,6 @@ export class HttpError extends Error {
     this.name = 'HttpError';
   }
 }
-
-// ---------------------------------------------------------------------------
-// Alerting
-// ---------------------------------------------------------------------------
 
 export type AlertLevel = 'info' | 'warn' | 'error' | 'critical';
 
@@ -31,27 +30,22 @@ export interface AlertEvent {
 
 export type AlertFn = (level: AlertLevel, message: string, meta?: Record<string, unknown>) => void;
 
-// ---------------------------------------------------------------------------
-// JSON values
-// ---------------------------------------------------------------------------
-
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
 export type JsonObject = { [key: string]: JsonValue };
-
-// ---------------------------------------------------------------------------
-// x402 server interface
-// ---------------------------------------------------------------------------
-
-// Typed interface for x402ResourceServer using @x402/core's own types.
-// Enforces correct method names, async signatures, and array vs single arg.
-import type { PaymentRequired, PaymentRequirements, SettleResponse } from '@x402/core/types';
 
 export interface X402Server {
   initialize(): Promise<void>;
 
   buildPaymentRequirementsFromOptions(
-    options: Array<{ scheme: string; network: string; price: string; payTo: string }>,
+    options: Array<{
+      scheme: string;
+      network: string;
+      price: string | { asset: string; amount: string; extra?: Record<string, unknown> };
+      payTo: string;
+      maxTimeoutSeconds?: number;
+      extra?: Record<string, unknown>;
+    }>,
     context: { request: Request },
   ): Promise<PaymentRequirements[]>;
 
@@ -67,45 +61,29 @@ export interface X402Server {
     payload: unknown,
   ): PaymentRequirements;
 
-  verifyPayment(
+  verifyPayment(payload: unknown, requirements: PaymentRequirements): Promise<VerifyResponse>;
+
+  settlePayment(
     payload: unknown,
     requirements: PaymentRequirements,
-  ): Promise<{ isValid: boolean; payer?: string }>;
-
-  settlePayment(payload: unknown, requirements: PaymentRequirements): Promise<SettleResponse>;
+    declaredExtensions?: Record<string, unknown>,
+    transportContext?: unknown,
+    settlementOverrides?: { amount?: string },
+  ): Promise<SettleResponse>;
 }
-
-// ---------------------------------------------------------------------------
-// Protocol / Auth
-// ---------------------------------------------------------------------------
 
 export type ProtocolType = 'x402' | 'mpp';
 export type AuthMode = 'paid' | 'siwx' | 'apiKey' | 'unprotected';
 export type RouteMethod = 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH';
 
 export interface RouteDefinition<K extends string = string> {
-  /**
-   * Public API path segment (without `/api/` prefix).
-   * Example: `flightaware/airports/id/flights/arrivals`
-   */
+  /** Public API path segment without the `/api/` prefix (e.g. `flightaware/airports/id/flights/arrivals`). */
   path: K;
-  /**
-   * Internal route ID for pricing maps / analytics. Defaults to `path`.
-   *
-   * In `strictRoutes` mode, custom keys are disallowed to prevent discovery
-   * drift between internal IDs and advertised paths.
-   */
+  /** Internal route ID for pricing maps / analytics. Defaults to `path`. Disallowed under `strictRoutes` to prevent discovery drift. */
   key?: string;
-  /**
-   * Optional explicit method. If omitted, defaults to builder behavior
-   * (`POST`, or `GET` when `.query()` is used).
-   */
+  /** Explicit HTTP method. Defaults to `POST`, or `GET` when `.query()` is used. */
   method?: RouteMethod;
 }
-
-// ---------------------------------------------------------------------------
-// Pricing
-// ---------------------------------------------------------------------------
 
 export interface TierConfig {
   price: string;
@@ -162,11 +140,13 @@ export interface PaidOptions {
   payTo?: PayToConfig;
   /** Override MPP protocol metadata in x-payment-info discovery. */
   mpp?: MppProtocolInfo;
+  /** Handler-driven dynamic pricing: handler calls `charge()` per tick, total billed is `tickCost × calls` capped at `maxPrice`. Requires `maxPrice`. Incompatible with tiered pricing. On x402 needs an `upto` accept; on MPP needs `RouterConfig.mpp.session`. */
+  dynamic?: boolean;
+  /** Per-tick cost (positive decimal-dollar string). Required for `.paid({ dynamic: true })`. Also the voucher-headroom granularity for MPP sessions. */
+  tickCost?: string;
+  /** Cosmetic unit label for 402 challenges / UIs (e.g. `'token'`, `'byte'`). Does not affect billing. */
+  unitType?: string;
 }
-
-// ---------------------------------------------------------------------------
-// Handler context
-// ---------------------------------------------------------------------------
 
 export type PaymentStatus = 'verified' | 'settled';
 
@@ -211,26 +191,17 @@ export interface SettledHandlerErrorContext<
 }
 
 export interface SettlementLifecycle<TBody = unknown> {
-  /**
-   * Runs after the handler returns a successful response, before router-controlled
-   * settlement/broadcast. Throw with `.status` to return a specific error and
-   * skip settlement when the protocol flow has not already settled.
-   */
+  /** Runs after a successful handler response, before router-controlled settlement/broadcast. Throw with `.status` to fail the request and skip settlement (when not already settled). */
   beforeSettle?: (ctx: SettlementLifecycleContext<TBody>) => void | Promise<void>;
-  /**
-   * Runs after successful settlement. Use for durable ledgers and audit rows.
-   * Errors are alerted and do not change the already-settled response.
-   */
+  /** Runs after successful settlement; for durable ledgers and audit rows. Errors are alerted but don't change the already-settled response. */
   afterSettle?: (ctx: SettlementSettledContext<TBody>) => void | Promise<void>;
-  /**
-   * Runs when the router has already observed a settled payment, then the
-   * handler returns an error response. Use for app-owned refund or
-   * compensation queues.
-   */
+  /** Runs when payment was settled but the handler then returned an error response. Use for app-owned refund / compensation queues. */
   onSettledHandlerError?: (ctx: SettledHandlerErrorContext<TBody>) => void | Promise<void>;
   /** Runs when router-controlled settlement fails after the handler succeeded. */
   onSettlementError?: (ctx: SettlementErrorContext<TBody>) => void | Promise<void>;
 }
+
+export type ChargeFn = () => Promise<void>;
 
 export interface HandlerContext<TBody = undefined, TQuery = undefined> {
   body: TBody;
@@ -245,9 +216,13 @@ export interface HandlerContext<TBody = undefined, TQuery = undefined> {
   setVerifiedWallet: (addr: string) => void;
 }
 
-// ---------------------------------------------------------------------------
-// Provider monitoring
-// ---------------------------------------------------------------------------
+/** Handler context for streaming `.paid({ dynamic: true })` handlers (async generators). Call `charge()` once per billable unit. */
+export interface StreamingHandlerContext<
+  TBody = undefined,
+  TQuery = undefined,
+> extends HandlerContext<TBody, TQuery> {
+  charge: ChargeFn;
+}
 
 export type OveragePolicy = 'same-rate' | 'increased-rate' | 'hard-stop';
 export type QuotaLevel = 'healthy' | 'warn' | 'critical';
@@ -277,10 +252,6 @@ export interface ProviderQuotaEvent {
   message: string;
 }
 
-// ---------------------------------------------------------------------------
-// Route registry entry
-// ---------------------------------------------------------------------------
-
 export interface RouteEntry {
   key: string;
   authMode: AuthMode;
@@ -290,28 +261,17 @@ export interface RouteEntry {
    */
   siwxEnabled?: boolean;
   pricing?: PricingConfig;
+  /** When true the route is dynamic-priced; bills `tickCost` per request (request-mode) or per `charge()` call (streaming). */
+  dynamicPrice?: boolean;
+  /** True iff handler is an async generator. Streaming handlers settle per-tick over SSE; non-streaming dynamic handlers bill exactly `tickCost` per request. Set by the builder at `.handler(fn)` time. */
+  streaming?: boolean;
   protocols: ProtocolType[];
   bodySchema?: ZodType;
   querySchema?: ZodType;
   outputSchema?: ZodType;
-  /**
-   * Optional conforming example for the request input (body for body routes, query params for query routes).
-   * When present, it must satisfy the corresponding schema and is validated at route registration.
-   *
-   * Emitted in the bazaar discovery extension so indexers can advertise a working sample call.
-   */
+  /** Optional conforming example for the request input (body or query). Validated against the schema at registration. Emitted in the bazaar discovery extension. */
   inputExample?: JsonObject;
-  /**
-   * Optional conforming example for the response output. When present, it must
-   * satisfy `outputSchema` and is validated at route registration.
-   *
-   * Accepts any JSON value (object, array, or primitive) to support top-level array or
-   * primitive response schemas.
-   *
-   * Emitted in the bazaar discovery extension. Without it the `output` block is
-   * dropped from the declaration entirely (the output schema alone cannot be
-   * exposed in bazaar without an example).
-   */
+  /** Optional conforming example for the response output (any JSON value). Validated against `outputSchema` at registration. Without it, the bazaar `output` block is omitted (schema alone can't be exposed). */
   outputExample?: JsonValue;
   description?: string;
   path?: string;
@@ -325,11 +285,11 @@ export interface RouteEntry {
   validateFn?: (body: unknown) => void | Promise<void>;
   settlement?: SettlementLifecycle;
   mppInfo?: MppProtocolInfo;
+  /** Per-tick cost (decimal-dollar). Required when `dynamicPrice` is true. */
+  tickCost?: string;
+  /** Cosmetic unit label for 402 challenges and client UIs. */
+  unitType?: string;
 }
-
-// ---------------------------------------------------------------------------
-// Discovery config
-// ---------------------------------------------------------------------------
 
 export interface DiscoveryConfig {
   title: string;
@@ -344,19 +304,9 @@ export interface DiscoveryConfig {
   serverUrl?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Router config
-// ---------------------------------------------------------------------------
-
 export interface RouterConfig {
   payeeAddress?: string;
-  /**
-   * Origin URL (e.g. `https://myapp.com`).
-   * Used for 402 challenge realm, discovery URLs, OpenAPI servers, and MPP memo indexing.
-   *
-   * **Required.** No auto-detection — the realm is load-bearing for payment matching,
-   * so it must be explicitly set by the consuming app.
-   */
+  /** Origin URL (required). Used as 402 realm, discovery base, OpenAPI server, and MPP memo prefix — must match the public domain or payment matching breaks. */
   baseUrl: string;
   network?: string;
   x402?: {
@@ -373,68 +323,25 @@ export interface RouterConfig {
     secretKey: string;
     currency: string;
     recipient?: string;
-    /** Tempo RPC URL for on-chain verification. Falls back to TEMPO_RPC_URL env var. */
+    /** Tempo RPC URL for on-chain verification. Falls back to `TEMPO_RPC_URL`. */
     rpcUrl?: string;
-    /**
-     * Private key of the account that sponsors transaction fees.
-     * When set, clients don't need gas tokens — the server pays fees on their behalf.
-     * Must be a hex-encoded private key (e.g. `0xabc123...`).
-     */
+    /** Hex private key. Signs channel close/settle; required for `session`. Address MUST equal `recipient`/payee — mppx asserts sender===payee on settle. Validated at init. */
+    operatorKey?: string;
+    /** Hex private key. Sponsors gas for client channel open/topUp. MUST resolve to a different address than `operatorKey` — Tempo rejects sender===feePayer. Validated at init. Omit to make clients pay their own gas. */
     feePayerKey?: string;
-    /**
-     * Persistent store for transaction hash replay protection.
-     *
-     * Without this, mppx defaults to `Store.memory()` which is wiped on every cold start —
-     * unsafe on Vercel or any multi-instance deployment. Pass `Store.upstash(redis)` or
-     * `Store.cloudflare(kv)` for a shared persistent store.
-     *
-     * @example
-     * import { Store } from 'mppx'
-     * store: Store.upstash({ get, set, del })
-     * store: Store.cloudflare(env.MY_KV_NAMESPACE)
-     */
+    /** Persistent store for tx-hash replay protection. mppx defaults to `Store.memory()` which is wiped on cold start — unsafe in serverless. Pass `Store.upstash(...)` or `Store.cloudflare(...)` for prod. */
     store?: Store.Store;
-    /**
-     * When `true`, auto-configures an Upstash-backed persistent store from Vercel KV
-     * environment variables (`KV_REST_API_URL` + `KV_REST_API_TOKEN`).
-     *
-     * Uses raw `fetch` against the Upstash REST API — no extra npm dependencies.
-     * Ignored when `store` is explicitly provided.
-     *
-     * @example
-     * createRouter({
-     *   mpp: {
-     *     secretKey: process.env.MPP_SECRET_KEY!,
-     *     currency: TEMPO_USDC_CURRENCY,
-     *     useDefaultStore: true,
-     *   }
-     * })
-     */
+    /** Auto-configures an Upstash-backed store from `KV_REST_API_URL` + `KV_REST_API_TOKEN` (set by Vercel KV). Ignored when `store` is provided. */
     useDefaultStore?: boolean;
+    /** Enables MPP payment-channel sessions for `.paid({ dynamic: true })` routes (registers both request and SSE session middleware). Also requires `mpp.operatorKey`. */
+    session?: {
+      /** Suggested deposit on the 402 challenge = `tickCost × depositMultiplier` USDC. Route `maxPrice` overrides. @default 10 */
+      depositMultiplier?: number;
+    };
   };
-  /**
-   * Payment protocols to accept on paid routes unless a route overrides them.
-   *
-   * @default ['x402']
-   *
-   * @example
-   * // Accept both x402 and MPP payments
-   * createRouter({
-   *   protocols: ['x402', 'mpp'],
-   *   mpp: { secretKey, currency: TEMPO_USDC_CURRENCY, recipient },
-   *   prices: { 'exa/search': '0.01' }
-   * })
-   */
+  /** Payment protocols to accept on paid routes unless overridden per route. @default ['x402'] */
   protocols?: ProtocolType[];
-  /**
-   * Enforce explicit, path-first route definitions.
-   *
-   * When enabled:
-   * - `.route('key')` is rejected; use `.route({ path })`.
-   * - custom `key` differing from `path` is rejected.
-   *
-   * This prevents discovery/openapi drift caused by shorthand internal keys.
-   */
+  /** When true, `.route('key')` is rejected (use `.route({ path })`) and custom `key !== path` is rejected. Prevents discovery/openapi drift. */
   strictRoutes?: boolean;
   discovery: DiscoveryConfig;
 }

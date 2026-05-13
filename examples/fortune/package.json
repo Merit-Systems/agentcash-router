@@ -11,7 +11,7 @@
   "dependencies": {
     "@agentcash/router": "link:../..",
     "@modelcontextprotocol/sdk": "^1.26.0",
-    "mppx": "^0.6.5",
+    "mppx": "^0.6.16",
     "next": "^15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -22,6 +22,7 @@
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.6",
     "@types/react-dom": "^19.0.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.3"
   }
 }

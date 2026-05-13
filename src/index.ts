@@ -12,10 +12,13 @@ import { createOpenAPIHandler } from './discovery/openapi.js';
 import { createLlmsTxtHandler } from './discovery/llms-txt.js';
 import { getConfiguredX402Accepts } from './protocols/x402/accepts.js';
 import { BASE_NETWORK } from './constants.js';
-import { RouterConfigError, formatRouterConfigIssues, getRouterConfigIssues } from './config.js';
-// ---------------------------------------------------------------------------
-// ServiceRouter
-// ---------------------------------------------------------------------------
+import {
+  RouterConfigError,
+  formatRouterConfigIssues,
+  getRouterConfigIssues,
+} from './config/index.js';
+import { initX402 } from './init/x402.js';
+import { initMpp } from './init/mpp.js';
 
 export interface MonitorEntry {
   provider: string;
@@ -38,10 +41,6 @@ export interface ServiceRouter<TPriceKeys extends string = never> {
   monitors(): MonitorEntry[];
   registry: RouteRegistry;
 }
-
-// ---------------------------------------------------------------------------
-// createRouter
-// ---------------------------------------------------------------------------
 
 export function createRouter<const P extends Record<string, string> = Record<never, string>>(
   config: RouterConfig & { prices?: P },
@@ -72,8 +71,6 @@ export function createRouter<const P extends Record<string, string> = Record<nev
 
   if (protocolConfigIssues.length > 0) {
     for (const issue of protocolConfigIssues) console.error(`[router] ${issue.message}`);
-    // Throw in production to fail `next build`. In development, errors are
-    // stored per-protocol and surfaced as clean JSON 500s at request time.
     if (process.env.NODE_ENV === 'production') {
       throw new RouterConfigError(protocolConfigIssues);
     }
@@ -81,8 +78,6 @@ export function createRouter<const P extends Record<string, string> = Record<nev
 
   const resolvedBaseUrl = config.baseUrl.replace(/\/+$/, '');
 
-  // Plugin init: non-fatal, but properly handle async rejections.
-  // RouterPlugin.init may return void or Promise<void>.
   if (config.plugin?.init) {
     try {
       const result = config.plugin.init({ origin: resolvedBaseUrl });
@@ -90,7 +85,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
         (result as Promise<void>).catch(() => {});
       }
     } catch {
-      // Plugin init failure is non-fatal
+      /* non-fatal */
     }
   }
 
@@ -107,79 +102,23 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     x402Accepts,
     mppx: null,
     tempoClient: null,
+    mppSessionConfig: config.mpp?.session
+      ? { depositMultiplier: config.mpp.session.depositMultiplier ?? 10 }
+      : null,
   };
 
-  // Async init — dynamic imports avoid require() which breaks Turbopack.
-  // Config errors (caught above) skip runtime init and just set the error field.
-  // Every request handler awaits deps.initPromise.
   deps.initPromise = (async () => {
-    // ---- x402 ----
-    if (x402ConfigError) {
-      deps.x402InitError = x402ConfigError;
-    } else {
-      try {
-        const { createX402Server } = await import('./server.js');
-        const result = await createX402Server(config);
-        deps.x402Server = result.server;
-        deps.x402FacilitatorsByNetwork = result.facilitatorsByNetwork;
-        await result.initPromise;
-      } catch (err: unknown) {
-        deps.x402Server = null;
-        deps.x402InitError = err instanceof Error ? err.message : String(err);
-      }
-    }
+    const x402Result = await initX402(config, x402ConfigError);
+    deps.x402Server = x402Result.server ?? null;
+    deps.x402FacilitatorsByNetwork = x402Result.facilitatorsByNetwork;
+    if (x402Result.initError) deps.x402InitError = x402Result.initError;
 
-    // ---- MPP ----
-    if (mppConfigError) {
-      deps.mppInitError = mppConfigError;
-    } else if (config.mpp) {
-      try {
-        const { Mppx, tempo } = await import('mppx/server');
-        const rpcUrl = (config.mpp.rpcUrl ?? process.env.TEMPO_RPC_URL)!;
-        const { createClient, http } = await import('viem');
-        const { tempo: tempoChain } = await import('viem/chains');
-        deps.tempoClient = createClient({ chain: tempoChain, transport: http(rpcUrl) });
-        const getClient = async () => deps.tempoClient!;
-
-        let feePayerAccount: unknown;
-        if (config.mpp.feePayerKey) {
-          const { privateKeyToAccount } = await import('viem/accounts');
-          feePayerAccount = privateKeyToAccount(config.mpp.feePayerKey as `0x${string}`);
-        }
-
-        let resolvedStore = config.mpp.store;
-        if (!resolvedStore && config.mpp.useDefaultStore) {
-          const kvUrl = process.env.KV_REST_API_URL;
-          const kvToken = process.env.KV_REST_API_TOKEN;
-          if (!kvUrl || !kvToken) {
-            throw new Error(
-              'mpp.useDefaultStore requires KV_REST_API_URL and KV_REST_API_TOKEN environment variables. ' +
-                'These are automatically set by Vercel KV.',
-            );
-          }
-          const { Store } = await import('mppx');
-          const { createUpstashRest } = await import('./upstash-rest.js');
-          resolvedStore = Store.upstash(createUpstashRest(kvUrl, kvToken));
-        }
-
-        deps.mppx = Mppx.create({
-          methods: [
-            tempo.charge({
-              currency: config.mpp.currency as `0x${string}`,
-              recipient: (config.mpp.recipient ?? config.payeeAddress) as `0x${string}`,
-              getClient,
-              ...(feePayerAccount ? { feePayer: feePayerAccount } : {}),
-              ...(resolvedStore ? { store: resolvedStore } : {}),
-            } as Parameters<typeof tempo.charge>[0]),
-          ],
-          secretKey: config.mpp.secretKey,
-          realm: new URL(resolvedBaseUrl).host,
-        });
-      } catch (err: unknown) {
-        deps.mppx = null;
-        deps.mppInitError = err instanceof Error ? err.message : String(err);
-        console.error(`[router] MPP initialization failed: ${deps.mppInitError}`);
-      }
+    const mppResult = await initMpp(config, resolvedBaseUrl, mppConfigError);
+    deps.mppx = mppResult.mppx ?? null;
+    deps.tempoClient = mppResult.tempoClient ?? null;
+    if (mppResult.initError) {
+      deps.mppInitError = mppResult.initError;
+      console.error(`[router] MPP initialization failed: ${mppResult.initError}`);
     }
   })();
 
@@ -263,10 +202,6 @@ function normalizePath(path: string): string {
   return normalized.replace(/\/+$/, '');
 }
 
-// ---------------------------------------------------------------------------
-// Re-exports
-// ---------------------------------------------------------------------------
-
 export { HttpError } from './types.js';
 export {
   BASE_NETWORK,
@@ -282,15 +217,16 @@ export {
   paidOptionsForProtocols,
   validateRouterConfig,
   x402AcceptsFromEnv,
-} from './config.js';
+} from './config/index.js';
 export type {
   RouterConfigIssue,
   RouterConfigIssueCode,
   RouterConfigValidationOptions,
   RouterEnv,
-} from './config.js';
+} from './config/index.js';
 export type {
   HandlerContext,
+  StreamingHandlerContext,
   RouterConfig,
   DiscoveryConfig,
   RouteEntry,

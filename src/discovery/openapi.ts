@@ -19,7 +19,6 @@ export function createOpenAPIHandler(
   return async (_request: NextRequest): Promise<NextResponse> => {
     if (cached) return NextResponse.json(cached);
 
-    // Barrel validation on first call
     if (!validated && pricesKeys) {
       registry.validate(pricesKeys);
       validated = true;
@@ -41,9 +40,6 @@ export function createOpenAPIHandler(
       if (built.requiresSiwxScheme) requiresSiwxScheme = true;
       if (built.requiresApiKeyScheme) requiresApiKeyScheme = true;
 
-      // Merge, don't overwrite: multiple HTTP methods on the same path
-      // are standard REST (GET + DELETE on /jobs/{id}). Each method gets
-      // its own operation under the shared path key.
       paths[apiPath] = { ...paths[apiPath], [method]: built.operation };
     }
 

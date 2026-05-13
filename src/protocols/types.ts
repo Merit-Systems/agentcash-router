@@ -1,12 +1,9 @@
 import type { NextRequest, NextResponse } from 'next/server';
 import type { HandlerPaymentContext, RouteEntry } from '../types.js';
 import type { RouterDeps } from '../pipeline/context/index.js';
+import type { ReportFn } from '../alert.js';
 
 export type ProtocolName = 'x402' | 'mpp';
-
-// ---------------------------------------------------------------------------
-// Verify
-// ---------------------------------------------------------------------------
 
 export interface VerifyArgs {
   request: NextRequest;
@@ -14,30 +11,26 @@ export interface VerifyArgs {
   price: string;
   routeEntry: RouteEntry;
   deps: RouterDeps;
+  report: ReportFn;
 }
 
 export interface VerifySuccess {
   ok: true;
   wallet: string;
   payment: HandlerPaymentContext;
-  /** Strategy-specific state threaded through to settle(). Opaque to the orchestrator. */
   token: unknown;
-  /**
-   * True when the payment is already final on-chain at verify time (e.g., MPP
-   * hash-payload). When true, the orchestrator runs `onSettledHandlerError`
-   * instead of skipping settlement on handler failure.
-   */
   alreadySettled?: boolean;
+}
+
+export interface VerifyFailure {
+  reason: string;
+  message?: string;
 }
 
 export type VerifyOutcome =
   | VerifySuccess
-  | { ok: false; kind: 'invalid' } // client problem → 402 challenge
-  | { ok: false; kind: 'config'; message: string }; // server config → 500
-
-// ---------------------------------------------------------------------------
-// Settle
-// ---------------------------------------------------------------------------
+  | { ok: false; kind: 'invalid'; failure?: VerifyFailure }
+  | { ok: false; kind: 'config'; message: string };
 
 export interface SettleArgs {
   request: NextRequest;
@@ -46,6 +39,19 @@ export interface SettleArgs {
   token: unknown;
   routeEntry: RouteEntry;
   deps: RouterDeps;
+  billedAmount: string;
+  report: ReportFn;
+}
+
+export interface StreamSettleArgs {
+  request: NextRequest;
+  source: AsyncIterable<unknown>;
+  payment: HandlerPaymentContext;
+  token: unknown;
+  routeEntry: RouteEntry;
+  deps: RouterDeps;
+  bindChannelCharge: (fn: (() => Promise<void>) | null) => void;
+  report: ReportFn;
 }
 
 export type SettleOutcome =
@@ -56,10 +62,6 @@ export type SettleOutcome =
     }
   | { ok: false; error: unknown; failMessage: string; failStatus?: number };
 
-// ---------------------------------------------------------------------------
-// Challenge
-// ---------------------------------------------------------------------------
-
 export interface ChallengeArgs {
   request: NextRequest;
   routeEntry: RouteEntry;
@@ -67,30 +69,31 @@ export interface ChallengeArgs {
   price: string;
   extensions?: Record<string, unknown>;
   deps: RouterDeps;
+  report: ReportFn;
 }
 
 export interface ChallengeContribution {
-  /** Header value(s) to set on the 402 response (e.g., PAYMENT-REQUIRED, WWW-Authenticate). */
   headers?: Record<string, string>;
-  /** Optional body fragment to merge into the 402 JSON. */
   body?: Record<string, unknown>;
 }
 
-// ---------------------------------------------------------------------------
-// Strategy
-// ---------------------------------------------------------------------------
+export interface PreflightOutcome {
+  skipBody: boolean;
+  skipHandler: boolean;
+}
 
 export interface PaymentStrategy {
   readonly protocol: ProtocolName;
 
-  /** Header sniff: does this request carry a payment for me? */
   detects(request: Request): boolean;
+
+  preflight?(request: Request, routeEntry: RouteEntry): PreflightOutcome | null;
 
   verify(args: VerifyArgs): Promise<VerifyOutcome>;
 
-  /** Called only after handler returned a 2xx response. */
   settle(args: SettleArgs): Promise<SettleOutcome>;
 
-  /** Contribute this protocol's piece to a 402 challenge. */
+  settleStream?(args: StreamSettleArgs): Promise<SettleOutcome>;
+
   buildChallenge(args: ChallengeArgs): Promise<ChallengeContribution>;
 }

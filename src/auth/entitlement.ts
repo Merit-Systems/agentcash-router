@@ -5,11 +5,7 @@ export interface EntitlementStore {
   grant(route: string, wallet: string): Promise<void>;
 }
 
-/**
- * In-memory SIWX entitlement store.
- *
- * Suitable for development and tests. Not durable across server restarts.
- */
+/** In-memory SIWX entitlement store. Suitable for development and tests; not durable across restarts. */
 export class MemoryEntitlementStore implements EntitlementStore {
   private readonly routeToWallets = new Map<string, Set<string>>();
 
@@ -59,9 +55,7 @@ export interface RedisEntitlementStoreOptions {
   prefix?: string;
 }
 
-/**
- * Redis-backed entitlement store for paid+SIWX acceleration.
- */
+/** Redis-backed entitlement store for paid+SIWX acceleration. */
 export function createRedisEntitlementStore(
   client: unknown,
   options?: RedisEntitlementStoreOptions,

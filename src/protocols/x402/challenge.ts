@@ -1,5 +1,6 @@
 import type { PaymentRequirements } from '@x402/core/types';
 import type { RouteEntry, X402ResolvedAccept, X402Server } from '../../types.js';
+import type { ReportFn } from '../../alert.js';
 import {
   getFacilitatorForRequirement,
   sameResolvedX402Facilitator,
@@ -38,10 +39,12 @@ interface BuildChallengeOptions {
   accepts: X402ResolvedAccept[];
   facilitatorsByNetwork?: ResolvedX402Facilitators;
   extensions?: Record<string, unknown>;
+  report?: ReportFn;
 }
 
 export async function buildX402Challenge(opts: BuildChallengeOptions) {
-  const { server, routeEntry, request, price, accepts, facilitatorsByNetwork, extensions } = opts;
+  const { server, routeEntry, request, price, accepts, facilitatorsByNetwork, extensions, report } =
+    opts;
   const { encodePaymentRequiredHeader } = await import('@x402/core/http');
   const resource = buildChallengeResource(request, routeEntry);
   const requirements = await buildChallengeRequirements(
@@ -51,6 +54,7 @@ export async function buildX402Challenge(opts: BuildChallengeOptions) {
     accepts,
     resource,
     facilitatorsByNetwork,
+    report,
   );
   const paymentRequired = await server.createPaymentRequiredResponse(
     requirements,
@@ -70,14 +74,15 @@ async function buildChallengeRequirements(
   accepts: X402ResolvedAccept[],
   resource: ChallengeResource,
   facilitatorsByNetwork?: ResolvedX402Facilitators,
+  report?: ReportFn,
 ): Promise<PaymentRequirements[]> {
-  const requirements = await buildExpectedRequirements(server, request, price, accepts);
+  const requirements = await buildExpectedRequirements(server, request, price, accepts, report);
   if (!needsFacilitatorEnrichment(accepts)) return requirements;
-  return enrichChallengeRequirements(requirements, resource, facilitatorsByNetwork);
+  return enrichChallengeRequirements(requirements, resource, facilitatorsByNetwork, report);
 }
 
 function needsFacilitatorEnrichment(accepts: X402ResolvedAccept[]): boolean {
-  return accepts.some((accept) => accept.scheme !== 'exact') || hasSolanaAccepts(accepts);
+  return hasSolanaAccepts(accepts);
 }
 
 async function enrichGroup(
@@ -101,6 +106,7 @@ async function enrichChallengeRequirements(
   requirements: PaymentRequirements[],
   resource: ChallengeResource,
   facilitatorsByNetwork?: ResolvedX402Facilitators,
+  report?: ReportFn,
 ): Promise<PaymentRequirements[]> {
   const groups = collectEnrichmentGroups(requirements, facilitatorsByNetwork);
   if (groups.length === 0) return requirements;
@@ -116,8 +122,9 @@ async function enrichChallengeRequirements(
       } catch (err) {
         const label = group.facilitator.url ?? group.facilitator.network;
         const reason = err instanceof Error ? err.message : String(err);
-        console.warn(
-          `[router] ${label} /accepts failed, dropping ${group.items.length} requirement(s): ${reason}`,
+        report?.(
+          'warn',
+          `${label} /accepts failed, dropping ${group.items.length} requirement(s): ${reason}`,
         );
         return { success: false, group };
       }
@@ -191,7 +198,7 @@ function getRequiredFacilitator(
 }
 
 function requiresFacilitatorEnrichment(requirement: PaymentRequirements): boolean {
-  return requirement.scheme !== 'exact' || isSolanaRequirement(requirement);
+  return isSolanaRequirement(requirement);
 }
 
 function buildChallengeResource(request: Request, routeEntry: RouteEntry): ChallengeResource {

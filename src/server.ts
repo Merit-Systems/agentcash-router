@@ -6,13 +6,11 @@ import type { RouterConfig, X402Server } from './types.js';
 import {
   getResolvedX402Facilitators,
   getResolvedX402FacilitatorGroups,
+  type ResolvedX402FacilitatorGroup,
 } from './protocols/x402/facilitators.js';
 import { getConfiguredX402Networks } from './protocols/x402/accepts.js';
 
 export async function createX402Server(config: RouterConfig) {
-  // Dynamic ESM imports: peer deps are loaded lazily so the router can
-  // boot without them installed. await import() is bundler-safe (unlike
-  // require() which Turbopack's __require polyfill silently breaks).
   const { x402ResourceServer, HTTPFacilitatorClient } = await import('@x402/core/server');
   const { registerExactEvmScheme } = await import('@x402/evm/exact/server');
   const { bazaarResourceServerExtension } = await import('@x402/extensions/bazaar');
@@ -54,32 +52,6 @@ export async function createX402Server(config: RouterConfig) {
   };
 }
 
-/**
- * Wrap an HTTPFacilitatorClient to return a hardcoded getSupported() response
- * for exact schemes. verify() and settle() pass through to the real client.
- *
- * Why: getSupported() hits the facilitator on every cold start. On Vercel,
- * N simultaneous cold starts blast the facilitator and get 429'd.
- *
- * For Solana, dynamic fields like feePayer/recentBlockhash are supplied later
- * by the /accepts enrichment call, so getSupported() only needs to advertise
- * that exact is available on the configured networks.
- */
-function cachedClient(
-  inner: FacilitatorClient,
-  kinds: SupportedResponse['kinds'],
-): FacilitatorClient {
-  return {
-    verify: inner.verify.bind(inner),
-    settle: inner.settle.bind(inner),
-    getSupported: async (): Promise<SupportedResponse> => ({
-      kinds,
-      extensions: [],
-      signers: {},
-    }),
-  };
-}
-
 function createFacilitatorClients(
   facilitatorsByNetwork: ReturnType<typeof getResolvedX402Facilitators>,
   HTTPFacilitatorClient: new (config?: FacilitatorConfig) => FacilitatorClient,
@@ -88,26 +60,47 @@ function createFacilitatorClients(
 
   return groups.map((group) => {
     const inner = new HTTPFacilitatorClient(group.config);
-    const kinds = group.networks.flatMap((network) => {
-      const exactKind = {
-        x402Version: 2 as const,
-        scheme: 'exact' as const,
-        network,
-        ...(group.family === 'solana'
-          ? {
-              extra: {
-                features: {
-                  xSettlementAccountSupported: true,
-                },
+    const kinds = buildSupportedKinds(group);
+    return hardcodedSupportedClient(inner, kinds);
+  });
+}
+
+// getSupported() hits the facilitator on every cold start. On Vercel, N
+// simultaneous cold starts blast the facilitator and get 429'd. The router
+// only uses exact/upto on EVM and exact on Solana — all of which the CDP
+// facilitator supports — so we bypass the network call entirely. verify()
+// and settle() pass through to the real client.
+function hardcodedSupportedClient(
+  inner: FacilitatorClient,
+  kinds: SupportedResponse['kinds'],
+): FacilitatorClient {
+  return {
+    verify: inner.verify.bind(inner),
+    settle: inner.settle.bind(inner),
+    getSupported: async () => ({ kinds, extensions: [], signers: {} }),
+  };
+}
+
+function buildSupportedKinds(group: ResolvedX402FacilitatorGroup): SupportedResponse['kinds'] {
+  return group.networks.flatMap((network) => {
+    const exactKind = {
+      x402Version: 2 as const,
+      scheme: 'exact' as const,
+      network,
+      ...(group.family === 'solana'
+        ? {
+            extra: {
+              features: {
+                xSettlementAccountSupported: true,
               },
-            }
-          : {}),
-      };
-      if (group.family === 'evm') {
-        return [exactKind, { x402Version: 2 as const, scheme: 'upto' as const, network }];
-      }
-      return [exactKind];
-    });
-    return cachedClient(inner, kinds);
+            },
+          }
+        : {}),
+    };
+    const uptoKind = { x402Version: 2 as const, scheme: 'upto' as const, network };
+    if (group.family === 'evm') {
+      return [exactKind, uptoKind];
+    }
+    return [exactKind, uptoKind];
   });
 }

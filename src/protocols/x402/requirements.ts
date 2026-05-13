@@ -1,37 +1,46 @@
 import type { PaymentRequirements } from '@x402/core/types';
 import type { X402ResolvedAccept, X402Server } from '../../types.js';
-import { buildEvmExactOptions } from './evm.js';
-import { buildSolanaExactOptions } from './solana.js';
+import type { ReportFn } from '../../alert.js';
+import { buildEvmExactOptions, buildEvmUptoOptions, isEvmNetwork } from './evm.js';
+import { buildSolanaExactOptions, isSolanaRequirement } from './solana.js';
 
-/** All non-custom requirements (exact scheme, EVM + Solana) plus custom-scheme requirements. */
 export async function buildExpectedRequirements(
   server: X402Server,
   request: Request,
   price: string,
   accepts: X402ResolvedAccept[],
+  report?: ReportFn,
 ): Promise<PaymentRequirements[]> {
-  const exactRequirements = await buildExactRequirements(server, request, price, accepts);
+  const sdkRequirements = await buildSdkHandledRequirements(
+    server,
+    request,
+    price,
+    accepts,
+    report,
+  );
   const customRequirements = buildCustomRequirements(price, accepts);
-  return [...exactRequirements, ...customRequirements];
+  return [...sdkRequirements, ...customRequirements];
 }
 
-async function buildExactRequirements(
+async function buildSdkHandledRequirements(
   server: X402Server,
   request: Request,
   price: string,
   accepts: X402ResolvedAccept[],
+  report?: ReportFn,
 ): Promise<PaymentRequirements[]> {
-  const exactGroups = [
+  const groups = [
     buildEvmExactOptions(accepts, price),
+    buildEvmUptoOptions(accepts, price),
     buildSolanaExactOptions(accepts, price),
   ].filter((options) => options.length > 0);
 
-  if (exactGroups.length === 0) return [];
+  if (groups.length === 0) return [];
 
   const requirements: PaymentRequirements[] = [];
   const failures: Error[] = [];
 
-  for (const options of exactGroups) {
+  for (const options of groups) {
     try {
       requirements.push(
         ...(await server.buildPaymentRequirementsFromOptions(options, { request })),
@@ -39,11 +48,12 @@ async function buildExactRequirements(
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       failures.push(err);
-      if (exactGroups.length === 1) {
+      if (groups.length === 1) {
         throw err;
       }
-      console.warn(
-        `[router] Failed to build x402 exact requirements for ${options[0]?.network}: ${err.message}`,
+      report?.(
+        'warn',
+        `Failed to build x402 ${options[0]?.scheme} requirements for ${options[0]?.network}: ${err.message}`,
       );
     }
   }
@@ -52,7 +62,7 @@ async function buildExactRequirements(
     return requirements;
   }
 
-  throw failures[0] ?? new Error('Failed to build x402 exact requirements');
+  throw failures[0] ?? new Error('Failed to build x402 SDK-handled requirements');
 }
 
 function buildCustomRequirements(
@@ -60,8 +70,18 @@ function buildCustomRequirements(
   accepts: X402ResolvedAccept[],
 ): PaymentRequirements[] {
   return accepts
-    .filter((accept) => accept.scheme !== 'exact')
+    .filter((accept) => !isSdkHandled(accept))
     .map((accept) => buildCustomRequirement(price, accept));
+}
+
+function isSdkHandled(accept: X402ResolvedAccept): boolean {
+  if (isEvmNetwork(accept.network)) {
+    return accept.scheme === 'exact' || accept.scheme === 'upto';
+  }
+  if (isSolanaRequirement({ network: accept.network } as PaymentRequirements)) {
+    return accept.scheme === 'exact';
+  }
+  return false;
 }
 
 function buildCustomRequirement(price: string, accept: X402ResolvedAccept): PaymentRequirements {

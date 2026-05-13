@@ -1,11 +1,3 @@
-/**
- * Error inspection helpers used across the pipeline.
- *
- * The pipeline accepts both `HttpError` instances and the universal
- * `Object.assign(new Error(), { status })` pattern. These helpers normalize
- * either form into a status code and message.
- */
-
 export function errorStatus(error: unknown, fallback: number): number {
   const status = (error as { status?: unknown } | null)?.status;
   return typeof status === 'number' ? status : fallback;

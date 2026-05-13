@@ -2,10 +2,7 @@ import type { NonceStore } from './nonce.js';
 import type { RouteEntry } from '../types.js';
 import { HEADERS } from '../headers.js';
 
-/**
- * SIWX verification error codes.
- * Enables clients to auto-retry transient failures (e.g., expired challenge).
- */
+/** SIWX verification error codes. */
 export type SiwxErrorCode =
   | 'siwx_missing_header'
   | 'siwx_malformed'
@@ -26,10 +23,6 @@ export type SiwxResult =
   | { valid: true; wallet: string }
   | { valid: false; wallet: null; code: SiwxErrorCode };
 
-/**
- * Categorize @x402/extensions validation error strings into structured codes.
- * Note: String parsing is fragile — filed upstream issue for structured codes.
- */
 function categorizeValidationError(error: string | undefined): SiwxErrorCode {
   if (!error) return 'siwx_malformed';
   const err = error.toLowerCase();

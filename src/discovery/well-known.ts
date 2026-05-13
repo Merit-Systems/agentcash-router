@@ -14,16 +14,11 @@ export function createWellKnownHandler(
   let validated = false;
 
   return async (_request: NextRequest): Promise<NextResponse> => {
-    // Barrel validation on first call
     if (!validated && pricesKeys) {
       registry.validate(pricesKeys);
       validated = true;
     }
 
-    // Discovery completeness: any route returning a 402 challenge needs
-    // to be discoverable. Filter by authMode !== 'unprotected' rather
-    // than checking specific protocols. MCP tools discover first, then
-    // adapt to the specific auth mode at probe time.
     const x402Set = new Set<string>();
     const mppSet = new Set<string>();
     const methodHints = discovery.methodHints ?? 'non-default';

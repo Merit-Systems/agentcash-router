@@ -34,6 +34,38 @@ export function buildEvmExactOptions(
     }));
 }
 
+export function buildEvmUptoOptions(
+  accepts: readonly X402ResolvedAccept[],
+  price: string,
+): Array<{
+  scheme: 'upto';
+  network: `eip155:${string}`;
+  price: string;
+  payTo: string;
+  maxTimeoutSeconds?: number;
+  extra?: Record<string, unknown>;
+}> {
+  return accepts
+    .filter(
+      (
+        accept,
+      ): accept is X402ResolvedAccept & {
+        network: `eip155:${string}`;
+        scheme: 'upto';
+      } => accept.scheme === 'upto' && isEvmNetwork(accept.network),
+    )
+    .map((accept) => ({
+      scheme: 'upto' as const,
+      network: accept.network,
+      payTo: accept.payTo,
+      price,
+      ...(accept.maxTimeoutSeconds !== undefined
+        ? { maxTimeoutSeconds: accept.maxTimeoutSeconds }
+        : {}),
+      ...(accept.extra ? { extra: accept.extra } : {}),
+    }));
+}
+
 export function isEvmRequirement(requirement: PaymentRequirements): boolean {
   return isEvmNetwork(requirement.network);
 }

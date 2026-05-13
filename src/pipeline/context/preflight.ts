@@ -1,14 +1,15 @@
 import type { NextRequest } from 'next/server';
 import type { HandlerContext, RouteEntry } from '../../types.js';
+import type { RouteHandler } from '../../orchestrate.js';
 import { HEADERS } from '../../headers.js';
 import type { PluginContext, RequestMeta } from '../../plugin.js';
 import { createDefaultContext, firePluginHook } from '../../plugin.js';
+import { createReporter } from '../../alert.js';
 import type { FlowCtx, RouterDeps } from './types.js';
 
-/** Build a per-request FlowCtx: meta + plugin context, plus the route+deps refs. */
 export function preflight(
   routeEntry: RouteEntry,
-  handler: (ctx: HandlerContext) => Promise<unknown>,
+  handler: RouteHandler,
   deps: RouterDeps,
   request: NextRequest,
 ): FlowCtx {
@@ -17,7 +18,15 @@ export function preflight(
     (firePluginHook(deps.plugin, 'onRequest', meta) as PluginContext | undefined) ??
     createDefaultContext(meta);
 
-  return { routeEntry, handler, deps, request, meta, pluginCtx };
+  return {
+    routeEntry,
+    handler: handler as (ctx: HandlerContext) => Promise<unknown> | AsyncIterable<unknown>,
+    deps,
+    request,
+    meta,
+    pluginCtx,
+    report: createReporter(deps.plugin, pluginCtx, routeEntry.key),
+  };
 }
 
 function buildMeta(request: NextRequest, routeEntry: RouteEntry): RequestMeta {

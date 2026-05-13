@@ -75,29 +75,6 @@ describe('fluent chain', () => {
     expect(entry!.outputExample).toEqual({ result: 'ok' });
   });
 
-  it('accepts inline body, query, and output examples', () => {
-    const { builder: bodyBuilder, registry: bodyRegistry } = makeBuilder('inline/body');
-    bodyBuilder
-      .paid('0.01')
-      .body(bodySchema, { query: 'hello' })
-      .output(outputSchema, { result: 'ok' })
-      .handler(async ({ body }) => ({ result: body.query }));
-
-    const bodyEntry = bodyRegistry.get('inline/body');
-    expect(bodyEntry!.inputExample).toEqual({ query: 'hello' });
-    expect(bodyEntry!.outputExample).toEqual({ result: 'ok' });
-
-    const { builder: queryBuilder, registry: queryRegistry } = makeBuilder('inline/query');
-    queryBuilder
-      .siwx()
-      .query(querySchema, { page: '1' })
-      .handler(async ({ query }) => ({ page: query.page }));
-
-    const queryEntry = queryRegistry.get('inline/query');
-    expect(queryEntry!.method).toBe('GET');
-    expect(queryEntry!.inputExample).toEqual({ page: '1' });
-  });
-
   it('.settlement() preserves route-level settlement hooks', () => {
     const { builder, registry } = makeBuilder('settlement/test');
     const beforeSettle = async () => {};
@@ -371,17 +348,6 @@ describe('registration-time safety', () => {
     ).toThrow('.inputExample() does not satisfy .body() schema');
   });
 
-  it('inline body example that does not match .body() schema throws at registration', () => {
-    const { builder } = makeBuilder('bad/inline-input-example');
-    expect(() =>
-      builder
-        .paid('0.01')
-        // @ts-expect-error — wrong type, testing runtime validation
-        .body(bodySchema, { query: 123 })
-        .handler(async () => ({})),
-    ).toThrow('.inputExample() does not satisfy .body() schema');
-  });
-
   it('.outputExample() that does not match .output() schema throws at registration', () => {
     const { builder } = makeBuilder('bad/output-example');
     expect(() =>
@@ -392,17 +358,6 @@ describe('registration-time safety', () => {
         .output(outputSchema)
         // @ts-expect-error — wrong type, testing runtime validation
         .outputExample({ result: 123 })
-        .handler(async () => ({})),
-    ).toThrow('.outputExample() does not satisfy .output() schema');
-  });
-
-  it('inline output example that does not match .output() schema throws at registration', () => {
-    const { builder } = makeBuilder('bad/inline-output-example');
-    expect(() =>
-      builder
-        .paid('0.01')
-        // @ts-expect-error — wrong type, testing runtime validation
-        .output(outputSchema, { result: 123 })
         .handler(async () => ({})),
     ).toThrow('.outputExample() does not satisfy .output() schema');
   });

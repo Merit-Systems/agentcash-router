@@ -1,5 +1,7 @@
 import type { PaymentPayload, PaymentRequirements } from '@x402/core/types';
+import { VerifyError } from '@x402/core/types';
 import type { X402ResolvedAccept, X402Server } from '../../types.js';
+import type { ReportFn } from '../../alert.js';
 import { HEADERS } from '../../headers.js';
 import { buildExpectedRequirements } from './requirements.js';
 
@@ -8,30 +10,54 @@ interface VerifyPaymentOptions {
   request: Request;
   price: string;
   accepts: X402ResolvedAccept[];
+  report?: ReportFn;
+}
+
+export interface VerifyPaymentFailure {
+  reason: string;
+  message?: string;
+  payer?: string;
+  accepted?: PaymentRequirements;
 }
 
 export async function verifyX402Payment(opts: VerifyPaymentOptions) {
-  const { server, request, price, accepts } = opts;
+  const { server, request, price, accepts, report } = opts;
   const payload = await readPaymentPayload(request);
   if (!payload) return null;
-  const requirements = await buildExpectedRequirements(server, request, price, accepts);
+  const requirements = await buildExpectedRequirements(server, request, price, accepts, report);
   const matching = findVerifiableRequirements(server, requirements, payload);
+  const accepted = payload.x402Version === 2 ? payload.accepted : undefined;
   if (!matching) {
-    return invalidPaymentVerification();
+    return invalidPaymentVerification({
+      reason: 'requirements_mismatch',
+      message: 'Signed payment requirements did not match any server-built requirement',
+      ...(accepted ? { accepted } : {}),
+    });
   }
 
-  let verify: { isValid: boolean; payer?: unknown };
+  let verify: Awaited<ReturnType<X402Server['verifyPayment']>>;
   try {
     verify = await server.verifyPayment(payload, matching);
   } catch (err: unknown) {
-    // VerifyError from @x402/core with 4xx statusCode (e.g. insufficient_funds)
-    // is a client payment issue → 402 challenge, not 500. 5xx/unknown re-throws.
-    const sc = (err as { statusCode?: number }).statusCode;
-    if (sc && sc >= 400 && sc < 500) return invalidPaymentVerification();
+    if (err instanceof VerifyError && err.statusCode >= 400 && err.statusCode < 500) {
+      return invalidPaymentVerification({
+        reason: err.invalidReason ?? 'verify_error',
+        ...(err.invalidMessage ? { message: err.invalidMessage } : {}),
+        ...(err.payer ? { payer: err.payer } : {}),
+        ...(accepted ? { accepted } : {}),
+      });
+    }
     throw err;
   }
-  if (!verify.isValid) return invalidPaymentVerification();
-  if (typeof verify.payer !== 'string' || verify.payer.length === 0) {
+  if (!verify.isValid) {
+    return invalidPaymentVerification({
+      reason: verify.invalidReason ?? 'unknown',
+      ...(verify.invalidMessage ? { message: verify.invalidMessage } : {}),
+      ...(verify.payer ? { payer: verify.payer } : {}),
+      ...(accepted ? { accepted } : {}),
+    });
+  }
+  if (!verify.payer) {
     throw new Error('x402 verification succeeded without a payer address');
   }
 
@@ -87,6 +113,12 @@ async function readPaymentPayload(request: Request): Promise<PaymentPayload | nu
   return decodePaymentSignatureHeader(paymentHeader);
 }
 
-function invalidPaymentVerification() {
-  return { valid: false as const, payload: null, requirements: null, payer: null };
+function invalidPaymentVerification(failure?: VerifyPaymentFailure) {
+  return {
+    valid: false as const,
+    payload: null,
+    requirements: null,
+    payer: null,
+    ...(failure ? { failure } : {}),
+  };
 }

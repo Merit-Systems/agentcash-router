@@ -1,13 +1,3 @@
-/**
- * MPP transaction-payload mode.
- *
- * Flow:
- *   verify  → simulate the user-signed transaction via viem (no broadcast).
- *             A simulation revert means the user is never charged.
- *   settle  → broadcast and wait for on-chain confirmation. The merchant bears
- *             the risk of broadcast failure after the handler ran.
- */
-
 import type { NextResponse } from 'next/server';
 import { Transaction as TempoTransaction } from 'viem/tempo';
 import { call as viemCall } from 'viem/actions';
@@ -28,7 +18,7 @@ export async function verifyTxMode(
 ): Promise<
   VerifySuccess | { ok: false; kind: 'invalid' } | { ok: false; kind: 'config'; message: string }
 > {
-  const { deps, price, routeEntry } = args;
+  const { deps, price, report } = args;
   if (!deps.tempoClient) {
     return {
       ok: false,
@@ -37,7 +27,6 @@ export async function verifyTxMode(
     };
   }
 
-  // Simulate to catch obvious reverts before invoking the handler.
   try {
     const serializedTx = (info.credential.payload as { signature: `0x${string}` }).signature;
     const transaction = TempoTransaction.deserialize(serializedTx) as {
@@ -52,7 +41,7 @@ export async function verifyTxMode(
     } as never);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[router] ${routeEntry.key}: MPP simulation failed — ${message}`);
+    report('warn', `MPP simulation failed: ${message}`);
     return { ok: false, kind: 'invalid' };
   }
 
@@ -76,7 +65,7 @@ export async function verifyTxMode(
 }
 
 export async function settleTxMode(args: SettleArgs): Promise<SettleOutcome> {
-  const { request, response, payment, deps, routeEntry } = args;
+  const { request, response, payment, deps, report } = args;
 
   if (!deps.mppx) {
     return {
@@ -87,13 +76,12 @@ export async function settleTxMode(args: SettleArgs): Promise<SettleOutcome> {
     };
   }
 
-  // Broadcast and confirm.
   let result: Awaited<ReturnType<ReturnType<typeof deps.mppx.charge>>>;
   try {
     result = await deps.mppx.charge({ amount: payment.amount })(request);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[router] ${routeEntry.key}: MPP broadcast failed after handler: ${message}`);
+    report('error', `MPP broadcast failed after handler: ${message}`);
     return {
       ok: false,
       error: err,
@@ -111,7 +99,7 @@ export async function settleTxMode(args: SettleArgs): Promise<SettleOutcome> {
       mppResult: result,
       challenge: result.challenge,
     });
-    console.error(`[router] ${routeEntry.key}: MPP payment failed after handler — ${detail}`);
+    report('error', `MPP payment failed after handler: ${detail}`);
     return {
       ok: false,
       error: settlementError,

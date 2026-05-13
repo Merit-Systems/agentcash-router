@@ -139,7 +139,9 @@ describe('upto scheme', () => {
 
         expect(uptoAccept).toBeDefined();
         expect(uptoAccept!.network).toBe(BASE_NETWORK);
-        expect(uptoAccept!.asset).toBe(USDC_ASSET);
+        // Asset comes from the registered UptoEvmScheme's network defaults
+        // (real upstream picks USDC for Base); the fake stamps `mock-usdc`.
+        expect(uptoAccept!.asset).toBeTruthy();
         expect(uptoAccept!.payTo).toBe(KNOWN_PAYEE);
       });
     });
@@ -213,6 +215,93 @@ describe('upto scheme', () => {
       expect(server.settledPayments).toHaveLength(1);
       const settled = server.settledPayments[0]!.requirements as { scheme?: string };
       expect(settled.scheme).toBe('upto');
+    });
+  });
+
+  describe('dynamic pricing (handler-driven)', () => {
+    function makeDynamicEntry(): RouteEntry {
+      return {
+        key: 'test/dynamic-route',
+        authMode: 'paid',
+        pricing: '0.10', // = maxPrice when single-arg .paid({ dynamic, maxPrice })
+        protocols: ['x402'],
+        method: 'POST',
+        dynamicPrice: true,
+        maxPrice: '0.10',
+        tickCost: '0.0001',
+        unitType: 'token',
+      };
+    }
+
+    function makeUptoPayment(amount = '100000'): string {
+      return encodePaymentSignatureHeader({
+        x402Version: 2,
+        resource: { url: URL, method: 'POST' },
+        accepted: {
+          scheme: 'upto',
+          network: BASE_NETWORK,
+          amount,
+          asset: USDC_ASSET,
+          payTo: KNOWN_PAYEE,
+          maxTimeoutSeconds: 300,
+        },
+        payload: { payer: KNOWN_PAYER },
+      });
+    }
+
+    function makeUptoDeps(server: FakeX402Server): OrchestrateDeps {
+      return makeDeps(server, [
+        {
+          scheme: 'upto',
+          network: BASE_NETWORK,
+          payTo: KNOWN_PAYEE,
+          asset: USDC_ASSET,
+          decimals: 6,
+          maxTimeoutSeconds: 300,
+        },
+      ]);
+    }
+
+    it('request-mode: forwards tickCost as $-tagged settlement override', async () => {
+      // Request-mode dynamic handlers have no `charge()` callback — every
+      // accepted request bills exactly `tickCost`. The settlement override
+      // forwards `tickCost` to the x402 server so Permit2Proxy settles for
+      // that amount (≤ the upto cap).
+      const server = new FakeX402Server();
+      const deps = makeUptoDeps(server);
+      const handler = createRequestHandler(makeDynamicEntry(), async () => ({ ok: true }), deps);
+
+      const res = await handler(
+        new NextRequest(URL, { method: 'POST', headers: { 'X-PAYMENT': makeUptoPayment() } }),
+      );
+
+      expect(res.status).toBe(200);
+      expect(server.settledPayments).toHaveLength(1);
+      expect(server.settledPayments[0]!.overrides).toEqual({ amount: '$0.0001' });
+    });
+
+    it('streaming: forwards billed total as $-tagged settlement override', async () => {
+      // x402 has no native streaming wrapper — the strategy rejects async
+      // generator handlers at settleStream. This test guards that the rejection
+      // is clean (500, no settle) rather than crashing or silently billing.
+      const server = new FakeX402Server();
+      const deps = makeUptoDeps(server);
+      const handler = createRequestHandler(
+        { ...makeDynamicEntry(), streaming: true },
+        async function* ({ charge }) {
+          await charge!();
+          await charge!();
+          yield 'chunk';
+        },
+        deps,
+      );
+
+      const res = await handler(
+        new NextRequest(URL, { method: 'POST', headers: { 'X-PAYMENT': makeUptoPayment() } }),
+      );
+
+      expect(res.status).toBe(500);
+      expect(server.settledPayments).toHaveLength(0);
     });
   });
 

@@ -1,6 +1,5 @@
 import { Receipt } from 'mppx';
 
-/** Best-effort extraction of the on-chain transaction hash from a Payment-Receipt header. */
 export function extractTxHash(receiptHeader: string | null | undefined): string {
   if (!receiptHeader) return '';
   try {
@@ -10,7 +9,6 @@ export function extractTxHash(receiptHeader: string | null | undefined): string 
   }
 }
 
-/** Best-effort parse of a 402 problem-detail JSON body. Returns the human reason or ''. */
 export async function readChallengeReason(challenge: Response): Promise<string> {
   try {
     const text = await challenge.clone().text();

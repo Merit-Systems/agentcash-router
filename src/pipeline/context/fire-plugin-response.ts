@@ -18,7 +18,6 @@ export function firePluginResponse(
     responseBody,
   });
 
-  // 402 is a payment challenge, not an error
   if (response.status >= 400 && response.status !== 402) {
     firePluginHook(ctx.deps.plugin, 'onError', ctx.pluginCtx, {
       status: response.status,

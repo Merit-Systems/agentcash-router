@@ -169,7 +169,7 @@ class RotatingExtraX402Server extends FakeX402Server {
       ?.feePayer;
 
     if (acceptedFeePayer !== requirementFeePayer) {
-      return { isValid: false, payer: null };
+      return { isValid: false };
     }
 
     return super.verifyPayment(payload, requirements);

@@ -35,9 +35,90 @@ Four auth modes, mutually exclusive (except `.apiKey()` composes with `.paid()`)
 ### `.paid(pricing)` — Payment required
 ```typescript
 .paid('0.01')                    // Static price
-.paid((body) => calcPrice(body)) // Dynamic pricing
+.paid((body) => calcPrice(body)) // Dynamic pricing (body-driven, pre-handler)
 .paid({ field: 'tier', tiers: { basic: { price: '0.01' } } }) // Tiered
+
+// Handler-driven dynamic pricing — `.handler()` request-mode bills exactly
+// tickCost per request; `.stream()` streaming bills per `charge()` call.
+.paid({ dynamic: true, tickCost: '0.0005', unitType: 'token', maxPrice: '0.10' })
 ```
+
+#### Handler-driven dynamic (`.paid({ dynamic: true })`)
+
+The handler shape determines the billing model and wire transport:
+
+**Request-mode** — `async (ctx) => value`. Bills exactly `tickCost` per
+request. No `charge()` on the context — the wire commitment is fixed at
+credential verification (mppx's non-SSE auto-charge for MPP, or x402 `upto`
+settled for `tickCost`). This is the spec-aligned "discrete paid unit" mode
+per `paymentauth.org/draft-tempo-session-00`.
+
+```typescript
+router
+  .route('llm/summarize')
+  .paid({ dynamic: true, tickCost: '0.01', unitType: 'request', maxPrice: '0.01' })
+  .body(z.object({ prompt: z.string() }))
+  .handler(async ({ body }) => {
+    const summary = await callLLM(body.prompt);
+    return { summary }; // always bills $0.01
+  });
+```
+
+For variable-cost-per-request billing, use the streaming shape below —
+splitting work into yields lets `charge()` meter per unit.
+
+**Streaming mode** — `.stream(async function* (ctx) { ... })`. Receives a
+`charge()` callback on `ctx`; one call adds one tick. The invariant:
+
+> **one `charge()` call === one tick === `tickCost` USDC === one route-defined unit**
+
+The route picks `tickCost` to match its billing unit (one token at $0.0005,
+one byte at $0.0000001, one frame at $0.001) and labels it via `unitType`.
+Total billed is `tickCost × call_count`, capped at `maxPrice`. (Internally:
+mppx auto-charges one prepaid tick at credential verify and marks it; the
+first `charge()` consumes the prepaid without an extra debit, then subsequent
+calls bill fresh ticks live.)
+
+```typescript
+router
+  .route('llm/stream')
+  .paid({ dynamic: true, tickCost: '0.0001', unitType: 'token', maxPrice: '0.05', protocols: ['mpp'] })
+  .body(z.object({ prompt: z.string() }))
+  .stream(async function* ({ body, charge }) {
+    for await (const token of streamLLM(body.prompt)) {
+      await charge();        // one tick = one token; blocks on need-voucher
+      yield token;
+    }
+    yield '[DONE]';            // free trailing event — no charge before it
+  });
+```
+
+**Type safety**: TypeScript discriminates by which terminal method you call.
+`.handler()` receives a `HandlerContext` with no `charge` — calling it is a
+compile-time error. `.stream()` receives a `StreamingHandlerContext` with
+`charge` and is only callable after `.paid({ dynamic: true, ... })`.
+
+`tickCost` is required per-route on `.paid({ dynamic: true })` — the builder
+throws at registration if it's missing. `unitType` is optional (cosmetic
+label, defaults to undefined which mppx surfaces as plain ticks).
+
+**Transport selection**: the router picks the wire format from the terminal
+method. `.handler()` request-mode goes through plain HTTP with a
+`Payment-Receipt` header (mppx's `tempo.session({ sse: false })`). `.stream()`
+goes through SSE with inline per-tick voucher events
+(`tempo.session({ sse: true })`). Two mppx instances run side-by-side
+sharing the same store, secretKey, and realm so channel state and challenge
+HMACs are interchangeable.
+
+Both terminal methods work on x402 `upto` (settles cumulative atomic amount;
+Permit2Proxy enforces ≤ maxPrice) and MPP. `.stream()` requires MPP — x402
+has no streaming primitive.
+
+**`suggestedDeposit` on MPP session 402 challenges**: defaults to
+`tickCost × RouterConfig.mpp.session.depositMultiplier` (default `10`), or
+the route's `maxPrice` when set. Raise the multiplier at deployment level to
+cover more requests per channel, or set `maxPrice` per-route when a single
+request can exceed the default budget.
 
 ### `.siwx()` — Wallet identity required (no payment)
 ```typescript
@@ -160,6 +241,15 @@ MPP payment verification requires an **authenticated** Tempo RPC endpoint. The p
 - `TEMPO_RPC_URL` — Authenticated Tempo RPC URL (e.g. `https://user:pass@rpc.mainnet.tempo.xyz`)
 
 Alternatively, pass `rpcUrl` in the `mpp` config object to `createRouter()`. Without either, MPP on-chain verification fails with "unauthorized: authentication required".
+
+### MPP Server Wallets: `operatorKey` and `feePayerKey`
+
+Two distinct roles, two distinct wallets:
+
+- **`mpp.operatorKey`** — signs server-side on-chain ops (channel close/settle). Required for sessions. Its derived address **must equal `recipient`/payee** because mppx's close handler asserts `sender === payee` on settle.
+- **`mpp.feePayerKey`** *(optional)* — sponsors gas for client-signed open/topUp txs. Omit to disable sponsorship; clients then pay their own gas.
+
+**The two MUST resolve to different addresses when both are set.** Tempo rejects fee-delegated txs where `sender === feePayer` with `-32000 "fee payer cannot resolve to sender"`. This bites the server-signed close/settle path. The router validates the addresses at `createRouter()` time and throws `mpp_operator_equals_fee_payer` if they collide — production `next build` fails fast; dev surfaces a logged error.
 
 ### CDP Environment Variables
 

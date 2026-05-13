@@ -4,10 +4,6 @@ import { fail } from './fail.js';
 import { settlementContext } from './settlement-context.js';
 import type { FlowCtx, SettleScope } from './types.js';
 
-/**
- * Run user-supplied beforeSettle hook. Throws → fail with the thrown status.
- * Returns null on success or when no hook is configured.
- */
 export async function runBeforeSettle(
   ctx: FlowCtx,
   scope: SettleScope,
