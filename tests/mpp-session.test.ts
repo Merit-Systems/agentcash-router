@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { RouteRegistry } from '../src/registry.js';
 import { RouteBuilder } from '../src/builder.js';
 import { createRequestHandler, type OrchestrateDeps } from '../src/orchestrate.js';
-import { MemoryNonceStore } from '../src/auth/nonce.js';
-import { MemoryEntitlementStore } from '../src/auth/entitlement.js';
+import { MemoryNonceStore } from '../src/kv-store/index.js';
+import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import type { HandlerPaymentContext, RouteEntry, SettlementSettledContext } from '../src/types.js';
 import type { RouterPlugin, SettlementEvent } from '../src/plugin.js';
 

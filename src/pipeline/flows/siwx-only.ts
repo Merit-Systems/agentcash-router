@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { buildSIWXExtension, SIWX_ERROR_MESSAGES, verifySIWX } from '../../auth/siwx.js';
-import { SIWX_CHALLENGE_EXPIRY_MS } from '../../auth/nonce.js';
+import { SIWX_CHALLENGE_EXPIRY_MS } from '../../kv-store/index.js';
 import { normalizeWalletAddress } from '../../auth/normalize-wallet.js';
 import { HEADERS } from '../../headers.js';
 import { firePluginHook } from '../../plugin.js';

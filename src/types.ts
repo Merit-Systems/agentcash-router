@@ -1,7 +1,6 @@
 import type { FacilitatorConfig } from '@x402/core/http';
 import type { NextRequest, NextResponse } from 'next/server';
 import type { ZodType } from 'zod';
-import type { Store } from 'mppx';
 import type {
   PaymentRequired,
   PaymentRequirements,
@@ -314,10 +313,13 @@ export interface RouterConfig {
     facilitators?: X402FacilitatorsConfig;
   };
   plugin?: import('./plugin.js').RouterPlugin;
-  siwx?: {
-    nonceStore?: import('./auth/nonce.js').NonceStore;
-    entitlementStore?: import('./auth/entitlement.js').EntitlementStore;
-  };
+  /**
+   * Single KV cache used for SIWX nonce replay, SIWX entitlement, and MPP tx-hash replay.
+   * Each consumer gets its own key prefix (`siwx:nonce:`, `siwx:ent:`, `mpp:`).
+   * Omit to fall back to in-memory stores (unsafe in serverless). Auto-detected from
+   * `KV_REST_API_URL` + `KV_REST_API_TOKEN` env vars when not provided.
+   */
+  kvStore?: import('./kv-store/index.js').KvStore;
   prices?: Record<string, string>;
   mpp?: {
     secretKey: string;
@@ -329,10 +331,6 @@ export interface RouterConfig {
     operatorKey?: string;
     /** Hex private key. Sponsors gas for client channel open/topUp. MUST resolve to a different address than `operatorKey` — Tempo rejects sender===feePayer. Validated at init. Omit to make clients pay their own gas. */
     feePayerKey?: string;
-    /** Persistent store for tx-hash replay protection. mppx defaults to `Store.memory()` which is wiped on cold start — unsafe in serverless. Pass `Store.upstash(...)` or `Store.cloudflare(...)` for prod. */
-    store?: Store.Store;
-    /** Auto-configures an Upstash-backed store from `KV_REST_API_URL` + `KV_REST_API_TOKEN` (set by Vercel KV). Ignored when `store` is provided. */
-    useDefaultStore?: boolean;
     /** Enables MPP payment-channel sessions for `.paid({ dynamic: true })` routes (registers both request and SSE session middleware). Also requires `mpp.operatorKey`. */
     session?: {
       /** Suggested deposit on the 402 challenge = `tickCost × depositMultiplier` USDC. Route `maxPrice` overrides. @default 10 */

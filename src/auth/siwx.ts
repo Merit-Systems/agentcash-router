@@ -1,4 +1,4 @@
-import type { NonceStore } from './nonce.js';
+import type { NonceStore } from '../kv-store/index.js';
 import type { RouteEntry } from '../types.js';
 import { HEADERS } from '../headers.js';
 

@@ -9,8 +9,7 @@ import type {
   X402Server,
 } from '../../types.js';
 import type { ResolvedX402Facilitator } from '../../protocols/x402/facilitators.js';
-import type { NonceStore } from '../../auth/nonce.js';
-import type { EntitlementStore } from '../../auth/entitlement.js';
+import type { NonceStore, EntitlementStore } from '../../kv-store/index.js';
 import type { PluginContext, RequestMeta, RouterPlugin } from '../../plugin.js';
 import type { ReportFn } from '../../alert.js';
 

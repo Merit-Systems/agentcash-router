@@ -24,7 +24,8 @@ Protocol-agnostic route framework for Next.js App Router APIs with x402 payment,
 - `src/pricing.ts` — Price resolution (static, tiered, dynamic)
 - `src/plugin.ts` — Plugin hook system
 - `src/server.ts` — x402 server initialization
-- `src/auth/` — Auth modules (siwx.ts, api-key.ts, nonce.ts)
+- `src/auth/` — Auth modules (siwx.ts, api-key.ts)
+- `src/kv-store/` — Single KV cache layer (`client.ts` is the only file that talks to Redis; `nonce.ts`/`entitlement.ts`/`mpp.ts` are namespaced adapters on top)
 - `src/protocols/` — Protocol handlers (x402.ts, detect.ts). MPP is handled via `mppx` high-level API (`Mppx.create` in index.ts)
 - `src/discovery/` — Auto-generated endpoints (well-known.ts, openapi.ts)
 
@@ -250,6 +251,17 @@ Two distinct roles, two distinct wallets:
 - **`mpp.feePayerKey`** *(optional)* — sponsors gas for client-signed open/topUp txs. Omit to disable sponsorship; clients then pay their own gas.
 
 **The two MUST resolve to different addresses when both are set.** Tempo rejects fee-delegated txs where `sender === feePayer` with `-32000 "fee payer cannot resolve to sender"`. This bites the server-signed close/settle path. The router validates the addresses at `createRouter()` time and throws `mpp_operator_equals_fee_payer` if they collide — production `next build` fails fast; dev surfaces a logged error.
+
+### KV Store
+
+One KV cache backs all three persistent stores (SIWX nonce, SIWX entitlement, MPP tx-hash replay). Each consumer gets its own key prefix (`siwx:nonce:`, `siwx:ent:`, `mpp:`).
+
+- `KV_REST_API_URL` — Upstash REST endpoint (also set automatically by Vercel KV)
+- `KV_REST_API_TOKEN` — Upstash REST token
+
+When both are present, `createRouter` auto-builds a fetch-based Upstash REST client (no SDK dependency) and uses it for all three stores. Missing either env var falls back to in-memory stores — fine for local dev, unsafe in serverless production. To inject a custom client, pass `kvStore` in `RouterConfig`.
+
+The only file that talks to Redis is `src/kv-store/client.ts`. It speaks the Upstash REST protocol with plain `fetch`. If you need a different backend (raw TCP Redis, Cloudflare KV), implement the `KvStore` interface and pass it in.
 
 ### CDP Environment Variables
 

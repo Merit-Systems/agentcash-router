@@ -75,7 +75,6 @@ const config = {
   x402: { accepts },
   mpp: mppFromEnv(process.env, {
     recipient: payeeAddress,
-    useDefaultStore: true,
   }),
   discovery: {
     title: 'My API',
@@ -99,8 +98,29 @@ and `TEMPO_RPC_URL`. `MPP_CURRENCY` must be the Tempo currency address; for
 Tempo USDC use `TEMPO_USDC_CURRENCY`. Optional `MPP_FEE_PAYER_KEY` is included
 when present and validated as a 32-byte EVM private key. `mppFromEnv()` only
 builds config; call `validateRouterConfig(config)` before `createRouter(config)`
-to fail fast on `mpp.useDefaultStore` store env (`KV_REST_API_URL` and
-`KV_REST_API_TOKEN`) when you use the default store.
+to fail fast on misconfiguration.
+
+### Persistent KV store
+
+The router uses a single KV cache for three things: SIWX nonce replay
+protection, SIWX entitlement records, and MPP tx-hash replay protection. Each
+consumer gets its own key prefix (`siwx:nonce:`, `siwx:ent:`, `mpp:`) so one
+Redis/Upstash instance serves all three.
+
+`createRouter` reads `KV_REST_API_URL` + `KV_REST_API_TOKEN` from `process.env`
+automatically (Vercel KV and Upstash both set these). If both are present, it
+builds an Upstash REST client and wires it into every store. If either is
+missing, all three stores fall back to in-memory — fine for local dev, unsafe
+in serverless production. To inject a custom client, pass `kvStore` directly:
+
+```typescript
+import { createRouter, createUpstashRestClient } from '@agentcash/router';
+
+createRouter({
+  kvStore: createUpstashRestClient(process.env.MY_KV_URL!, process.env.MY_KV_TOKEN!),
+  // ...
+});
+```
 
 ## Quick Start
 
@@ -196,8 +216,8 @@ Creates a `ServiceRouter` instance.
 | `network` | `string` | `'eip155:8453'` | Blockchain network |
 | `plugin` | `RouterPlugin` | `undefined` | Observability plugin |
 | `prices` | `Record<string, string>` | `undefined` | Central pricing map (auto-applied) |
-| `siwx.nonceStore` | `NonceStore` | `MemoryNonceStore` | Custom nonce store |
-| `mpp` | `{ secretKey, currency, recipient?, rpcUrl?, feePayerKey?, useDefaultStore? }` | `undefined` | MPP config |
+| `kvStore` | `KvStore` | auto from `KV_REST_API_URL` + `KV_REST_API_TOKEN`, else memory | Single KV cache for SIWX nonce, SIWX entitlement, and MPP tx-hash replay |
+| `mpp` | `{ secretKey, currency, recipient?, rpcUrl?, feePayerKey?, session? }` | `undefined` | MPP config |
 | `protocols` | `('x402' \| 'mpp')[]` | `['x402']` | Default protocols for paid routes |
 | `strictRoutes` | `boolean` | `false` | Enforce `route({ path })` and prevent key/path divergence |
 

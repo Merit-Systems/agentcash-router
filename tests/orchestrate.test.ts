@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createRequestHandler, type OrchestrateDeps } from '../src/orchestrate.js';
-import { MemoryNonceStore } from '../src/auth/nonce.js';
-import { MemoryEntitlementStore } from '../src/auth/entitlement.js';
+import { MemoryNonceStore } from '../src/kv-store/index.js';
+import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
 import { withX402Payment } from './fakes/request.js';
 import type {

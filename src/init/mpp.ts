@@ -1,8 +1,9 @@
 import type { Client } from 'viem';
 import type { RouterConfig } from '../types.js';
 import type { RouterDeps } from '../pipeline/context/index.js';
+import type { KvStore } from '../kv-store/index.js';
 import { getMppxRequestContext, getMppxStreamingContext } from '../mppx-init.js';
-import { resolveMppStore } from './store.js';
+import { createKvMppStore } from '../kv-store/index.js';
 
 type MppxField = NonNullable<RouterDeps['mppx']>;
 
@@ -15,6 +16,7 @@ export interface MppInitResult {
 export async function initMpp(
   config: RouterConfig,
   resolvedBaseUrl: string,
+  kvStore: KvStore | undefined,
   configError?: string,
 ): Promise<MppInitResult> {
   if (configError) return { initError: configError };
@@ -41,7 +43,7 @@ export async function initMpp(
       assertOperatorMatchesRecipient(config, operatorAccount.address);
     }
 
-    const resolvedStore = await resolveMppStore(config.mpp);
+    const resolvedStore = kvStore ? await createKvMppStore(kvStore) : undefined;
 
     const realm = new URL(resolvedBaseUrl).host;
     const mppConfig = config.mpp;
