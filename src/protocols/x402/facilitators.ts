@@ -118,11 +118,10 @@ function resolveX402FacilitatorTarget(
   network: string,
   defaultEvmFacilitator: X402FacilitatorTarget,
 ): X402FacilitatorTarget {
-  return (
-    (isSolanaNetwork(network) ? config.x402?.facilitators?.solana : undefined) ??
-    (isEvmNetwork(network) ? config.x402?.facilitators?.evm : undefined) ??
-    (isSolanaNetwork(network) ? DEFAULT_SOLANA_FACILITATOR_URL : defaultEvmFacilitator)
-  );
+  if (isSolanaNetwork(network)) {
+    return config.x402?.facilitators?.solana ?? DEFAULT_SOLANA_FACILITATOR_URL;
+  }
+  return defaultEvmFacilitator;
 }
 
 function normalizeFacilitatorTarget(target: X402FacilitatorTarget): X402RouterFacilitatorConfig {

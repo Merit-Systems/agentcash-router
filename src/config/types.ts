@@ -1,6 +1,6 @@
-import type { ProtocolType } from '../types.js';
-
-export type RouterEnv = Record<string, string | undefined>;
+import type { DiscoveryConfig, ProtocolType, X402FacilitatorsConfig } from '../types.js';
+import type { RouterPlugin } from '../plugin/index.js';
+import type { KvStore } from '../kv-store/index.js';
 
 export type RouterConfigIssueCode =
   | 'missing_base_url'
@@ -30,15 +30,70 @@ export type RouterConfigIssueCode =
   | 'mpp_operator_equals_fee_payer'
   | 'missing_discovery_title'
   | 'missing_discovery_description'
-  | 'missing_discovery_guidance';
+  | 'missing_discovery_guidance'
+  | 'invalid_server_url'
+  | 'kv_url_without_token'
+  | 'kv_token_without_url'
+  | 'invalid_kv_url'
+  | 'missing_kv_in_production';
+
+export type RouterConfigIssueSeverity = 'error' | 'warning';
 
 export interface RouterConfigIssue {
   code: RouterConfigIssueCode;
   message: string;
   protocol?: ProtocolType;
+  /** @default 'error' — warnings are surfaced via `console.warn` and do not throw. */
+  severity?: RouterConfigIssueSeverity;
 }
 
-export interface RouterConfigValidationOptions {
-  env?: RouterEnv;
+/** Internal — every zod issue our schema emits carries these params. */
+export interface IssueParams {
+  code: RouterConfigIssueCode;
+  protocol?: ProtocolType;
+  severity?: RouterConfigIssueSeverity;
+}
+
+/** Internal — options for `validateRouterConfig` / `getRouterConfigIssues`. */
+export interface ValidateOptions {
+  env?: Record<string, string | undefined>;
   requireCdpKeys?: boolean;
+}
+
+/** Options for {@link createRouterFromEnv} / {@link routerConfigFromEnv}. */
+export interface CreateRouterFromEnvOptions<
+  TPrices extends Record<string, string> = Record<never, string>,
+> {
+  /** Defaults to `process.env`. Pass an explicit object in tests. */
+  env?: Record<string, string | undefined>;
+
+  /** Discovery title. Shown in `.well-known/agentcash`, OpenAPI, and `/llms.txt`. */
+  title: string;
+  /** Discovery description. */
+  description: string;
+  /** Long-form usage guidance for agent consumers. Served at `/llms.txt`. Pass an empty string to opt out. */
+  guidance: string;
+  /** Discovery version. @default '1.0.0' */
+  version?: string;
+  /** Optional contact metadata published in discovery. */
+  contact?: DiscoveryConfig['contact'];
+  /** Optional ownership proofs published in `.well-known/agentcash`. */
+  ownershipProofs?: string[];
+  /** Per-route HTTP method hint visibility. */
+  methodHints?: DiscoveryConfig['methodHints'];
+  /** Override the OpenAPI `servers[].url`. Defaults to `BASE_URL`. */
+  serverUrl?: string;
+
+  /** Centralized price map keyed by route id. `route(key)` auto-applies `.paid(prices[key])` for matching keys. */
+  prices?: TPrices;
+  /** Observability plugin. */
+  plugin?: RouterPlugin;
+  /** Custom KV store. When omitted, the router auto-bootstraps from `KV_REST_API_URL` + `KV_REST_API_TOKEN`. */
+  kvStore?: KvStore;
+  /** Override x402 facilitators. The Solana facilitator defaults to `SOLANA_FACILITATOR_URL` env or `DEFAULT_SOLANA_FACILITATOR_URL`. */
+  x402Facilitators?: X402FacilitatorsConfig;
+  /** Explicit protocol list. Default: `['x402']`, with `'mpp'` added when `MPP_SECRET_KEY` is set. */
+  protocols?: readonly ProtocolType[];
+  /** Require `route({ path })` form for every route. @default false */
+  strictRoutes?: boolean;
 }

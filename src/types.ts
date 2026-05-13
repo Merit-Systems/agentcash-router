@@ -130,9 +130,7 @@ export interface X402RouterFacilitatorConfig extends FacilitatorConfig {
 export type X402FacilitatorTarget = string | X402RouterFacilitatorConfig;
 
 export interface X402FacilitatorsConfig {
-  /** Facilitator for EVM chains (Base, etc.). Defaults to the Coinbase facilitator using `CDP_API_KEY_ID`/`CDP_API_KEY_SECRET`. */
-  evm?: X402FacilitatorTarget;
-  /** Facilitator for Solana. Required to accept Solana payments — there's no default. */
+  /** Facilitator for Solana. Defaults to {@link DEFAULT_SOLANA_FACILITATOR_URL}. The EVM facilitator is hardcoded to Coinbase (CDP) — set `CDP_API_KEY_ID` / `CDP_API_KEY_SECRET`. */
   solana?: X402FacilitatorTarget;
 }
 

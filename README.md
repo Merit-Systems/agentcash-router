@@ -18,7 +18,7 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 
 | Var | Required | Purpose |
 |-----|----------|---------|
-| `X402_WALLET_ADDRESS` | yes | EVM payee for x402 payments (`0x…`, 20 bytes). Canonicalized to lowercase. |
+| `EVM_PAYEE_ADDRESS` | yes | EVM address that receives x402 and MPP payments (`0x…`, 20 bytes). Canonicalized to lowercase. The zero address is rejected. |
 | `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | yes (production) | Coinbase Developer Platform credentials for the default EVM facilitator. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
 
 ### Solana

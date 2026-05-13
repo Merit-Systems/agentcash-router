@@ -28,7 +28,7 @@ const BASE_UPTO_ACCEPT = {
 function validEnv(overrides: Record<string, string | undefined> = {}) {
   return {
     BASE_URL: 'https://api.example.com',
-    X402_WALLET_ADDRESS: PAYEE,
+    EVM_PAYEE_ADDRESS: PAYEE,
     ...overrides,
   };
 }
@@ -59,7 +59,7 @@ describe('routerConfigFromEnv', () => {
 
   it('canonicalizes checksummed EVM payee to lowercase', () => {
     const config = routerConfigFromEnv(
-      validOptions({ env: validEnv({ X402_WALLET_ADDRESS: PAYEE_CHECKSUM }) }),
+      validOptions({ env: validEnv({ EVM_PAYEE_ADDRESS: PAYEE_CHECKSUM }) }),
     );
     expect(config.payeeAddress).toBe(PAYEE_CHECKSUM.toLowerCase());
   });
@@ -195,7 +195,7 @@ describe('routerConfigFromEnv', () => {
       routerConfigFromEnv({
         env: {
           BASE_URL: 'not-a-url',
-          X402_WALLET_ADDRESS: 'oops',
+          EVM_PAYEE_ADDRESS: 'oops',
           SOLANA_PAYEE_ADDRESS: 'not-base58!',
           MPP_SECRET_KEY: 'secret',
           MPP_CURRENCY: 'not-an-address',
@@ -220,12 +220,12 @@ describe('routerConfigFromEnv', () => {
   });
 
   it('rejects missing BASE_URL', () => {
-    expect(() =>
-      routerConfigFromEnv(validOptions({ env: { X402_WALLET_ADDRESS: PAYEE } })),
-    ).toThrow(RouterConfigError);
+    expect(() => routerConfigFromEnv(validOptions({ env: { EVM_PAYEE_ADDRESS: PAYEE } }))).toThrow(
+      RouterConfigError,
+    );
   });
 
-  it('rejects missing X402_WALLET_ADDRESS', () => {
+  it('rejects missing EVM_PAYEE_ADDRESS', () => {
     expect(() =>
       routerConfigFromEnv(validOptions({ env: { BASE_URL: 'https://api.example.com' } })),
     ).toThrow(RouterConfigError);
@@ -241,6 +241,134 @@ describe('routerConfigFromEnv', () => {
       expect(codes).toContain('missing_mpp_currency');
       expect(codes).toContain('missing_mpp_rpc_url');
     }
+  });
+
+  it('rejects EVM_PAYEE_ADDRESS set to the zero address', () => {
+    try {
+      routerConfigFromEnv(
+        validOptions({
+          env: validEnv({
+            EVM_PAYEE_ADDRESS: '0x0000000000000000000000000000000000000000',
+          }),
+        }),
+      );
+      expect.fail('routerConfigFromEnv should have thrown');
+    } catch (error) {
+      expect(error).toBeInstanceOf(RouterConfigError);
+      expect((error as RouterConfigError).issues.map((i) => i.code)).toContain('placeholder_payee');
+    }
+  });
+
+  it('rejects MPP_OPERATOR_KEY and MPP_FEE_PAYER_KEY resolving to the same address', () => {
+    const sameKey = `0x${'a'.repeat(64)}`;
+    try {
+      routerConfigFromEnv(
+        validOptions({
+          env: validEnv({
+            MPP_SECRET_KEY: 'secret',
+            MPP_CURRENCY: TEMPO_USDC_ADDRESS,
+            TEMPO_RPC_URL: 'https://tempo.example.com',
+            MPP_OPERATOR_KEY: sameKey,
+            MPP_FEE_PAYER_KEY: sameKey,
+          }),
+        }),
+      );
+      expect.fail('routerConfigFromEnv should have thrown');
+    } catch (error) {
+      expect(error).toBeInstanceOf(RouterConfigError);
+      expect((error as RouterConfigError).issues.map((i) => i.code)).toContain(
+        'mpp_operator_equals_fee_payer',
+      );
+    }
+  });
+
+  it('rejects a malformed serverUrl option', () => {
+    try {
+      routerConfigFromEnv(validOptions({ serverUrl: 'not-a-url' }));
+      expect.fail('routerConfigFromEnv should have thrown');
+    } catch (error) {
+      expect(error).toBeInstanceOf(RouterConfigError);
+      expect((error as RouterConfigError).issues.map((i) => i.code)).toContain(
+        'invalid_server_url',
+      );
+    }
+  });
+
+  describe('KV warnings', () => {
+    function captureWarn(fn: () => void): string[] {
+      const warnings: string[] = [];
+      const original = console.warn;
+      console.warn = (msg: unknown) => {
+        warnings.push(String(msg));
+      };
+      try {
+        fn();
+      } finally {
+        console.warn = original;
+      }
+      return warnings;
+    }
+
+    it('warns when KV_REST_API_URL is set without KV_REST_API_TOKEN', () => {
+      const warnings = captureWarn(() => {
+        routerConfigFromEnv(
+          validOptions({ env: validEnv({ KV_REST_API_URL: 'https://kv.example.com' }) }),
+        );
+      });
+      expect(warnings.some((w) => w.includes('KV_REST_API_TOKEN is missing'))).toBe(true);
+    });
+
+    it('warns when KV_REST_API_TOKEN is set without KV_REST_API_URL', () => {
+      const warnings = captureWarn(() => {
+        routerConfigFromEnv(validOptions({ env: validEnv({ KV_REST_API_TOKEN: 't' }) }));
+      });
+      expect(warnings.some((w) => w.includes('KV_REST_API_URL is missing'))).toBe(true);
+    });
+
+    it('warns when KV_REST_API_URL is malformed', () => {
+      const warnings = captureWarn(() => {
+        routerConfigFromEnv(
+          validOptions({
+            env: validEnv({ KV_REST_API_URL: 'not-a-url', KV_REST_API_TOKEN: 't' }),
+          }),
+        );
+      });
+      expect(warnings.some((w) => w.includes('KV_REST_API_URL is not a valid URL'))).toBe(true);
+    });
+
+    it('warns when KV is unset and NODE_ENV=production', () => {
+      const warnings = captureWarn(() => {
+        routerConfigFromEnv(validOptions({ env: validEnv({ NODE_ENV: 'production' }) }));
+      });
+      expect(warnings.some((w) => w.includes('in-memory KV store'))).toBe(true);
+    });
+
+    it('does not warn when an explicit kvStore option is passed', () => {
+      const warnings = captureWarn(() => {
+        routerConfigFromEnv(
+          validOptions({
+            env: validEnv({ NODE_ENV: 'production' }),
+            kvStore: {} as never,
+          }),
+        );
+      });
+      expect(warnings).toEqual([]);
+    });
+
+    it('does not warn when KV vars are both set and valid', () => {
+      const warnings = captureWarn(() => {
+        routerConfigFromEnv(
+          validOptions({
+            env: validEnv({
+              KV_REST_API_URL: 'https://kv.example.com',
+              KV_REST_API_TOKEN: 't',
+              NODE_ENV: 'production',
+            }),
+          }),
+        );
+      });
+      expect(warnings).toEqual([]);
+    });
   });
 
   it('rejects missing required discovery fields with distinct codes', () => {

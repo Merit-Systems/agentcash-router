@@ -7,16 +7,12 @@ import {
 import {
   RouterConfigError,
   getRouterConfigIssues,
-  mppFromEnv,
-  paidOptionsForProtocols,
   validateRouterConfig,
-  x402AcceptsFromEnv,
 } from '../src/config/index.js';
 import type { RouterConfig } from '../src/types.js';
 
 const PAYEE = '0x1234567890123456789012345678901234567890';
 const SOLANA_PAYEE = '9tCZP1W2jNYZjikmteU1HRrkoSGaRqcNs9ciLeQZb4a2';
-const FEE_PAYER_KEY = `0x${'1'.repeat(64)}`;
 
 function makeConfig(overrides: Partial<RouterConfig> = {}): RouterConfig {
   return {
@@ -26,154 +22,43 @@ function makeConfig(overrides: Partial<RouterConfig> = {}): RouterConfig {
       title: 'Test API',
       version: '1.0.0',
     },
-    x402: {
-      facilitators: {
-        evm: 'https://facilitator.example.com',
-      },
-    },
     ...overrides,
   };
 }
 
-describe('router config helpers', () => {
+describe('router config constants', () => {
   it('exports stable network and currency constants', () => {
     expect(BASE_MAINNET_NETWORK).toBe('eip155:8453');
     expect(SOLANA_MAINNET_NETWORK).toBe('solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp');
     expect(TEMPO_USDC_ADDRESS).toBe('0x20c000000000000000000000b9537d11c60e8b50');
   });
-
-  it('builds x402 accepts from env without lowercasing Solana payees', () => {
-    expect(
-      x402AcceptsFromEnv({
-        X402_WALLET_ADDRESS: PAYEE,
-        SOLANA_PAYEE_ADDRESS: SOLANA_PAYEE,
-      }),
-    ).toEqual([
-      {
-        scheme: 'exact',
-        network: BASE_MAINNET_NETWORK,
-        payTo: PAYEE,
-      },
-      {
-        scheme: 'exact',
-        network: SOLANA_MAINNET_NETWORK,
-        payTo: SOLANA_PAYEE,
-      },
-    ]);
-  });
-
-  it('supports explicit legacy x402 payee env names', () => {
-    expect(
-      x402AcceptsFromEnv(
-        {
-          X402_PAYEE_ADDRESS: PAYEE,
-        },
-        { payeeEnv: 'X402_PAYEE_ADDRESS' },
-      ),
-    ).toEqual([
-      {
-        scheme: 'exact',
-        network: BASE_MAINNET_NETWORK,
-        payTo: PAYEE,
-      },
-    ]);
-  });
-
-  it('returns undefined when no MPP env is present', () => {
-    expect(mppFromEnv({})).toBeUndefined();
-  });
-
-  it('rejects partial MPP env', () => {
-    expect(() => mppFromEnv({ MPP_SECRET_KEY: 'secret' })).toThrow(
-      'MPP env is incomplete. Missing: MPP_CURRENCY, TEMPO_RPC_URL',
-    );
-  });
-
-  it('rejects non-address MPP currency env', () => {
-    expect(() =>
-      mppFromEnv({
-        MPP_SECRET_KEY: 'secret',
-        MPP_CURRENCY: 'USDC',
-        TEMPO_RPC_URL: 'https://tempo.example.com',
-      }),
-    ).toThrow('MPP_CURRENCY must be a 0x-prefixed 20-byte Tempo currency address');
-  });
-
-  it('builds MPP config from the complete env trio', () => {
-    expect(
-      mppFromEnv(
-        {
-          MPP_SECRET_KEY: 'secret',
-          MPP_CURRENCY: TEMPO_USDC_ADDRESS,
-          TEMPO_RPC_URL: 'https://tempo.example.com',
-          MPP_FEE_PAYER_KEY: FEE_PAYER_KEY,
-        },
-        { recipient: PAYEE },
-      ),
-    ).toEqual({
-      secretKey: 'secret',
-      currency: TEMPO_USDC_ADDRESS,
-      rpcUrl: 'https://tempo.example.com',
-      recipient: PAYEE,
-      feePayerKey: FEE_PAYER_KEY,
-    });
-  });
-
-  it('rejects invalid MPP fee payer keys from env', () => {
-    expect(() =>
-      mppFromEnv({
-        MPP_SECRET_KEY: 'secret',
-        MPP_CURRENCY: TEMPO_USDC_ADDRESS,
-        TEMPO_RPC_URL: 'https://tempo.example.com',
-        MPP_FEE_PAYER_KEY: 'not-a-private-key',
-      }),
-    ).toThrow('MPP_FEE_PAYER_KEY must be a 0x-prefixed 32-byte EVM private key');
-  });
-
-  it('attributes invalid explicit MPP fee payer keys to the option name', () => {
-    expect(() =>
-      mppFromEnv(
-        {
-          MPP_SECRET_KEY: 'secret',
-          MPP_CURRENCY: TEMPO_USDC_ADDRESS,
-          TEMPO_RPC_URL: 'https://tempo.example.com',
-        },
-        { feePayerKey: 'not-a-private-key' },
-      ),
-    ).toThrow('feePayerKey must be a 0x-prefixed 32-byte EVM private key');
-  });
-
-  it('copies protocol arrays when creating paid options', () => {
-    const protocols = ['x402', 'mpp'] as const;
-    const options = paidOptionsForProtocols(protocols);
-
-    expect(options).toEqual({ protocols: ['x402', 'mpp'] });
-    expect(options.protocols).not.toBe(protocols);
-  });
 });
 
 describe('validateRouterConfig', () => {
-  it('throws a structured error for missing default CDP keys', () => {
-    expect(() => validateRouterConfig(makeConfig({ x402: undefined }), { env: {} })).toThrow(
-      RouterConfigError,
-    );
+  it('throws a structured error for missing CDP keys when EVM x402 is enabled', () => {
+    expect(() => validateRouterConfig(makeConfig(), { env: {} })).toThrow(RouterConfigError);
 
     try {
-      validateRouterConfig(makeConfig({ x402: undefined }), { env: {} });
+      validateRouterConfig(makeConfig(), { env: {} });
     } catch (error) {
       expect(error).toBeInstanceOf(RouterConfigError);
       expect((error as RouterConfigError).issues).toEqual([
         {
           code: 'missing_cdp_keys',
           protocol: 'x402',
-          message: 'default EVM x402 facilitator requires CDP_API_KEY_ID and CDP_API_KEY_SECRET.',
+          message:
+            'x402 EVM facilitator (Coinbase) requires CDP_API_KEY_ID and CDP_API_KEY_SECRET.',
         },
       ]);
     }
   });
 
-  it('allows custom EVM facilitators without CDP keys', () => {
-    expect(() => validateRouterConfig(makeConfig(), { env: {} })).not.toThrow();
+  it('passes CDP-keys validation when keys are present', () => {
+    expect(() =>
+      validateRouterConfig(makeConfig(), {
+        env: { CDP_API_KEY_ID: 'id', CDP_API_KEY_SECRET: 'secret' },
+      }),
+    ).not.toThrow();
   });
 
   it('reports missing MPP secret and currency before async initialization', () => {

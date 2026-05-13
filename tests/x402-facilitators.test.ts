@@ -104,41 +104,7 @@ describe('x402 facilitator resolution', () => {
     expect(await getAcceptsHeadersForFacilitator(facilitator!)).toEqual(acceptsHeaders);
   });
 
-  it('applies family-specific facilitators', () => {
-    const config = makeConfig({
-      x402: {
-        accepts: [
-          { network: BASE_MAINNET_NETWORK, payTo: '0x1234567890123456789012345678901234567890' },
-          { network: SOLANA_NETWORK, payTo: '9tCZP1W2jNYZjikmteU1HRrkoSGaRqcNs9ciLeQZb4a2' },
-        ],
-        facilitators: {
-          evm: 'https://evm.example',
-          solana: 'https://solana.example',
-        },
-      },
-    });
-
-    expect(
-      getResolvedX402Facilitator(config, BASE_MAINNET_NETWORK, DEFAULT_CDP_FACILITATOR),
-    ).toEqual({
-      family: 'evm',
-      network: BASE_MAINNET_NETWORK,
-      url: 'https://evm.example',
-      config: {
-        url: 'https://evm.example',
-      },
-    });
-    expect(getResolvedX402Facilitator(config, SOLANA_NETWORK, DEFAULT_CDP_FACILITATOR)).toEqual({
-      family: 'solana',
-      network: SOLANA_NETWORK,
-      url: 'https://solana.example',
-      config: {
-        url: 'https://solana.example',
-      },
-    });
-  });
-
-  it('groups networks by family and effective facilitator config', () => {
+  it('groups networks by family — EVM uses CDP default, Solana respects override', () => {
     const config = makeConfig({
       x402: {
         accepts: [
@@ -147,7 +113,6 @@ describe('x402 facilitator resolution', () => {
           { network: SOLANA_NETWORK, payTo: '9tCZP1W2jNYZjikmteU1HRrkoSGaRqcNs9ciLeQZb4a2' },
         ],
         facilitators: {
-          evm: 'https://evm.example',
           solana: 'https://solana.example',
         },
       },
@@ -164,7 +129,7 @@ describe('x402 facilitator resolution', () => {
     ).toEqual([
       {
         family: 'evm',
-        config: { url: 'https://evm.example' },
+        config: { url: DEFAULT_CDP_FACILITATOR },
         networks: ['eip155:8453', 'eip155:1'],
       },
       {
