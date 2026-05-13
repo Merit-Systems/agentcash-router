@@ -1,4 +1,4 @@
-export const USDC_DECIMALS = 6;
+const USDC_DECIMALS = 6;
 
 export function decimalToAtomic(amount: string): bigint {
   const m = /^(\d+)(?:\.(\d+))?$/.exec(amount.trim());

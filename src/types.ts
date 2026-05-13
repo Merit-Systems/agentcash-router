@@ -29,7 +29,7 @@ export interface AlertEvent {
 
 export type AlertFn = (level: AlertLevel, message: string, meta?: Record<string, unknown>) => void;
 
-export type JsonPrimitive = string | number | boolean | null;
+type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
 export type JsonObject = { [key: string]: JsonValue };
 
@@ -130,9 +130,7 @@ export interface X402RouterFacilitatorConfig extends FacilitatorConfig {
 export type X402FacilitatorTarget = string | X402RouterFacilitatorConfig;
 
 export interface X402FacilitatorsConfig {
-  /** Facilitator for EVM chains (Base, etc.). Defaults to the Coinbase facilitator using `CDP_API_KEY_ID`/`CDP_API_KEY_SECRET`. */
-  evm?: X402FacilitatorTarget;
-  /** Facilitator for Solana. Required to accept Solana payments — there's no default. */
+  /** Facilitator for Solana. Defaults to {@link DEFAULT_SOLANA_FACILITATOR_URL}. The EVM facilitator is hardcoded to Coinbase (CDP) — set `CDP_API_KEY_ID` / `CDP_API_KEY_SECRET`. */
   solana?: X402FacilitatorTarget;
 }
 
@@ -328,7 +326,7 @@ export interface RouterConfig {
     /** Per-chain facilitator overrides (`evm`/`solana`). Defaults to the Coinbase facilitator on EVM; set `solana` to accept Solana payments. */
     facilitators?: X402FacilitatorsConfig;
   };
-  /** Observability hook receiving request/auth/payment/settlement events. Use `consolePlugin` for dev, or implement `RouterPlugin` for structured logs/analytics. */
+  /** Observability hook receiving request/auth/payment/settlement events. Implement `RouterPlugin` for structured logs/analytics. */
   plugin?: import('./plugin/index.js').RouterPlugin;
   /** Single KV cache for SIWX nonce, SIWX entitlement, and MPP tx-hash replay (prefixed `siwx:nonce:`, `siwx:ent:`, `mpp:`). Pass `{ url, token }` for an Upstash-compatible REST endpoint (Upstash, Vercel KV), or a custom `KvStore` implementation. Omitted: auto-bootstraps from `KV_REST_API_URL` + `KV_REST_API_TOKEN`; falls back to in-memory when missing (unsafe in serverless). */
   kvStore?: import('./kv-store/index.js').KvStore | { url: string; token: string };
@@ -338,7 +336,7 @@ export interface RouterConfig {
   mpp?: {
     /** HMAC key for signing/verifying MPP challenge nonces. Persist across deploys — rotating invalidates outstanding 402 challenges. Falls back to `MPP_SECRET_KEY`. */
     secretKey: string;
-    /** Tempo currency contract address (0x-prefixed). Use `TEMPO_USDC_CURRENCY` for USDC on Tempo. */
+    /** Tempo currency contract address (0x-prefixed). Use `TEMPO_USDC_ADDRESS` for USDC on Tempo. */
     currency: string;
     /** MPP payee address (EVM). Overrides `payeeAddress` for MPP only. Required when `payeeAddress` is unset. MUST equal `operatorKey`'s derived address when `session` is enabled. */
     recipient?: string;

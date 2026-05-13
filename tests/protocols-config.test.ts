@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { TEMPO_USDC_CURRENCY, createRouter } from '../src/index.js';
+import { TEMPO_USDC_ADDRESS, createRouter } from '../src/index.js';
 import type { RouterConfig } from '../src/types.js';
 
 describe('RouterConfig.protocols', () => {
@@ -13,7 +13,7 @@ describe('RouterConfig.protocols', () => {
 
   const validMppConfig = {
     secretKey: 'test-secret-key',
-    currency: TEMPO_USDC_CURRENCY,
+    currency: TEMPO_USDC_ADDRESS,
     rpcUrl: 'https://rpc.example.com',
   };
 
@@ -118,13 +118,33 @@ describe('RouterConfig.protocols', () => {
             ...baseConfig,
             baseUrl: 'https://test.example.com',
             protocols: ['mpp'],
-            mpp: { secretKey: 'test', currency: TEMPO_USDC_CURRENCY },
+            mpp: { secretKey: 'test', currency: TEMPO_USDC_ADDRESS },
           });
         }).toThrow(/Tempo RPC URL/);
       } finally {
         process.env.NODE_ENV = origEnv;
         spy.mockRestore();
         if (origRpc !== undefined) process.env.TEMPO_RPC_URL = origRpc;
+      }
+    });
+
+    it('reads CDP keys from process.env (not an empty object) for the precheck', () => {
+      const origEnv = process.env.NODE_ENV;
+      const origId = process.env.CDP_API_KEY_ID;
+      const origSecret = process.env.CDP_API_KEY_SECRET;
+      process.env.NODE_ENV = 'production';
+      process.env.CDP_API_KEY_ID = 'id';
+      process.env.CDP_API_KEY_SECRET = 'secret';
+      try {
+        expect(() =>
+          createRouter({ ...baseConfig, baseUrl: 'https://test.example.com' }),
+        ).not.toThrow();
+      } finally {
+        process.env.NODE_ENV = origEnv;
+        if (origId !== undefined) process.env.CDP_API_KEY_ID = origId;
+        else delete process.env.CDP_API_KEY_ID;
+        if (origSecret !== undefined) process.env.CDP_API_KEY_SECRET = origSecret;
+        else delete process.env.CDP_API_KEY_SECRET;
       }
     });
 
@@ -217,7 +237,7 @@ describe('RouterConfig.protocols', () => {
         const router = createRouter({
           ...baseConfig,
           protocols: ['mpp'],
-          mpp: { secretKey: 'test', currency: TEMPO_USDC_CURRENCY },
+          mpp: { secretKey: 'test', currency: TEMPO_USDC_ADDRESS },
         });
         const handler = router
           .route('unpriced/route')
@@ -239,7 +259,7 @@ describe('RouterConfig.protocols', () => {
         protocols: ['mpp'],
         mpp: {
           secretKey: 'test',
-          currency: TEMPO_USDC_CURRENCY,
+          currency: TEMPO_USDC_ADDRESS,
           rpcUrl: 'https://rpc.example.com',
         },
       } as RouterConfig);
@@ -283,7 +303,7 @@ describe('RouterConfig.protocols', () => {
         const router = createRouter({
           ...baseConfig,
           protocols: ['mpp'],
-          mpp: { secretKey: 'test', currency: TEMPO_USDC_CURRENCY },
+          mpp: { secretKey: 'test', currency: TEMPO_USDC_ADDRESS },
         });
         router.route('test/route').handler(async () => ({}));
         const entry = router.registry.get('test/route');
@@ -374,7 +394,7 @@ describe('RouterConfig.protocols', () => {
         protocols: ['mpp'],
         mpp: {
           secretKey: 'test',
-          currency: TEMPO_USDC_CURRENCY,
+          currency: TEMPO_USDC_ADDRESS,
           recipient: '0x9876543210987654321098765432109876543210',
           rpcUrl: 'https://rpc.example.com',
         },

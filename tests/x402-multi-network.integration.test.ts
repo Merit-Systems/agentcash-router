@@ -10,7 +10,7 @@ import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
 import type { RouteEntry } from '../src/types.js';
-import type { ResolvedX402Facilitator } from '../src/x402-facilitators.js';
+import type { ResolvedX402Facilitator } from '../src/protocols/x402/facilitators.js';
 
 interface SettledRequirements {
   scheme?: string;
@@ -24,7 +24,7 @@ function settledReqs(server: FakeX402Server, index = 0): SettledRequirements | u
   return server.settledPayments[index]?.requirements as SettledRequirements | undefined;
 }
 
-const BASE_NETWORK = 'eip155:8453';
+const BASE_MAINNET_NETWORK = 'eip155:8453';
 const SOLANA_NETWORK = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
 const SOLANA_PAYEE = '9tCZP1W2jNYZjikmteU1HRrkoSGaRqcNs9ciLeQZb4a2';
 const SOLANA_SETTLEMENT_SCHEME = '@faremeter/x-solana-settlement';
@@ -47,12 +47,12 @@ function makeDeps(server: FakeX402Server): OrchestrateDeps {
     nonceStore: new MemoryNonceStore(),
     entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: KNOWN_PAYEE,
-    network: BASE_NETWORK,
+    network: BASE_MAINNET_NETWORK,
     x402FacilitatorsByNetwork: {
       [SOLANA_NETWORK]: makeFacilitator(SOLANA_NETWORK, 'https://facilitator.example'),
     },
     x402Accepts: [
-      { scheme: 'exact', network: BASE_NETWORK, payTo: KNOWN_PAYEE },
+      { scheme: 'exact', network: BASE_MAINNET_NETWORK, payTo: KNOWN_PAYEE },
       { scheme: 'exact', network: SOLANA_NETWORK, payTo: SOLANA_PAYEE },
     ],
   };
@@ -205,7 +205,7 @@ describe('x402 multi-network integration', () => {
     const challenge = decodePaymentRequiredHeader(header!);
     expect(challenge.accepts).toHaveLength(2);
     expect(challenge.accepts.map((accept) => accept.network)).toEqual([
-      BASE_NETWORK,
+      BASE_MAINNET_NETWORK,
       SOLANA_NETWORK,
     ]);
     expect(challenge.accepts.map((accept) => accept.payTo)).toEqual([KNOWN_PAYEE, SOLANA_PAYEE]);
@@ -227,7 +227,7 @@ describe('x402 multi-network integration', () => {
     const challenge = decodePaymentRequiredHeader(header!);
     expect(challenge.accepts).toHaveLength(1);
     expect(challenge.accepts[0]).toMatchObject({
-      network: BASE_NETWORK,
+      network: BASE_MAINNET_NETWORK,
       payTo: KNOWN_PAYEE,
     });
   });
@@ -236,14 +236,14 @@ describe('x402 multi-network integration', () => {
     const server = new FakeX402Server();
     const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), makeDeps(server));
 
-    const response = await handler(makePaymentRequest(BASE_NETWORK, KNOWN_PAYEE));
+    const response = await handler(makePaymentRequest(BASE_MAINNET_NETWORK, KNOWN_PAYEE));
 
     expect(response.status).toBe(200);
     expect(server.settledPayments).toHaveLength(1);
-    expect(settledReqs(server)?.network).toBe(BASE_NETWORK);
+    expect(settledReqs(server)?.network).toBe(BASE_MAINNET_NETWORK);
 
     const paymentResponse = decodePaymentResponseHeader(response.headers.get('PAYMENT-RESPONSE')!);
-    expect(paymentResponse.network).toBe(BASE_NETWORK);
+    expect(paymentResponse.network).toBe(BASE_MAINNET_NETWORK);
   });
 
   it('matches and settles the Solana requirement when the client selects Solana', async () => {
@@ -265,7 +265,7 @@ describe('x402 multi-network integration', () => {
     const server = new FakeX402Server();
     const deps = makeDeps(server);
     deps.x402Accepts = [
-      { scheme: 'exact', network: BASE_NETWORK, payTo: KNOWN_PAYEE },
+      { scheme: 'exact', network: BASE_MAINNET_NETWORK, payTo: KNOWN_PAYEE },
       { scheme: 'exact', network: SOLANA_NETWORK, payTo: SOLANA_PAYEE },
       {
         scheme: SOLANA_SETTLEMENT_SCHEME,
@@ -289,7 +289,7 @@ describe('x402 multi-network integration', () => {
     expect(
       challenge.accepts.map((accept) => ({ scheme: accept.scheme, network: accept.network })),
     ).toEqual([
-      { scheme: 'exact', network: BASE_NETWORK },
+      { scheme: 'exact', network: BASE_MAINNET_NETWORK },
       { scheme: 'exact', network: SOLANA_NETWORK },
       { scheme: SOLANA_SETTLEMENT_SCHEME, network: SOLANA_NETWORK },
     ]);
@@ -319,11 +319,11 @@ describe('x402 multi-network integration', () => {
     const server = new FakeX402Server();
     const deps = makeDeps(server);
     deps.x402FacilitatorsByNetwork = {
-      [BASE_NETWORK]: makeFacilitator(BASE_NETWORK, 'https://cdp.example'),
+      [BASE_MAINNET_NETWORK]: makeFacilitator(BASE_MAINNET_NETWORK, 'https://cdp.example'),
       [SOLANA_NETWORK]: makeFacilitator(SOLANA_NETWORK, 'https://facilitator.example'),
     };
     deps.x402Accepts = [
-      { scheme: 'exact', network: BASE_NETWORK, payTo: KNOWN_PAYEE },
+      { scheme: 'exact', network: BASE_MAINNET_NETWORK, payTo: KNOWN_PAYEE },
       {
         scheme: SOLANA_SETTLEMENT_SCHEME,
         network: SOLANA_NETWORK,
@@ -375,7 +375,7 @@ describe('x402 multi-network integration', () => {
     const server = new FakeX402Server();
     const deps = makeDeps(server);
     deps.x402FacilitatorsByNetwork = {
-      [BASE_NETWORK]: makeFacilitator(BASE_NETWORK, 'https://cdp.example'),
+      [BASE_MAINNET_NETWORK]: makeFacilitator(BASE_MAINNET_NETWORK, 'https://cdp.example'),
       [SOLANA_NETWORK]: makeFacilitator(SOLANA_NETWORK, 'https://facilitator.example'),
     };
 

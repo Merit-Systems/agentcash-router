@@ -1,13 +1,12 @@
 import type { Network, PaymentRequirements } from '@x402/core/types';
 import { isEvmNetwork } from './evm.js';
 import { isSolanaNetwork } from './solana.js';
+import { DEFAULT_SOLANA_FACILITATOR_URL } from '../../constants.js';
 import type {
   RouterConfig,
   X402FacilitatorTarget,
   X402RouterFacilitatorConfig,
 } from '../../types.js';
-
-export const DEFAULT_SOLANA_FACILITATOR_URL = 'https://facilitator.corbits.dev';
 
 export type NetworkFamily = 'evm' | 'solana';
 
@@ -119,11 +118,10 @@ function resolveX402FacilitatorTarget(
   network: string,
   defaultEvmFacilitator: X402FacilitatorTarget,
 ): X402FacilitatorTarget {
-  return (
-    (isSolanaNetwork(network) ? config.x402?.facilitators?.solana : undefined) ??
-    (isEvmNetwork(network) ? config.x402?.facilitators?.evm : undefined) ??
-    (isSolanaNetwork(network) ? DEFAULT_SOLANA_FACILITATOR_URL : defaultEvmFacilitator)
-  );
+  if (isSolanaNetwork(network)) {
+    return config.x402?.facilitators?.solana ?? DEFAULT_SOLANA_FACILITATOR_URL;
+  }
+  return defaultEvmFacilitator;
 }
 
 function normalizeFacilitatorTarget(target: X402FacilitatorTarget): X402RouterFacilitatorConfig {

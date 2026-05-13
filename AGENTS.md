@@ -19,21 +19,20 @@ A protocol-agnostic route framework for Next.js App Router APIs. Provides x402 p
 
 ```
 src/
+  index.ts              public surface — createRouter / createRouterFromEnv
   builder.ts            fluent RouteBuilder
-  orchestrate.ts        request lifecycle wiring
-  handler.ts            safe handler invocation
   registry.ts           Map-backed route registry
+  constants.ts          network ids, USDC asset/decimals, default facilitator
   types.ts              core types (RouteEntry, HandlerContext, HttpError)
-  server.ts             x402 server bootstrap
-  plugin.ts             RouterPlugin types + consolePlugin
-  init/                 protocol init (x402.ts, mpp.ts)
-  protocols/            x402/ and mpp/ strategies, detect.ts
+  plugin/               RouterPlugin types + lifecycle dispatch
+  init/                 protocol init (x402.ts, mpp.ts) + env reader (from-env.ts)
+  protocols/            x402/ and mpp/ strategies, detect.ts, accepts
   auth/                 siwx.ts, api-key.ts, normalize-wallet.ts
   kv-store/             one KvStore backs siwx nonce, siwx entitlement, mpp replay
   pricing/              fixed, tiered, dynamic, atomic conversion
   pipeline/             flows (paid, siwx-only, api-key-only, unprotected)
   discovery/            well-known, openapi, llms-txt
-  config/               validation + env helpers
+  config/               RouterConfig validation, RouterConfigError, issue codes
 ```
 
 ## Pipeline
@@ -47,35 +46,23 @@ src/
 - **Discovery visibility.** `authMode !== 'unprotected'` determines well-known visibility, not the protocol list. SIWX routes are discoverable.
 - **OpenAPI.** Merge paths for multi-method endpoints (GET + DELETE on same path). Never overwrite.
 - **Duplicate route keys.** Registry silently overwrites (last write wins) with a dev-only `console.warn`. This is intentional: Next.js module load order is non-deterministic, so stub + real handler may register either order.
-- **Dynamic pricing.** Body is parsed before the 402 challenge via `request.clone()` when pricing is a function. `maxPrice` is optional and acts as a cap and a fallback on pricing function errors.
+- **Args-driven pricing.** Body is parsed before the 402 challenge via `request.clone()` when pricing is a function. `maxPrice` is optional and acts as a cap and a fallback on pricing function errors.
 - **MPP operator vs fee-payer.** `mpp.operatorKey` and `mpp.feePayerKey` MUST resolve to different addresses. Tempo rejects fee-delegated txs where `sender === feePayer`. `createRouter` validates this at construction and throws `mpp_operator_equals_fee_payer`.
 - **MPP operator address.** Must equal `recipient` / payee. mppx's close handler asserts `sender === payee` on settle.
 - **Streaming requires MPP.** `.stream()` only works on MPP. x402 has no streaming primitive.
 
-## Required config
+## Two entry points
 
-```typescript
-createRouter({
-  baseUrl: process.env.BASE_URL!,         // required, no fallback
-  payeeAddress: process.env.WALLET!,      // payee for x402
-  discovery: { title, version },          // required, drives OpenAPI / llms.txt
-  protocols: ['x402'],                    // or ['x402', 'mpp']
-  mpp: mppFromEnv(process.env),           // optional
-  plugin: consolePlugin(),                // optional
-  strictRoutes: true,                     // recommended
-});
-```
+Two ways to initialize, both publicly exported:
 
-`baseUrl` is load-bearing: it sets the MPP realm and the OpenAPI server URL. Missing `baseUrl` throws in every environment, dev and prod.
+- **`createRouterFromEnv(options)`** — paved road. Reads `process.env`, validates every value, throws a single `RouterConfigError` with all problems at once. Auto-emits `exact` + `upto` accepts on Base, auto-adds Solana when `SOLANA_PAYEE_ADDRESS` is set, auto-enables MPP session mode when `MPP_OPERATOR_KEY` is set.
+- **`createRouter(config)`** — lower-level. Caller passes a fully-built `RouterConfig`. Use when env doesn't cover the case (custom networks, multi-payee setups, non-standard assets, fully programmatic configs).
+
+Implementation: `createRouterFromEnv(options)` ≡ `createRouter(routerConfigFromEnv(options))`. `routerConfigFromEnv` is also exported, so consumers who want "env-derived base + programmatic tweaks" can spread the result and override fields before passing to `createRouter`.
 
 ## Environment variables
 
-| Var | Purpose |
-|-----|---------|
-| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | Default `@coinbase/x402` facilitator auth. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
-| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Upstash / Vercel KV. If both set, an Upstash REST client is auto-wired into all three stores. Missing either falls back to in-memory (unsafe in serverless production). |
-| `TEMPO_RPC_URL` | Authenticated Tempo RPC. Public `rpc.tempo.xyz` returns 401. |
-| `MPP_SECRET_KEY`, `MPP_CURRENCY`, `MPP_OPERATOR_KEY`, `MPP_FEE_PAYER_KEY` | MPP server config. Use `mppFromEnv(process.env)` to assemble. |
+`src/config/schema.ts` is the single source of truth — `envShape` declares every var the router reads (each field's `.refine(...)` carries both the shape check and the user-facing description). `ENV_KEYS` is derived from it. README and `.env.example` are drift-tested against `ENV_KEYS` (see `tests/env-drift.test.ts`); when adding/renaming an env var, edit `schema.ts` and the two user-facing docs together.
 
 ## Build and test
 

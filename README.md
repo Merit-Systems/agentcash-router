@@ -1,62 +1,107 @@
-# @agentcash/router
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://agentcash.dev/logo-dark-striped.svg">
+    <img alt="AgentCash" src="https://agentcash.dev/logo-light-striped.svg" width="360">
+  </picture>
+</p>
 
-Fluent route builder for Next.js App Router APIs with x402 payments, MPP payments, SIWX authentication, and API key auth. A route is 3 to 6 lines; pricing, discovery, OpenAPI, and settlement are derived.
+<h1 align="center">@agentcash/router</h1>
+
+<p align="center">
+  <strong>The fastest way to ship an API on x402 and MPP.</strong><br/>
+  x402 and MPP payments, compatible discovery, and minimal boilerplate. With @agentcash/router, agents on <a href="https://agentcash.dev">AgentCash</a> and across the agentic commerce ecosystem are compatible and call your endpoints from day one.
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@agentcash/router"><img alt="npm" src="https://img.shields.io/npm/v/@agentcash/router.svg?color=111&label=npm"></a>
+  <a href="https://agentcash.dev/docs"><img alt="docs" src="https://img.shields.io/badge/docs-agentcash.dev-111"></a>
+  <a href="#install"><img alt="next.js" src="https://img.shields.io/badge/Next.js-App%20Router-111"></a>
+</p>
+
+---
 
 ## Install
 
 ```bash
 pnpm add @agentcash/router
-pnpm add next zod @x402/core @x402/evm @x402/extensions @coinbase/x402 zod-openapi
+pnpm add next zod @x402/core @x402/evm @x402/extensions @coinbase/x402 zod-openapi # peer dependencies
 pnpm add mppx  # optional, for MPP support
 ```
 
 ## Environment
 
-| Var | Required for | Notes |
-|-----|--------------|-------|
-| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | x402 (default facilitator) | T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
-| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | SIWX nonce, SIWX entitlement, MPP replay | Upstash / Vercel KV. Missing either falls back to in-memory (unsafe in serverless production). |
-| `TEMPO_RPC_URL` | MPP | Authenticated endpoint. Public `rpc.tempo.xyz` returns 401. |
-| `MPP_SECRET_KEY`, `MPP_CURRENCY`, `MPP_OPERATOR_KEY`, `MPP_FEE_PAYER_KEY` | MPP | Assemble with `mppFromEnv(process.env)`. |
+The recommended entry point reads its config from `process.env`. A copy-paste `.env.example` lives at the repo root.
 
-`baseUrl` is required and load-bearing: it sets the MPP realm and the OpenAPI server URL.
+### x402
 
-### MPP operator vs fee-payer
+| Var | Required | Purpose |
+|-----|----------|---------|
+| `EVM_PAYEE_ADDRESS` | yes | EVM address that receives x402 and MPP payments (`0x…`, 20 bytes). Canonicalized to lowercase. The zero address is rejected. |
+| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | yes (production) | Coinbase Developer Platform credentials for the default EVM facilitator. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
 
-`MPP_OPERATOR_KEY` signs server-side close / settle. Its derived address must equal `MPP_RECIPIENT` (mppx asserts `sender === payee` on settle). `MPP_FEE_PAYER_KEY` sponsors gas for client-signed open / top-up txs. The two MUST resolve to different addresses; Tempo rejects fee-delegated txs where `sender === feePayer`. `createRouter` enforces this at startup.
+### Solana
+
+| Var | Required | Purpose |
+|-----|----------|---------|
+| `SOLANA_PAYEE_ADDRESS` | no | When set, adds a Solana `exact` accept so the router takes Solana payments. **Dynamic pricing (`upto`) is Base-only** — Solana clients can only pay static-priced routes. |
+| `SOLANA_FACILITATOR_URL` | no | Override the Solana x402 facilitator. Defaults to `DEFAULT_SOLANA_FACILITATOR_URL`. |
+
+### MPP (auto-enabled when `MPP_SECRET_KEY` is set)
+
+| Var | Required | Purpose |
+|-----|----------|---------|
+| `MPP_SECRET_KEY` | when MPP is enabled | Server-side MPP secret. Presence toggles MPP on. |
+| `MPP_CURRENCY` | when MPP is enabled | Tempo currency address. Use `TEMPO_USDC_ADDRESS` for Tempo USDC. |
+| `TEMPO_RPC_URL` | when MPP is enabled | Authenticated Tempo JSON-RPC endpoint. Public `rpc.tempo.xyz` returns 401. |
+| `MPP_OPERATOR_KEY` | no | Signs server-side close/settle. When set, MPP session mode is enabled automatically (required for streaming + `.paid({ dynamic: true })` on MPP). Address must equal the payee. |
+| `MPP_FEE_PAYER_KEY` | no | Sponsors client gas for channel open/topUp. Must resolve to a different address than `MPP_OPERATOR_KEY` (Tempo rejects fee-delegated txs where `sender === feePayer`). |
+
+### Other
+
+| Var | Required | Purpose |
+|-----|----------|---------|
+| `BASE_URL` | yes | Origin URL (`https://api.example.com`). Load-bearing — used as the 402 realm, OpenAPI server URL, and MPP memo prefix. Must match the public domain. |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | no | Upstash / Vercel KV. Backs SIWX nonce, SIWX entitlement, and MPP replay. In-memory fallback is unsafe in serverless production. Providing a Kv Store is highly recommended. |
 
 ## Quick start
 
 ### 1. Create the router
 
+There are two ways to initialize. Pick one.
+
+**Option A — `createRouterFromEnv` (recommended).** Reads `process.env`, validates every value up front, and throws a single `RouterConfigError` with every problem at once. Auto-enables MPP when `MPP_SECRET_KEY` is set, auto-adds a Solana accept when `SOLANA_PAYEE_ADDRESS` is set, auto-enables MPP session mode when `MPP_OPERATOR_KEY` is set.
+
 ```typescript
 // lib/router.ts
-import {
-  createRouter,
-  mppFromEnv,
-  validateRouterConfig,
-  x402AcceptsFromEnv,
-  type ProtocolType,
-} from '@agentcash/router';
+import { createRouterFromEnv } from '@agentcash/router';
 
-const payeeAddress = process.env.X402_WALLET_ADDRESS!;
-const protocols: ProtocolType[] = process.env.MPP_SECRET_KEY ? ['x402', 'mpp'] : ['x402'];
-
-const config = {
-  payeeAddress,
-  baseUrl: process.env.NEXT_PUBLIC_BASE_URL!,
-  strictRoutes: true,
-  protocols,
-  x402: { accepts: x402AcceptsFromEnv(process.env, { payeeAddress }) },
-  mpp: mppFromEnv(process.env, { recipient: payeeAddress }),
-  discovery: { title: 'My API', version: '1.0.0' },
-};
-
-validateRouterConfig(config);
-export const router = createRouter(config);
+export const router = createRouterFromEnv({
+  title: 'My API',
+  description: 'Pay-per-call search.',
+  guidance: 'POST /search with { q: string }. Returns top 10 results.',
+});
 ```
 
-`x402AcceptsFromEnv` adds Base by default and adds Solana mainnet when `SOLANA_PAYEE_ADDRESS` is set. `mppFromEnv` returns `undefined` when no MPP env is present; if any MPP var is set, the full set is required.
+**Option B — build a `RouterConfig` and pass it to `createRouter`.** Use this when you need custom networks, multiple payees, non-standard assets, or any setting `createRouterFromEnv` doesn't expose. `createRouter` runs the same validation against the `RouterConfig` shape.
+
+```typescript
+// lib/router.ts
+import { createRouter, BASE_MAINNET_NETWORK } from '@agentcash/router';
+
+export const router = createRouter({
+  baseUrl: 'https://api.example.com',
+  payeeAddress: '0x…',
+  network: BASE_MAINNET_NETWORK,
+  protocols: ['x402'],
+  x402: { accepts: [/* … */] },
+  discovery: {
+    title: 'My API',
+    version: '1.0.0',
+    description: 'Pay-per-call search.',
+    guidance: 'POST /search with { q: string }. Returns top 10 results.',
+  },
+});
+```
 
 ### 2. Define routes
 
@@ -88,17 +133,13 @@ export const GET = router.route({ path: 'health' })
 ### 3. Auto-discovery
 
 ```typescript
-// app/.well-known/x402/route.ts
-import { router } from '@/lib/router';
-import '@/lib/routes-barrel';  // imports every route module
-export const GET = router.wellKnown();
-
 // app/openapi.json/route.ts
+import { router } from '@/lib/router';
+import '@/lib/routes-barrel';  // imports every route module so the registry is populated
 export const GET = router.openapi();
-
-// app/llms.txt/route.ts
-export const GET = router.llmsTxt();
 ```
+
+The barrel forces every route module to load before the discovery handler walks the registry — Next.js otherwise lazy-loads route files on first hit, and unloaded routes don't appear in the spec.
 
 ## Auth modes
 
@@ -126,7 +167,7 @@ router.route({ path: 'gated' })
 .paid('0.02')
 ```
 
-**Dynamic (body-driven).**
+**Args-driven.**
 ```typescript
 .paid((body) => calculateCost(body), { maxPrice: '5.00' })
 .body(genSchema)
@@ -181,47 +222,10 @@ router.route({ path: 'domain/register' })
 
 Pipeline order: `body parse -> validate -> 402 challenge -> payment -> handler`.
 
-## Handler context
+## Plugin Hooks
 
 ```typescript
-interface HandlerContext<TBody, TQuery> {
-  body: TBody;
-  query: TQuery;
-  request: NextRequest;
-  wallet: string | null;
-  payment: HandlerPaymentContext | null;
-  account: unknown;                      // from .apiKey() resolver
-  alert: AlertFn;
-  setVerifiedWallet: (addr: string) => void;
-}
-```
-
-`payment` is `null` for unprotected, API-key-only, and SIWX-only requests. For paid requests it carries `protocol`, `status`, `payer`, `amount`, `network`, and best-effort tx / receipt metadata.
-
-## Settlement hooks
-
-```typescript
-router.route({ path: 'render' })
-  .paid('0.10')
-  .body(schema)
-  .settlement({
-    beforeSettle: async ({ result }) => {
-      if (!isUsableResult(result)) {
-        throw Object.assign(new Error('Render failed'), { status: 502 });
-      }
-    },
-    afterSettle: async ({ payment, result }) => ledger.record({ tx: payment.transaction, result }),
-    onSettledHandlerError: async ({ payment, error }) => compensationQueue.enqueue({ receipt: payment.receipt, error }),
-  })
-  .handler(async ({ body }) => render(body));
-```
-
-`beforeSettle` can still abort the charge for x402 and MPP transaction-payload flows. `onSettledHandlerError` covers already-settled MPP requests whose handler errored; the router cannot generically refund because it does not hold merchant signing keys.
-
-## Plugin
-
-```typescript
-import { createRouter, consolePlugin, type RouterPlugin } from '@agentcash/router';
+import { createRouterFromEnv, type RouterPlugin } from '@agentcash/router';
 
 const myPlugin: RouterPlugin = {
   onRequest(meta) {},
@@ -230,46 +234,15 @@ const myPlugin: RouterPlugin = {
   onResponse(ctx, response) {},
   onError(ctx, error) {},
   onAlert(ctx, alert) {},
-  onProviderQuota(ctx, event) {},
 };
 
-export const router = createRouter({ plugin: myPlugin, /* ... */ });
+export const router = createRouterFromEnv({
+  title: 'My API',
+  description: '…',
+  guidance: '…',
+  plugin: myPlugin,
+});
 ```
 
-All hooks are optional and fire-and-forget; they never delay the response. `consolePlugin()` logs lifecycle events.
+All hooks are optional and fire-and-forget; they never delay the response. Use hooks to add additional telemetry or flexibility to your resource's lifecycle.
 
-## Provider monitoring
-
-For routes wrapping a third-party API with quota:
-
-```typescript
-router.route({ path: 'search' })
-  .paid('0.01')
-  .provider('exa', {
-    extractQuota: (result, headers) => ({
-      remaining: result.rateLimit?.remaining ?? null,
-      limit: result.rateLimit?.limit ?? null,
-    }),
-    warn: 100,
-    critical: 10,
-  })
-  .body(searchSchema)
-  .handler(async ({ body }) => exa.search(body));
-```
-
-`extractQuota` runs after each successful response (status < 400). Exceptions are swallowed; the plugin hook `onProviderQuota` fires with level `healthy` / `warn` / `critical`.
-
-For providers that need a separate health-check call, register a `monitor` function. Retrieve registered monitors with `router.monitors()` from a cron entry point.
-
-## Build and test
-
-```bash
-pnpm build       # tsup
-pnpm test        # vitest
-pnpm typecheck   # tsc --noEmit
-pnpm check       # format + lint + typecheck + build + test
-```
-
-## License
-
-MIT

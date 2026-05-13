@@ -16,16 +16,18 @@ import { createWellKnownHandler } from './discovery/well-known.js';
 import { createOpenAPIHandler } from './discovery/openapi.js';
 import { createLlmsTxtHandler } from './discovery/llms-txt.js';
 import { getConfiguredX402Accepts } from './protocols/x402/accepts.js';
-import { BASE_NETWORK } from './constants.js';
+import { BASE_MAINNET_NETWORK } from './constants.js';
 import {
   RouterConfigError,
   formatRouterConfigIssues,
   getRouterConfigIssues,
+  routerConfigFromEnv,
+  type CreateRouterFromEnvOptions,
 } from './config/index.js';
 import { initX402 } from './init/x402.js';
 import { initMpp } from './init/mpp.js';
 
-export interface MonitorEntry {
+interface MonitorEntry {
   provider: string;
   route: string;
   monitor: () => Promise<import('./types.js').QuotaInfo | null>;
@@ -56,9 +58,10 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   const entitlementStore = kvStore
     ? createKvEntitlementStore(kvStore)
     : new MemoryEntitlementStore();
-  const network = config.network ?? BASE_NETWORK;
+  const network = config.network ?? BASE_MAINNET_NETWORK;
   const x402Accepts = getConfiguredX402Accepts(config);
   const configIssues = getRouterConfigIssues(config, {
+    env: process.env,
     requireCdpKeys: process.env.NODE_ENV === 'production',
   });
   const baseUrlIssue = configIssues.find((issue) => issue.code === 'missing_base_url');
@@ -210,95 +213,61 @@ function normalizePath(path: string): string {
   return normalized.replace(/\/+$/, '');
 }
 
+/**
+ * Build a {@link ServiceRouter} from environment variables.
+ *
+ * Validates every required env var up front and throws a single
+ * {@link RouterConfigError} containing all problems at once. Most consumers
+ * should use this entry point. Use {@link createRouter} when you need to
+ * construct a {@link RouterConfig} programmatically.
+ *
+ * The env vars this function reads are the canonical schema in
+ * `src/config/schema.ts` (`ENV_SPEC`).
+ *
+ * @example
+ * ```ts
+ * export const router = createRouterFromEnv({
+ *   title: 'My API',
+ *   description: 'Pay-per-call search.',
+ *   guidance: 'POST /search with { q: string }. Returns top 10 results.',
+ * });
+ * ```
+ */
+export function createRouterFromEnv<const P extends Record<string, string> = Record<never, string>>(
+  options: CreateRouterFromEnvOptions<P>,
+): ServiceRouter<Extract<keyof P, string>> {
+  return createRouter<P>(routerConfigFromEnv(options));
+}
+
 export { HttpError } from './types.js';
 export {
-  BASE_NETWORK,
+  BASE_MAINNET_NETWORK,
   SOLANA_MAINNET_NETWORK,
-  TEMPO_USDC_CURRENCY,
+  BASE_USDC_ADDRESS,
+  BASE_USDC_DECIMALS,
+  TEMPO_USDC_ADDRESS,
+  TEMPO_USDC_DECIMALS,
+  DEFAULT_SOLANA_FACILITATOR_URL,
   ZERO_EVM_ADDRESS,
 } from './constants.js';
-export {
-  RouterConfigError,
-  formatRouterConfigIssues,
-  getRouterConfigIssues,
-  mppFromEnv,
-  paidOptionsForProtocols,
-  validateRouterConfig,
-  x402AcceptsFromEnv,
-} from './config/index.js';
+export type {
+  HandlerContext,
+  RouterConfig,
+  DiscoveryConfig,
+  PaidOptions,
+  ProtocolType,
+  SettlementLifecycleContext,
+  SettlementSettledContext,
+  SettlementErrorContext,
+  X402FacilitatorsConfig,
+} from './types.js';
+export type { RouterPlugin } from './plugin/index.js';
+export type { KvStore } from './kv-store/index.js';
+export { routerConfigFromEnv } from './config/index.js';
+export type { CreateRouterFromEnvOptions } from './config/index.js';
+export { RouterConfigError } from './config/error.js';
 export type {
   RouterConfigIssue,
   RouterConfigIssueCode,
-  RouterConfigValidationOptions,
-  RouterEnv,
-} from './config/index.js';
-export type {
-  HandlerContext,
-  StreamingHandlerContext,
-  RouterConfig,
-  DiscoveryConfig,
-  RouteEntry,
-  PricingConfig,
-  PaidOptions,
-  MppProtocolInfo,
-  ProtocolType,
-  AuthMode,
-  AlertFn,
-  AlertLevel,
-  AlertEvent,
-  HandlerPaymentContext,
-  SettlementLifecycle,
-  SettlementLifecycleContext,
-  SettlementSettledContext,
-  SettledHandlerErrorContext,
-  SettlementErrorContext,
-  TierConfig,
-  PaymentStatus,
-  ProviderConfig,
-  ProviderQuotaEvent,
-  QuotaInfo,
-  QuotaLevel,
-  OveragePolicy,
-  X402Server,
-  X402AcceptConfig,
-  X402ResolvedAccept,
-  X402RouterFacilitatorConfig,
-  X402FacilitatorsConfig,
-  X402FacilitatorTarget,
-  PayToConfig,
-} from './types.js';
-
-export { consolePlugin } from './plugin/index.js';
-export type {
-  RouterPlugin,
-  PluginContext,
-  RequestMeta,
-  AuthEvent,
-  PaymentEvent,
-  SettlementEvent,
-  ResponseMeta,
-  ErrorEvent,
-} from './plugin/index.js';
-
-export type {
-  KvStore,
-  KvChange,
-  NonceStore,
-  KvNonceStoreOptions,
-  EntitlementStore,
-  KvEntitlementStoreOptions,
-  KvMppStoreOptions,
-} from './kv-store/index.js';
-export {
-  withPrefix,
-  MemoryNonceStore,
-  createKvNonceStore,
-  SIWX_CHALLENGE_EXPIRY_MS,
-  MemoryEntitlementStore,
-  createKvEntitlementStore,
-  createKvMppStore,
-} from './kv-store/index.js';
-export type { SiwxErrorCode } from './auth/siwx.js';
-export { SIWX_ERROR_MESSAGES } from './auth/siwx.js';
-export { RouteBuilder } from './builder.js';
-export { RouteRegistry } from './registry.js';
+  RouterConfigIssueSeverity,
+} from './config/types.js';
