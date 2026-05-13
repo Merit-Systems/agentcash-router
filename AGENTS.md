@@ -82,7 +82,7 @@ The full list, by responsibility. `createRouterFromEnv` reads all of these; manu
 
 | Var | Required | Purpose |
 |-----|----------|---------|
-| `SOLANA_PAYEE_ADDRESS` | no | When set, adds a Solana `exact` accept. |
+| `SOLANA_PAYEE_ADDRESS` | no | When set, adds a Solana `exact` accept. **Dynamic pricing (`upto`) is Base-only** — Solana clients can only pay static-priced routes. |
 | `SOLANA_FACILITATOR_URL` | no | Override the Solana x402 facilitator. Defaults to `DEFAULT_SOLANA_FACILITATOR_URL`. |
 
 ### MPP (enabled by `MPP_SECRET_KEY`)

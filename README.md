@@ -25,7 +25,7 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 
 | Var | Required | Purpose |
 |-----|----------|---------|
-| `SOLANA_PAYEE_ADDRESS` | no | When set, adds a Solana `exact` accept so the router takes Solana payments. |
+| `SOLANA_PAYEE_ADDRESS` | no | When set, adds a Solana `exact` accept so the router takes Solana payments. **Dynamic pricing (`upto`) is Base-only** — Solana clients can only pay static-priced routes. |
 | `SOLANA_FACILITATOR_URL` | no | Override the Solana x402 facilitator. Defaults to `DEFAULT_SOLANA_FACILITATOR_URL`. |
 
 ### MPP (auto-enabled when `MPP_SECRET_KEY` is set)
