@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { bufferBody, validateBody } from '../../body.js';
+import { bufferBody, validateBody } from '../body.js';
 import { firePluginResponse } from './fire-plugin-response.js';
 import type { FlowCtx, ParseBodyResult } from './types.js';
 

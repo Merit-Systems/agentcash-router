@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
-import { bufferBody, validateBody } from '../src/body.js';
+import { bufferBody, validateBody } from '../src/pipeline/body.js';
 
 describe('bufferBody', () => {
   it('parses valid JSON body', async () => {

@@ -1,5 +1,5 @@
 import type { NextResponse } from 'next/server';
-import { type FlowCtx } from '../context/index.js';
+import { type FlowCtx } from '../steps/index.js';
 import { runDynamicPaidFlow } from './dynamic/dynamic-paid.js';
 import { runStaticPaidFlow } from './static/static-paid.js';
 

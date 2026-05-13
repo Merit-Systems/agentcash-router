@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { RouteRegistry } from '../src/registry.js';
 import { RouteBuilder } from '../src/builder.js';
-import { createRequestHandler, type OrchestrateDeps } from '../src/orchestrate.js';
+import { createRequestHandler, type OrchestrateDeps } from '../src/pipeline/orchestrate.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import type { HandlerPaymentContext, RouteEntry, SettlementSettledContext } from '../src/types.js';

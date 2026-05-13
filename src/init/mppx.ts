@@ -1,6 +1,6 @@
 import type { Mppx as MppxNS, Transport } from 'mppx/server';
-import type { RouterConfig } from './types.js';
-import type { MppxMiddleware } from './pipeline/context/types.js';
+import type { RouterConfig } from '../types.js';
+import type { MppxMiddleware } from '../pipeline/steps/types.js';
 
 type MppxModule = typeof import('mppx/server');
 

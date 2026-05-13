@@ -3,7 +3,7 @@ import type { PricingStrategy } from '../../pricing/index.js';
 import { getAllowedStrategies } from '../../protocols/index.js';
 import type { VerifyFailure } from '../../protocols/types.js';
 import { buildChallengeExtensions } from '../challenge-extensions.js';
-import { errorMessage, errorStatus, firePluginResponse, type FlowCtx } from '../context/index.js';
+import { errorMessage, errorStatus, firePluginResponse, type FlowCtx } from '../steps/index.js';
 
 export async function build402(
   ctx: FlowCtx,

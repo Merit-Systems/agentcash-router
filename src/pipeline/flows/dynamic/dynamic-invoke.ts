@@ -7,8 +7,8 @@ import type {
   StreamingHandlerContext,
 } from '../../../types.js';
 import { HttpError } from '../../../types.js';
-import { parseQuery } from '../../context/parse-query.js';
-import type { DynamicInvokeResult, FlowCtx } from '../../context/types.js';
+import { parseQuery } from '../../steps/parse-query.js';
+import type { DynamicInvokeResult, FlowCtx } from '../../steps/types.js';
 
 export async function invokeDynamic(
   ctx: FlowCtx,
