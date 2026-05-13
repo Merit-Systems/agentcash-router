@@ -128,6 +128,26 @@ describe('RouterConfig.protocols', () => {
       }
     });
 
+    it('reads CDP keys from process.env (not an empty object) for the precheck', () => {
+      const origEnv = process.env.NODE_ENV;
+      const origId = process.env.CDP_API_KEY_ID;
+      const origSecret = process.env.CDP_API_KEY_SECRET;
+      process.env.NODE_ENV = 'production';
+      process.env.CDP_API_KEY_ID = 'id';
+      process.env.CDP_API_KEY_SECRET = 'secret';
+      try {
+        expect(() =>
+          createRouter({ ...baseConfig, baseUrl: 'https://test.example.com' }),
+        ).not.toThrow();
+      } finally {
+        process.env.NODE_ENV = origEnv;
+        if (origId !== undefined) process.env.CDP_API_KEY_ID = origId;
+        else delete process.env.CDP_API_KEY_ID;
+        if (origSecret !== undefined) process.env.CDP_API_KEY_SECRET = origSecret;
+        else delete process.env.CDP_API_KEY_SECRET;
+      }
+    });
+
     it('throws in production when x402 payeeAddress is missing', () => {
       const origEnv = process.env.NODE_ENV;
       process.env.NODE_ENV = 'production';

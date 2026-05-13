@@ -61,6 +61,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   const network = config.network ?? BASE_MAINNET_NETWORK;
   const x402Accepts = getConfiguredX402Accepts(config);
   const configIssues = getRouterConfigIssues(config, {
+    env: process.env,
     requireCdpKeys: process.env.NODE_ENV === 'production',
   });
   const baseUrlIssue = configIssues.find((issue) => issue.code === 'missing_base_url');
