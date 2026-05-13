@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { HttpError } from './types.js';
+import { HttpError } from '../types.js';
 
 export async function safeCallHandler(
   handler: (ctx: unknown) => Promise<unknown>,

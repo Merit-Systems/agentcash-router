@@ -11,7 +11,7 @@ import type {
 import type { ResolvedX402Facilitator } from '../../protocols/x402/facilitators.js';
 import type { NonceStore, EntitlementStore } from '../../kv-store/index.js';
 import type { PluginContext, RequestMeta, RouterPlugin } from '../../plugin.js';
-import type { ReportFn } from '../../alert.js';
+import type { ReportFn } from '../alert.js';
 
 export type MppxMiddlewareResponse<T extends Transport.AnyTransport> =
   | { status: 402; challenge: Transport.ChallengeOutputOf<T> }

@@ -1,6 +1,6 @@
 import type { PaymentRequirements } from '@x402/core/types';
 import type { X402ResolvedAccept, X402Server } from '../../types.js';
-import type { ReportFn } from '../../alert.js';
+import type { ReportFn } from '../../pipeline/alert.js';
 import { buildEvmExactOptions, buildEvmUptoOptions, isEvmNetwork } from './evm.js';
 import { buildSolanaExactOptions, isSolanaRequirement } from './solana.js';
 

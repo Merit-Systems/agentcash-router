@@ -10,7 +10,7 @@ import {
   settleAndFinalizeRequest,
   type FlowCtx,
   type SettleScope,
-} from '../../context/index.js';
+} from '../../steps/index.js';
 import { build402 } from '../build402.js';
 import { resolveDynamicBodyAndPrice } from './dynamic-body-and-price.js';
 

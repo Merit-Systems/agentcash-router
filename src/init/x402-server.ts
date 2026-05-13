@@ -1,14 +1,14 @@
 import type { FacilitatorConfig, FacilitatorClient } from '@x402/core/http';
 import type { SupportedResponse } from '@x402/core/types';
-import { filterEvmNetworks } from './protocols/x402/evm.js';
-import { filterSolanaNetworks } from './protocols/x402/solana.js';
-import type { RouterConfig, X402Server } from './types.js';
+import { filterEvmNetworks } from '../protocols/x402/evm.js';
+import { filterSolanaNetworks } from '../protocols/x402/solana.js';
+import type { RouterConfig, X402Server } from '../types.js';
 import {
   getResolvedX402Facilitators,
   getResolvedX402FacilitatorGroups,
   type ResolvedX402FacilitatorGroup,
-} from './protocols/x402/facilitators.js';
-import { getConfiguredX402Networks } from './protocols/x402/accepts.js';
+} from '../protocols/x402/facilitators.js';
+import { getConfiguredX402Networks } from '../protocols/x402/accepts.js';
 
 export async function createX402Server(config: RouterConfig) {
   const { x402ResourceServer, HTTPFacilitatorClient } = await import('@x402/core/server');
