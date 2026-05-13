@@ -1,12 +1,30 @@
-# @agentcash/router
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://agentcash.dev/logo-dark-striped.svg">
+    <img alt="AgentCash" src="https://agentcash.dev/logo-light-striped.svg" width="360">
+  </picture>
+</p>
 
-Fluent route builder for Next.js App Router APIs with x402 payments, MPP payments, SIWX authentication, and API key auth. A route is 3 to 6 lines; pricing, discovery, OpenAPI, and settlement are derived.
+<h1 align="center">@agentcash/router</h1>
+
+<p align="center">
+  <strong>The fastest way to ship an API on x402 and MPP.</strong><br/>
+  x402 and MPP payments, compatible discovery, and minimal boilerplate. With @agentcash/router, agents on <a href="https://agentcash.dev">AgentCash</a> and across the agentic commerce ecosystem are compatible and call your endpoints from day one.
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@agentcash/router"><img alt="npm" src="https://img.shields.io/npm/v/@agentcash/router.svg?color=111&label=npm"></a>
+  <a href="https://agentcash.dev/docs"><img alt="docs" src="https://img.shields.io/badge/docs-agentcash.dev-111"></a>
+  <a href="#install"><img alt="next.js" src="https://img.shields.io/badge/Next.js-App%20Router-111"></a>
+</p>
+
+---
 
 ## Install
 
 ```bash
 pnpm add @agentcash/router
-pnpm add next zod @x402/core @x402/evm @x402/extensions @coinbase/x402 zod-openapi
+pnpm add next zod @x402/core @x402/evm @x402/extensions @coinbase/x402 zod-openapi # peer dependencies
 pnpm add mppx  # optional, for MPP support
 ```
 
@@ -43,7 +61,7 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 | Var | Required | Purpose |
 |-----|----------|---------|
 | `BASE_URL` | yes | Origin URL (`https://api.example.com`). Load-bearing — used as the 402 realm, OpenAPI server URL, and MPP memo prefix. Must match the public domain. |
-| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | no | Upstash / Vercel KV. Backs SIWX nonce, SIWX entitlement, and MPP replay. In-memory fallback is unsafe in serverless production. |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | no | Upstash / Vercel KV. Backs SIWX nonce, SIWX entitlement, and MPP replay. In-memory fallback is unsafe in serverless production. Providing a Kv Store is highly recommended. |
 
 ## Quick start
 
@@ -82,18 +100,6 @@ export const router = createRouter({
     description: 'Pay-per-call search.',
     guidance: 'POST /search with { q: string }. Returns top 10 results.',
   },
-});
-```
-
-For the env-driven base with programmatic tweaks, compose them: `routerConfigFromEnv` (also exported) returns the same `RouterConfig` that `createRouterFromEnv` builds internally — augment it, then pass to `createRouter`.
-
-```typescript
-import { createRouter, routerConfigFromEnv } from '@agentcash/router';
-
-const config = routerConfigFromEnv({ title: '…', description: '…', guidance: '…' });
-export const router = createRouter({
-  ...config,
-  x402: { ...config.x402, accepts: [/* add a custom accept */, ...(config.x402?.accepts ?? [])] },
 });
 ```
 
@@ -216,7 +222,7 @@ router.route({ path: 'domain/register' })
 
 Pipeline order: `body parse -> validate -> 402 challenge -> payment -> handler`.
 
-## Plugin
+## Plugin Hooks
 
 ```typescript
 import { createRouterFromEnv, type RouterPlugin } from '@agentcash/router';
@@ -238,5 +244,5 @@ export const router = createRouterFromEnv({
 });
 ```
 
-All hooks are optional and fire-and-forget; they never delay the response.
+All hooks are optional and fire-and-forget; they never delay the response. Use hooks to add additional telemetry or flexibility to your resource's lifecycle.
 
