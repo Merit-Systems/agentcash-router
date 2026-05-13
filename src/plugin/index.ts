@@ -1,4 +1,4 @@
-import type { AlertEvent, ProviderQuotaEvent } from './types.js';
+import type { AlertEvent, ProviderQuotaEvent } from '../types.js';
 
 export interface RequestMeta {
   requestId: string;

@@ -1,6 +1,6 @@
 import type { PaymentRequirements } from '@x402/core/types';
 import type { RouteEntry, X402ResolvedAccept, X402Server } from '../../types.js';
-import type { ReportFn } from '../../alert.js';
+import type { ReportFn } from '../../plugin/reporter.js';
 import {
   getFacilitatorForRequirement,
   sameResolvedX402Facilitator,

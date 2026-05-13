@@ -10,8 +10,8 @@ import type {
 } from '../../types.js';
 import type { ResolvedX402Facilitator } from '../../protocols/x402/facilitators.js';
 import type { NonceStore, EntitlementStore } from '../../kv-store/index.js';
-import type { PluginContext, RequestMeta, RouterPlugin } from '../../plugin.js';
-import type { ReportFn } from '../../alert.js';
+import type { PluginContext, RequestMeta, RouterPlugin } from '../../plugin/index.js';
+import type { ReportFn } from '../../plugin/reporter.js';
 
 export type MppxMiddlewareResponse<T extends Transport.AnyTransport> =
   | { status: 402; challenge: Transport.ChallengeOutputOf<T> }

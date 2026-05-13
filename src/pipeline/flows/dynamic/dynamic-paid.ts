@@ -1,9 +1,9 @@
 import type { NextResponse } from 'next/server';
 import { selectPricing } from '../../../pricing/index.js';
-import { firePluginHook } from '../../../plugin.js';
 import { selectIncomingStrategy } from '../../../protocols/index.js';
 import {
   fail,
+  firePaymentVerified,
   protocolInitError,
   resolveEarlyBody,
   runApiKeyGate,
@@ -80,7 +80,7 @@ export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   }
 
   ctx.pluginCtx.setVerifiedWallet(verifyOutcome.wallet);
-  firePluginHook(deps.plugin, 'onPaymentVerified', ctx.pluginCtx, {
+  firePaymentVerified(ctx, {
     protocol: incomingStrategy.protocol,
     payer: verifyOutcome.wallet,
     amount: price,

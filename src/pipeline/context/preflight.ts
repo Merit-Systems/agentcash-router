@@ -2,9 +2,9 @@ import type { NextRequest } from 'next/server';
 import type { HandlerContext, RouteEntry } from '../../types.js';
 import type { RouteHandler } from '../../orchestrate.js';
 import { HEADERS } from '../../headers.js';
-import type { PluginContext, RequestMeta } from '../../plugin.js';
-import { createDefaultContext, firePluginHook } from '../../plugin.js';
-import { createReporter } from '../../alert.js';
+import type { PluginContext, RequestMeta } from '../../plugin/index.js';
+import { createDefaultContext, firePluginHook } from '../../plugin/index.js';
+import { createReporter } from '../../plugin/reporter.js';
 import type { FlowCtx, RouterDeps } from './types.js';
 
 export function preflight(

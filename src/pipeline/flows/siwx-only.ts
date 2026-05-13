@@ -4,12 +4,12 @@ import { buildSIWXExtension, SIWX_ERROR_MESSAGES, verifySIWX } from '../../auth/
 import { SIWX_CHALLENGE_EXPIRY_MS } from '../../kv-store/index.js';
 import { normalizeWalletAddress } from '../../auth/normalize-wallet.js';
 import { HEADERS } from '../../headers.js';
-import { firePluginHook } from '../../plugin.js';
 import { detectProtocol } from '../../protocols/detect.js';
 import { verifyMppSiwx } from '../../protocols/mpp/siwx-mode.js';
 import type { X402AcceptConfig } from '../../types.js';
 import {
   fail,
+  fireAuthVerified,
   firePluginResponse,
   type FlowCtx,
   parseBody,
@@ -46,11 +46,7 @@ export async function runSiwxOnlyFlow(ctx: FlowCtx): Promise<NextResponse> {
 
     if (mppSiwxResult.valid) {
       ctx.pluginCtx.setVerifiedWallet(mppSiwxResult.wallet);
-      firePluginHook(deps.plugin, 'onAuthVerified', ctx.pluginCtx, {
-        authMode: 'siwx',
-        wallet: mppSiwxResult.wallet,
-        route: routeEntry.key,
-      });
+      fireAuthVerified(ctx, { authMode: 'siwx', wallet: mppSiwxResult.wallet });
       const authResponse = await runHandlerOnly(ctx, mppSiwxResult.wallet, undefined);
       if (authResponse.status < 400) {
         return mppSiwxResult.withReceipt(authResponse) as NextResponse;
@@ -75,11 +71,7 @@ export async function runSiwxOnlyFlow(ctx: FlowCtx): Promise<NextResponse> {
 
   const wallet = normalizeWalletAddress(siwx.wallet);
   ctx.pluginCtx.setVerifiedWallet(wallet);
-  firePluginHook(deps.plugin, 'onAuthVerified', ctx.pluginCtx, {
-    authMode: 'siwx',
-    wallet,
-    route: routeEntry.key,
-  });
+  fireAuthVerified(ctx, { authMode: 'siwx', wallet });
   return runHandlerOnly(ctx, wallet, undefined);
 }
 

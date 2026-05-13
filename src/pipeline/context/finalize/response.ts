@@ -1,6 +1,5 @@
 import type { NextResponse } from 'next/server';
-import { firePluginResponse } from '../fire-plugin-response.js';
-import { fireProviderQuota } from '../fire-provider-quota.js';
+import { firePluginResponse, fireProviderQuota } from '../../../plugin/events.js';
 import type { FlowCtx } from '../types.js';
 
 export function finalize(

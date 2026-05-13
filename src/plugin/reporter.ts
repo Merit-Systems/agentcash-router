@@ -1,5 +1,5 @@
-import { firePluginHook, type PluginContext, type RouterPlugin } from './plugin.js';
-import type { AlertLevel } from './types.js';
+import type { AlertLevel } from '../types.js';
+import { firePluginHook, type PluginContext, type RouterPlugin } from './index.js';
 
 export type ReportFn = (level: AlertLevel, message: string, meta?: Record<string, unknown>) => void;
 

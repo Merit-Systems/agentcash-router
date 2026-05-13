@@ -1,5 +1,4 @@
 import type { NextResponse } from 'next/server';
-import { firePluginHook } from '../../../plugin.js';
 import type { PaymentStrategy, VerifySuccess } from '../../../protocols/types.js';
 import type { HandlerPaymentContext } from '../../../types.js';
 import {
@@ -22,7 +21,6 @@ export async function runStaticRequestFlow(args: {
   result: StaticRequestResult;
 }): Promise<NextResponse> {
   const { ctx, strategy, verifyOutcome, account, body, price, result } = args;
-  const { deps, routeEntry } = ctx;
 
   const settleScope: SettleScope = {
     wallet: verifyOutcome.wallet,
@@ -70,11 +68,10 @@ export async function runStaticRequestFlow(args: {
     billedAmount: price,
     onSettleError: async (error, failMessage) => {
       await runSettlementError(ctx, settleScope, error, 'settle');
-      firePluginHook(deps.plugin, 'onAlert', ctx.pluginCtx, {
-        level: 'critical' as const,
-        message: `${strategy.protocol} ${failMessage}: ${errorMessage(error, 'unknown')}`,
-        route: routeEntry.key,
-      });
+      ctx.report(
+        'critical',
+        `${strategy.protocol} ${failMessage}: ${errorMessage(error, 'unknown')}`,
+      );
     },
   });
 }

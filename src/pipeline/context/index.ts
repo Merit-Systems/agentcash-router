@@ -16,8 +16,13 @@ export { runValidate } from './run-validate.js';
 export { runHandlerOnly } from './run-handler-only.js';
 export { finalize } from './finalize/index.js';
 export { fail } from './fail.js';
-export { firePluginResponse } from './fire-plugin-response.js';
-export { fireProviderQuota } from './fire-provider-quota.js';
+export {
+  fireAuthVerified,
+  firePaymentSettled,
+  firePaymentVerified,
+  firePluginResponse,
+  fireProviderQuota,
+} from '../../plugin/events.js';
 export { runBeforeSettle } from './run-before-settle.js';
 export { runAfterSettle } from './run-after-settle.js';
 export { runSettlementError } from './run-settlement-error.js';

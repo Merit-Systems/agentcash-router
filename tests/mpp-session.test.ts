@@ -7,7 +7,7 @@ import { createRequestHandler, type OrchestrateDeps } from '../src/orchestrate.j
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import type { HandlerPaymentContext, RouteEntry, SettlementSettledContext } from '../src/types.js';
-import type { RouterPlugin, SettlementEvent } from '../src/plugin.js';
+import type { RouterPlugin, SettlementEvent } from '../src/plugin/index.js';
 
 // ---------------------------------------------------------------------------
 // Mocks

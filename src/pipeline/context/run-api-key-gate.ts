@@ -1,7 +1,7 @@
 import type { NextResponse } from 'next/server';
 import { verifyApiKey } from '../../auth/api-key.js';
-import { firePluginHook } from '../../plugin.js';
 import { fail } from './fail.js';
+import { fireAuthVerified } from '../../plugin/events.js';
 import type { FlowCtx } from './types.js';
 
 export type ApiKeyGateResult =
@@ -9,7 +9,7 @@ export type ApiKeyGateResult =
   | { ok: false; response: NextResponse };
 
 export async function runApiKeyGate(ctx: FlowCtx): Promise<ApiKeyGateResult> {
-  const { request, routeEntry, deps } = ctx;
+  const { request, routeEntry } = ctx;
 
   if (!routeEntry.apiKeyResolver) return { ok: true, account: undefined };
 
@@ -18,11 +18,6 @@ export async function runApiKeyGate(ctx: FlowCtx): Promise<ApiKeyGateResult> {
     return { ok: false, response: fail(ctx, 401, 'Invalid or missing API key') };
   }
 
-  firePluginHook(deps.plugin, 'onAuthVerified', ctx.pluginCtx, {
-    authMode: 'apiKey',
-    wallet: null,
-    route: routeEntry.key,
-    account: apiKeyResult.account,
-  });
+  fireAuthVerified(ctx, { authMode: 'apiKey', wallet: null, account: apiKeyResult.account });
   return { ok: true, account: apiKeyResult.account };
 }

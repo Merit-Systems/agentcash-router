@@ -1,8 +1,8 @@
 import type { NextResponse } from 'next/server';
-import { firePluginHook } from '../../../plugin.js';
 import type { PaymentStrategy, SettleOutcome } from '../../../protocols/types.js';
 import type { HandlerPaymentContext } from '../../../types.js';
 import { grantEntitlementIfSiwx } from '../grant-entitlement.js';
+import { firePaymentSettled } from '../../../plugin/events.js';
 import { runAfterSettle } from '../run-after-settle.js';
 import type { FlowCtx, SettleScope } from '../types.js';
 import { finalize } from './response.js';
@@ -22,7 +22,7 @@ export async function runPostSettleEpilogue(args: {
   const { ctx, strategy, wallet, settle, afterSettleScope, rawResult, body } = args;
 
   await grantEntitlementIfSiwx(ctx, wallet);
-  firePluginHook(ctx.deps.plugin, 'onPaymentSettled', ctx.pluginCtx, {
+  firePaymentSettled(ctx, {
     protocol: strategy.protocol,
     payer: wallet,
     transaction: settle.settledPayment.transaction ?? '',

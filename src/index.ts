@@ -268,7 +268,7 @@ export type {
   PayToConfig,
 } from './types.js';
 
-export { consolePlugin } from './plugin.js';
+export { consolePlugin } from './plugin/index.js';
 export type {
   RouterPlugin,
   PluginContext,
@@ -278,7 +278,7 @@ export type {
   SettlementEvent,
   ResponseMeta,
   ErrorEvent,
-} from './plugin.js';
+} from './plugin/index.js';
 
 export type {
   KvStore,

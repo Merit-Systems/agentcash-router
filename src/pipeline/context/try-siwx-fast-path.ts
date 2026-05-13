@@ -2,7 +2,7 @@ import type { NextResponse } from 'next/server';
 import { normalizeWalletAddress } from '../../auth/normalize-wallet.js';
 import { verifySIWX } from '../../auth/siwx.js';
 import { HEADERS } from '../../headers.js';
-import { firePluginHook } from '../../plugin.js';
+import { fireAuthVerified } from '../../plugin/events.js';
 import { runHandlerOnly } from './run-handler-only.js';
 import type { FlowCtx } from './types.js';
 
@@ -26,10 +26,6 @@ export async function trySiwxFastPath(
   const entitled = await deps.entitlementStore.has(routeEntry.key, wallet);
   if (!entitled) return null;
 
-  firePluginHook(deps.plugin, 'onAuthVerified', ctx.pluginCtx, {
-    authMode: 'siwx',
-    wallet,
-    route: routeEntry.key,
-  });
+  fireAuthVerified(ctx, { authMode: 'siwx', wallet });
   return runHandlerOnly(ctx, wallet, account);
 }

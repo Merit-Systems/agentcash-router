@@ -1,5 +1,4 @@
 import { buildSIWXExtension } from '../auth/siwx.js';
-import { firePluginHook } from '../plugin.js';
 import type { FlowCtx } from './context/index.js';
 
 export async function buildChallengeExtensions(
@@ -37,11 +36,10 @@ export async function buildChallengeExtensions(
       extensions = declareDiscoveryExtension(config);
     }
   } catch (err) {
-    firePluginHook(ctx.deps.plugin, 'onAlert', ctx.pluginCtx, {
-      level: 'warn' as const,
-      message: `Bazaar schema generation failed: ${err instanceof Error ? err.message : String(err)}`,
-      route: routeEntry.key,
-    });
+    ctx.report(
+      'warn',
+      `Bazaar schema generation failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
   if (routeEntry.siwxEnabled) {

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { firePluginResponse } from './fire-plugin-response.js';
+import { firePluginResponse } from '../../plugin/events.js';
 import type { FlowCtx } from './types.js';
 
 export function fail(

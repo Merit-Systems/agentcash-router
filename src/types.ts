@@ -312,7 +312,7 @@ export interface RouterConfig {
     accepts?: X402AcceptConfig[];
     facilitators?: X402FacilitatorsConfig;
   };
-  plugin?: import('./plugin.js').RouterPlugin;
+  plugin?: import('./plugin/index.js').RouterPlugin;
   /** Single KV cache for SIWX nonce, SIWX entitlement, and MPP tx-hash replay (prefixed `siwx:nonce:`, `siwx:ent:`, `mpp:`). Auto-bootstraps from `KV_REST_API_URL` + `KV_REST_API_TOKEN`; falls back to in-memory when missing (unsafe in serverless). */
   kvStore?: import('./kv-store/index.js').KvStore;
   prices?: Record<string, string>;

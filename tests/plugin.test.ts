@@ -6,8 +6,8 @@ import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
 import { withX402Payment } from './fakes/request.js';
-import { createDefaultContext } from '../src/plugin.js';
-import type { RouterPlugin, RequestMeta, PluginContext } from '../src/plugin.js';
+import { createDefaultContext } from '../src/plugin/index.js';
+import type { RouterPlugin, RequestMeta, PluginContext } from '../src/plugin/index.js';
 import type { RouteEntry } from '../src/types.js';
 
 const bodySchema = z.object({ query: z.string() });

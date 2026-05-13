@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { firePluginHook } from '../../../plugin.js';
 import { createChargeContext, type ChargeContext } from '../../../pricing/charge-context.js';
 import type {
   HandlerContext,
@@ -35,14 +34,7 @@ export async function invokeDynamic(
     wallet,
     payment,
     account,
-    alert(level, message, alertMeta) {
-      firePluginHook(ctx.deps.plugin, 'onAlert', ctx.pluginCtx, {
-        level,
-        message,
-        route: ctx.routeEntry.key,
-        meta: alertMeta,
-      });
-    },
+    alert: ctx.report,
     setVerifiedWallet: (addr) => ctx.pluginCtx.setVerifiedWallet(addr),
   };
 
