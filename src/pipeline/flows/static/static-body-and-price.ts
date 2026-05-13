@@ -7,7 +7,7 @@ import {
   parseBody,
   runValidate,
   type FlowCtx,
-} from '../../context/index.js';
+} from '../../steps/index.js';
 
 export type StaticBodyAndPriceResolution =
   | { ok: true; parsedBody: unknown; price: string }

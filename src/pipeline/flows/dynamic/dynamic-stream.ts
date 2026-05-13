@@ -1,7 +1,7 @@
 import type { NextResponse } from 'next/server';
 import type { PaymentStrategy, VerifySuccess } from '../../../protocols/types.js';
-import { settleAndFinalizeStream } from '../../context/index.js';
-import type { DynamicStreamResult, FlowCtx } from '../../context/types.js';
+import { settleAndFinalizeStream } from '../../steps/index.js';
+import type { DynamicStreamResult, FlowCtx } from '../../steps/types.js';
 
 export async function runDynamicStreamFlow(args: {
   ctx: FlowCtx;

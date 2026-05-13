@@ -1,7 +1,7 @@
 import type { PaymentPayload, PaymentRequirements } from '@x402/core/types';
 import { VerifyError } from '@x402/core/types';
 import type { X402ResolvedAccept, X402Server } from '../../types.js';
-import type { ReportFn } from '../../alert.js';
+import type { ReportFn } from '../../plugin/reporter.js';
 import { HEADERS } from '../../headers.js';
 import { buildExpectedRequirements } from './requirements.js';
 

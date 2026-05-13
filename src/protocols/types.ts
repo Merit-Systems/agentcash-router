@@ -1,7 +1,7 @@
 import type { NextRequest, NextResponse } from 'next/server';
 import type { HandlerPaymentContext, RouteEntry } from '../types.js';
-import type { RouterDeps } from '../pipeline/context/index.js';
-import type { ReportFn } from '../alert.js';
+import type { RouterDeps } from '../pipeline/steps/index.js';
+import type { ReportFn } from '../plugin/reporter.js';
 
 export type ProtocolName = 'x402' | 'mpp';
 

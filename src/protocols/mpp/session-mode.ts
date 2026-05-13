@@ -11,7 +11,7 @@ import type {
   VerifyFailure,
   VerifySuccess,
 } from '../types.js';
-import type { MppxMiddlewareResponse } from '../../pipeline/context/types.js';
+import type { MppxMiddlewareResponse } from '../../pipeline/steps/types.js';
 import type { MppCredentialInfo } from './credential.js';
 
 export interface MppSessionToken {

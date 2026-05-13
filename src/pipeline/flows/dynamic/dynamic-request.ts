@@ -1,5 +1,4 @@
 import type { NextResponse } from 'next/server';
-import { firePluginHook } from '../../../plugin.js';
 import type { PaymentStrategy, VerifySuccess } from '../../../protocols/types.js';
 import {
   errorMessage,
@@ -7,8 +6,8 @@ import {
   runBeforeSettle,
   runSettlementError,
   settleAndFinalizeRequest,
-} from '../../context/index.js';
-import type { DynamicRequestResult, FlowCtx, SettleScope } from '../../context/types.js';
+} from '../../steps/index.js';
+import type { DynamicRequestResult, FlowCtx, SettleScope } from '../../steps/types.js';
 
 export async function runDynamicRequestFlow(args: {
   ctx: FlowCtx;
@@ -19,7 +18,7 @@ export async function runDynamicRequestFlow(args: {
   result: DynamicRequestResult;
 }): Promise<NextResponse> {
   const { ctx, strategy, verifyOutcome, account, body, result } = args;
-  const { deps, routeEntry } = ctx;
+  const { routeEntry } = ctx;
 
   const settleScope: SettleScope = {
     wallet: verifyOutcome.wallet,
@@ -50,11 +49,10 @@ export async function runDynamicRequestFlow(args: {
     billedAmount,
     onSettleError: async (error, failMessage) => {
       await runSettlementError(ctx, settleScope, error, 'settle');
-      firePluginHook(deps.plugin, 'onAlert', ctx.pluginCtx, {
-        level: 'critical' as const,
-        message: `${strategy.protocol} ${failMessage}: ${errorMessage(error, 'unknown')}`,
-        route: routeEntry.key,
-      });
+      ctx.report(
+        'critical',
+        `${strategy.protocol} ${failMessage}: ${errorMessage(error, 'unknown')}`,
+      );
     },
   });
 }

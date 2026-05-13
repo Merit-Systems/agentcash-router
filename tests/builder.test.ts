@@ -4,7 +4,7 @@ import { RouteRegistry } from '../src/registry.js';
 import { RouteBuilder } from '../src/builder.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
-import type { OrchestrateDeps } from '../src/orchestrate.js';
+import type { OrchestrateDeps } from '../src/pipeline/orchestrate.js';
 
 function makeDeps(): OrchestrateDeps {
   return {

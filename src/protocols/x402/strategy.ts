@@ -1,7 +1,7 @@
 import type { PaymentRequirements } from '@x402/core/types';
 import { PERMIT2_ADDRESS } from '@x402/evm';
 import type { HandlerPaymentContext } from '../../types.js';
-import type { ReportFn } from '../../alert.js';
+import type { ReportFn } from '../../plugin/reporter.js';
 import { HEADERS } from '../../headers.js';
 import { normalizeWalletAddress } from '../../auth/normalize-wallet.js';
 import type {

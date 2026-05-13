@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import type { NextResponse } from 'next/server';
 import type { RouterConfig } from './types.js';
 import type { RouteDefinition, RouteMethod } from './types.js';
-import type { OrchestrateDeps } from './orchestrate.js';
+import type { OrchestrateDeps } from './pipeline/orchestrate.js';
 import { RouteRegistry } from './registry.js';
 import { RouteBuilder } from './builder.js';
 import {
@@ -268,7 +268,7 @@ export type {
   PayToConfig,
 } from './types.js';
 
-export { consolePlugin } from './plugin.js';
+export { consolePlugin } from './plugin/index.js';
 export type {
   RouterPlugin,
   PluginContext,
@@ -278,7 +278,7 @@ export type {
   SettlementEvent,
   ResponseMeta,
   ErrorEvent,
-} from './plugin.js';
+} from './plugin/index.js';
 
 export type {
   KvStore,

@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
-import { firePluginHook } from '../../../plugin.js';
 import type { HandlerContext, HandlerPaymentContext } from '../../../types.js';
 import { HttpError } from '../../../types.js';
-import { parseQuery } from '../../context/parse-query.js';
-import type { FlowCtx, StaticRequestResult } from '../../context/types.js';
+import { parseQuery } from '../../steps/parse-query.js';
+import type { FlowCtx, StaticRequestResult } from '../../steps/types.js';
 
 export function invokePaidStatic(
   ctx: FlowCtx,
@@ -40,14 +39,7 @@ function buildHandlerCtx(
     wallet,
     payment,
     account,
-    alert(level, message, alertMeta) {
-      firePluginHook(ctx.deps.plugin, 'onAlert', ctx.pluginCtx, {
-        level,
-        message,
-        route: ctx.routeEntry.key,
-        meta: alertMeta,
-      });
-    },
+    alert: ctx.report,
     setVerifiedWallet: (addr) => ctx.pluginCtx.setVerifiedWallet(addr),
   };
 }

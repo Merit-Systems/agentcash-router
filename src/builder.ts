@@ -16,8 +16,8 @@ import type {
   PayToConfig,
 } from './types.js';
 import type { RouteRegistry } from './registry.js';
-import type { OrchestrateDeps, RouteHandler } from './orchestrate.js';
-import { createRequestHandler } from './orchestrate.js';
+import type { OrchestrateDeps, RouteHandler } from './pipeline/orchestrate.js';
+import { createRequestHandler } from './pipeline/orchestrate.js';
 import { validateExamples } from './validate-examples.js';
 
 type True = true;

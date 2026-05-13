@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
-import { firePluginHook } from '../../../plugin.js';
 import type { PricingStrategy } from '../../../pricing/index.js';
 import type { PaymentStrategy } from '../../../protocols/types.js';
 import {
   errorMessage,
   fail,
+  firePaymentVerified,
   runBeforeSettle,
   runSettlementError,
   settleAndFinalizeRequest,
   type FlowCtx,
   type SettleScope,
-} from '../../context/index.js';
+} from '../../steps/index.js';
 import { build402 } from '../build402.js';
 import { resolveDynamicBodyAndPrice } from './dynamic-body-and-price.js';
 
@@ -45,7 +45,7 @@ export async function runDynamicChannelMgmtFlow(args: {
   }
 
   ctx.pluginCtx.setVerifiedWallet(verifyOutcome.wallet);
-  firePluginHook(deps.plugin, 'onPaymentVerified', ctx.pluginCtx, {
+  firePaymentVerified(ctx, {
     protocol: strategy.protocol,
     payer: verifyOutcome.wallet,
     amount: price,
