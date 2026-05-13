@@ -4,6 +4,7 @@ export type RouterEnv = Record<string, string | undefined>;
 
 export type RouterConfigIssueCode =
   | 'missing_base_url'
+  | 'invalid_base_url'
   | 'empty_protocols'
   | 'missing_x402_accepts'
   | 'missing_x402_network'
@@ -11,6 +12,9 @@ export type RouterConfigIssueCode =
   | 'missing_x402_asset'
   | 'invalid_x402_decimals'
   | 'missing_x402_payee'
+  | 'invalid_x402_payee'
+  | 'invalid_solana_payee'
+  | 'invalid_solana_facilitator_url'
   | 'missing_cdp_keys'
   | 'placeholder_payee'
   | 'missing_mpp_config'
@@ -20,9 +24,13 @@ export type RouterConfigIssueCode =
   | 'missing_mpp_recipient'
   | 'invalid_mpp_recipient'
   | 'missing_mpp_rpc_url'
+  | 'invalid_mpp_rpc_url'
   | 'invalid_mpp_fee_payer_key'
   | 'invalid_mpp_operator_key'
-  | 'mpp_operator_equals_fee_payer';
+  | 'mpp_operator_equals_fee_payer'
+  | 'missing_discovery_title'
+  | 'missing_discovery_description'
+  | 'missing_discovery_guidance';
 
 export interface RouterConfigIssue {
   code: RouterConfigIssueCode;

@@ -12,18 +12,33 @@ pnpm add mppx  # optional, for MPP support
 
 ## Environment
 
-| Var | Required for | Notes |
-|-----|--------------|-------|
-| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | x402 (default facilitator) | T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
-| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | SIWX nonce, SIWX entitlement, MPP replay | Upstash / Vercel KV. Missing either falls back to in-memory (unsafe in serverless production). |
-| `TEMPO_RPC_URL` | MPP | Authenticated endpoint. Public `rpc.tempo.xyz` returns 401. |
-| `MPP_SECRET_KEY`, `MPP_CURRENCY`, `MPP_OPERATOR_KEY`, `MPP_FEE_PAYER_KEY` | MPP | Assemble with `mppFromEnv(process.env)`. |
+The recommended entry point reads its config from `process.env`. Set the vars below; everything else is derived.
 
-`baseUrl` is required and load-bearing: it sets the MPP realm and the OpenAPI server URL.
+### Required
 
-### MPP operator vs fee-payer
+| Var | Purpose |
+|-----|---------|
+| `BASE_URL` | Your production origin (`https://api.example.com`). Load-bearing — used as the 402 realm, OpenAPI server URL, and MPP memo prefix. Must match the public domain. |
+| `X402_WALLET_ADDRESS` | EVM payee for x402 payments (`0x…`, 20 bytes). |
 
-`MPP_OPERATOR_KEY` signs server-side close / settle. Its derived address must equal `MPP_RECIPIENT` (mppx asserts `sender === payee` on settle). `MPP_FEE_PAYER_KEY` sponsors gas for client-signed open / top-up txs. The two MUST resolve to different addresses; Tempo rejects fee-delegated txs where `sender === feePayer`. `createRouter` enforces this at startup.
+### Optional
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `SOLANA_PAYEE_ADDRESS` | _(none)_ | When set, adds a Solana `exact` accept so the router takes Solana payments. |
+| `SOLANA_FACILITATOR_URL` | `DEFAULT_SOLANA_FACILITATOR_URL` | x402 Solana facilitator endpoint. |
+| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | _(required in production)_ | Coinbase EVM facilitator credentials. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | _(in-memory fallback)_ | Upstash / Vercel KV. Used for SIWX nonce, SIWX entitlement, and MPP replay. In-memory fallback is unsafe in serverless production. |
+
+### MPP (auto-enabled when `MPP_SECRET_KEY` is set)
+
+| Var | Purpose |
+|-----|---------|
+| `MPP_SECRET_KEY` | Server-side MPP secret. Presence toggles MPP on. |
+| `MPP_CURRENCY` | Tempo currency address. Use `TEMPO_USDC_CURRENCY` for Tempo USDC. |
+| `TEMPO_RPC_URL` | Authenticated Tempo JSON-RPC endpoint. Public `rpc.tempo.xyz` returns 401. |
+| `MPP_FEE_PAYER_KEY` | Optional. EVM private key sponsoring gas for client-signed open/top-up txs. |
+| `MPP_OPERATOR_KEY` | Optional. Signs server-side close/settle. Must resolve to a different address than `MPP_FEE_PAYER_KEY` (Tempo rejects fee-delegated txs where `sender === feePayer`). |
 
 ## Quick start
 
@@ -31,32 +46,16 @@ pnpm add mppx  # optional, for MPP support
 
 ```typescript
 // lib/router.ts
-import {
-  createRouter,
-  mppFromEnv,
-  validateRouterConfig,
-  x402AcceptsFromEnv,
-  type ProtocolType,
-} from '@agentcash/router';
+import { createRouterFromEnv } from '@agentcash/router';
 
-const payeeAddress = process.env.X402_WALLET_ADDRESS!;
-const protocols: ProtocolType[] = process.env.MPP_SECRET_KEY ? ['x402', 'mpp'] : ['x402'];
-
-const config = {
-  payeeAddress,
-  baseUrl: process.env.NEXT_PUBLIC_BASE_URL!,
-  strictRoutes: true,
-  protocols,
-  x402: { accepts: x402AcceptsFromEnv(process.env, { payeeAddress }) },
-  mpp: mppFromEnv(process.env, { recipient: payeeAddress }),
-  discovery: { title: 'My API', version: '1.0.0' },
-};
-
-validateRouterConfig(config);
-export const router = createRouter(config);
+export const router = createRouterFromEnv({
+  title: 'My API',
+  description: 'Pay-per-call search.',
+  guidance: 'POST /search with { q: string }. Returns top 10 results.',
+});
 ```
 
-`x402AcceptsFromEnv` adds Base by default and adds Solana mainnet when `SOLANA_PAYEE_ADDRESS` is set. `mppFromEnv` returns `undefined` when no MPP env is present; if any MPP var is set, the full set is required.
+`createRouterFromEnv` reads `process.env`, validates everything up front, and throws a single `RouterConfigError` with every problem at once. It auto-enables MPP when `MPP_SECRET_KEY` is set and auto-adds a Solana accept when `SOLANA_PAYEE_ADDRESS` is set. For programmatic configuration (custom networks, multiple payees, etc.), build a `RouterConfig` manually and pass it to `createRouter`.
 
 ### 2. Define routes
 
@@ -221,7 +220,7 @@ router.route({ path: 'render' })
 ## Plugin
 
 ```typescript
-import { createRouter, consolePlugin, type RouterPlugin } from '@agentcash/router';
+import { createRouterFromEnv, type RouterPlugin } from '@agentcash/router';
 
 const myPlugin: RouterPlugin = {
   onRequest(meta) {},
@@ -233,10 +232,15 @@ const myPlugin: RouterPlugin = {
   onProviderQuota(ctx, event) {},
 };
 
-export const router = createRouter({ plugin: myPlugin, /* ... */ });
+export const router = createRouterFromEnv({
+  title: 'My API',
+  description: '…',
+  guidance: '…',
+  plugin: myPlugin,
+});
 ```
 
-All hooks are optional and fire-and-forget; they never delay the response. `consolePlugin()` logs lifecycle events.
+All hooks are optional and fire-and-forget; they never delay the response.
 
 ## Provider monitoring
 

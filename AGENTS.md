@@ -19,21 +19,20 @@ A protocol-agnostic route framework for Next.js App Router APIs. Provides x402 p
 
 ```
 src/
+  index.ts              public surface — createRouter / createRouterFromEnv
   builder.ts            fluent RouteBuilder
-  orchestrate.ts        request lifecycle wiring
-  handler.ts            safe handler invocation
   registry.ts           Map-backed route registry
+  constants.ts          network ids, USDC asset/decimals, default facilitator
   types.ts              core types (RouteEntry, HandlerContext, HttpError)
-  server.ts             x402 server bootstrap
-  plugin.ts             RouterPlugin types + consolePlugin
-  init/                 protocol init (x402.ts, mpp.ts)
-  protocols/            x402/ and mpp/ strategies, detect.ts
+  plugin/               RouterPlugin types + lifecycle dispatch
+  init/                 protocol init (x402.ts, mpp.ts) + env reader (from-env.ts)
+  protocols/            x402/ and mpp/ strategies, detect.ts, accepts
   auth/                 siwx.ts, api-key.ts, normalize-wallet.ts
   kv-store/             one KvStore backs siwx nonce, siwx entitlement, mpp replay
   pricing/              fixed, tiered, dynamic, atomic conversion
   pipeline/             flows (paid, siwx-only, api-key-only, unprotected)
   discovery/            well-known, openapi, llms-txt
-  config/               validation + env helpers
+  config/               RouterConfig validation, RouterConfigError, issue codes
 ```
 
 ## Pipeline
@@ -52,30 +51,51 @@ src/
 - **MPP operator address.** Must equal `recipient` / payee. mppx's close handler asserts `sender === payee` on settle.
 - **Streaming requires MPP.** `.stream()` only works on MPP. x402 has no streaming primitive.
 
-## Required config
+## Two entry points
+
+`createRouterFromEnv` is the paved road: reads `process.env`, validates every value, throws a single `RouterConfigError` with all problems at once. Auto-emits `exact` + `upto` accepts on Base, auto-adds Solana when `SOLANA_PAYEE_ADDRESS` is set, auto-enables MPP session mode when `MPP_OPERATOR_KEY` is set.
 
 ```typescript
-createRouter({
-  baseUrl: process.env.BASE_URL!,         // required, no fallback
-  payeeAddress: process.env.WALLET!,      // payee for x402
-  discovery: { title, version },          // required, drives OpenAPI / llms.txt
-  protocols: ['x402'],                    // or ['x402', 'mpp']
-  mpp: mppFromEnv(process.env),           // optional
-  plugin: consolePlugin(),                // optional
-  strictRoutes: true,                     // recommended
+import { createRouterFromEnv } from '@agentcash/router';
+
+export const router = createRouterFromEnv({
+  title: 'My API',
+  description: 'Pay-per-call search.',
+  guidance: '...',
 });
 ```
 
-`baseUrl` is load-bearing: it sets the MPP realm and the OpenAPI server URL. Missing `baseUrl` throws in every environment, dev and prod.
+`createRouter` is the lower-level entry point. Use it when the caller needs to build `RouterConfig` programmatically (custom networks, multi-payee setups, non-standard assets). `routerConfigFromEnv` exposes the env-reading step on its own when the caller wants to inspect or augment the config before instantiation.
 
 ## Environment variables
 
+The full list, by responsibility. `createRouterFromEnv` reads all of these; manual `createRouter` callers can use them too but must wire them up.
+
+### Required
+
 | Var | Purpose |
 |-----|---------|
-| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | Default `@coinbase/x402` facilitator auth. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
-| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Upstash / Vercel KV. If both set, an Upstash REST client is auto-wired into all three stores. Missing either falls back to in-memory (unsafe in serverless production). |
+| `BASE_URL` | Origin URL — 402 realm, OpenAPI server URL, MPP memo prefix. Load-bearing; must match the public domain. |
+| `X402_WALLET_ADDRESS` | EVM payee for x402 payments (0x-prefixed, 20 bytes). Canonicalized to lowercase. |
+
+### Optional
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `SOLANA_PAYEE_ADDRESS` | _(none)_ | When set, adds a Solana `exact` accept. |
+| `SOLANA_FACILITATOR_URL` | `DEFAULT_SOLANA_FACILITATOR_URL` | Solana x402 facilitator endpoint. |
+| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | _(required in production)_ | Default `@coinbase/x402` facilitator auth. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | _(in-memory fallback)_ | Upstash / Vercel KV. Backs SIWX nonce, SIWX entitlement, MPP replay. Missing either falls back to in-memory (unsafe in serverless production). |
+
+### MPP (enabled by `MPP_SECRET_KEY`)
+
+| Var | Purpose |
+|-----|---------|
+| `MPP_SECRET_KEY` | Server-side MPP secret. Presence toggles MPP on. |
+| `MPP_CURRENCY` | Tempo currency address. Use `TEMPO_USDC_CURRENCY`. |
 | `TEMPO_RPC_URL` | Authenticated Tempo RPC. Public `rpc.tempo.xyz` returns 401. |
-| `MPP_SECRET_KEY`, `MPP_CURRENCY`, `MPP_OPERATOR_KEY`, `MPP_FEE_PAYER_KEY` | MPP server config. Use `mppFromEnv(process.env)` to assemble. |
+| `MPP_OPERATOR_KEY` | Signs server-side close/settle. When set, session mode is enabled (required for `.paid({ dynamic: true })` over MPP). Address must equal the payee. |
+| `MPP_FEE_PAYER_KEY` | Sponsors client gas for channel open/topUp. Must resolve to a different address than the operator. |
 
 ## Build and test
 

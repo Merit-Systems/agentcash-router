@@ -24,6 +24,7 @@ import {
 } from './config/index.js';
 import { initX402 } from './init/x402.js';
 import { initMpp } from './init/mpp.js';
+import { routerConfigFromEnv, type CreateRouterFromEnvOptions } from './init/from-env.js';
 
 interface MonitorEntry {
   provider: string;
@@ -210,12 +211,40 @@ function normalizePath(path: string): string {
   return normalized.replace(/\/+$/, '');
 }
 
+/**
+ * Build a {@link ServiceRouter} from environment variables.
+ *
+ * Validates every required env var up front and throws a single
+ * {@link RouterConfigError} containing all problems at once. Most consumers
+ * should use this entry point. Use {@link createRouter} when you need to
+ * construct a {@link RouterConfig} programmatically.
+ *
+ * @example
+ * ```ts
+ * export const router = createRouterFromEnv({
+ *   title: 'My API',
+ *   description: 'Pay-per-call search.',
+ *   guidance: 'POST /search with { q: string }. Returns top 10 results.',
+ * });
+ * ```
+ *
+ * @see {@link CreateRouterFromEnvOptions} for the full list of recognised env vars.
+ */
+export function createRouterFromEnv<const P extends Record<string, string> = Record<never, string>>(
+  options: CreateRouterFromEnvOptions<P>,
+): ServiceRouter<Extract<keyof P, string>> {
+  return createRouter<P>(routerConfigFromEnv(options));
+}
+
 export { HttpError } from './types.js';
 export {
   BASE_NETWORK,
   SOLANA_MAINNET_NETWORK,
   TEMPO_USDC_CURRENCY,
   ZERO_EVM_ADDRESS,
+  DEFAULT_SOLANA_FACILITATOR_URL,
+  BASE_USDC_ASSET,
+  BASE_USDC_DECIMALS,
 } from './constants.js';
 export type {
   HandlerContext,
@@ -230,3 +259,7 @@ export type {
 } from './types.js';
 export type { RouterPlugin } from './plugin/index.js';
 export type { KvStore } from './kv-store/index.js';
+export { routerConfigFromEnv } from './init/from-env.js';
+export type { CreateRouterFromEnvOptions } from './init/from-env.js';
+export { RouterConfigError } from './config/error.js';
+export type { RouterConfigIssue, RouterConfigIssueCode } from './config/types.js';
