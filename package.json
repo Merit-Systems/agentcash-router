@@ -20,8 +20,8 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    ".claude/CLAUDE.md",
-    ".claude/skills"
+    "AGENTS.md",
+    "README.md"
   ],
   "scripts": {
     "build": "tsup",
