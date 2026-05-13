@@ -97,15 +97,22 @@ export type PricingConfig<TBody = unknown> =
 export type PayToConfig = string | ((request: Request, body?: unknown) => string | Promise<string>);
 
 interface X402AcceptBase {
+  /** Chain identifier (e.g. `base`, `base-sepolia`, `solana-mainnet`). */
   network: string;
+  /** Token contract address (EVM) or mint (Solana). Defaults to USDC for the network. */
   asset?: string;
+  /** Token decimals. Defaults to USDC's 6. */
   decimals?: number;
+  /** Max payment-proof age the facilitator will accept, in seconds. */
   maxTimeoutSeconds?: number;
+  /** Extra fields passed through to the x402 PaymentRequirements `extra` block. */
   extra?: Record<string, unknown>;
 }
 
 export interface X402AcceptConfig extends X402AcceptBase {
+  /** `'exact'` for fixed-price one-shot payments; `'upto'` for settle-≤-cap (required for `.paid({ dynamic: true })` on x402). @default 'exact' */
   scheme?: string;
+  /** Per-accept payee override. Function form receives the request and parsed body for dynamic recipient routing. Falls back to `RouterConfig.payeeAddress`. */
   payTo?: PayToConfig;
 }
 
@@ -115,13 +122,17 @@ export interface X402ResolvedAccept extends X402AcceptBase {
 }
 
 export interface X402RouterFacilitatorConfig extends FacilitatorConfig {
+  /** Async header builder invoked per facilitator call. Use for short-lived auth tokens (e.g. CDP signed headers). */
   createAcceptsHeaders?: () => Promise<Record<string, string>>;
 }
 
+/** A facilitator URL or a full `FacilitatorConfig` (URL + auth header builders). */
 export type X402FacilitatorTarget = string | X402RouterFacilitatorConfig;
 
 export interface X402FacilitatorsConfig {
+  /** Facilitator for EVM chains (Base, etc.). Defaults to the Coinbase facilitator using `CDP_API_KEY_ID`/`CDP_API_KEY_SECRET`. */
   evm?: X402FacilitatorTarget;
+  /** Facilitator for Solana. Required to accept Solana payments — there's no default. */
   solana?: X402FacilitatorTarget;
 }
 
@@ -304,21 +315,32 @@ export interface DiscoveryConfig {
 }
 
 export interface RouterConfig {
+  /** Default payee for paid routes — populates `payTo` on the auto-generated x402 `exact` accept and acts as the MPP `recipient` fallback. Override per-protocol via `x402.accepts[i].payTo` / `mpp.recipient`, or per-route via `.paid({ payTo })`. */
   payeeAddress?: string;
   /** Origin URL (required). Used as 402 realm, discovery base, OpenAPI server, and MPP memo prefix — must match the public domain or payment matching breaks. */
   baseUrl: string;
+  /** Default chain for the auto-generated x402 `exact` accept (e.g. `base`, `base-sepolia`). Ignored when `x402.accepts` is set. @default 'base' */
   network?: string;
+  /** x402 protocol settings. Omit to default to a single `exact`/USDC accept on `network` paid to `payeeAddress`, verified via the Coinbase default facilitator (requires `CDP_API_KEY_ID`/`CDP_API_KEY_SECRET`). */
   x402?: {
+    /** Explicit accepts list (scheme + network + asset). Overrides the auto-generated default. Add an `upto` accept here to enable `.paid({ dynamic: true })` on x402. */
     accepts?: X402AcceptConfig[];
+    /** Per-chain facilitator overrides (`evm`/`solana`). Defaults to the Coinbase facilitator on EVM; set `solana` to accept Solana payments. */
     facilitators?: X402FacilitatorsConfig;
   };
+  /** Observability hook receiving request/auth/payment/settlement events. Use `consolePlugin` for dev, or implement `RouterPlugin` for structured logs/analytics. */
   plugin?: import('./plugin.js').RouterPlugin;
   /** Single KV cache for SIWX nonce, SIWX entitlement, and MPP tx-hash replay (prefixed `siwx:nonce:`, `siwx:ent:`, `mpp:`). Pass `{ url, token }` for an Upstash-compatible REST endpoint (Upstash, Vercel KV), or a custom `KvStore` implementation. Omitted: auto-bootstraps from `KV_REST_API_URL` + `KV_REST_API_TOKEN`; falls back to in-memory when missing (unsafe in serverless). */
   kvStore?: import('./kv-store/index.js').KvStore | { url: string; token: string };
+  /** Centralized price map keyed by route ID. `.route(key)` auto-applies `.paid(prices[key])` when `key` is listed; per-route `.paid()` still works for keys not in the map. */
   prices?: Record<string, string>;
+  /** MPP (Tempo) payment-channel config. Required when `protocols` includes `'mpp'`. */
   mpp?: {
+    /** HMAC key for signing/verifying MPP challenge nonces. Persist across deploys — rotating invalidates outstanding 402 challenges. Falls back to `MPP_SECRET_KEY`. */
     secretKey: string;
+    /** Tempo currency contract address (0x-prefixed). Use `TEMPO_USDC_CURRENCY` for USDC on Tempo. */
     currency: string;
+    /** MPP payee address (EVM). Overrides `payeeAddress` for MPP only. Required when `payeeAddress` is unset. MUST equal `operatorKey`'s derived address when `session` is enabled. */
     recipient?: string;
     /** Tempo RPC URL for on-chain verification. Falls back to `TEMPO_RPC_URL`. */
     rpcUrl?: string;
@@ -336,5 +358,6 @@ export interface RouterConfig {
   protocols?: ProtocolType[];
   /** When true, `.route('key')` is rejected (use `.route({ path })`) and custom `key !== path` is rejected. Prevents discovery/openapi drift. */
   strictRoutes?: boolean;
+  /** Static metadata for auto-generated discovery surfaces — `/.well-known/x402`, OpenAPI (`/api/openapi`), and `/llms.txt`. */
   discovery: DiscoveryConfig;
 }
