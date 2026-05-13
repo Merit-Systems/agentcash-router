@@ -22,8 +22,7 @@ export type RouterConfigIssueCode =
   | 'missing_mpp_rpc_url'
   | 'invalid_mpp_fee_payer_key'
   | 'invalid_mpp_operator_key'
-  | 'mpp_operator_equals_fee_payer'
-  | 'missing_mpp_default_store_env';
+  | 'mpp_operator_equals_fee_payer';
 
 export interface RouterConfigIssue {
   code: RouterConfigIssueCode;

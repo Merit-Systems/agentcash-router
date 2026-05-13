@@ -8,7 +8,6 @@ export function mppFromEnv(
   options: {
     recipient?: string;
     require?: boolean;
-    useDefaultStore?: boolean;
     feePayerKey?: string;
   } = {},
 ): RouterConfig['mpp'] | undefined {
@@ -49,7 +48,6 @@ export function mppFromEnv(
     rpcUrl: rpcUrl!,
     ...(options.recipient ? { recipient: options.recipient } : {}),
     ...(feePayerKey ? { feePayerKey } : {}),
-    ...(options.useDefaultStore !== undefined ? { useDefaultStore: options.useDefaultStore } : {}),
   };
 }
 

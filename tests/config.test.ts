@@ -106,7 +106,7 @@ describe('router config helpers', () => {
           TEMPO_RPC_URL: 'https://tempo.example.com',
           MPP_FEE_PAYER_KEY: FEE_PAYER_KEY,
         },
-        { recipient: PAYEE, useDefaultStore: true },
+        { recipient: PAYEE },
       ),
     ).toEqual({
       secretKey: 'secret',
@@ -114,7 +114,6 @@ describe('router config helpers', () => {
       rpcUrl: 'https://tempo.example.com',
       recipient: PAYEE,
       feePayerKey: FEE_PAYER_KEY,
-      useDefaultStore: true,
     });
   });
 

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createRedisEntitlementStore, MemoryEntitlementStore } from '../src/auth/entitlement.js';
+import {
+  createKvEntitlementStore,
+  MemoryEntitlementStore,
+  type KvStore,
+} from '../src/kv-store/index.js';
 
 describe('MemoryEntitlementStore', () => {
   it('grants and checks entitlements by route + wallet', async () => {
@@ -28,53 +32,69 @@ describe('MemoryEntitlementStore', () => {
   });
 });
 
-describe('createRedisEntitlementStore', () => {
-  it('supports upstash-style clients', async () => {
-    const data = new Map<string, Set<string>>();
-    const upstash = {
-      constructor: { name: 'Redis' },
-      url: 'https://example.com',
-      async sadd(key: string, member: string): Promise<number> {
-        let set = data.get(key);
-        if (!set) {
-          set = new Set<string>();
-          data.set(key, set);
-        }
-        set.add(member);
-        return 1;
+describe('createKvEntitlementStore', () => {
+  function makeFakeKv(): KvStore {
+    const sets = new Map<string, Set<string>>();
+    return {
+      async get() {
+        return null;
       },
-      async sismember(key: string, member: string): Promise<number> {
-        return data.get(key)?.has(member) ? 1 : 0;
+      async set() {},
+      async del() {},
+      async setNxEx() {
+        return true;
+      },
+      async sadd(key, member) {
+        let s = sets.get(key);
+        if (!s) {
+          s = new Set();
+          sets.set(key, s);
+        }
+        s.add(member);
+      },
+      async sismember(key, member) {
+        return sets.get(key)?.has(member) ?? false;
+      },
+      async update() {
+        throw new Error('not used');
       },
     };
+  }
 
-    const store = createRedisEntitlementStore(upstash);
+  it('grants and checks via sadd/sismember', async () => {
+    const store = createKvEntitlementStore(makeFakeKv());
     await store.grant('route/a', '0xWalletA');
     expect(await store.has('route/a', '0xwalleta')).toBe(true);
     expect(await store.has('route/a', '0xwalletb')).toBe(false);
   });
 
-  it('supports ioredis-style clients', async () => {
-    const data = new Map<string, Set<string>>();
-    const ioredis = {
-      options: {},
-      status: 'ready',
-      async sadd(key: string, member: string): Promise<number> {
-        let set = data.get(key);
-        if (!set) {
-          set = new Set<string>();
-          data.set(key, set);
-        }
-        set.add(member);
-        return 1;
-      },
-      async sismember(key: string, member: string): Promise<number> {
-        return data.get(key)?.has(member) ? 1 : 0;
+  it('namespaces keys under siwx:ent: by default', async () => {
+    const kv = makeFakeKv();
+    const calls: Array<[string, string]> = [];
+    const wrapped: KvStore = {
+      ...kv,
+      sadd: async (key, member) => {
+        calls.push([key, member]);
+        return kv.sadd(key, member);
       },
     };
+    const store = createKvEntitlementStore(wrapped);
+    await store.grant('route/a', '0xWalletA');
+    expect(calls[0]).toEqual(['siwx:ent:route/a', '0xwalleta']);
+  });
 
-    const store = createRedisEntitlementStore(ioredis);
-    await store.grant('route/b', '0xWalletB');
-    expect(await store.has('route/b', '0xwalletb')).toBe(true);
+  it('respects custom prefix', async () => {
+    const kv = makeFakeKv();
+    const calls: Array<[string, string]> = [];
+    const wrapped: KvStore = {
+      ...kv,
+      sadd: async (key, member) => {
+        calls.push([key, member]);
+        return kv.sadd(key, member);
+      },
+    };
+    const store = createKvEntitlementStore(wrapped, { prefix: 'app:e:' });
+    await store.grant('route/a', '0xWalletA');
+    expect(calls[0]).toEqual(['app:e:route/a', '0xwalleta']);
   });
 });

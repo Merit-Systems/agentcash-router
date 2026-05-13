@@ -5,8 +5,13 @@ import type { RouteDefinition, RouteMethod } from './types.js';
 import type { OrchestrateDeps } from './orchestrate.js';
 import { RouteRegistry } from './registry.js';
 import { RouteBuilder } from './builder.js';
-import { MemoryNonceStore } from './auth/nonce.js';
-import { MemoryEntitlementStore } from './auth/entitlement.js';
+import {
+  MemoryNonceStore,
+  MemoryEntitlementStore,
+  createKvNonceStore,
+  createKvEntitlementStore,
+  createKvStoreFromEnv,
+} from './kv-store/index.js';
 import { createWellKnownHandler } from './discovery/well-known.js';
 import { createOpenAPIHandler } from './discovery/openapi.js';
 import { createLlmsTxtHandler } from './discovery/llms-txt.js';
@@ -46,8 +51,11 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   config: RouterConfig & { prices?: P },
 ): ServiceRouter<Extract<keyof P, string>> {
   const registry = new RouteRegistry();
-  const nonceStore = config.siwx?.nonceStore ?? new MemoryNonceStore();
-  const entitlementStore = config.siwx?.entitlementStore ?? new MemoryEntitlementStore();
+  const kvStore = config.kvStore ?? createKvStoreFromEnv();
+  const nonceStore = kvStore ? createKvNonceStore(kvStore) : new MemoryNonceStore();
+  const entitlementStore = kvStore
+    ? createKvEntitlementStore(kvStore)
+    : new MemoryEntitlementStore();
   const network = config.network ?? BASE_NETWORK;
   const x402Accepts = getConfiguredX402Accepts(config);
   const configIssues = getRouterConfigIssues(config, {
@@ -113,7 +121,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     deps.x402FacilitatorsByNetwork = x402Result.facilitatorsByNetwork;
     if (x402Result.initError) deps.x402InitError = x402Result.initError;
 
-    const mppResult = await initMpp(config, resolvedBaseUrl, mppConfigError);
+    const mppResult = await initMpp(config, resolvedBaseUrl, kvStore, mppConfigError);
     deps.mppx = mppResult.mppx ?? null;
     deps.tempoClient = mppResult.tempoClient ?? null;
     if (mppResult.initError) {
@@ -272,10 +280,26 @@ export type {
   ErrorEvent,
 } from './plugin.js';
 
-export type { NonceStore, RedisNonceStoreOptions } from './auth/nonce.js';
-export { MemoryNonceStore, createRedisNonceStore, SIWX_CHALLENGE_EXPIRY_MS } from './auth/nonce.js';
-export type { EntitlementStore, RedisEntitlementStoreOptions } from './auth/entitlement.js';
-export { MemoryEntitlementStore, createRedisEntitlementStore } from './auth/entitlement.js';
+export type {
+  KvStore,
+  KvChange,
+  NonceStore,
+  KvNonceStoreOptions,
+  EntitlementStore,
+  KvEntitlementStoreOptions,
+  KvMppStoreOptions,
+} from './kv-store/index.js';
+export {
+  createUpstashRestClient,
+  createKvStoreFromEnv,
+  withPrefix,
+  MemoryNonceStore,
+  createKvNonceStore,
+  SIWX_CHALLENGE_EXPIRY_MS,
+  MemoryEntitlementStore,
+  createKvEntitlementStore,
+  createKvMppStore,
+} from './kv-store/index.js';
 export type { SiwxErrorCode } from './auth/siwx.js';
 export { SIWX_ERROR_MESSAGES } from './auth/siwx.js';
 export { RouteBuilder } from './builder.js';

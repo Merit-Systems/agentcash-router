@@ -6,8 +6,8 @@ import {
   encodePaymentSignatureHeader,
 } from '@x402/core/http';
 import { createRequestHandler, type OrchestrateDeps } from '../src/orchestrate.js';
-import { MemoryNonceStore } from '../src/auth/nonce.js';
-import { MemoryEntitlementStore } from '../src/auth/entitlement.js';
+import { MemoryNonceStore } from '../src/kv-store/index.js';
+import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
 import type { RouteEntry } from '../src/types.js';
 import type { ResolvedX402Facilitator } from '../src/x402-facilitators.js';

@@ -22,7 +22,6 @@ const CHECKS: MppCheck[] = [
   checkFeePayerKey,
   checkOperatorKey,
   checkOperatorMatchesFeePayer,
-  checkDefaultStoreEnv,
 ];
 
 export function validateMppConfig(config: RouterConfig, env: RouterEnv): RouterConfigIssue[] {
@@ -145,16 +144,5 @@ function checkOperatorMatchesFeePayer({ mpp }: MppCheckArgs): RouterConfigIssue 
       `Tempo rejects fee-delegated txs with sender === feePayer, so channel ` +
       `close/settle would fail at runtime. Either use two distinct wallets, ` +
       `or omit feePayerKey to disable gas sponsorship (clients then pay their own gas).`,
-  };
-}
-
-function checkDefaultStoreEnv({ mpp, env }: MppCheckArgs): RouterConfigIssue | null {
-  if (!mpp.useDefaultStore || mpp.store) return null;
-  if (env.KV_REST_API_URL && env.KV_REST_API_TOKEN) return null;
-  return {
-    code: 'missing_mpp_default_store_env',
-    protocol: 'mpp',
-    message:
-      'mpp.useDefaultStore requires KV_REST_API_URL and KV_REST_API_TOKEN environment variables. These are automatically set by Vercel KV.',
   };
 }

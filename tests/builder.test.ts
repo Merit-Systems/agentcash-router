@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { RouteRegistry } from '../src/registry.js';
 import { RouteBuilder } from '../src/builder.js';
-import { MemoryNonceStore } from '../src/auth/nonce.js';
-import { MemoryEntitlementStore } from '../src/auth/entitlement.js';
+import { MemoryNonceStore } from '../src/kv-store/index.js';
+import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import type { OrchestrateDeps } from '../src/orchestrate.js';
 
 function makeDeps(): OrchestrateDeps {
