@@ -18,13 +18,13 @@ export async function verifyHashMode(
 ): Promise<
   VerifySuccess | { ok: false; kind: 'invalid' } | { ok: false; kind: 'config'; message: string }
 > {
-  const { deps, price, routeEntry, request } = args;
+  const { deps, price, request, report } = args;
 
   if (!deps.mppx) {
     const reason = deps.mppInitError
       ? `MPP initialization failed: ${deps.mppInitError}`
       : 'MPP not initialized — ensure mppx is installed and mpp config (secretKey, currency, recipient) is correct';
-    console.error(`[router] ${routeEntry.key}: ${reason}`);
+    report('error', reason);
     return { ok: false, kind: 'config', message: reason };
   }
 
@@ -33,14 +33,14 @@ export async function verifyHashMode(
     chargeResult = await deps.mppx.charge({ amount: price })(request);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[router] ${routeEntry.key}: MPP charge failed: ${message}`);
+    report('error', `MPP charge failed: ${message}`);
     return { ok: false, kind: 'config', message: `MPP payment processing failed: ${message}` };
   }
 
   if (chargeResult.status === 402) {
     const reason = await readChallengeReason(chargeResult.challenge);
     const detail = reason || 'credential may be invalid, or check TEMPO_RPC_URL configuration';
-    console.warn(`[router] ${routeEntry.key}: MPP credential rejected — ${detail}`);
+    report('warn', `MPP credential rejected: ${detail}`);
     return { ok: false, kind: 'invalid' };
   }
 

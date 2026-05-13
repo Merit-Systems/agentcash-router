@@ -151,8 +151,9 @@ async function buildChargeChallenge(args: ChallengeArgs): Promise<ChallengeContr
       if (wwwAuth) return { headers: { [HEADERS.WWW_AUTHENTICATE]: wwwAuth } };
     }
   } catch (err) {
-    console.warn(
-      `[router] MPP challenge build failed: ${err instanceof Error ? err.message : String(err)}`,
+    args.report(
+      'warn',
+      `MPP challenge build failed: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
   }

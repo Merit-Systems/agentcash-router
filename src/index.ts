@@ -12,8 +12,13 @@ import { createOpenAPIHandler } from './discovery/openapi.js';
 import { createLlmsTxtHandler } from './discovery/llms-txt.js';
 import { getConfiguredX402Accepts } from './protocols/x402/accepts.js';
 import { BASE_NETWORK } from './constants.js';
-import { RouterConfigError, formatRouterConfigIssues, getRouterConfigIssues } from './config.js';
-import { getMppxRequestContext, getMppxStreamingContext } from './mppx-init.js';
+import {
+  RouterConfigError,
+  formatRouterConfigIssues,
+  getRouterConfigIssues,
+} from './config/index.js';
+import { initX402 } from './init/x402.js';
+import { initMpp } from './init/mpp.js';
 
 export interface MonitorEntry {
   provider: string;
@@ -103,106 +108,17 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   };
 
   deps.initPromise = (async () => {
-    if (x402ConfigError) {
-      deps.x402InitError = x402ConfigError;
-    } else {
-      try {
-        const { createX402Server } = await import('./server.js');
-        const result = await createX402Server(config);
-        deps.x402Server = result.server;
-        deps.x402FacilitatorsByNetwork = result.facilitatorsByNetwork;
-        await result.initPromise;
-      } catch (err: unknown) {
-        deps.x402Server = null;
-        deps.x402InitError = err instanceof Error ? err.message : String(err);
-      }
-    }
+    const x402Result = await initX402(config, x402ConfigError);
+    deps.x402Server = x402Result.server ?? null;
+    deps.x402FacilitatorsByNetwork = x402Result.facilitatorsByNetwork;
+    if (x402Result.initError) deps.x402InitError = x402Result.initError;
 
-    if (mppConfigError) {
-      deps.mppInitError = mppConfigError;
-    } else if (config.mpp) {
-      try {
-        const { Mppx, tempo } = await import('mppx/server');
-        const rpcUrl = (config.mpp.rpcUrl ?? process.env.TEMPO_RPC_URL)!;
-        const { createClient, http } = await import('viem');
-        const { tempo: tempoChain } = await import('viem/chains');
-        deps.tempoClient = createClient({ chain: tempoChain, transport: http(rpcUrl) });
-        const getClient = async () => deps.tempoClient!;
-
-        const { privateKeyToAccount } = await import('viem/accounts');
-        const operatorAccount = config.mpp.operatorKey
-          ? privateKeyToAccount(config.mpp.operatorKey as `0x${string}`)
-          : undefined;
-        const feePayerAccount = config.mpp.feePayerKey
-          ? privateKeyToAccount(config.mpp.feePayerKey as `0x${string}`)
-          : undefined;
-
-        if (config.mpp.session && operatorAccount) {
-          const recipient = (config.mpp.recipient ?? config.payeeAddress)?.toLowerCase();
-          const opAddr = operatorAccount.address.toLowerCase();
-          if (recipient && opAddr !== recipient) {
-            throw new Error(
-              `MPP session config mismatch: operator address ${operatorAccount.address} ` +
-                `must equal recipient/payee ${recipient}. ` +
-                `mppx's channel-close handler asserts sender === payee. ` +
-                `Set mpp.operatorKey to the private key for ${recipient}, or set ` +
-                `mpp.recipient/payeeAddress to ${operatorAccount.address}.`,
-            );
-          }
-        }
-
-        let resolvedStore = config.mpp.store;
-        if (!resolvedStore && config.mpp.useDefaultStore) {
-          const kvUrl = process.env.KV_REST_API_URL;
-          const kvToken = process.env.KV_REST_API_TOKEN;
-          if (!kvUrl || !kvToken) {
-            throw new Error(
-              'mpp.useDefaultStore requires KV_REST_API_URL and KV_REST_API_TOKEN environment variables. ' +
-                'These are automatically set by Vercel KV.',
-            );
-          }
-          const { Store } = await import('mppx');
-          const { createUpstashRest } = await import('./upstash-rest.js');
-          resolvedStore = Store.upstash(createUpstashRest(kvUrl, kvToken));
-        }
-
-        const realm = new URL(resolvedBaseUrl).host;
-        const mppConfig = config.mpp;
-        const sessionEnabled = !!(mppConfig.session && operatorAccount);
-        const sharedSessionParams = {
-          currency: mppConfig.currency as `0x${string}`,
-          decimals: 6,
-          recipient: (mppConfig.recipient ?? config.payeeAddress) as `0x${string}`,
-          getClient,
-          ...(operatorAccount ? { account: operatorAccount } : {}),
-          ...(feePayerAccount ? { feePayer: feePayerAccount } : {}),
-          ...(resolvedStore ? { store: resolvedStore } : {}),
-        };
-        const mppxArgs = {
-          Mppx,
-          tempo,
-          mppConfig,
-          payeeAddress: config.payeeAddress ?? '',
-          getClient,
-          feePayerAccount,
-          resolvedStore,
-          sessionEnabled,
-          sharedSessionParams,
-          realm,
-        };
-        const primary = getMppxRequestContext(mppxArgs);
-        const streaming = getMppxStreamingContext(mppxArgs);
-
-        deps.mppx = {
-          charge: primary.charge,
-          ...(primary.session ? { sessionRequest: primary.session } : {}),
-          ...(streaming?.session ? { sessionStream: streaming.session } : {}),
-        };
-      } catch (err: unknown) {
-        deps.mppx = null;
-        deps.mppInitError = err instanceof Error ? err.message : String(err);
-        console.error(`[router] MPP initialization failed: ${deps.mppInitError}`);
-      }
+    const mppResult = await initMpp(config, resolvedBaseUrl, mppConfigError);
+    deps.mppx = mppResult.mppx ?? null;
+    deps.tempoClient = mppResult.tempoClient ?? null;
+    if (mppResult.initError) {
+      deps.mppInitError = mppResult.initError;
+      console.error(`[router] MPP initialization failed: ${mppResult.initError}`);
     }
   })();
 
@@ -301,13 +217,13 @@ export {
   paidOptionsForProtocols,
   validateRouterConfig,
   x402AcceptsFromEnv,
-} from './config.js';
+} from './config/index.js';
 export type {
   RouterConfigIssue,
   RouterConfigIssueCode,
   RouterConfigValidationOptions,
   RouterEnv,
-} from './config.js';
+} from './config/index.js';
 export type {
   HandlerContext,
   StreamingHandlerContext,

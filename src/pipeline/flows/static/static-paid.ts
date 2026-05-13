@@ -16,20 +16,14 @@ import { resolveStaticBodyAndPrice } from './static-body-and-price.js';
 import { runStaticRequestFlow } from './static-request.js';
 
 export async function runStaticPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
-  const { request, routeEntry, deps } = ctx;
+  const { request, routeEntry, deps, report } = ctx;
 
   const apiKeyGate = await runApiKeyGate(ctx);
   if (!apiKeyGate.ok) return apiKeyGate.response;
   const { account } = apiKeyGate;
 
   const pricing = selectPricing(routeEntry.pricing, {
-    alert: (level, message, meta) =>
-      firePluginHook(deps.plugin, 'onAlert', ctx.pluginCtx, {
-        level,
-        message,
-        route: routeEntry.key,
-        meta,
-      }),
+    alert: report,
     maxPrice: routeEntry.maxPrice,
     minPrice: routeEntry.minPrice,
     route: routeEntry.key,
@@ -60,6 +54,7 @@ export async function runStaticPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
     price,
     routeEntry,
     deps,
+    report,
   });
 
   if (verifyOutcome.ok === false) {

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import type { PricingStrategy } from '../../pricing/index.js';
-import { firePluginHook } from '../../plugin.js';
 import { getAllowedStrategies } from '../../protocols/index.js';
 import type { VerifyFailure } from '../../protocols/types.js';
 import { buildChallengeExtensions } from '../challenge-extensions.js';
@@ -48,6 +47,7 @@ export async function build402(
         price: challengePrice,
         extensions,
         deps: ctx.deps,
+        report: ctx.report,
       });
       if (contribution.headers) {
         for (const [name, value] of Object.entries(contribution.headers)) {
@@ -56,11 +56,7 @@ export async function build402(
       }
     } catch (err) {
       const message = `${strategy.protocol} challenge build failed: ${errorMessage(err, String(err))}`;
-      firePluginHook(ctx.deps.plugin, 'onAlert', ctx.pluginCtx, {
-        level: 'critical' as const,
-        message,
-        route: ctx.routeEntry.key,
-      });
+      ctx.report('critical', message);
       if (strategy.protocol === 'x402') {
         const errorResponse = NextResponse.json(
           { success: false, error: message },

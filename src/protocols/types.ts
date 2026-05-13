@@ -1,6 +1,7 @@
 import type { NextRequest, NextResponse } from 'next/server';
 import type { HandlerPaymentContext, RouteEntry } from '../types.js';
 import type { RouterDeps } from '../pipeline/context/index.js';
+import type { ReportFn } from '../alert.js';
 
 export type ProtocolName = 'x402' | 'mpp';
 
@@ -10,6 +11,7 @@ export interface VerifyArgs {
   price: string;
   routeEntry: RouteEntry;
   deps: RouterDeps;
+  report: ReportFn;
 }
 
 export interface VerifySuccess {
@@ -38,6 +40,7 @@ export interface SettleArgs {
   routeEntry: RouteEntry;
   deps: RouterDeps;
   billedAmount: string;
+  report: ReportFn;
 }
 
 export interface StreamSettleArgs {
@@ -48,6 +51,7 @@ export interface StreamSettleArgs {
   routeEntry: RouteEntry;
   deps: RouterDeps;
   bindChannelCharge: (fn: (() => Promise<void>) | null) => void;
+  report: ReportFn;
 }
 
 export type SettleOutcome =
@@ -65,6 +69,7 @@ export interface ChallengeArgs {
   price: string;
   extensions?: Record<string, unknown>;
   deps: RouterDeps;
+  report: ReportFn;
 }
 
 export interface ChallengeContribution {

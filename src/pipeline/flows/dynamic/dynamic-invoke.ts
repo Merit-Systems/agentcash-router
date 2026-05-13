@@ -61,7 +61,7 @@ export async function invokeDynamic(
     if (!chargeContext) {
       return errorResult(
         new HttpError(
-          'route returned an async iterable from a non-streaming handler — declare with `async function*` to opt into streaming',
+          'route returned an async iterable from a non-streaming handler — use .stream(async function*(...)) instead of .handler() to opt into streaming',
           500,
         ),
         null,

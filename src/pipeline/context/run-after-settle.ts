@@ -1,4 +1,3 @@
-import { firePluginHook } from '../../plugin.js';
 import type { HandlerPaymentContext } from '../../types.js';
 import { errorMessage } from './errors.js';
 import { runSettlementError } from './run-settlement-error.js';
@@ -15,12 +14,7 @@ export async function runAfterSettle(
     await hook(settlementContext(ctx, scope));
   } catch (error) {
     const message = errorMessage(error, 'Post-settlement hook failed');
-    console.error(`[router] ${ctx.routeEntry.key}: afterSettle failed: ${message}`);
-    firePluginHook(ctx.deps.plugin, 'onAlert', ctx.pluginCtx, {
-      level: 'error' as const,
-      message: `Post-settlement hook failed: ${message}`,
-      route: ctx.routeEntry.key,
-    });
+    ctx.report('error', `Post-settlement hook failed: ${message}`);
     await runSettlementError(ctx, scope, error, 'afterSettle');
   }
 }

@@ -14,7 +14,7 @@ export async function settleAndFinalizeStream(args: {
   bindChannelCharge: (fn: (() => Promise<void>) | null) => void;
 }): Promise<NextResponse> {
   const { ctx, strategy, verifyOutcome, source, account, body, bindChannelCharge } = args;
-  const { request, routeEntry, deps } = ctx;
+  const { request, routeEntry, deps, report } = ctx;
 
   if (!strategy.settleStream) {
     return fail(ctx, 500, `${strategy.protocol} does not support streaming handlers`, body);
@@ -28,6 +28,7 @@ export async function settleAndFinalizeStream(args: {
     routeEntry,
     deps,
     bindChannelCharge,
+    report,
   });
 
   if (!settle.ok) {

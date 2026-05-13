@@ -40,11 +40,7 @@ export async function runSiwxOnlyFlow(ctx: FlowCtx): Promise<NextResponse> {
       mppSiwxResult = await verifyMppSiwx(request, deps.mppx);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      firePluginHook(deps.plugin, 'onAlert', ctx.pluginCtx, {
-        level: 'critical' as const,
-        message: `MPP SIWX verification failed: ${message}`,
-        route: routeEntry.key,
-      });
+      ctx.report('critical', `MPP SIWX verification failed: ${message}`);
       return fail(ctx, 500, `MPP SIWX verification failed: ${message}`);
     }
 
@@ -136,11 +132,10 @@ async function buildSiwxChallenge(ctx: FlowCtx): Promise<NextResponse> {
     const { encodePaymentRequiredHeader } = await import('@x402/core/http');
     encoded = encodePaymentRequiredHeader(paymentRequired);
   } catch (err) {
-    firePluginHook(deps.plugin, 'onAlert', ctx.pluginCtx, {
-      level: 'warn' as const,
-      message: `SIWX challenge header encoding failed: ${err instanceof Error ? err.message : String(err)}`,
-      route: routeEntry.key,
-    });
+    ctx.report(
+      'warn',
+      `SIWX challenge header encoding failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
   const response = new NextResponse(JSON.stringify(paymentRequired), {

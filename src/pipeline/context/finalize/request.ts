@@ -16,7 +16,7 @@ export async function settleAndFinalizeRequest(args: {
 }): Promise<NextResponse> {
   const { ctx, strategy, verifyOutcome, scope, rawResult, body, billedAmount, onSettleError } =
     args;
-  const { request, routeEntry, deps } = ctx;
+  const { request, routeEntry, deps, report } = ctx;
 
   const settle = await strategy.settle({
     request,
@@ -26,6 +26,7 @@ export async function settleAndFinalizeRequest(args: {
     routeEntry,
     deps,
     billedAmount,
+    report,
   });
 
   if (!settle.ok) {

@@ -1,5 +1,6 @@
 import type { PaymentRequirements } from '@x402/core/types';
 import type { X402ResolvedAccept, X402Server } from '../../types.js';
+import type { ReportFn } from '../../alert.js';
 import { buildEvmExactOptions, buildEvmUptoOptions, isEvmNetwork } from './evm.js';
 import { buildSolanaExactOptions, isSolanaRequirement } from './solana.js';
 
@@ -8,8 +9,15 @@ export async function buildExpectedRequirements(
   request: Request,
   price: string,
   accepts: X402ResolvedAccept[],
+  report?: ReportFn,
 ): Promise<PaymentRequirements[]> {
-  const sdkRequirements = await buildSdkHandledRequirements(server, request, price, accepts);
+  const sdkRequirements = await buildSdkHandledRequirements(
+    server,
+    request,
+    price,
+    accepts,
+    report,
+  );
   const customRequirements = buildCustomRequirements(price, accepts);
   return [...sdkRequirements, ...customRequirements];
 }
@@ -19,6 +27,7 @@ async function buildSdkHandledRequirements(
   request: Request,
   price: string,
   accepts: X402ResolvedAccept[],
+  report?: ReportFn,
 ): Promise<PaymentRequirements[]> {
   const groups = [
     buildEvmExactOptions(accepts, price),
@@ -42,8 +51,9 @@ async function buildSdkHandledRequirements(
       if (groups.length === 1) {
         throw err;
       }
-      console.warn(
-        `[router] Failed to build x402 ${options[0]?.scheme} requirements for ${options[0]?.network}: ${err.message}`,
+      report?.(
+        'warn',
+        `Failed to build x402 ${options[0]?.scheme} requirements for ${options[0]?.network}: ${err.message}`,
       );
     }
   }

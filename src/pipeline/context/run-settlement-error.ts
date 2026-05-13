@@ -1,4 +1,3 @@
-import { firePluginHook } from '../../plugin.js';
 import { errorMessage } from './errors.js';
 import { settlementContext } from './settlement-context.js';
 import type { FlowCtx, SettleScope } from './types.js';
@@ -15,11 +14,6 @@ export async function runSettlementError(
     await hook({ ...settlementContext(ctx, scope), error, phase });
   } catch (hookError) {
     const message = errorMessage(hookError, 'Settlement error hook failed');
-    console.error(`[router] ${ctx.routeEntry.key}: onSettlementError failed: ${message}`);
-    firePluginHook(ctx.deps.plugin, 'onAlert', ctx.pluginCtx, {
-      level: 'error' as const,
-      message: `Settlement error hook failed: ${message}`,
-      route: ctx.routeEntry.key,
-    });
+    ctx.report('error', `Settlement error hook failed: ${message}`);
   }
 }

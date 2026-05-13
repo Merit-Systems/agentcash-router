@@ -35,11 +35,23 @@ type StreamingHandlerFn<TBody, TQuery> = (
   ctx: StreamingHandlerContext<TBody, TQuery>,
 ) => AsyncIterable<unknown>;
 
-type HandlerFnFor<TBody, TQuery, IsDynamic extends boolean> = IsDynamic extends true
-  ? RequestHandlerFn<TBody, TQuery> | StreamingHandlerFn<TBody, TQuery>
-  : RequestHandlerFn<TBody, TQuery>;
-
 type HandlerArg<
+  TBody,
+  TQuery,
+  HasAuth extends boolean,
+  NeedsBody extends boolean,
+  HasBody extends boolean,
+> = HasAuth extends true
+  ? [NeedsBody, HasBody] extends [true, false]
+    ? {
+        __missing: 'Call .body(schema) — dynamic/tiered pricing requires a body schema to resolve the price against';
+      }
+    : RequestHandlerFn<TBody, TQuery>
+  : {
+      __missing: 'Select an auth mode: .paid(pricing), .siwx(), .apiKey(resolver), or .unprotected()';
+    };
+
+type StreamArg<
   TBody,
   TQuery,
   HasAuth extends boolean,
@@ -47,13 +59,17 @@ type HandlerArg<
   HasBody extends boolean,
   IsDynamic extends boolean,
 > = HasAuth extends true
-  ? [NeedsBody, HasBody] extends [true, false]
-    ? {
-        __missing: 'Call .body(schema) — dynamic/tiered pricing requires a body schema to resolve the price against';
+  ? IsDynamic extends true
+    ? [NeedsBody, HasBody] extends [true, false]
+      ? {
+          __missing: 'Call .body(schema) — dynamic pricing requires a body schema to resolve the price against';
+        }
+      : StreamingHandlerFn<TBody, TQuery>
+    : {
+        __missing: 'Streaming handlers require .paid({ dynamic: true, tickCost, unitType, maxPrice }) — static/free routes cannot meter per-chunk billing';
       }
-    : HandlerFnFor<TBody, TQuery, IsDynamic>
   : {
-      __missing: 'Select an auth mode: .paid(pricing), .siwx(), .apiKey(resolver), or .unprotected()';
+      __missing: 'Select an auth mode: .paid({ dynamic: true, ... }) — streaming requires handler-driven dynamic pricing';
     };
 
 export class RouteBuilder<
@@ -108,17 +124,66 @@ export class RouteBuilder<
     return next;
   }
 
+  /**
+   * Charge a fixed price per request, denominated in USDC as a decimal string.
+   *
+   * @example
+   * ```ts
+   * router.route('search').paid('0.01').handler(handler);
+   * ```
+   */
   paid(
     pricing: string,
     options?: PaidOptions,
   ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, IsDynamic>;
+  /**
+   * Configure handler-driven dynamic pricing — each tick costs `tickCost` USDC,
+   * capped at `maxPrice`. Pair with `.handler()` for one-tick-per-request
+   * billing, or with `.stream()` for per-yield metering.
+   *
+   * @example
+   * ```ts
+   * router
+   *   .route('llm/stream')
+   *   .paid({ dynamic: true, tickCost: '0.0001', unitType: 'token', maxPrice: '0.05' })
+   *   .stream(async function* ({ charge }) { await charge(); yield 'hi'; });
+   * ```
+   */
   paid(
     options: PaidOptions & { dynamic: true; maxPrice: string },
   ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, True>;
+  /**
+   * Compute the price from the parsed body before issuing the 402 challenge.
+   * Throw an `HttpError` from the pricing function to reject the request before
+   * payment is requested.
+   *
+   * @example
+   * ```ts
+   * router
+   *   .route('llm')
+   *   .paid((body) => `${body.tokens * 0.0001}`, { maxPrice: '5.00' })
+   *   .body(schema)
+   *   .handler(handler);
+   * ```
+   */
   paid<TBodyIn>(
     pricing: (body: TBodyIn) => string | Promise<string>,
     options?: PaidOptions & { maxPrice?: string },
   ): RouteBuilder<TBody, TQuery, TOutput, True, True, HasBody, IsDynamic>;
+  /**
+   * Select a price tier from `body[field]`, optionally falling back to the
+   * `default` tier when the value is missing. The 402 challenge advertises the
+   * highest tier price.
+   *
+   * @example
+   * ```ts
+   * router
+   *   .route('upload')
+   *   .paid({ field: 'size', tiers: { sm: { price: '0.01' }, lg: { price: '0.10' } } })
+   *   .body(schema)
+   *   .handler(handler);
+   * ```
+   */
   paid(
     pricing: {
       field: string;
@@ -212,6 +277,16 @@ export class RouteBuilder<
     return next;
   }
 
+  /**
+   * Require Sign-In-with-X wallet identity on this route — clients prove
+   * control of a wallet via a signed challenge. Combine with `.paid()` to gate
+   * a paid route on a verified wallet identity.
+   *
+   * @example
+   * ```ts
+   * router.route('profile').siwx().handler(async ({ wallet }) => getProfile(wallet));
+   * ```
+   */
   siwx(): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, IsDynamic> {
     if (this._authMode === 'unprotected') {
       throw new Error(
@@ -247,6 +322,19 @@ export class RouteBuilder<
     return next;
   }
 
+  /**
+   * Require an `X-API-Key` header (or `Authorization: Bearer <key>`); the
+   * resolver returns the account record, or `null` for 401. Composes with
+   * `.paid()` — key is checked first, payment second.
+   *
+   * @example
+   * ```ts
+   * router
+   *   .route('admin/users')
+   *   .apiKey(async (key) => db.admin.findByKey(key))
+   *   .handler(async ({ account }) => db.user.list(account.orgId));
+   * ```
+   */
   apiKey(
     resolver: (key: string) => unknown | Promise<unknown>,
   ): RouteBuilder<TBody, TQuery, TOutput, True, NeedsBody, HasBody, IsDynamic> {
@@ -269,6 +357,15 @@ export class RouteBuilder<
     return next;
   }
 
+  /**
+   * Mark the route as public — no auth, no payment, no SIWX. The handler
+   * receives `null` for `wallet`, `payment`, and `account`.
+   *
+   * @example
+   * ```ts
+   * router.route('health').unprotected().handler(async () => ({ status: 'ok' }));
+   * ```
+   */
   unprotected(): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, IsDynamic> {
     if (this._authMode && this._authMode !== 'unprotected') {
       throw new Error(
@@ -296,6 +393,20 @@ export class RouteBuilder<
     return next;
   }
 
+  /**
+   * Tag the route with an upstream provider for discovery and provider-side
+   * monitoring. The provider name and config surface in `well-known` and
+   * OpenAPI output.
+   *
+   * @example
+   * ```ts
+   * router
+   *   .route('search')
+   *   .paid('0.01')
+   *   .provider('exa', { quotaPerMonth: 1000 })
+   *   .handler(handler);
+   * ```
+   */
   provider(name: string, config?: ProviderConfig): this {
     const next = this.fork();
     next._providerName = name;
@@ -303,16 +414,18 @@ export class RouteBuilder<
     return next;
   }
 
+  /**
+   * Declare the request body's Zod schema. Parsed body is typed as `ctx.body`
+   * in the handler. Use `.inputExample()` to attach a discovery example.
+   *
+   * @example
+   * ```ts
+   * .body(z.object({ query: z.string() }))
+   *   .handler(async ({ body }) => search(body.query));
+   * ```
+   */
   body<T>(
     schema: ZodType<T>,
-  ): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True, IsDynamic>;
-  body<T>(
-    schema: ZodType<T>,
-    example: T & JsonObject,
-  ): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True, IsDynamic>;
-  body<T>(
-    schema: ZodType<T>,
-    example?: T & JsonObject,
   ): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True, IsDynamic> {
     const next = this.fork() as unknown as RouteBuilder<
       T,
@@ -324,23 +437,22 @@ export class RouteBuilder<
       IsDynamic
     >;
     next._bodySchema = schema;
-    if (example !== undefined) {
-      next._inputExample = example;
-      next._hasInputExample = true;
-    }
     return next;
   }
 
+  /**
+   * Declare a query-string Zod schema and switch the route to `GET`. Parsed
+   * query is typed as `ctx.query` in the handler. Use `.inputExample()` to
+   * attach a discovery example.
+   *
+   * @example
+   * ```ts
+   * .query(z.object({ id: z.string() }))
+   *   .handler(async ({ query }) => getById(query.id));
+   * ```
+   */
   query<T>(
     schema: ZodType<T>,
-  ): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic>;
-  query<T>(
-    schema: ZodType<T>,
-    example: T & JsonObject,
-  ): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic>;
-  query<T>(
-    schema: ZodType<T>,
-    example?: T & JsonObject,
   ): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
@@ -352,24 +464,24 @@ export class RouteBuilder<
       IsDynamic
     >;
     next._querySchema = schema;
-    if (example !== undefined) {
-      next._inputExample = example;
-      next._hasInputExample = true;
-    }
     next._method = 'GET';
     return next;
   }
 
+  /**
+   * Declare the response output's Zod schema for OpenAPI generation. The
+   * runtime does not validate handler return values — use Zod's `.parse()`
+   * inside the handler if strict output validation is required. Use
+   * `.outputExample()` to attach a discovery example.
+   *
+   * @example
+   * ```ts
+   * .output(z.object({ result: z.string() }))
+   *   .handler(async () => ({ result: 'ok' }));
+   * ```
+   */
   output<T>(
     schema: ZodType<T>,
-  ): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody, IsDynamic>;
-  output<T>(
-    schema: ZodType<T>,
-    example: T & JsonValue,
-  ): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody, IsDynamic>;
-  output<T>(
-    schema: ZodType<T>,
-    example?: T & JsonValue,
   ): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody, IsDynamic> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
@@ -381,17 +493,17 @@ export class RouteBuilder<
       IsDynamic
     >;
     next._outputSchema = schema;
-    if (example !== undefined) {
-      next._outputExample = example;
-      next._hasOutputExample = true;
-    }
     return next;
   }
 
   /**
-   * Attach a conforming example of the request input (body or query) for
-   * discovery extensions. Validated against the registered schema at
-   * registration. Prefer passing `example` directly to `.body()` / `.query()`.
+   * Attach an example of the request body or query for discovery output,
+   * validated against the registered schema at registration.
+   *
+   * @example
+   * ```ts
+   * .body(searchSchema).inputExample({ query: 'cats' });
+   * ```
    */
   inputExample(
     example: InputTypeFor<TBody, TQuery> & JsonObject,
@@ -411,10 +523,13 @@ export class RouteBuilder<
   }
 
   /**
-   * Attach a conforming example of the response output (any JSON value,
-   * including top-level arrays) for discovery extensions. Validated against
-   * the registered output schema. Prefer passing `example` directly to
-   * `.output()`.
+   * Attach an example response for discovery output, validated against the
+   * registered output schema at registration.
+   *
+   * @example
+   * ```ts
+   * .output(resultSchema).outputExample({ result: 'ok' });
+   * ```
    */
   outputExample(
     example: TOutput & JsonValue,
@@ -433,18 +548,45 @@ export class RouteBuilder<
     return next;
   }
 
+  /**
+   * Set a human-readable summary of the route. Surfaces in OpenAPI,
+   * `well-known`, and `llms.txt` discovery output.
+   *
+   * @example
+   * ```ts
+   * .description('Search indexed web pages by full-text query');
+   * ```
+   */
   description(text: string): this {
     const next = this.fork();
     next._description = text;
     return next;
   }
 
+  /**
+   * Override the URL path advertised in discovery output. Defaults to the
+   * registry key passed to `.route()`.
+   *
+   * @example
+   * ```ts
+   * router.route('search').path('/v2/search').handler(handler);
+   * ```
+   */
   path(p: string): this {
     const next = this.fork();
     next._path = p;
     return next;
   }
 
+  /**
+   * Override the HTTP method advertised in discovery. Defaults to `POST`, or
+   * `GET` when `.query()` has been called.
+   *
+   * @example
+   * ```ts
+   * router.route('items/delete').method('DELETE').handler(handler);
+   * ```
+   */
   method(m: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH'): this {
     const next = this.fork();
     next._method = m;
@@ -452,10 +594,18 @@ export class RouteBuilder<
   }
 
   /**
-   * Pre-payment validation. Runs after body parsing, before the 402 challenge.
-   * Requires `.body()` — call `.body()` first for type inference.
-   * Throw with `Object.assign(new Error('...'), { status })` to control the
-   * response code (defaults to 400).
+   * Run validation against the parsed body before the 402 challenge. Throw
+   * `Object.assign(new Error('...'), { status })` to reject with a custom
+   * status code; defaults to 400. Requires `.body()` to be called first.
+   *
+   * @example
+   * ```ts
+   * .body(RegisterSchema).validate(async (body) => {
+   *   if (await isTaken(body.name)) {
+   *     throw Object.assign(new Error('taken'), { status: 409 });
+   *   }
+   * });
+   * ```
    */
   validate(
     fn: (body: TBody) => void | Promise<void>,
@@ -466,10 +616,17 @@ export class RouteBuilder<
   }
 
   /**
-   * Route-specific settlement hooks. `beforeSettle` runs after a successful
-   * handler response but before router-controlled settlement/broadcast, so it
-   * can still prevent the charge for x402 and MPP transaction-payload flows.
-   * `afterSettle` runs after settlement.
+   * Hook into the settlement lifecycle. `beforeSettle` runs after the handler
+   * succeeds but before on-chain settlement and can cancel the charge;
+   * `afterSettle` runs after settlement completes (success or failure).
+   *
+   * @example
+   * ```ts
+   * .settlement({
+   *   beforeSettle: ({ result }) => (result.refund ? 'skip' : 'continue'),
+   *   afterSettle: ({ tx }) => analytics.track('settled', { tx }),
+   * });
+   * ```
    */
   settlement(
     lifecycle: SettlementLifecycle<TBody>,
@@ -479,12 +636,55 @@ export class RouteBuilder<
     return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic>;
   }
 
+  /**
+   * Register the request handler and return the Next.js route function. The
+   * handler receives a typed context and may return a value (serialized to
+   * JSON), a raw `Response`, or throw an `HttpError` for a non-2xx status.
+   *
+   * @example
+   * ```ts
+   * export const POST = router
+   *   .route('search')
+   *   .paid('0.01')
+   *   .body(schema)
+   *   .handler(async ({ body, wallet }) => searchService(body, wallet));
+   * ```
+   */
   handler(
-    fn: HandlerArg<TBody, TQuery, HasAuth, NeedsBody, HasBody, IsDynamic>,
+    fn: HandlerArg<TBody, TQuery, HasAuth, NeedsBody, HasBody>,
   ): (request: NextRequest) => Promise<Response> {
-    const handlerFn = fn as unknown as (
-      ctx: HandlerContext<TBody, TQuery>,
-    ) => Promise<unknown> | AsyncIterable<unknown>;
+    return this.register(fn as unknown as RouteHandler, false);
+  }
+
+  /**
+   * Register a streaming handler (`async function*`) and return the Next.js
+   * route function. Each `charge()` call bills one tick (`tickCost` USDC) up
+   * to `maxPrice`; requires `.paid({ dynamic: true, ... })` and MPP session mode.
+   *
+   * @example
+   * ```ts
+   * export const POST = router
+   *   .route('llm/stream')
+   *   .paid({ dynamic: true, tickCost: '0.0001', unitType: 'token', maxPrice: '0.05' })
+   *   .body(schema)
+   *   .stream(async function* ({ body, charge }) {
+   *     for await (const token of streamLLM(body.prompt)) {
+   *       await charge();
+   *       yield token;
+   *     }
+   *   });
+   * ```
+   */
+  stream(
+    fn: StreamArg<TBody, TQuery, HasAuth, NeedsBody, HasBody, IsDynamic>,
+  ): (request: NextRequest) => Promise<Response> {
+    return this.register(fn as unknown as RouteHandler, true);
+  }
+
+  private register(
+    handlerFn: RouteHandler,
+    streaming: boolean,
+  ): (request: NextRequest) => Promise<Response> {
     if (!this._authMode) {
       throw new Error(
         `route '${this._key}': Select an auth mode: .paid(pricing), .siwx(), .apiKey(resolver), or .unprotected()`,
@@ -515,10 +715,9 @@ export class RouteBuilder<
         );
       }
     }
-    const isStreaming = isAsyncGeneratorFunction(handlerFn);
-    if (isStreaming && !this._dynamicPrice) {
+    if (streaming && !this._dynamicPrice) {
       throw new Error(
-        `route '${this._key}': streaming handlers (async function*) require .paid({ dynamic: true }) — ` +
+        `route '${this._key}': .stream() requires .paid({ dynamic: true }) — ` +
           `static/free routes can't meter per-chunk billing.`,
       );
     }
@@ -540,7 +739,7 @@ export class RouteBuilder<
       siwxEnabled: this._siwxEnabled,
       pricing: this._pricing,
       dynamicPrice: this._dynamicPrice ? true : undefined,
-      streaming: isStreaming ? true : undefined,
+      streaming: streaming ? true : undefined,
       protocols: this._protocols,
       bodySchema: this._bodySchema,
       querySchema: this._querySchema,
@@ -565,12 +764,8 @@ export class RouteBuilder<
 
     this._registry.register(entry);
 
-    return createRequestHandler(entry, handlerFn as RouteHandler, this._deps);
+    return createRequestHandler(entry, handlerFn, this._deps);
   }
-}
-
-function isAsyncGeneratorFunction(fn: unknown): boolean {
-  return typeof fn === 'function' && fn.constructor?.name === 'AsyncGeneratorFunction';
 }
 
 function resolvePaidArgs(

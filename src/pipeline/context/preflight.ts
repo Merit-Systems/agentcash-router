@@ -4,6 +4,7 @@ import type { RouteHandler } from '../../orchestrate.js';
 import { HEADERS } from '../../headers.js';
 import type { PluginContext, RequestMeta } from '../../plugin.js';
 import { createDefaultContext, firePluginHook } from '../../plugin.js';
+import { createReporter } from '../../alert.js';
 import type { FlowCtx, RouterDeps } from './types.js';
 
 export function preflight(
@@ -24,6 +25,7 @@ export function preflight(
     request,
     meta,
     pluginCtx,
+    report: createReporter(deps.plugin, pluginCtx, routeEntry.key),
   };
 }
 

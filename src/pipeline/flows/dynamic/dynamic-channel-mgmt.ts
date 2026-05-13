@@ -22,7 +22,7 @@ export async function runDynamicChannelMgmtFlow(args: {
   skipBody: boolean;
 }): Promise<NextResponse> {
   const { ctx, strategy, account, pricing, skipBody } = args;
-  const { request, routeEntry, deps } = ctx;
+  const { request, routeEntry, deps, report } = ctx;
 
   const bodyAndPrice = await resolveDynamicBodyAndPrice({ ctx, pricing, skipBody });
   if (!bodyAndPrice.ok) return bodyAndPrice.response;
@@ -34,6 +34,7 @@ export async function runDynamicChannelMgmtFlow(args: {
     price,
     routeEntry,
     deps,
+    report,
   });
 
   if (verifyOutcome.ok === false) {
@@ -74,11 +75,7 @@ export async function runDynamicChannelMgmtFlow(args: {
     billedAmount: '0',
     onSettleError: async (error, failMessage) => {
       await runSettlementError(ctx, settleScope, error, 'settle');
-      firePluginHook(deps.plugin, 'onAlert', ctx.pluginCtx, {
-        level: 'critical' as const,
-        message: `${strategy.protocol} ${failMessage}: ${errorMessage(error, 'unknown')}`,
-        route: routeEntry.key,
-      });
+      report('critical', `${strategy.protocol} ${failMessage}: ${errorMessage(error, 'unknown')}`);
     },
   });
 }
