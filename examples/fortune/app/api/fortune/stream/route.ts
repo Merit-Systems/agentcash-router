@@ -48,7 +48,7 @@ export const POST = router
     protocols: ['mpp'],
   })
   .body(StreamSchema)
-  .handler(async function* ({ body, charge }) {
+  .stream(async function* ({ body, charge }) {
     // Echo the prompt as the first event — bill one token. If the channel
     // runs short, this `await` blocks: mppx emits `payment-need-voucher` and
     // resumes once the client signs a higher cumulative voucher.

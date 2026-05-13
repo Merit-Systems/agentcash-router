@@ -38,8 +38,8 @@ Four auth modes, mutually exclusive (except `.apiKey()` composes with `.paid()`)
 .paid((body) => calcPrice(body)) // Dynamic pricing (body-driven, pre-handler)
 .paid({ field: 'tier', tiers: { basic: { price: '0.01' } } }) // Tiered
 
-// Handler-driven dynamic pricing — request-mode bills exactly tickCost;
-// streaming handlers (async function*) bill per `charge()` call.
+// Handler-driven dynamic pricing — `.handler()` request-mode bills exactly
+// tickCost per request; `.stream()` streaming bills per `charge()` call.
 .paid({ dynamic: true, tickCost: '0.0005', unitType: 'token', maxPrice: '0.10' })
 ```
 
@@ -67,8 +67,8 @@ router
 For variable-cost-per-request billing, use the streaming shape below —
 splitting work into yields lets `charge()` meter per unit.
 
-**Streaming mode** — `async function* (ctx)`. Receives a `charge()` callback;
-one call adds one tick. The invariant:
+**Streaming mode** — `.stream(async function* (ctx) { ... })`. Receives a
+`charge()` callback on `ctx`; one call adds one tick. The invariant:
 
 > **one `charge()` call === one tick === `tickCost` USDC === one route-defined unit**
 
@@ -84,7 +84,7 @@ router
   .route('llm/stream')
   .paid({ dynamic: true, tickCost: '0.0001', unitType: 'token', maxPrice: '0.05', protocols: ['mpp'] })
   .body(z.object({ prompt: z.string() }))
-  .handler(async function* ({ body, charge }) {
+  .stream(async function* ({ body, charge }) {
     for await (const token of streamLLM(body.prompt)) {
       await charge();        // one tick = one token; blocks on need-voucher
       yield token;
@@ -93,27 +93,26 @@ router
   });
 ```
 
-**Type safety**: TypeScript discriminates by the handler signature.
-Request-mode handlers do not have `charge` on their context — calling it is
-a compile-time error. Only streaming handlers receive the
-`StreamingHandlerContext` with `charge`.
+**Type safety**: TypeScript discriminates by which terminal method you call.
+`.handler()` receives a `HandlerContext` with no `charge` — calling it is a
+compile-time error. `.stream()` receives a `StreamingHandlerContext` with
+`charge` and is only callable after `.paid({ dynamic: true, ... })`.
 
 `tickCost` is required per-route on `.paid({ dynamic: true })` — the builder
 throws at registration if it's missing. `unitType` is optional (cosmetic
 label, defaults to undefined which mppx surfaces as plain ticks).
 
-**Transport selection**: the router auto-picks the wire format from the
-handler shape. Request-mode handlers go through plain HTTP with a
-`Payment-Receipt` header (mppx's `tempo.session({ sse: false })`). Streaming
-handlers go through SSE with inline per-tick voucher events
+**Transport selection**: the router picks the wire format from the terminal
+method. `.handler()` request-mode goes through plain HTTP with a
+`Payment-Receipt` header (mppx's `tempo.session({ sse: false })`). `.stream()`
+goes through SSE with inline per-tick voucher events
 (`tempo.session({ sse: true })`). Two mppx instances run side-by-side
 sharing the same store, secretKey, and realm so channel state and challenge
 HMACs are interchangeable.
 
-The same handler shape works on both x402 `upto` (settles cumulative atomic
-amount; Permit2Proxy enforces ≤ maxPrice) and MPP sessions (per-tick voucher
-debits; channel persists across requests). Streaming requires MPP — x402 has
-no streaming primitive.
+Both terminal methods work on x402 `upto` (settles cumulative atomic amount;
+Permit2Proxy enforces ≤ maxPrice) and MPP. `.stream()` requires MPP — x402
+has no streaming primitive.
 
 **`suggestedDeposit` on MPP session 402 challenges**: defaults to
 `tickCost × RouterConfig.mpp.session.depositMultiplier` (default `10`), or
