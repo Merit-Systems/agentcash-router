@@ -1,75 +1,46 @@
 # Fortune Example
 
-Minimal Next.js app demonstrating `@agentcash/router` with both x402 and MPP payment protocols.
+Minimal Next.js app exercising every transaction kind `@agentcash/router` supports — x402 exact, x402 upto (dynamic), MPP one-shot, MPP session request-mode, MPP session SSE, function-based dynamic pricing, and SIWX identity.
 
-## Quick Start
+Each route is self-contained: the top-of-file comment names the payment method it tests and shows the exact `agentcash` CLI command. To smoke-test every kind in order, see [`AGENTCASH_TESTS.md`](./AGENTCASH_TESTS.md).
 
-1. **Install dependencies**
-   ```bash
-   pnpm install
-   ```
-
-2. **Configure environment**
-   ```bash
-   cp .env.example .env.local
-   # Edit .env.local with your keys
-   ```
-
-3. **Start dev server**
-   ```bash
-   pnpm dev
-   ```
-
-4. **Test the endpoint**
-   ```bash
-   # Get challenge (402)
-   curl -i -X POST http://localhost:3000/api/fortune
-
-   # With agentcash MCP
-   await mcp__agentcash__fetch({
-     url: 'http://localhost:3000/api/fortune',
-     method: 'POST',
-     paymentMethod: 'mpp',  // or 'x402'
-   });
-   ```
-
-## Endpoints
-
-- `POST /api/fortune` - Get a random fortune ($0.001, x402/MPP)
-- `POST /api/fortune/premium` - Premium fortune by category ($0.005, x402/MPP)
-- `GET /api/fortune/profile` - Verified wallet identity (SIWX only; EVM + Solana)
-- `POST /api/fortune/favorites` - Save a favorite fortune (SIWX)
-- `GET /api/fortune/favorites` - List saved favorites (SIWX)
-- `GET /.well-known/x402` - Discovery endpoint
-- `GET /openapi.json` - OpenAPI spec
-- `GET /llms.txt` - Agent guidance (from `discovery.guidance`)
-
-## Solana + SIWX
-
-SIWX routes (profile, favorites) accept both **EVM (Base)** and **Solana** wallets. The router derives `supportedChains` from `x402.accepts`, so configuring both `eip155:8453` and `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp` accepts enables dual-chain SIWX. Use `GET /api/fortune/profile` to verify wallet identity with no payment.
-
-## Testing MPP
-
-To test MPP payments:
-
-1. Set `MPP_SECRET_KEY` in `.env.local` (64-char hex string)
-2. Use `paymentMethod: 'mpp'` in MCP fetch
-3. Check console for `[MPP]` logs showing credential flow
-
-## Fast Iteration
-
-This example uses `"@agentcash/router": "file:../.."` to link directly to the parent router source. After making changes to the router:
+## Quick start
 
 ```bash
-# Rebuild router
-cd ../..
+pnpm install
+cp .env.example .env.local   # then edit with your keys
+pnpm dev                      # http://localhost:3000
+```
+
+## Endpoint → payment method map
+
+| Endpoint | Method | Payment kind | agentcash flag |
+|---|---|---|---|
+| `/api/fortune` | POST | x402 exact (Base) or MPP one-shot (Tempo) | `-p x402` / `-p mpp` |
+| `/api/fortune/premium` | POST | x402 upto — dynamic price, EIP-2612 gas-sponsored | `-p x402` |
+| `/api/fortune/llm` | POST | MPP session request-mode or x402 upto | `-p mpp` / `-p x402` |
+| `/api/fortune/stream` | POST | MPP session SSE streaming | `--stream` |
+| `/api/fortune/dynamic` | POST | Function-based dynamic pricing | auto |
+| `/api/fortune/favorites` | POST / GET | SIWX (Sign-In-with-X, no payment) | auto |
+| `/api/fortune/profile` | GET | SIWX (Sign-In-with-X, no payment) | auto |
+| `/.well-known/x402` | GET | Discovery | auto |
+| `/openapi.json` | GET | OpenAPI spec | n/a |
+| `/llms.txt` | GET | Agent guidance (`discovery.guidance`) | n/a |
+
+## SIWX dual-chain
+
+The SIWX routes accept both **EVM (Base)** and **Solana** wallets. The router derives `supportedChains` from `x402.accepts`, so configuring both `eip155:8453` and a Solana cluster enables dual-chain SIWX. `GET /api/fortune/profile` is the simplest way to verify wallet identity with no payment.
+
+## Fast iteration
+
+The example uses `"@agentcash/router": "link:../.."` to consume the package from source. After editing router code:
+
+```bash
+# from repo root
 pnpm build
 
-# Reinstall in example (picks up changes)
-cd examples/fortune
+# in examples/fortune
 rm -rf node_modules/.cache
 pnpm install --force
-
-# Restart dev server
-pnpm dev
+pnpm dev   # restart — Next won't hot-reload a linked dependency
 ```

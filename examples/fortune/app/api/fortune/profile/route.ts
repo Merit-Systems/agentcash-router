@@ -1,14 +1,10 @@
 import { router } from '../../../../lib/router';
 
-/**
- * SIWX-only endpoint: returns the verified wallet identity.
- * No payment required. Supports both EVM (Base) and Solana wallets.
- *
- * Test (returns 402 SIWX challenge):
- *   curl -i http://localhost:3000/api/fortune/profile
- *
- * With SIGN-IN-WITH-X header returns { wallet }.
- */
+// Tests SIWX (Sign-In-with-X) — verified wallet identity, no payment.
+// Supports EVM (Base) and Solana wallets via `x402.accepts`.
+// agentcash invokes this with:
+//   agentcash fetch http://localhost:3000/api/fortune/profile
+
 export const GET = router
   .route('fortune/profile')
   .siwx()

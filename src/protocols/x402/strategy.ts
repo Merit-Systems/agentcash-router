@@ -188,11 +188,12 @@ interface FacilitatorErrorShape {
 
 function reportSettleFailure(report: ReportFn, err: unknown, network: string): void {
   const facilitator = (err ?? {}) as FacilitatorErrorShape;
-  report('error', 'Settlement failed', {
+  const meta = {
     error: err instanceof Error ? err.message : String(err),
     network,
     errorReason: facilitator.errorReason,
     facilitatorStatus: facilitator.response?.status,
     facilitatorBody: facilitator.response?.data ?? facilitator.response?.body,
-  });
+  };
+  report('error', 'Settlement failed', meta);
 }

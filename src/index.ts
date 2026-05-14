@@ -119,7 +119,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   };
 
   deps.initPromise = (async () => {
-    const x402Result = await initX402(config, x402ConfigError);
+    const x402Result = await initX402(config, kvStore, x402ConfigError);
     deps.x402Server = x402Result.server ?? null;
     deps.x402FacilitatorsByNetwork = x402Result.facilitatorsByNetwork;
     if (x402Result.initError) deps.x402InitError = x402Result.initError;

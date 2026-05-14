@@ -4,11 +4,10 @@ export const router = createRouterFromEnv({
   title: 'Fortune API',
   description: 'Pay-per-call fortune telling API',
   guidance:
-    'POST /api/fortune for a single fortune ($0.001). ' +
-    'POST /api/fortune/premium for a longer reading ($0.005). ' +
-    'POST /api/fortune/llm and /api/fortune/stream use MPP session-mode dynamic pricing.',
-  prices: {
-    fortune: '0.001',
-    'fortune/premium': '0.005',
-  },
+    'POST /api/fortune for a single fortune ($0.001, x402 exact or MPP one-shot). ' +
+    'POST /api/fortune/premium for an x402 upto dynamic-priced reading. ' +
+    'POST /api/fortune/llm for MPP session request-mode or x402 upto. ' +
+    'POST /api/fortune/stream for an MPP session SSE stream. ' +
+    'POST /api/fortune/dynamic for function-based dynamic pricing. ' +
+    'GET /api/fortune/profile and POST /api/fortune/favorites are SIWX (identity, no payment).',
 });
