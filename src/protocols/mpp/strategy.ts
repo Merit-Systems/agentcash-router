@@ -4,7 +4,7 @@ import type { Session } from 'mppx/tempo';
 import { AUTH_SCHEME, HEADERS } from '../../headers.js';
 import { multiplyDecimal } from '../../pricing/format.js';
 import type { HandlerPaymentContext } from '../../types.js';
-import type { MppxMiddlewareResponse } from '../../pipeline/steps/types.js';
+import type { MppxMiddlewareResponse } from './middleware-types.js';
 import type {
   ChallengeArgs,
   ChallengeContribution,
