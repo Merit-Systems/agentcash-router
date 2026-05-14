@@ -1,11 +1,6 @@
 import type { NextRequest, NextResponse } from 'next/server';
 import type { Transport } from 'mppx/server';
-import type {
-  HandlerPaymentContext,
-  RouteEntry,
-  X402AcceptConfig,
-  X402Server,
-} from '../types.js';
+import type { HandlerPaymentContext, RouteEntry, X402AcceptConfig, X402Server } from '../types.js';
 import type { ResolvedX402Facilitator } from './x402/facilitators.js';
 import type { MppxMiddleware } from './mpp/middleware-types.js';
 import type { NonceStore, EntitlementStore } from '../kv-store/index.js';

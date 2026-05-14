@@ -1,8 +1,8 @@
 import type { FacilitatorClient } from '@x402/core/http';
 import type { KvStore } from './client.js';
 
-export const FACILITATOR_SUPPORTED_TTL_SECONDS = 60 * 60;
-export const FACILITATOR_SUPPORTED_KV_PREFIX = 'x402:facilitator-supported:';
+const FACILITATOR_SUPPORTED_TTL_SECONDS = 60 * 60;
+const FACILITATOR_SUPPORTED_KV_PREFIX = 'x402:facilitator-supported:';
 
 type SupportedResponse = Awaited<ReturnType<FacilitatorClient['getSupported']>>;
 

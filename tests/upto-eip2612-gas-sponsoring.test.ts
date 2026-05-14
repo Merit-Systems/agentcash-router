@@ -38,10 +38,7 @@ function makeFacilitator(network: string, url: string): ResolvedX402Facilitator 
   };
 }
 
-function makeDeps(
-  server: FakeX402Server,
-  accepts: RouterDeps['x402Accepts'],
-): RouterDeps {
+function makeDeps(server: FakeX402Server, accepts: RouterDeps['x402Accepts']): RouterDeps {
   return {
     x402Server: server as unknown as RouterDeps['x402Server'],
     initPromise: Promise.resolve(),
@@ -187,9 +184,7 @@ describe('upto + EIP-2612 gas sponsoring on fortune/llm', () => {
         if (msg.primaryType === 'Permit') {
           return signTypedDataSpy(msg);
         }
-        return account.signTypedData(
-          msg as unknown as Parameters<typeof account.signTypedData>[0],
-        );
+        return account.signTypedData(msg as unknown as Parameters<typeof account.signTypedData>[0]);
       },
       readContract,
       signTransaction,
