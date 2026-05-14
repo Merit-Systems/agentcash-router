@@ -75,14 +75,7 @@ function restKvStore(url: string, token: string): KvStore {
   }
 
   async function setNxEx(key: string, value: unknown, ttlSeconds: number): Promise<boolean> {
-    const result = await exec<string>([
-      'SET',
-      key,
-      stringifyValue(value),
-      'EX',
-      ttlSeconds,
-      'NX',
-    ]);
+    const result = await exec<string>(['SET', key, stringifyValue(value), 'EX', ttlSeconds, 'NX']);
     return result === 'OK';
   }
 

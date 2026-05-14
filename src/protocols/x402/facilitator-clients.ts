@@ -15,19 +15,21 @@ export function createFacilitatorClients(
 ): FacilitatorClient[] {
   return getResolvedX402FacilitatorGroups(facilitatorsByNetwork).map((group) => {
     const inner = new HTTPFacilitatorClient(group.config);
+    const kinds = buildSupportedKinds(group);
     const baseline = (): SupportedResponse => ({
-      kinds: buildSupportedKinds(group),
+      kinds,
       extensions: [],
       signers: {},
     });
     if (group.family === 'solana') {
       return hardcodedSupportedClient(inner, baseline);
     }
-    return withCachedSupported(inner, {
+    const cached = withCachedSupported(inner, {
       kv: kvStore,
       cacheKey: group.config.url,
       fallback: baseline,
     });
+    return withScopedKinds(cached, kinds);
   });
 }
 
@@ -39,6 +41,17 @@ function hardcodedSupportedClient(
     verify: inner.verify.bind(inner),
     settle: inner.settle.bind(inner),
     getSupported: async () => build(),
+  };
+}
+
+function withScopedKinds(
+  client: FacilitatorClient,
+  kinds: SupportedResponse['kinds'],
+): FacilitatorClient {
+  return {
+    verify: client.verify.bind(client),
+    settle: client.settle.bind(client),
+    getSupported: async () => ({ ...(await client.getSupported()), kinds }),
   };
 }
 

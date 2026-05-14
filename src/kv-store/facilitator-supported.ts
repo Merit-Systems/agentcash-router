@@ -101,5 +101,7 @@ async function writeKvCache(
 }
 
 function isSupportedResponse(value: unknown): value is SupportedResponse {
-  return typeof value === 'object' && value !== null && Array.isArray((value as SupportedResponse).kinds);
+  return (
+    typeof value === 'object' && value !== null && Array.isArray((value as SupportedResponse).kinds)
+  );
 }
