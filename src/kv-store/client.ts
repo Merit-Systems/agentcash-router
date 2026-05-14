@@ -18,6 +18,22 @@ interface RestResponse<T> {
   error?: string;
 }
 
+const BIGINT_SUFFIX = '#__bigint';
+
+function stringifyValue(value: unknown): string {
+  return JSON.stringify(value, (_key, v) =>
+    typeof v === 'bigint' ? `${v.toString()}${BIGINT_SUFFIX}` : v,
+  );
+}
+
+function parseValue(raw: string): unknown {
+  return JSON.parse(raw, (_key, v) =>
+    typeof v === 'string' && v.endsWith(BIGINT_SUFFIX)
+      ? BigInt(v.slice(0, -BIGINT_SUFFIX.length))
+      : v,
+  );
+}
+
 function restKvStore(url: string, token: string): KvStore {
   const base = url.replace(/\/+$/, '');
   const authHeader = { Authorization: `Bearer ${token}` };
@@ -41,11 +57,17 @@ function restKvStore(url: string, token: string): KvStore {
     const res = await fetch(`${base}/get/${encodeURIComponent(key)}`, { headers: authHeader });
     if (!res.ok) throw new Error(`[kv-store] GET ${key}: ${res.status}`);
     const { result } = (await res.json()) as RestResponse<unknown>;
-    return result ?? null;
+    if (result == null) return null;
+    if (typeof result !== 'string') return result;
+    try {
+      return parseValue(result);
+    } catch {
+      return result;
+    }
   }
 
   async function set(key: string, value: unknown): Promise<void> {
-    await exec(['SET', key, JSON.stringify(value)]);
+    await exec(['SET', key, stringifyValue(value)]);
   }
 
   async function del(key: string): Promise<void> {
@@ -53,7 +75,7 @@ function restKvStore(url: string, token: string): KvStore {
   }
 
   async function setNxEx(key: string, value: unknown, ttlSeconds: number): Promise<boolean> {
-    const result = await exec<string>(['SET', key, JSON.stringify(value), 'EX', ttlSeconds, 'NX']);
+    const result = await exec<string>(['SET', key, stringifyValue(value), 'EX', ttlSeconds, 'NX']);
     return result === 'OK';
   }
 

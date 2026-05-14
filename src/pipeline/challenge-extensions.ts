@@ -1,4 +1,5 @@
 import { buildSIWXExtension } from '../auth/siwx.js';
+import { isEvmNetwork } from '../protocols/x402/evm.js';
 import type { FlowCtx } from './steps/index.js';
 
 export async function buildChallengeExtensions(
@@ -53,6 +54,23 @@ export async function buildChallengeExtensions(
       }
     } catch {
       /* optional enrichment */
+    }
+  }
+  const hasEvmUpto = ctx.deps.x402Accepts.some(
+    (accept) => accept.scheme === 'upto' && isEvmNetwork(accept.network),
+  );
+  if (hasEvmUpto) {
+    try {
+      const { declareEip2612GasSponsoringExtension } = await import('@x402/extensions');
+      extensions = {
+        ...(extensions ?? {}),
+        ...declareEip2612GasSponsoringExtension(),
+      };
+    } catch (err) {
+      ctx.report(
+        'warn',
+        `EIP-2612 gas-sponsoring declaration failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 

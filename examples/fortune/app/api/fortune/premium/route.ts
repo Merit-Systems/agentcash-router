@@ -1,12 +1,21 @@
 import { z } from 'zod';
 import { router } from '../../../../lib/router';
 
+// Tests x402 upto — handler-driven dynamic pricing settled with EIP-2612
+// gas-sponsoring on Base. Also exercises `.validate()` running BEFORE the 402.
+// agentcash invokes this with:
+//   agentcash fetch http://localhost:3000/api/fortune/premium \
+//     --method POST -p x402 -b '{"category":"love"}'
+//
+// To hit the validate-rejection path (category 'health' is pre-exhausted, so
+// the request returns 429 before any payment challenge):
+//   agentcash fetch http://localhost:3000/api/fortune/premium \
+//     --method POST -p x402 -b '{"category":"health"}'
+
 const PremiumSchema = z.object({
   category: z.enum(['love', 'career', 'health']),
 });
 
-// Simulate category-based rate limits (resets on server restart)
-// 'health' is pre-exhausted for testing validate rejection
 const categoryUsage = new Map<string, number>([['health', 3]]);
 const CATEGORY_LIMIT = 3;
 
@@ -28,26 +37,16 @@ const premiumFortunes: Record<string, string[]> = {
   ],
 };
 
-/**
- * Premium fortune endpoint with pre-payment validation.
- *
- * Demonstrates `.validate()` for async business logic that runs BEFORE
- * the 402 challenge is shown. Invalid requests are rejected with appropriate
- * error codes, not charged.
- *
- * Test validate pass (returns 402 with price):
- *   curl -X POST http://localhost:3000/api/fortune/premium \
- *     -H "Content-Type: application/json" \
- *     -d '{"category": "love"}'
- *
- * Test validate fail (returns 429 before price - 'health' is pre-exhausted):
- *   curl -X POST http://localhost:3000/api/fortune/premium \
- *     -H "Content-Type: application/json" \
- *     -d '{"category": "health"}'
- */
 export const POST = router
   .route('fortune/premium')
   .body(PremiumSchema)
+  .paid({
+    dynamic: true,
+    tickCost: '0.005',
+    unitType: 'request',
+    maxPrice: '0.05',
+    protocols: ['x402'],
+  })
   .validate(async (body) => {
     const count = categoryUsage.get(body.category) ?? 0;
     if (count >= CATEGORY_LIMIT) {
@@ -59,11 +58,9 @@ export const POST = router
   })
   .description('Premium fortune with category selection (rate limited per category)')
   .handler(async ({ body }) => {
-    // Increment usage
     const count = categoryUsage.get(body.category) ?? 0;
     categoryUsage.set(body.category, count + 1);
 
-    // Get random fortune for category
     const fortunes = premiumFortunes[body.category];
     const fortune = fortunes[Math.floor(Math.random() * fortunes.length)];
 

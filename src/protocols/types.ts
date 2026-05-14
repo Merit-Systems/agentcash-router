@@ -1,9 +1,41 @@
 import type { NextRequest, NextResponse } from 'next/server';
-import type { HandlerPaymentContext, RouteEntry } from '../types.js';
-import type { RouterDeps } from '../pipeline/steps/types.js';
+import type { Transport } from 'mppx/server';
+import type { HandlerPaymentContext, RouteEntry, X402AcceptConfig, X402Server } from '../types.js';
+import type { ResolvedX402Facilitator } from './x402/facilitators.js';
+import type { MppxMiddleware } from './mpp/middleware-types.js';
+import type { NonceStore, EntitlementStore } from '../kv-store/index.js';
+import type { RouterPlugin } from '../plugin/index.js';
 import type { ReportFn } from '../plugin/reporter.js';
 
 export type ProtocolName = 'x402' | 'mpp';
+
+export interface RouterDeps {
+  x402Server: X402Server | null;
+  initPromise: Promise<void>;
+  x402InitError?: string;
+  mppInitError?: string;
+  plugin?: RouterPlugin;
+  nonceStore: NonceStore;
+  entitlementStore: EntitlementStore;
+  payeeAddress: string;
+  mppRecipient?: string;
+  network: string;
+  x402FacilitatorsByNetwork?: Record<string, ResolvedX402Facilitator>;
+  x402Accepts: X402AcceptConfig[];
+  mppx?: {
+    charge: MppxMiddleware<{ amount: string }, Transport.Http>;
+    sessionRequest?: MppxMiddleware<
+      { amount: string; unitType?: string; suggestedDeposit?: string },
+      Transport.Http
+    >;
+    sessionStream?: MppxMiddleware<
+      { amount: string; unitType?: string; suggestedDeposit?: string },
+      Transport.Sse
+    >;
+  } | null;
+  mppSessionConfig?: { depositMultiplier: number } | null;
+  tempoClient?: import('viem').Client | null;
+}
 
 export interface VerifyArgs {
   request: NextRequest;

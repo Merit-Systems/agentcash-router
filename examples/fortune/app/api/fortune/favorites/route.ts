@@ -1,36 +1,30 @@
 import { z } from 'zod';
 import { router } from '../../../../lib/router';
 
+// Tests SIWX (Sign-In-with-X) — wallet identity proof, no payment. POST also
+// exercises `.validate()` running BEFORE the SIWX challenge is shown.
+// agentcash invokes the POST with:
+//   agentcash fetch http://localhost:3000/api/fortune/favorites \
+//     --method POST -b '{"fortune":"A good day awaits"}'
+// agentcash invokes the GET with:
+//   agentcash fetch http://localhost:3000/api/fortune/favorites
+//
+// To hit the validate-rejection path (fortune > 100 chars → 400 before SIWX):
+//   agentcash fetch http://localhost:3000/api/fortune/favorites --method POST \
+//     -b '{"fortune":"<more than 100 chars of text...>"}'
+
 const SaveFavoriteSchema = z.object({
   fortune: z.string().min(1).describe('The fortune text to save'),
 });
 
-// Simulate per-wallet favorites storage (resets on server restart)
 const walletFavorites = new Map<string, string[]>();
 const MAX_FAVORITES = 3;
 
-/**
- * SIWX-protected favorites endpoint with pre-auth validation.
- *
- * Demonstrates `.validate()` with SIWX auth - validation runs before
- * the SIWX challenge is shown, rejecting invalid requests early.
- *
- * Test validate pass (returns 402 SIWX challenge):
- *   curl -X POST http://localhost:3001/api/fortune/favorites \
- *     -H "Content-Type: application/json" \
- *     -d '{"fortune": "A good day awaits"}'
- *
- * Test validate fail (fortune too long - returns 400 before SIWX):
- *   curl -X POST http://localhost:3001/api/fortune/favorites \
- *     -H "Content-Type: application/json" \
- *     -d '{"fortune": "This fortune is way too long and exceeds the maximum allowed length for storage in our system which is limited to keep things concise and meaningful"}'
- */
 export const POST = router
   .route('fortune/favorites')
   .siwx()
   .body(SaveFavoriteSchema)
   .validate(async (body) => {
-    // Business validation: fortune must be reasonable length
     if (body.fortune.length > 100) {
       throw Object.assign(
         new Error('Fortune too long (max 100 chars)'),
@@ -67,9 +61,6 @@ export const POST = router
     };
   });
 
-/**
- * Get wallet's saved favorites (SIWX protected, no validation needed).
- */
 export const GET = router
   .route('fortune/favorites')
   .siwx()

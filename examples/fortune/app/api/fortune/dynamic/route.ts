@@ -2,6 +2,17 @@ import { z } from 'zod';
 import { HttpError } from '@agentcash/router';
 import { router } from '@/lib/router';
 
+// Tests function-based dynamic pricing — the price is computed from the
+// request body, and the pricing function also pre-payment validates. The
+// challenge price varies by `depth`.
+// agentcash invokes this with:
+//   agentcash fetch http://localhost:3000/api/fortune/dynamic \
+//     --method POST -b '{"category":"love","depth":"detailed"}'
+//
+// To hit the pricing-fn rejection (returns 400 before any 402):
+//   agentcash fetch http://localhost:3000/api/fortune/dynamic \
+//     --method POST -b '{"category":"wealth","depth":"comprehensive"}'
+
 const DynamicSchema = z.object({
   category: z.enum(['love', 'career', 'health', 'wealth']),
   depth: z.enum(['brief', 'detailed', 'comprehensive']).default('brief'),
@@ -43,14 +54,6 @@ const fortunes: Record<string, Record<string, string>> = {
 
 const blockedCombos = new Set(['wealth:comprehensive']);
 
-/**
- * Dynamic pricing fortune — mirrors the stablestudio pattern exactly:
- *   .route(key).paid(pricingFn, { maxPrice }).body(schema).handler(fn)
- *
- * - Pricing function does pre-payment validation (HttpError 400) before returning price
- * - Uses .toFixed(2) like stablestudio's calculateJobCostFromRegistry
- * - maxPrice is much higher than any dynamic price (same ratio as stablestudio)
- */
 const pricingFn = async (body: Record<string, unknown>) => {
   const depth = (body.depth as string) ?? 'brief';
   const category = body.category as string;

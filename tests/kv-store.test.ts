@@ -21,10 +21,10 @@ describe('resolveKvStore with { url, token }', () => {
     vi.restoreAllMocks();
   });
 
-  it('get() sends correct request and parses result', async () => {
+  it('get() JSON-parses the stored value (symmetric with set/setNxEx)', async () => {
     fetchSpy.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ result: '{"foo":"bar"}' }),
+      json: async () => ({ result: JSON.stringify({ foo: 'bar' }) }),
     });
 
     const client = expectKvStore(resolveKvStore({ url, token }));
@@ -33,7 +33,19 @@ describe('resolveKvStore with { url, token }', () => {
     expect(fetchSpy).toHaveBeenCalledWith(`${url}/get/my-key`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    expect(result).toBe('{"foo":"bar"}');
+    expect(result).toEqual({ foo: 'bar' });
+  });
+
+  it('get() round-trips numbers stored via setNxEx', async () => {
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ result: '1' }) });
+    const client = expectKvStore(resolveKvStore({ url, token }));
+    await expect(client.get('nonce')).resolves.toBe(1);
+  });
+
+  it('get() falls back to the raw string when the value is not JSON', async () => {
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ result: 'plain-text' }) });
+    const client = expectKvStore(resolveKvStore({ url, token }));
+    await expect(client.get('legacy')).resolves.toBe('plain-text');
   });
 
   it('get() returns null when result is null', async () => {
@@ -62,6 +74,27 @@ describe('resolveKvStore with { url, token }', () => {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(['SET', 'my-key', JSON.stringify({ count: 42 })]),
     });
+  });
+
+  it('set() / get() round-trip BigInt values (mppx channel state)', async () => {
+    let stored: string | undefined;
+    fetchSpy.mockImplementation((async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        const [, , payload] = JSON.parse(init.body as string) as [string, string, string];
+        stored = payload;
+        return { ok: true, json: async () => ({ result: 'OK' }) } as Response;
+      }
+      return { ok: true, json: async () => ({ result: stored ?? null }) } as Response;
+    }) as unknown as typeof fetchSpy);
+
+    const client = expectKvStore(resolveKvStore({ url, token }));
+    await client.set('channel', { balance: 1234567890123456789n, channelId: '0xabc' });
+    const read = (await client.get('channel')) as { balance: bigint; channelId: string };
+
+    expect(stored).toContain('#__bigint');
+    expect(typeof read.balance).toBe('bigint');
+    expect(read.balance).toBe(1234567890123456789n);
+    expect(read.channelId).toBe('0xabc');
   });
 
   it('del() sends POST with DEL command', async () => {

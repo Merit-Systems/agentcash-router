@@ -1,7 +1,7 @@
 import { walletFromDid } from './credential.js';
 import { Credential } from 'mppx';
 import type { Transport } from 'mppx/server';
-import type { MppxMiddleware, MppxMiddlewareResponse } from '../../pipeline/steps/types.js';
+import type { MppxMiddleware, MppxMiddlewareResponse } from './middleware-types.js';
 
 type MppxInstance = {
   charge: MppxMiddleware<{ amount: string }, Transport.Http>;

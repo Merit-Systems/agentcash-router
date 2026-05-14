@@ -1,5 +1,9 @@
 import { router } from '../../../lib/router';
 
+// Tests x402 exact and MPP one-shot — same fixed-price route, swap the `-p` flag.
+// agentcash invokes this with:
+//   agentcash fetch http://localhost:3000/api/fortune --method POST -p x402   # x402 exact
+//   agentcash fetch http://localhost:3000/api/fortune --method POST -p mpp    # MPP one-shot
 const fortunes = [
   'A beautiful, smart, and loving person will be coming into your life.',
   'A dubious friend may be an enemy in camouflage.',
@@ -15,9 +19,10 @@ const fortunes = [
 
 export const POST = router
   .route('fortune')
+  .paid('0.001')
+  .description('Random fortune — fixed price; x402 exact or MPP one-shot')
   .handler(async () => {
     const randomFortune = fortunes[Math.floor(Math.random() * fortunes.length)];
-
     return {
       fortune: randomFortune,
       timestamp: new Date().toISOString(),

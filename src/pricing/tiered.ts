@@ -1,4 +1,5 @@
 import type { TierConfig } from '../types.js';
+import { compareDecimals } from './format.js';
 import type { PricingDescriptor, PricingStrategy } from './types.js';
 
 interface TieredPricingOptions {
@@ -55,7 +56,7 @@ export class TieredPricing implements PricingStrategy {
   private maxTierPrice(): string {
     let max = '0';
     for (const tier of Object.values(this.opts.tiers)) {
-      if (parseFloat(tier.price) > parseFloat(max)) max = tier.price;
+      if (compareDecimals(tier.price, max) > 0) max = tier.price;
     }
     return max;
   }
