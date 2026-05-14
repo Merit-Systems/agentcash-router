@@ -157,11 +157,10 @@ export function createRouter<const P extends Record<string, string> = Record<nev
             'Remove custom `key` or make it equal to `path`.',
         );
       }
-      let builder = new RouteBuilder(key, registry, deps);
+      let builder = new RouteBuilder(key, registry, deps, {
+        protocols: config.protocols,
+      });
       builder = builder.path(normalizedPath);
-      if (config.protocols) {
-        builder._protocols = [...config.protocols];
-      }
       if (definition.method) {
         builder = builder.method(definition.method as RouteMethod);
       }

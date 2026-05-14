@@ -73,6 +73,42 @@ type StreamArg<
       __missing: 'Select an auth mode: .paid({ dynamic: true, ... }) — streaming requires handler-driven dynamic pricing';
     };
 
+type BuilderState<TBody> = {
+  key: string;
+  registry: RouteRegistry;
+  deps: OrchestrateDeps;
+  authMode: AuthMode | null;
+  pricing: PricingConfig | undefined;
+  siwxEnabled: boolean;
+  protocols: ProtocolType[];
+  maxPrice: string | undefined;
+  minPrice: string | undefined;
+  dynamicPrice: boolean;
+  tickCost: string | undefined;
+  unitType: string | undefined;
+  payTo: PayToConfig | undefined;
+  bodySchema: ZodType | undefined;
+  querySchema: ZodType | undefined;
+  outputSchema: ZodType | undefined;
+  inputExample: JsonObject | undefined;
+  hasInputExample: boolean;
+  outputExample: JsonValue | undefined;
+  hasOutputExample: boolean;
+  description: string | undefined;
+  path: string | undefined;
+  method: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH';
+  apiKeyResolver: ((key: string) => unknown | Promise<unknown>) | undefined;
+  providerName: string | undefined;
+  providerConfig: ProviderConfig | undefined;
+  validateFn: ((body: TBody) => void | Promise<void>) | undefined;
+  settlement: SettlementLifecycle<TBody> | undefined;
+  mppInfo: MppProtocolInfo | undefined;
+};
+
+export interface RouteBuilderDefaults {
+  protocols?: ProtocolType[];
+}
+
 export class RouteBuilder<
   TBody = undefined,
   TQuery = undefined,
@@ -82,46 +118,54 @@ export class RouteBuilder<
   HasBody extends boolean = false,
   IsDynamic extends boolean = false,
 > {
-  /** @internal */ readonly _key: string;
-  /** @internal */ readonly _registry: RouteRegistry;
-  /** @internal */ readonly _deps: OrchestrateDeps;
-  /** @internal */ _authMode: AuthMode | null = null;
-  /** @internal */ _pricing: PricingConfig | undefined;
-  /** @internal */ _siwxEnabled = false;
-  /** @internal */ _protocols: ProtocolType[] = ['x402'];
-  /** @internal */ _maxPrice: string | undefined;
-  /** @internal */ _minPrice: string | undefined;
-  /** @internal */ _dynamicPrice = false;
-  /** @internal */ _tickCost: string | undefined;
-  /** @internal */ _unitType: string | undefined;
-  /** @internal */ _payTo: PayToConfig | undefined;
-  /** @internal */ _bodySchema: ZodType | undefined;
-  /** @internal */ _querySchema: ZodType | undefined;
-  /** @internal */ _outputSchema: ZodType | undefined;
-  /** @internal */ _inputExample: JsonObject | undefined = undefined;
-  /** @internal */ _hasInputExample = false;
-  /** @internal */ _outputExample: JsonValue | undefined = undefined;
-  /** @internal */ _hasOutputExample = false;
-  /** @internal */ _description: string | undefined;
-  /** @internal */ _path: string | undefined;
-  /** @internal */ _method: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH' = 'POST';
-  /** @internal */ _apiKeyResolver: ((key: string) => unknown | Promise<unknown>) | undefined;
-  /** @internal */ _providerName: string | undefined;
-  /** @internal */ _providerConfig: ProviderConfig | undefined;
-  /** @internal */ _validateFn: ((body: TBody) => void | Promise<void>) | undefined;
-  /** @internal */ _settlement: SettlementLifecycle<TBody> | undefined;
-  /** @internal */ _mppInfo: MppProtocolInfo | undefined;
+  #s: BuilderState<TBody>;
 
-  constructor(key: string, registry: RouteRegistry, deps: OrchestrateDeps) {
-    this._key = key;
-    this._registry = registry;
-    this._deps = deps;
+  constructor(
+    key: string,
+    registry: RouteRegistry,
+    deps: OrchestrateDeps,
+    defaults?: RouteBuilderDefaults,
+  ) {
+    this.#s = {
+      key,
+      registry,
+      deps,
+      authMode: null,
+      pricing: undefined,
+      siwxEnabled: false,
+      protocols: defaults?.protocols ? [...defaults.protocols] : ['x402'],
+      maxPrice: undefined,
+      minPrice: undefined,
+      dynamicPrice: false,
+      tickCost: undefined,
+      unitType: undefined,
+      payTo: undefined,
+      bodySchema: undefined,
+      querySchema: undefined,
+      outputSchema: undefined,
+      inputExample: undefined,
+      hasInputExample: false,
+      outputExample: undefined,
+      hasOutputExample: false,
+      description: undefined,
+      path: undefined,
+      method: 'POST',
+      apiKeyResolver: undefined,
+      providerName: undefined,
+      providerConfig: undefined,
+      validateFn: undefined,
+      settlement: undefined,
+      mppInfo: undefined,
+    };
   }
 
   private fork(): this {
-    const next = Object.create(Object.getPrototypeOf(this));
-    Object.assign(next, this);
-    next._protocols = [...this._protocols];
+    const next = new RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic>(
+      this.#s.key,
+      this.#s.registry,
+      this.#s.deps,
+    ) as unknown as this;
+    next.#s = { ...this.#s, protocols: [...this.#s.protocols] };
     return next;
   }
 
@@ -197,16 +241,16 @@ export class RouteBuilder<
     pricingOrOptions: PricingConfig | (PaidOptions & { dynamic: true; maxPrice: string }),
     options?: PaidOptions,
   ): RouteBuilder<TBody, TQuery, TOutput, True, boolean, HasBody, boolean> {
-    const { pricing, resolvedOptions } = resolvePaidArgs(this._key, pricingOrOptions, options);
+    const { pricing, resolvedOptions } = resolvePaidArgs(this.#s.key, pricingOrOptions, options);
 
-    if (this._authMode === 'unprotected') {
+    if (this.#s.authMode === 'unprotected') {
       throw new Error(
-        `route '${this._key}': Cannot combine .unprotected() and .paid() on the same route.`,
+        `route '${this.#s.key}': Cannot combine .unprotected() and .paid() on the same route.`,
       );
     }
-    if (this._pricing !== undefined) {
+    if (this.#s.pricing !== undefined) {
       throw new Error(
-        `route '${this._key}': Cannot call .paid() more than once on the same route.`,
+        `route '${this.#s.key}': Cannot call .paid() more than once on the same route.`,
       );
     }
 
@@ -219,53 +263,53 @@ export class RouteBuilder<
       HasBody,
       boolean
     >;
-    next._authMode = 'paid';
-    next._pricing = pricing;
+    next.#s.authMode = 'paid';
+    next.#s.pricing = pricing;
     if (resolvedOptions?.protocols) {
-      next._protocols = [...resolvedOptions.protocols];
-    } else if (next._protocols.length === 0) {
-      next._protocols = ['x402'];
+      next.#s.protocols = [...resolvedOptions.protocols];
+    } else if (next.#s.protocols.length === 0) {
+      next.#s.protocols = ['x402'];
     }
-    if (resolvedOptions?.maxPrice) next._maxPrice = resolvedOptions.maxPrice;
-    if (resolvedOptions?.minPrice) next._minPrice = resolvedOptions.minPrice;
-    if (resolvedOptions?.payTo) next._payTo = resolvedOptions.payTo;
-    if (resolvedOptions?.mpp) next._mppInfo = resolvedOptions.mpp;
-    if (resolvedOptions?.dynamic) next._dynamicPrice = true;
-    if (resolvedOptions?.tickCost) next._tickCost = resolvedOptions.tickCost;
-    if (resolvedOptions?.unitType) next._unitType = resolvedOptions.unitType;
+    if (resolvedOptions?.maxPrice) next.#s.maxPrice = resolvedOptions.maxPrice;
+    if (resolvedOptions?.minPrice) next.#s.minPrice = resolvedOptions.minPrice;
+    if (resolvedOptions?.payTo) next.#s.payTo = resolvedOptions.payTo;
+    if (resolvedOptions?.mpp) next.#s.mppInfo = resolvedOptions.mpp;
+    if (resolvedOptions?.dynamic) next.#s.dynamicPrice = true;
+    if (resolvedOptions?.tickCost) next.#s.tickCost = resolvedOptions.tickCost;
+    if (resolvedOptions?.unitType) next.#s.unitType = resolvedOptions.unitType;
 
     if (typeof pricing === 'object' && 'tiers' in pricing) {
-      if (next._dynamicPrice) {
+      if (next.#s.dynamicPrice) {
         throw new Error(
-          `route '${this._key}': .paid({ dynamic: true }) is incompatible with tiered pricing`,
+          `route '${this.#s.key}': .paid({ dynamic: true }) is incompatible with tiered pricing`,
         );
       }
       for (const [tierKey, tierConfig] of Object.entries(pricing.tiers)) {
         if (!tierKey) {
-          throw new Error(`route '${this._key}': tier key cannot be empty`);
+          throw new Error(`route '${this.#s.key}': tier key cannot be empty`);
         }
         if (!isPositiveDecimal(tierConfig.price)) {
           throw new Error(
-            `route '${this._key}': tier '${tierKey}' price '${tierConfig.price}' must be a positive decimal string`,
+            `route '${this.#s.key}': tier '${tierKey}' price '${tierConfig.price}' must be a positive decimal string`,
           );
         }
       }
     }
     if (resolvedOptions?.maxPrice !== undefined && !isPositiveDecimal(resolvedOptions.maxPrice)) {
       throw new Error(
-        `route '${this._key}': maxPrice '${resolvedOptions.maxPrice}' must be a positive decimal string`,
+        `route '${this.#s.key}': maxPrice '${resolvedOptions.maxPrice}' must be a positive decimal string`,
       );
     }
     if (resolvedOptions?.tickCost !== undefined && !isPositiveDecimal(resolvedOptions.tickCost)) {
       throw new Error(
-        `route '${this._key}': tickCost '${resolvedOptions.tickCost}' must be a positive decimal string`,
+        `route '${this.#s.key}': tickCost '${resolvedOptions.tickCost}' must be a positive decimal string`,
       );
     }
-    if (next._dynamicPrice && !next._maxPrice) {
-      throw new Error(`route '${this._key}': .paid({ dynamic: true }) requires maxPrice`);
+    if (next.#s.dynamicPrice && !next.#s.maxPrice) {
+      throw new Error(`route '${this.#s.key}': .paid({ dynamic: true }) requires maxPrice`);
     }
-    if (next._dynamicPrice && !next._tickCost) {
-      throw new Error(`route '${this._key}': .paid({ dynamic: true }) requires tickCost`);
+    if (next.#s.dynamicPrice && !next.#s.tickCost) {
+      throw new Error(`route '${this.#s.key}': .paid({ dynamic: true }) requires tickCost`);
     }
 
     return next;
@@ -282,15 +326,15 @@ export class RouteBuilder<
    * ```
    */
   siwx(): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, IsDynamic> {
-    if (this._authMode === 'unprotected') {
+    if (this.#s.authMode === 'unprotected') {
       throw new Error(
-        `route '${this._key}': Cannot combine .unprotected() and .siwx() on the same route.`,
+        `route '${this.#s.key}': Cannot combine .unprotected() and .siwx() on the same route.`,
       );
     }
 
-    if (this._apiKeyResolver) {
+    if (this.#s.apiKeyResolver) {
       throw new Error(
-        `route '${this._key}': Combining .siwx() and .apiKey() is not supported on the same route.`,
+        `route '${this.#s.key}': Combining .siwx() and .apiKey() is not supported on the same route.`,
       );
     }
 
@@ -303,16 +347,16 @@ export class RouteBuilder<
       HasBody,
       IsDynamic
     >;
-    next._siwxEnabled = true;
+    next.#s.siwxEnabled = true;
 
-    if (next._authMode === 'paid' || next._pricing) {
-      next._authMode = 'paid';
-      if (next._protocols.length === 0) next._protocols = ['x402'];
+    if (next.#s.authMode === 'paid' || next.#s.pricing) {
+      next.#s.authMode = 'paid';
+      if (next.#s.protocols.length === 0) next.#s.protocols = ['x402'];
       return next;
     }
 
-    next._authMode = 'siwx';
-    next._protocols = [];
+    next.#s.authMode = 'siwx';
+    next.#s.protocols = [];
     return next;
   }
 
@@ -332,9 +376,9 @@ export class RouteBuilder<
   apiKey(
     resolver: (key: string) => unknown | Promise<unknown>,
   ): RouteBuilder<TBody, TQuery, TOutput, True, NeedsBody, HasBody, IsDynamic> {
-    if (this._siwxEnabled) {
+    if (this.#s.siwxEnabled) {
       throw new Error(
-        `route '${this._key}': Combining .apiKey() and .siwx() is not supported on the same route.`,
+        `route '${this.#s.key}': Combining .apiKey() and .siwx() is not supported on the same route.`,
       );
     }
     const next = this.fork() as RouteBuilder<
@@ -346,8 +390,8 @@ export class RouteBuilder<
       HasBody,
       IsDynamic
     >;
-    next._authMode = 'apiKey';
-    next._apiKeyResolver = resolver;
+    next.#s.authMode = 'apiKey';
+    next.#s.apiKeyResolver = resolver;
     return next;
   }
 
@@ -361,15 +405,15 @@ export class RouteBuilder<
    * ```
    */
   unprotected(): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, IsDynamic> {
-    if (this._authMode && this._authMode !== 'unprotected') {
+    if (this.#s.authMode && this.#s.authMode !== 'unprotected') {
       throw new Error(
-        `route '${this._key}': Cannot combine .unprotected() and .${this._authMode}() on the same route.`,
+        `route '${this.#s.key}': Cannot combine .unprotected() and .${this.#s.authMode}() on the same route.`,
       );
     }
 
-    if (this._pricing) {
+    if (this.#s.pricing) {
       throw new Error(
-        `route '${this._key}': Cannot combine .unprotected() and .paid() on the same route.`,
+        `route '${this.#s.key}': Cannot combine .unprotected() and .paid() on the same route.`,
       );
     }
 
@@ -382,8 +426,8 @@ export class RouteBuilder<
       HasBody,
       IsDynamic
     >;
-    next._authMode = 'unprotected';
-    next._protocols = [];
+    next.#s.authMode = 'unprotected';
+    next.#s.protocols = [];
     return next;
   }
 
@@ -403,8 +447,8 @@ export class RouteBuilder<
    */
   provider(name: string, config?: ProviderConfig): this {
     const next = this.fork();
-    next._providerName = name;
-    next._providerConfig = config ?? {};
+    next.#s.providerName = name;
+    next.#s.providerConfig = config ?? {};
     return next;
   }
 
@@ -430,7 +474,7 @@ export class RouteBuilder<
       True,
       IsDynamic
     >;
-    next._bodySchema = schema;
+    next.#s.bodySchema = schema;
     return next;
   }
 
@@ -457,8 +501,8 @@ export class RouteBuilder<
       HasBody,
       IsDynamic
     >;
-    next._querySchema = schema;
-    next._method = 'GET';
+    next.#s.querySchema = schema;
+    next.#s.method = 'GET';
     return next;
   }
 
@@ -486,7 +530,7 @@ export class RouteBuilder<
       HasBody,
       IsDynamic
     >;
-    next._outputSchema = schema;
+    next.#s.outputSchema = schema;
     return next;
   }
 
@@ -511,8 +555,8 @@ export class RouteBuilder<
       HasBody,
       IsDynamic
     >;
-    next._inputExample = example;
-    next._hasInputExample = true;
+    next.#s.inputExample = example;
+    next.#s.hasInputExample = true;
     return next;
   }
 
@@ -537,8 +581,8 @@ export class RouteBuilder<
       HasBody,
       IsDynamic
     >;
-    next._outputExample = example;
-    next._hasOutputExample = true;
+    next.#s.outputExample = example;
+    next.#s.hasOutputExample = true;
     return next;
   }
 
@@ -553,7 +597,7 @@ export class RouteBuilder<
    */
   description(text: string): this {
     const next = this.fork();
-    next._description = text;
+    next.#s.description = text;
     return next;
   }
 
@@ -568,7 +612,7 @@ export class RouteBuilder<
    */
   path(p: string): this {
     const next = this.fork();
-    next._path = p;
+    next.#s.path = p;
     return next;
   }
 
@@ -583,7 +627,7 @@ export class RouteBuilder<
    */
   method(m: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH'): this {
     const next = this.fork();
-    next._method = m;
+    next.#s.method = m;
     return next;
   }
 
@@ -605,7 +649,7 @@ export class RouteBuilder<
     fn: (body: TBody) => void | Promise<void>,
   ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic> {
     const next = this.fork();
-    next._validateFn = fn;
+    next.#s.validateFn = fn;
     return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic>;
   }
 
@@ -626,7 +670,7 @@ export class RouteBuilder<
     lifecycle: SettlementLifecycle<TBody>,
   ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic> {
     const next = this.fork();
-    next._settlement = lifecycle;
+    next.#s.settlement = lifecycle;
     return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic>;
   }
 
@@ -679,86 +723,86 @@ export class RouteBuilder<
     handlerFn: RouteHandler,
     streaming: boolean,
   ): (request: NextRequest) => Promise<Response> {
-    if (!this._authMode) {
+    if (!this.#s.authMode) {
       throw new Error(
-        `route '${this._key}': Select an auth mode: .paid(pricing), .siwx(), .apiKey(resolver), or .unprotected()`,
+        `route '${this.#s.key}': Select an auth mode: .paid(pricing), .siwx(), .apiKey(resolver), or .unprotected()`,
       );
     }
-    if (this._validateFn && !this._bodySchema) {
+    if (this.#s.validateFn && !this.#s.bodySchema) {
       throw new Error(
-        `route '${this._key}': .validate() requires .body() — validation runs on parsed body`,
+        `route '${this.#s.key}': .validate() requires .body() — validation runs on parsed body`,
       );
     }
-    if (this._settlement && !this._pricing) {
-      throw new Error(`route '${this._key}': .settlement() requires a paid route`);
+    if (this.#s.settlement && !this.#s.pricing) {
+      throw new Error(`route '${this.#s.key}': .settlement() requires a paid route`);
     }
-    if (this._dynamicPrice && this._protocols.includes('x402')) {
-      const hasUpto = this._deps.x402Accepts.some((accept) => accept.scheme === 'upto');
+    if (this.#s.dynamicPrice && this.#s.protocols.includes('x402')) {
+      const hasUpto = this.#s.deps.x402Accepts.some((accept) => accept.scheme === 'upto');
       if (!hasUpto) {
         throw new Error(
-          `route '${this._key}': .paid({ dynamic: true }) on an x402 route requires an 'upto' accept on at least one configured network. ` +
+          `route '${this.#s.key}': .paid({ dynamic: true }) on an x402 route requires an 'upto' accept on at least one configured network. ` +
             `Add { scheme: 'upto', network, asset } to RouterConfig.x402.accepts.`,
         );
       }
     }
-    if (this._dynamicPrice && this._protocols.includes('mpp')) {
-      if (!this._deps.mppSessionConfig) {
+    if (this.#s.dynamicPrice && this.#s.protocols.includes('mpp')) {
+      if (!this.#s.deps.mppSessionConfig) {
         throw new Error(
-          `route '${this._key}': .paid({ dynamic: true }) on an MPP route requires session mode. ` +
+          `route '${this.#s.key}': .paid({ dynamic: true }) on an MPP route requires session mode. ` +
             `Set RouterConfig.mpp.session = {} and provide mpp.operatorKey.`,
         );
       }
     }
-    if (streaming && !this._dynamicPrice) {
+    if (streaming && !this.#s.dynamicPrice) {
       throw new Error(
-        `route '${this._key}': .stream() requires .paid({ dynamic: true }) — ` +
+        `route '${this.#s.key}': .stream() requires .paid({ dynamic: true }) — ` +
           `static/free routes can't meter per-chunk billing.`,
       );
     }
 
     validateExamples(
-      this._key,
-      this._bodySchema,
-      this._querySchema,
-      this._outputSchema,
-      this._inputExample,
-      this._hasInputExample,
-      this._outputExample,
-      this._hasOutputExample,
+      this.#s.key,
+      this.#s.bodySchema,
+      this.#s.querySchema,
+      this.#s.outputSchema,
+      this.#s.inputExample,
+      this.#s.hasInputExample,
+      this.#s.outputExample,
+      this.#s.hasOutputExample,
     );
 
     const entry: RouteEntry = {
-      key: this._key,
-      authMode: this._authMode!,
-      siwxEnabled: this._siwxEnabled,
-      pricing: this._pricing,
-      dynamicPrice: this._dynamicPrice ? true : undefined,
+      key: this.#s.key,
+      authMode: this.#s.authMode!,
+      siwxEnabled: this.#s.siwxEnabled,
+      pricing: this.#s.pricing,
+      dynamicPrice: this.#s.dynamicPrice ? true : undefined,
       streaming: streaming ? true : undefined,
-      protocols: this._protocols,
-      bodySchema: this._bodySchema,
-      querySchema: this._querySchema,
-      outputSchema: this._outputSchema,
-      inputExample: this._hasInputExample ? this._inputExample : undefined,
-      outputExample: this._hasOutputExample ? this._outputExample : undefined,
-      description: this._description,
-      path: this._path,
-      method: this._method,
-      maxPrice: this._maxPrice,
-      minPrice: this._minPrice,
-      payTo: this._payTo,
-      apiKeyResolver: this._apiKeyResolver,
-      providerName: this._providerName,
-      providerConfig: this._providerConfig,
-      validateFn: this._validateFn as ((body: unknown) => void | Promise<void>) | undefined,
-      settlement: this._settlement as SettlementLifecycle | undefined,
-      mppInfo: this._mppInfo,
-      tickCost: this._tickCost,
-      unitType: this._unitType,
+      protocols: this.#s.protocols,
+      bodySchema: this.#s.bodySchema,
+      querySchema: this.#s.querySchema,
+      outputSchema: this.#s.outputSchema,
+      inputExample: this.#s.hasInputExample ? this.#s.inputExample : undefined,
+      outputExample: this.#s.hasOutputExample ? this.#s.outputExample : undefined,
+      description: this.#s.description,
+      path: this.#s.path,
+      method: this.#s.method,
+      maxPrice: this.#s.maxPrice,
+      minPrice: this.#s.minPrice,
+      payTo: this.#s.payTo,
+      apiKeyResolver: this.#s.apiKeyResolver,
+      providerName: this.#s.providerName,
+      providerConfig: this.#s.providerConfig,
+      validateFn: this.#s.validateFn as ((body: unknown) => void | Promise<void>) | undefined,
+      settlement: this.#s.settlement as SettlementLifecycle | undefined,
+      mppInfo: this.#s.mppInfo,
+      tickCost: this.#s.tickCost,
+      unitType: this.#s.unitType,
     };
 
-    this._registry.register(entry);
+    this.#s.registry.register(entry);
 
-    return createRequestHandler(entry, handlerFn, this._deps);
+    return createRequestHandler(entry, handlerFn, this.#s.deps);
   }
 }
 
