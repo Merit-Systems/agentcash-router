@@ -65,6 +65,30 @@ $CLI fetch http://localhost:3000/api/fortune/stream \
 
 Expect: `"protocol": "mpp"`, a `channelId`, and a concatenated stream of `{"event":"prompt"}`, ~9 `{"event":"token"}` lines, and one trailing `{"event":"done"}`. Route is `.paid({ dynamic: true, unitType: 'token', protocols: ['mpp'] }).stream(async function*)` — billed per `charge()` call inside the generator.
 
+## Solana variant
+
+The example also advertises Solana in `x402.accepts` when `SOLANA_PAYEE_ADDRESS` is set. Solana support is narrower than Base/Tempo: **only x402 `exact` (static-priced) and SIWX work** — `upto` is Base-only and MPP is Tempo-only, so tests 2/3/4/5 above have no Solana counterpart.
+
+Force the wallet onto Solana with `--payment-network solana`. Fund the Solana account first (`$CLI list-accounts` shows the deposit link).
+
+### S1. x402 `exact` on Solana
+
+```bash
+$CLI fetch http://localhost:3000/api/fortune --method POST -p x402 --payment-network solana
+```
+
+Expect: `"protocol": "x402"`, `"network": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"`, a `transactionHash`. The 402 challenge's Solana accepts entry must include `extra.feePayer`, `recentBlockhash`, `decimals`, and `tokenProgram` — the client signs against that feePayer and the facilitator co-signs.
+
+**Watch for:** `Payment rejected (invalid_payload): feePayer not managed: <address>`. That means the server advertised a feePayer the configured Solana facilitator doesn't sign for — usually a mismatch between the facilitator that answered `getSupported()` (quote time) and the one handling `/settle` (settle time). Check `src/protocols/x402/solana.ts` and the facilitator wiring in `src/protocols/x402/facilitator-clients.ts`.
+
+### S2. SIWX identity on Solana
+
+```bash
+$CLI fetch http://localhost:3000/api/fortune/profile --payment-network solana
+```
+
+Expect: `{"wallet": "<base58 Solana address>", "message": "Identity verified via Sign-In with X"}` and **no payment**. The 402 challenge's `extensions.sign-in-with-x.supportedChains` must include `{chainId: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", type: "ed25519"}`. If you get an EVM address back, the CLI fell through to Base — the `--payment-network solana` flag was ignored or the route's supported chains are misconfigured.
+
 ## Reporting back
 
 Summarize as a table: test #, endpoint, protocol/network, pass/fail, tx hash or channel id. Note any retries needed (test 4's funding race is the only expected flake).

@@ -1,14 +1,10 @@
-import type { FacilitatorConfig, FacilitatorClient } from '@x402/core/http';
 import { filterEvmNetworks } from '../protocols/x402/evm.js';
 import { filterSolanaNetworks } from '../protocols/x402/solana.js';
 import type { RouterConfig, X402Server } from '../types.js';
-import {
-  getResolvedX402Facilitators,
-  getResolvedX402FacilitatorGroups,
-} from '../protocols/x402/facilitators.js';
+import { getResolvedX402Facilitators } from '../protocols/x402/facilitators.js';
+import { createFacilitatorClients } from '../protocols/x402/facilitator-clients.js';
 import { getConfiguredX402Networks } from '../protocols/x402/accepts.js';
 import type { KvStore } from '../kv-store/index.js';
-import { withCachedSupported } from '../kv-store/facilitator-supported.js';
 
 export async function createX402Server(config: RouterConfig, kvStore?: KvStore) {
   const { x402ResourceServer, HTTPFacilitatorClient } = await import('@x402/core/server');
@@ -54,18 +50,4 @@ export async function createX402Server(config: RouterConfig, kvStore?: KvStore) 
     initPromise,
     facilitatorsByNetwork,
   };
-}
-
-function createFacilitatorClients(
-  facilitatorsByNetwork: ReturnType<typeof getResolvedX402Facilitators>,
-  HTTPFacilitatorClient: new (config?: FacilitatorConfig) => FacilitatorClient,
-  kvStore: KvStore | undefined,
-): FacilitatorClient[] {
-  const groups = getResolvedX402FacilitatorGroups(facilitatorsByNetwork);
-  return groups.map((group) =>
-    withCachedSupported(new HTTPFacilitatorClient(group.config), {
-      kv: kvStore,
-      cacheKey: group.config.url,
-    }),
-  );
 }
