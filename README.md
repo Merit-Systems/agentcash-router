@@ -27,8 +27,6 @@ pnpm add @agentcash/router
 pnpm add next zod  # peer dependencies
 ```
 
-`next` and `zod` are peer dependencies — the router shares your app's copy. Everything else (the x402 packages, `mppx`, `viem`, `zod-openapi`) is bundled as a regular dependency and installed automatically.
-
 ## Environment
 
 The recommended entry point reads its config from `process.env`. A copy-paste `.env.example` lives at the repo root.
