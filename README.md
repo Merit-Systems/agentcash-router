@@ -24,7 +24,7 @@
 
 ```bash
 pnpm add @agentcash/router
-pnpm add next zod @x402/core @x402/evm @x402/extensions @coinbase/x402 zod-openapi # peer dependencies
+pnpm add next zod @x402/core @x402/evm @x402/extensions @x402/svm @coinbase/x402 zod-openapi # peer dependencies
 pnpm add mppx  # optional, for MPP support
 ```
 
@@ -37,13 +37,13 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 | Var | Required | Purpose |
 |-----|----------|---------|
 | `EVM_PAYEE_ADDRESS` | yes | EVM address that receives x402 and MPP payments (`0x…`, 20 bytes). Canonicalized to lowercase. The zero address is rejected. |
-| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | yes (production) | Coinbase Developer Platform credentials for the default EVM facilitator. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
+| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | yes (EVM) | Coinbase Developer Platform credentials for the default EVM facilitator. Create an API key at https://portal.cdp.coinbase.com. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
 
 ### Solana
 
 | Var | Required | Purpose |
 |-----|----------|---------|
-| `SOLANA_PAYEE_ADDRESS` | no | When set, adds a Solana `exact` accept so the router takes Solana payments. **Dynamic pricing (`upto`) is Base-only** — Solana clients can only pay static-priced routes. |
+| `SOLANA_PAYEE_ADDRESS` | no | When set, adds a Solana `exact` accept so the router takes Solana payments. **`.upTo()` is Base-only and `.metered()` is MPP-only**. Solana clients can only pay static-priced `.paid()` routes. |
 | `SOLANA_FACILITATOR_URL` | no | Override the Solana x402 facilitator. Defaults to `DEFAULT_SOLANA_FACILITATOR_URL`. |
 
 ### MPP (auto-enabled when `MPP_SECRET_KEY` is set)
@@ -53,14 +53,14 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 | `MPP_SECRET_KEY` | when MPP is enabled | Server-side MPP secret. Presence toggles MPP on. |
 | `MPP_CURRENCY` | when MPP is enabled | Tempo currency address. Use `TEMPO_USDC_ADDRESS` for Tempo USDC. |
 | `TEMPO_RPC_URL` | when MPP is enabled | Authenticated Tempo JSON-RPC endpoint. Public `rpc.tempo.xyz` returns 401. |
-| `MPP_OPERATOR_KEY` | no | Signs server-side close/settle. When set, MPP session mode is enabled automatically (required for streaming + `.paid({ dynamic: true })` on MPP). Address must equal the payee. |
+| `MPP_OPERATOR_KEY` | no | Signs server-side close/settle. When set, MPP session mode is enabled automatically (required for `.metered()`: both streaming and request-mode per-tick billing). Address must equal the payee. |
 | `MPP_FEE_PAYER_KEY` | no | Sponsors client gas for channel open/topUp. Must resolve to a different address than `MPP_OPERATOR_KEY` (Tempo rejects fee-delegated txs where `sender === feePayer`). |
 
 ### Other
 
 | Var | Required | Purpose |
 |-----|----------|---------|
-| `BASE_URL` | yes | Origin URL (`https://api.example.com`). Load-bearing — used as the 402 realm, OpenAPI server URL, and MPP memo prefix. Must match the public domain. |
+| `BASE_URL` | yes | Origin URL (`https://api.example.com`). Load-bearing: used as the 402 realm, OpenAPI server URL, and MPP memo prefix. Must match the public domain. |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | no | Upstash / Vercel KV. Backs SIWX nonce, SIWX entitlement, and MPP replay. In-memory fallback is unsafe in serverless production. Providing a Kv Store is highly recommended. |
 
 ## Quick start
@@ -69,7 +69,7 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 
 There are two ways to initialize. Pick one.
 
-**Option A — `createRouterFromEnv` (recommended).** Reads `process.env`, validates every value up front, and throws a single `RouterConfigError` with every problem at once. Auto-enables MPP when `MPP_SECRET_KEY` is set, auto-adds a Solana accept when `SOLANA_PAYEE_ADDRESS` is set, auto-enables MPP session mode when `MPP_OPERATOR_KEY` is set.
+**Option A: `createRouterFromEnv` (recommended).** Reads `process.env`, validates every value up front, and throws a single `RouterConfigError` with every problem at once. Auto-enables MPP when `MPP_SECRET_KEY` is set, auto-adds a Solana accept when `SOLANA_PAYEE_ADDRESS` is set, auto-enables MPP session mode when `MPP_OPERATOR_KEY` is set.
 
 ```typescript
 // lib/router.ts
@@ -82,7 +82,7 @@ export const router = createRouterFromEnv({
 });
 ```
 
-**Option B — build a `RouterConfig` and pass it to `createRouter`.** Use this when you need custom networks, multiple payees, non-standard assets, or any setting `createRouterFromEnv` doesn't expose. `createRouter` runs the same validation against the `RouterConfig` shape.
+**Option B: build a `RouterConfig` and pass it to `createRouter`.** Use this when you need custom networks, multiple payees, non-standard assets, or any setting `createRouterFromEnv` doesn't expose. `createRouter` runs the same validation against the `RouterConfig` shape.
 
 ```typescript
 // lib/router.ts
@@ -139,7 +139,7 @@ import '@/lib/routes-barrel';  // imports every route module so the registry is 
 export const GET = router.openapi();
 ```
 
-The barrel forces every route module to load before the discovery handler walks the registry — Next.js otherwise lazy-loads route files on first hit, and unloaded routes don't appear in the spec.
+The barrel forces every route module to load before the discovery handler walks the registry. Next.js otherwise lazy-loads route files on first hit, and unloaded routes don't appear in the spec.
 
 The `openapi.json` should be hosted at `GET <origin>/openapi.json`. 
 
@@ -147,9 +147,11 @@ The `openapi.json` should be hosted at `GET <origin>/openapi.json`.
 
 | Method | Purpose |
 |--------|---------|
-| `.paid(price)` | Payment required (x402, MPP, or both). |
+| `.paid(price)` | Fixed, args-derived, or tiered payment up front (x402, MPP, or both). |
+| `.upTo(maxPrice)` | Handler-computed billing; handler calls `charge(amount)` and the request settles once for the running total. **x402 only.** |
+| `.metered({ tickCost, maxPrice })` | Per-tick billing over an MPP payment channel. `.handler()` bills exactly `tickCost`; `.stream()` calls `charge()` per yield. **MPP only.** Streaming requires this. |
 | `.siwx()` | Wallet identity, no payment. Returns 402 with a SIWX challenge. |
-| `.apiKey(resolver)` | `X-API-Key` or `Authorization: Bearer <key>`. Composes with `.paid()`. |
+| `.apiKey(resolver)` | `X-API-Key` or `Authorization: Bearer <key>`. Composes with `.paid()` / `.upTo()` / `.metered()`. |
 | `.unprotected()` | No auth. |
 
 ```typescript
@@ -164,18 +166,22 @@ router.route({ path: 'gated' })
 
 ## Pricing
 
+`.paid()`, `.upTo()`, and `.metered()` are mutually exclusive pricing modes: pick one per route.
+
+### `.paid()`: fixed, args-derived, or tiered
+
 **Static.**
 ```typescript
 .paid('0.02')
 ```
 
-**Args-driven.**
+**Args-derived.** Compute the price from the parsed body. Throw `HttpError` to reject before the 402 challenge.
 ```typescript
 .paid((body) => calculateCost(body), { maxPrice: '5.00' })
 .body(genSchema)
 ```
 
-`maxPrice` caps the computed amount and acts as a fallback if the pricing function throws. Without `maxPrice`, the route trusts your function fully (no cap, no fallback) and returns 500 on errors.
+`maxPrice` caps the computed amount and acts as a fallback on non-`HttpError` exceptions thrown by the pricing function (`HttpError` is always rethrown). Without `maxPrice`, the route trusts your function fully (no cap, no fallback) and returns 500 on errors.
 
 **Tiered.**
 ```typescript
@@ -189,15 +195,34 @@ router.route({ path: 'gated' })
 .body(uploadSchema)
 ```
 
-**Handler-driven (request-mode).** Bills exactly `tickCost` per request:
+### `.upTo()`: handler-computed, x402 only
+
+Handler calls `charge(amount)` one or more times; the request settles once for the accumulated total, capped at `maxPrice`. Requires an `'upto'` accept on at least one configured x402 network (`createRouterFromEnv` auto-adds one on Base).
+
 ```typescript
-.paid({ dynamic: true, tickCost: '0.01', unitType: 'request', maxPrice: '0.01' })
+.upTo('0.05')
+.body(schema)
+.handler(async ({ body, charge }) => {
+  await charge('0.001');
+  // ... more work ...
+  await charge('0.002');
+  return result;
+});
+```
+
+### `.metered()`: per-tick, MPP only
+
+Per-tick billing over an MPP payment channel. Requires `MPP_OPERATOR_KEY` (`createRouterFromEnv` auto-enables session mode when it's set).
+
+**Request-mode.** `.handler()` bills exactly `tickCost` on each request:
+```typescript
+.metered({ tickCost: '0.01', maxPrice: '0.05', unitType: 'request' })
 .handler(async ({ body }) => { ... });
 ```
 
-**Streaming (MPP only).** One `charge()` call bills one tick:
+**Streaming.** Each `charge()` call bills one tick, up to `maxPrice`:
 ```typescript
-.paid({ dynamic: true, tickCost: '0.0001', unitType: 'token', maxPrice: '0.05', protocols: ['mpp'] })
+.metered({ tickCost: '0.0001', maxPrice: '0.05', unitType: 'token' })
 .stream(async function* ({ body, charge }) {
   for await (const token of streamLLM(body.prompt)) {
     await charge();
@@ -205,6 +230,8 @@ router.route({ path: 'gated' })
   }
 });
 ```
+
+Streaming is MPP-only. `.stream()` on a `.paid()` / `.upTo()` / `.unprotected()` route throws at registration.
 
 ## Pre-payment validation
 
@@ -247,4 +274,22 @@ export const router = createRouterFromEnv({
 ```
 
 All hooks are optional and fire-and-forget; they never delay the response. Use hooks to add additional telemetry or flexibility to your resource's lifecycle.
+
+### Debugging with `onAlert`
+
+The router reports internal warnings and errors (failed payment verification, simulation failures, misconfiguration) through `onAlert`: with no plugin registered these messages are silently dropped, so wiring up a logging plugin is the fastest way to see why a request failed. Forward `onAlert` (and `onError`) to your logs:
+
+```typescript
+const loggingPlugin: RouterPlugin = {
+  onAlert(_ctx, alert) {
+    (alert.level === 'error' ? console.error : console.warn)(
+      `[router:${alert.route}] ${alert.message}`,
+      alert.meta ?? '',
+    );
+  },
+  onError(_ctx, error) {
+    console.error(`[router] ${error.status} ${error.message} (settled=${error.settled})`);
+  },
+};
+```
 

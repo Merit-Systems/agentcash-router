@@ -26,7 +26,7 @@ Run them in order. Each is independent — if one fails, keep going and report w
 $CLI fetch http://localhost:3000/api/fortune --method POST -p x402
 ```
 
-Expect: `"protocol": "x402"`, `"network": "base"`, a `transactionHash`. Route is `/api/fortune` with no `.paid({ dynamic: true })` → exact scheme.
+Expect: `"protocol": "x402"`, `"network": "base"`, a `transactionHash`. Route is `/api/fortune` with `.paid('0.001')` → exact scheme.
 
 ### 2. x402 `upto` — dynamic price with EIP-2612 gas-sponsoring on Base
 
@@ -35,7 +35,7 @@ $CLI fetch http://localhost:3000/api/fortune/premium \
   --method POST -p x402 -b '{"category":"love"}'
 ```
 
-Expect: `"protocol": "x402"`, `"network": "base"`, `"price": "up to $0.05"`, a `transactionHash`. Route is `.paid({ dynamic: true, tickCost, maxPrice, protocols: ['x402'] })` → upto + Permit2. The 402 challenge must carry `extra.facilitatorAddress` (provided by `getSupported()` from the CDP facilitator); if you see `upto scheme requires facilitatorAddress in paymentRequirements.extra`, the server lost the `getSupported()` enrichment.
+Expect: `"protocol": "x402"`, `"network": "base"`, `"price": "up to $0.005"`, a `transactionHash`. Route is `.upTo('0.005')` with the handler calling `charge(amount)` → upto + Permit2. The 402 challenge must carry `extra.facilitatorAddress` (provided by `getSupported()` from the CDP facilitator); if you see `upto scheme requires facilitatorAddress in paymentRequirements.extra`, the server lost the `getSupported()` enrichment.
 
 ### 3. MPP one-shot — fixed price, no session
 
@@ -52,7 +52,7 @@ $CLI fetch http://localhost:3000/api/fortune/llm \
   --method POST -p mpp -b '{"prompt":"Will I find love?"}'
 ```
 
-Expect: `"protocol": "mpp"`, `"network": "tempo"`, a `channelId` (no `transactionHash` — settlement is deferred until channel close). Route is `.paid({ dynamic: true, tickCost: '0.001', unitType: 'request' })`.
+Expect: `"protocol": "mpp"`, `"network": "tempo"`, a `channelId` (no `transactionHash` — settlement is deferred until channel close). Route is `.metered({ tickCost: '0.001', maxPrice: '0.01', unitType: 'request' })` — `.handler()` (non-generator) bills exactly `tickCost` per request.
 
 **Known race:** first call after a long gap can fail with `Channel not found: channel not funded on-chain`. The CLI opens the channel and immediately tries to use it before the on-chain funding tx lands. Wait ~8s and retry — once the channel is funded, subsequent calls reuse it.
 
@@ -63,7 +63,7 @@ $CLI fetch http://localhost:3000/api/fortune/stream \
   --method POST -b '{"prompt":"What awaits me?"}' --stream
 ```
 
-Expect: `"protocol": "mpp"`, a `channelId`, and a concatenated stream of `{"event":"prompt"}`, ~9 `{"event":"token"}` lines, and one trailing `{"event":"done"}`. Route is `.paid({ dynamic: true, unitType: 'token', protocols: ['mpp'] }).stream(async function*)` — billed per `charge()` call inside the generator.
+Expect: `"protocol": "mpp"`, a `channelId`, and a concatenated stream of `{"event":"prompt"}`, ~9 `{"event":"token"}` lines, and one trailing `{"event":"done"}`. Route is `.metered({ tickCost: '0.0001', maxPrice: '0.05', unitType: 'token' }).stream(async function*)` — each `charge()` call inside the generator bills one tick.
 
 ## Solana variant
 

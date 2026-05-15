@@ -96,6 +96,16 @@ describe('DynamicPricing', () => {
     const p = new DynamicPricing({ fn: () => '0', minPrice: '0.01', maxPrice: '5.00' });
     expect(p.describe()).toEqual({ mode: 'dynamic', min: '0.01', max: '5.00' });
   });
+
+  it('throws 500 when fn returns a malformed amount and no maxPrice', async () => {
+    const p = new DynamicPricing({ fn: () => 'not-a-price', route: 'test/route' });
+    await expect(p.quote({})).rejects.toMatchObject({ name: 'HttpError', status: 500 });
+  });
+
+  it('throws 500 when fn returns a non-positive amount and no maxPrice', async () => {
+    const p = new DynamicPricing({ fn: () => '0', route: 'test/route' });
+    await expect(p.quote({})).rejects.toMatchObject({ status: 500 });
+  });
 });
 
 describe('TieredPricing', () => {
@@ -113,6 +123,11 @@ describe('TieredPricing', () => {
   it('challengeQuote returns highest tier price when body absent', async () => {
     const p = new TieredPricing({ field: 'tier', tiers });
     expect(await p.challengeQuote(undefined)).toBe('2.00');
+  });
+
+  it('challengeQuote falls back to max tier when body lacks the discriminator field', async () => {
+    const p = new TieredPricing({ field: 'tier', tiers });
+    expect(await p.challengeQuote({})).toBe('2.00');
   });
 
   it('rejects unknown tier with status 400', async () => {

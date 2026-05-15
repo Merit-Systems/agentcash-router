@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
-import { bufferBody, validateBody } from '../src/pipeline/body.js';
+import { bufferBody, MalformedJsonError, validateBody } from '../src/pipeline/body.js';
 
 describe('bufferBody', () => {
   it('parses valid JSON body', async () => {
@@ -18,13 +18,21 @@ describe('bufferBody', () => {
     expect(result).toBeUndefined();
   });
 
-  it('returns undefined for invalid JSON', async () => {
+  it('returns undefined for whitespace-only body', async () => {
     const req = new Request('http://test.com', {
       method: 'POST',
-      body: 'not json',
+      body: '   ',
     });
     const result = await bufferBody(req);
     expect(result).toBeUndefined();
+  });
+
+  it('throws MalformedJsonError for invalid JSON', async () => {
+    const req = new Request('http://test.com', {
+      method: 'POST',
+      body: '{not json',
+    });
+    await expect(bufferBody(req)).rejects.toBeInstanceOf(MalformedJsonError);
   });
 });
 

@@ -47,7 +47,8 @@ describe('validateRouterConfig', () => {
           code: 'missing_cdp_keys',
           protocol: 'x402',
           message:
-            'x402 EVM facilitator (Coinbase) requires CDP_API_KEY_ID and CDP_API_KEY_SECRET.',
+            'x402 EVM facilitator (Coinbase) requires CDP_API_KEY_ID and CDP_API_KEY_SECRET. ' +
+            'Create an API key at https://portal.cdp.coinbase.com and set it via env.',
         },
       ]);
     }

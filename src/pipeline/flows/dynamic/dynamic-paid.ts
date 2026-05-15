@@ -10,7 +10,7 @@ import {
   trySiwxFastPath,
   type FlowCtx,
 } from '../../steps/index.js';
-import { build402 } from '../build402.js';
+import { buildChallengeResponse } from '../challenge-response.js';
 import { resolveDynamicBodyAndPrice } from './dynamic-body-and-price.js';
 import { runDynamicChannelMgmtFlow } from './dynamic-channel-mgmt.js';
 import { invokeMetered, invokeUpto } from './dynamic-invoke/index.js';
@@ -46,7 +46,7 @@ export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   if (!incomingStrategy) {
     const initError = protocolInitError(routeEntry, deps);
     if (initError) return fail(ctx, 500, initError);
-    return build402(ctx, pricing, earlyBody);
+    return buildChallengeResponse(ctx, pricing, earlyBody);
   }
 
   const { skipBody, skipHandler } = resolveDynamicPreflight(incomingStrategy, request, routeEntry);
@@ -78,7 +78,7 @@ export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
     if (verifyOutcome.kind === 'config') {
       return fail(ctx, 500, verifyOutcome.message, parsedBody);
     }
-    return build402(ctx, pricing, parsedBody, verifyOutcome.failure);
+    return buildChallengeResponse(ctx, pricing, parsedBody, verifyOutcome.failure);
   }
 
   ctx.pluginCtx.setVerifiedWallet(verifyOutcome.wallet);

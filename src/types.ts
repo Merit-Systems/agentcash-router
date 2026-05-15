@@ -335,7 +335,7 @@ export interface DiscoveryConfig {
 }
 
 export interface RouterConfig {
-  /** Default payee for paid routes — populates `payTo` on the auto-generated x402 `exact` accept and acts as the MPP `recipient` fallback. Override per-protocol via `x402.accepts[i].payTo` / `mpp.recipient`, or per-route via `.paid({ payTo })`. */
+  /** Default payee for paid routes — populates `payTo` on the auto-generated x402 `exact` accept and acts as the MPP `recipient` fallback. Override per-protocol via `x402.accepts[i].payTo` / `mpp.recipient`, or per-route via the `payTo` option on `.paid()` / `.upTo()` / `.metered()`. */
   payeeAddress?: string;
   /** Origin URL (required). Used as 402 realm, discovery base, OpenAPI server, and MPP memo prefix — must match the public domain or payment matching breaks. */
   baseUrl: string;

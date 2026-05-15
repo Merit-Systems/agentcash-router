@@ -30,15 +30,15 @@ export class TieredPricing implements PricingStrategy {
     );
   }
 
-  challengeQuote(body: unknown | undefined): Promise<string> {
+  async challengeQuote(body: unknown | undefined): Promise<string> {
     if (body !== undefined) {
       try {
-        return this.quote(body);
+        return await this.quote(body);
       } catch {
         /* fall through to max */
       }
     }
-    return Promise.resolve(this.maxTierPrice());
+    return this.maxTierPrice();
   }
 
   describe(): PricingDescriptor {

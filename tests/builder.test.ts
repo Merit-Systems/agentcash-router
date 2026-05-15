@@ -212,6 +212,33 @@ describe('registration-time safety', () => {
     );
   });
 
+  it('fixed price "abc" throws at registration', () => {
+    const { builder } = makeBuilder();
+    expect(() => builder.paid('abc')).toThrow("price 'abc' must be a positive decimal");
+  });
+
+  it('fixed price "0" throws at registration', () => {
+    const { builder } = makeBuilder();
+    expect(() => builder.paid('0')).toThrow('must be a positive decimal');
+  });
+
+  it('fixed price beyond 6 decimal places throws at registration', () => {
+    const { builder } = makeBuilder();
+    expect(() => builder.paid('1.1234567')).toThrow('must be a positive decimal');
+  });
+
+  it('object-form fixed price is validated at registration', () => {
+    const { builder } = makeBuilder();
+    expect(() => builder.paid({ price: '-1.00' })).toThrow('must be a positive decimal');
+  });
+
+  it("minPrice 'abc' throws at registration", () => {
+    const { builder } = makeBuilder();
+    expect(() => builder.paid((_body: unknown) => '0.01', { minPrice: 'abc' })).toThrow(
+      'must be a positive decimal',
+    );
+  });
+
   it('.validate() without .body() throws at registration', () => {
     const { builder } = makeBuilder();
     expect(() =>

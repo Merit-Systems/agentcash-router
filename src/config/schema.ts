@@ -29,6 +29,7 @@ import type {
 } from './types.js';
 import {
   canonicalizeEvm,
+  evmAddressFromKey,
   isEvmAddress,
   isEvmPrivateKey,
   isPlaceholderEvm,
@@ -275,7 +276,6 @@ function getConfiguredX402Accepts(config: RouterConfig): X402AcceptConfig[] {
 function validateX402Config(
   config: RouterConfig,
   env: Record<string, string | undefined>,
-  options: ValidateOptions,
 ): RouterConfigIssue[] {
   const accepts = getConfiguredX402Accepts(config);
   const issues: RouterConfigIssue[] = [];
@@ -322,24 +322,26 @@ function validateX402Config(
       `x402 payee '${placeholder}' is a placeholder address and cannot receive payments.`,
     );
   }
-  if (options.requireCdpKeys !== false) {
-    const hasEvm = accepts.some(
-      (a) => typeof a.network === 'string' && a.network.startsWith('eip155:'),
-    );
-    if (hasEvm) {
-      const missing = ['CDP_API_KEY_ID', 'CDP_API_KEY_SECRET'].filter((k) => !env[k]);
-      if (missing.length > 0) {
-        push(
-          'missing_cdp_keys',
-          `x402 EVM facilitator (Coinbase) requires ${missing.join(' and ')}.`,
-        );
-      }
+  const hasEvm = accepts.some(
+    (a) => typeof a.network === 'string' && a.network.startsWith('eip155:'),
+  );
+  if (hasEvm) {
+    const missing = ['CDP_API_KEY_ID', 'CDP_API_KEY_SECRET'].filter((k) => !env[k]);
+    if (missing.length > 0) {
+      push(
+        'missing_cdp_keys',
+        `x402 EVM facilitator (Coinbase) requires ${missing.join(' and ')}. ` +
+          'Create an API key at https://portal.cdp.coinbase.com and set it via env.',
+      );
     }
   }
   return issues;
 }
 
-function validateMppConfig(config: RouterConfig): RouterConfigIssue[] {
+function validateMppConfig(
+  config: RouterConfig,
+  env: Record<string, string | undefined>,
+): RouterConfigIssue[] {
   const m = config.mpp;
   if (!m) {
     return [
@@ -390,7 +392,7 @@ function validateMppConfig(config: RouterConfig): RouterConfigIssue[] {
       `MPP recipient '${placeholder}' is a placeholder address and cannot receive payments.`,
     );
   }
-  if (!m.rpcUrl) {
+  if (!m.rpcUrl && !env.TEMPO_RPC_URL) {
     push(
       'missing_mpp_rpc_url',
       'MPP requires an authenticated Tempo RPC URL. Set TEMPO_RPC_URL env var or pass rpcUrl in the mpp config object.',
@@ -417,6 +419,18 @@ function validateMppConfig(config: RouterConfig): RouterConfigIssue[] {
         'close/settle would fail at runtime. Either use two distinct wallets, ' +
         'or omit feePayerKey to disable gas sponsorship (clients then pay their own gas).',
     );
+  }
+  if (m.session && recipient && isEvmAddress(recipient)) {
+    const operatorAddress = evmAddressFromKey(m.operatorKey);
+    if (operatorAddress && operatorAddress !== recipient.toLowerCase()) {
+      push(
+        'mpp_operator_recipient_mismatch',
+        `MPP session operatorKey resolves to ${operatorAddress}, which must equal ` +
+          `the recipient/payee ${recipient.toLowerCase()}. mppx's channel-close handler ` +
+          'asserts sender === payee. Set mpp.operatorKey to the recipient’s private key, ' +
+          'or set mpp.recipient/payeeAddress to the operator address.',
+      );
+    }
   }
   return issues;
 }
@@ -610,7 +624,7 @@ export function getRouterConfigIssues(
         "RouterConfig.protocols cannot be empty. Omit the field to use default ['x402'] or specify protocols explicitly.",
     });
   }
-  if (protocols.includes('x402')) issues.push(...validateX402Config(config, env, options));
-  if (protocols.includes('mpp')) issues.push(...validateMppConfig(config));
+  if (protocols.includes('x402')) issues.push(...validateX402Config(config, env));
+  if (protocols.includes('mpp')) issues.push(...validateMppConfig(config, env));
   return issues;
 }

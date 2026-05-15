@@ -5,7 +5,7 @@ import type { VerifyFailure } from '../../protocols/types.js';
 import { buildChallengeExtensions } from '../challenge-extensions.js';
 import { errorMessage, errorStatus, firePluginResponse, type FlowCtx } from '../steps/index.js';
 
-export async function build402(
+export async function buildChallengeResponse(
   ctx: FlowCtx,
   pricing: PricingStrategy | null,
   body: unknown | undefined,

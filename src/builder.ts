@@ -374,9 +374,19 @@ export class RouteBuilder<
         }
       }
     }
+    if (billing === 'exact' && typeof pricing === 'string' && !isPositiveDecimal(pricing)) {
+      throw new Error(
+        `route '${this.#s.key}': price '${pricing}' must be a positive decimal string`,
+      );
+    }
     if (next.#s.maxPrice !== undefined && !isPositiveDecimal(next.#s.maxPrice)) {
       throw new Error(
         `route '${this.#s.key}': maxPrice '${next.#s.maxPrice}' must be a positive decimal string`,
+      );
+    }
+    if (next.#s.minPrice !== undefined && !isPositiveDecimal(next.#s.minPrice)) {
+      throw new Error(
+        `route '${this.#s.key}': minPrice '${next.#s.minPrice}' must be a positive decimal string`,
       );
     }
     if (next.#s.tickCost !== undefined && !isPositiveDecimal(next.#s.tickCost)) {

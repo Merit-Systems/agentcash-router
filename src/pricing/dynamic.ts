@@ -1,5 +1,5 @@
 import { HttpError, type AlertFn } from '../types.js';
-import { compareDecimals } from './format.js';
+import { compareDecimals, isPositiveDecimal } from './format.js';
 import type { PricingDescriptor, PricingStrategy } from './types.js';
 
 export type DynamicPricingFn = (body: unknown) => string | Promise<string>;
@@ -18,9 +18,10 @@ export class DynamicPricing implements PricingStrategy {
   constructor(private readonly opts: DynamicPricingOptions) {}
 
   async quote(body: unknown): Promise<string> {
+    let priced: string;
     try {
       const raw = await this.opts.fn(body);
-      return this.cap(raw, body);
+      priced = this.cap(raw, body);
     } catch (err) {
       if (err instanceof HttpError) throw err;
       this.alert('error', `Pricing function failed: ${msg(err)}`, {
@@ -33,6 +34,13 @@ export class DynamicPricing implements PricingStrategy {
       }
       throw err;
     }
+    if (!isPositiveDecimal(priced)) {
+      throw new HttpError(
+        `route '${this.opts.route ?? 'unknown'}': dynamic pricing returned an invalid amount '${priced}'`,
+        500,
+      );
+    }
+    return priced;
   }
 
   challengeQuote(body: unknown | undefined): Promise<string> {

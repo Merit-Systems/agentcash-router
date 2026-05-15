@@ -1,6 +1,6 @@
 # Fortune Example
 
-Minimal Next.js app exercising every transaction kind `@agentcash/router` supports — x402 exact, x402 upto (dynamic), MPP one-shot, MPP session request-mode, MPP session SSE, function-based dynamic pricing, and SIWX identity.
+Minimal Next.js app exercising every transaction kind `@agentcash/router` supports — `.paid()` fixed (x402 exact / MPP one-shot), `.upTo()` (x402 handler-driven), `.metered()` request-mode (MPP session), `.metered().stream()` (MPP session SSE), `.paid(fn)` (args-derived pricing), and `.siwx()` (identity).
 
 Each route is self-contained: the top-of-file comment names the payment method it tests and shows the exact `agentcash` CLI command. To smoke-test every kind in order, see [`AGENTCASH_TESTS.md`](./AGENTCASH_TESTS.md).
 
@@ -14,18 +14,18 @@ pnpm dev                      # http://localhost:3000
 
 ## Endpoint → payment method map
 
-| Endpoint | Method | Payment kind | agentcash flag |
-|---|---|---|---|
-| `/api/fortune` | POST | x402 exact (Base) or MPP one-shot (Tempo) | `-p x402` / `-p mpp` |
-| `/api/fortune/premium` | POST | x402 upto — dynamic price, EIP-2612 gas-sponsored | `-p x402` |
-| `/api/fortune/llm` | POST | MPP session request-mode or x402 upto | `-p mpp` / `-p x402` |
-| `/api/fortune/stream` | POST | MPP session SSE streaming | `--stream` |
-| `/api/fortune/dynamic` | POST | Function-based dynamic pricing | auto |
-| `/api/fortune/favorites` | POST / GET | SIWX (Sign-In-with-X, no payment) | auto |
-| `/api/fortune/profile` | GET | SIWX (Sign-In-with-X, no payment) | auto |
-| `/.well-known/x402` | GET | Discovery | auto |
-| `/openapi.json` | GET | OpenAPI spec | n/a |
-| `/llms.txt` | GET | Agent guidance (`discovery.guidance`) | n/a |
+| Endpoint                 | Method     | Pricing mode                                            | Payment kind                                       | agentcash flag       |
+| ------------------------ | ---------- | ------------------------------------------------------- | -------------------------------------------------- | -------------------- |
+| `/api/fortune`           | POST       | `.paid('0.001')`                                        | x402 exact (Base) or MPP one-shot (Tempo)          | `-p x402` / `-p mpp` |
+| `/api/fortune/premium`   | POST       | `.upTo('0.005')`                                        | x402 upto — handler-driven, EIP-2612 gas-sponsored | `-p x402`            |
+| `/api/fortune/llm`       | POST       | `.metered({ tickCost, unitType: 'request' })`           | MPP session, request-mode                          | `-p mpp`             |
+| `/api/fortune/stream`    | POST       | `.metered({ tickCost, unitType: 'token' }).stream(...)` | MPP session, SSE streaming                         | `--stream`           |
+| `/api/fortune/dynamic`   | POST       | `.paid(fn, { maxPrice })`                               | Args-derived pricing (x402 / MPP)                  | auto                 |
+| `/api/fortune/favorites` | POST / GET | `.siwx()`                                               | SIWX (Sign-In-with-X, no payment)                  | auto                 |
+| `/api/fortune/profile`   | GET        | `.siwx()`                                               | SIWX (Sign-In-with-X, no payment)                  | auto                 |
+| `/.well-known/x402`      | GET        | —                                                       | Discovery                                          | auto                 |
+| `/openapi.json`          | GET        | —                                                       | OpenAPI spec                                       | n/a                  |
+| `/llms.txt`              | GET        | —                                                       | Agent guidance (`discovery.guidance`)              | n/a                  |
 
 ## SIWX dual-chain
 

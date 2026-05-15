@@ -26,10 +26,7 @@ export const POST = router
   .body(SaveFavoriteSchema)
   .validate(async (body) => {
     if (body.fortune.length > 100) {
-      throw Object.assign(
-        new Error('Fortune too long (max 100 chars)'),
-        { status: 400 },
-      );
+      throw Object.assign(new Error('Fortune too long (max 100 chars)'), { status: 400 });
     }
   })
   .description('Save a favorite fortune (SIWX protected, max 3 per wallet)')
@@ -37,17 +34,11 @@ export const POST = router
     const favorites = walletFavorites.get(wallet!) ?? [];
 
     if (favorites.length >= MAX_FAVORITES) {
-      throw Object.assign(
-        new Error(`Max ${MAX_FAVORITES} favorites per wallet`),
-        { status: 409 },
-      );
+      throw Object.assign(new Error(`Max ${MAX_FAVORITES} favorites per wallet`), { status: 409 });
     }
 
     if (favorites.includes(body.fortune)) {
-      throw Object.assign(
-        new Error('Fortune already saved'),
-        { status: 409 },
-      );
+      throw Object.assign(new Error('Fortune already saved'), { status: 409 });
     }
 
     favorites.push(body.fortune);

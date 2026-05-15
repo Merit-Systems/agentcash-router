@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { HandlerContext, HandlerPaymentContext } from '../../../../types.js';
 import { HttpError } from '../../../../types.js';
-import { parseQuery } from '../../../steps/parse-query.js';
 import type { DynamicRequestResult, FlowCtx } from '../../../steps/types.js';
 
 export function buildBaseHandlerCtx(
@@ -13,7 +12,7 @@ export function buildBaseHandlerCtx(
 ): HandlerContext {
   return {
     body: body as never,
-    query: parseQuery(ctx.request, ctx.routeEntry) as never,
+    query: ctx.query as never,
     request: ctx.request,
     requestId: ctx.meta.requestId,
     route: ctx.routeEntry.key,

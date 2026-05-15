@@ -60,10 +60,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     : new MemoryEntitlementStore();
   const network = config.network ?? BASE_MAINNET_NETWORK;
   const x402Accepts = getConfiguredX402Accepts(config);
-  const configIssues = getRouterConfigIssues(config, {
-    env: process.env,
-    requireCdpKeys: process.env.NODE_ENV === 'production',
-  });
+  const configIssues = getRouterConfigIssues(config, { env: process.env });
   const baseUrlIssue = configIssues.find((issue) => issue.code === 'missing_base_url');
   if (baseUrlIssue) throw new RouterConfigError([baseUrlIssue]);
 
@@ -81,10 +78,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     mppConfigIssues.length > 0 ? formatRouterConfigIssues(mppConfigIssues) : undefined;
 
   if (protocolConfigIssues.length > 0) {
-    for (const issue of protocolConfigIssues) console.error(`[router] ${issue.message}`);
-    if (process.env.NODE_ENV === 'production') {
-      throw new RouterConfigError(protocolConfigIssues);
-    }
+    throw new RouterConfigError(protocolConfigIssues);
   }
 
   const resolvedBaseUrl = config.baseUrl.replace(/\/+$/, '');

@@ -39,10 +39,6 @@ export async function initMpp(
       ? privateKeyToAccount(config.mpp.feePayerKey as `0x${string}`)
       : undefined;
 
-    if (config.mpp.session && operatorAccount) {
-      assertOperatorMatchesRecipient(config, operatorAccount.address);
-    }
-
     const resolvedStore = kvStore ? await createKvMppStore(kvStore) : undefined;
 
     const realm = new URL(resolvedBaseUrl).host;
@@ -81,19 +77,5 @@ export async function initMpp(
     return { mppx, tempoClient };
   } catch (err) {
     return { initError: err instanceof Error ? err.message : String(err) };
-  }
-}
-
-function assertOperatorMatchesRecipient(config: RouterConfig, operatorAddress: string): void {
-  const recipient = (config.mpp?.recipient ?? config.payeeAddress)?.toLowerCase();
-  const opAddr = operatorAddress.toLowerCase();
-  if (recipient && opAddr !== recipient) {
-    throw new Error(
-      `MPP session config mismatch: operator address ${operatorAddress} ` +
-        `must equal recipient/payee ${recipient}. ` +
-        `mppx's channel-close handler asserts sender === payee. ` +
-        `Set mpp.operatorKey to the private key for ${recipient}, or set ` +
-        `mpp.recipient/payeeAddress to ${operatorAddress}.`,
-    );
   }
 }

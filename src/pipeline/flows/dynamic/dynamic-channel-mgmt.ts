@@ -11,7 +11,7 @@ import {
   type FlowCtx,
   type SettleScope,
 } from '../../steps/index.js';
-import { build402 } from '../build402.js';
+import { buildChallengeResponse } from '../challenge-response.js';
 import { resolveDynamicBodyAndPrice } from './dynamic-body-and-price.js';
 
 export async function runDynamicChannelMgmtFlow(args: {
@@ -41,7 +41,7 @@ export async function runDynamicChannelMgmtFlow(args: {
     if (verifyOutcome.kind === 'config') {
       return fail(ctx, 500, verifyOutcome.message, parsedBody);
     }
-    return build402(ctx, pricing, parsedBody, verifyOutcome.failure);
+    return buildChallengeResponse(ctx, pricing, parsedBody, verifyOutcome.failure);
   }
 
   ctx.pluginCtx.setVerifiedWallet(verifyOutcome.wallet);
