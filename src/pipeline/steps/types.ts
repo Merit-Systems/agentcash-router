@@ -15,6 +15,7 @@ export interface FlowCtx {
   meta: RequestMeta;
   pluginCtx: PluginContext;
   report: ReportFn;
+  query: unknown;
 }
 
 export type ParseBodyResult = { ok: true; data: unknown } | { ok: false; response: NextResponse };

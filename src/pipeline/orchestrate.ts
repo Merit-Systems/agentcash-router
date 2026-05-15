@@ -1,6 +1,6 @@
 import type { NextRequest, NextResponse } from 'next/server';
 import type { HandlerContext, RouteEntry, StreamingHandlerContext } from '../types.js';
-import { preflight, type RouterDeps } from './steps/index.js';
+import { preflight, validateQuery, type RouterDeps } from './steps/index.js';
 import { runApiKeyOnlyFlow } from './flows/api-key-only.js';
 import { runPaidFlow } from './flows/paid.js';
 import { runSiwxOnlyFlow } from './flows/siwx-only.js';
@@ -20,6 +20,10 @@ export function createRequestHandler(
   return async (request: NextRequest): Promise<NextResponse> => {
     await deps.initPromise;
     const ctx = preflight(routeEntry, handler, deps, request);
+
+    const query = validateQuery(ctx);
+    if (!query.ok) return query.response;
+    ctx.query = query.data;
 
     if (routeEntry.authMode === 'unprotected') return runUnprotectedFlow(ctx);
     if (routeEntry.authMode === 'siwx') return runSiwxOnlyFlow(ctx);

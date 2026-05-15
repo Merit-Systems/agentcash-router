@@ -27,8 +27,7 @@ const pricing: Record<string, number> = {
 const fortunes: Record<string, Record<string, string>> = {
   love: {
     brief: 'Love finds you soon.',
-    detailed:
-      'A meaningful connection is forming. Stay open to unexpected encounters this week.',
+    detailed: 'A meaningful connection is forming. Stay open to unexpected encounters this week.',
     comprehensive:
       'The stars align for romance. Someone from your past may reappear with new intentions. Trust your instincts — they will guide you to the relationship you deserve.',
   },
@@ -63,7 +62,7 @@ const pricingFn = async (body: Record<string, unknown>) => {
   }
 
   let cost: number = pricing[depth] ?? pricing.brief;
-  if (cost > 1.00) {
+  if (cost > 1.0) {
     cost = 0.99;
   }
   return cost.toFixed(2);

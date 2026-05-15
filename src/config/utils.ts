@@ -28,14 +28,20 @@ export const isSolanaAddress = (v: string) => SOLANA_ADDRESS_RE.test(v);
 export const isX402Network = (v: string) => v.startsWith('eip155:') || v.startsWith('solana:');
 export const canonicalizeEvm = (addr: string) => addr.toLowerCase();
 
+/** Derive the lowercased EVM address for a private key, or null if the key is malformed. */
+export function evmAddressFromKey(key: string | undefined): string | null {
+  if (!key || !isEvmPrivateKey(key)) return null;
+  return privateKeyToAccount(key as `0x${string}`).address.toLowerCase();
+}
+
 /** Returns the colliding address, or null if the keys don't collide / aren't both set. */
 export function operatorAddressesCollide(
   opKey: string | undefined,
   fpKey: string | undefined,
 ): string | null {
-  if (!opKey || !fpKey || !isEvmPrivateKey(opKey) || !isEvmPrivateKey(fpKey)) return null;
-  const op = privateKeyToAccount(opKey as `0x${string}`).address.toLowerCase();
-  const fp = privateKeyToAccount(fpKey as `0x${string}`).address.toLowerCase();
+  const op = evmAddressFromKey(opKey);
+  const fp = evmAddressFromKey(fpKey);
+  if (!op || !fp) return null;
   return op === fp ? op : null;
 }
 

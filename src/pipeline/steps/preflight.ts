@@ -26,6 +26,7 @@ export function preflight(
     meta,
     pluginCtx,
     report: createReporter(deps.plugin, pluginCtx, routeEntry.key),
+    query: undefined,
   };
 }
 

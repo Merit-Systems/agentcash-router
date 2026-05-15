@@ -27,7 +27,7 @@ export async function settleX402Payment(
   };
 }
 
-function tagBareDecimalAsDollars(amount: string): string {
-  if (/^\d+\.\d+$/.test(amount)) return `$${amount}`;
+export function tagBareDecimalAsDollars(amount: string): string {
+  if (/^\d+(?:\.\d+)?$/.test(amount)) return `$${amount}`;
   return amount;
 }

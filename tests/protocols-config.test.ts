@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { NextRequest } from 'next/server';
 import { TEMPO_USDC_ADDRESS, createRouter } from '../src/index.js';
+import { evmAddressFromKey } from '../src/config/utils.js';
 import type { RouterConfig } from '../src/types.js';
 
 describe('RouterConfig.protocols', () => {
@@ -16,6 +16,9 @@ describe('RouterConfig.protocols', () => {
     currency: TEMPO_USDC_ADDRESS,
     rpcUrl: 'https://rpc.example.com',
   };
+
+  const sessionOperatorKey = `0x${'1'.repeat(64)}`;
+  const sessionOperatorAddress = evmAddressFromKey(sessionOperatorKey)!;
 
   describe('defaults and basic behavior', () => {
     it('defaults to x402-only when protocols is omitted', () => {
@@ -82,9 +85,9 @@ describe('RouterConfig.protocols', () => {
   });
 
   describe('validation', () => {
-    // protocols: [] always throws (programming error).
-    // Other config errors: throw in production (fails next build),
-    // log + return JSON 500 in development.
+    // protocols: [] always throws (programming error). Every other config
+    // error throws at construction too, regardless of NODE_ENV — a
+    // misconfiguration fails the build instead of surfacing at request time.
 
     it('throws when protocols is empty array', () => {
       expect(() => {
@@ -216,84 +219,93 @@ describe('RouterConfig.protocols', () => {
       }
     });
 
-    it('logs error in development when mpp config is missing', async () => {
-      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const router = createRouter({ ...baseConfig, protocols: ['mpp'] });
-      const handler = router
-        .route('unpriced/route')
-        .unprotected()
-        .handler(async () => ({ ok: true }));
-      // Await init to ensure console.error has fired
-      await handler(new NextRequest('http://localhost/api/test'));
-      expect(spy).toHaveBeenCalledWith(expect.stringContaining('mpp config is missing'));
-      spy.mockRestore();
+    it('throws in development when mpp config is missing', () => {
+      const origEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+      try {
+        expect(() => createRouter({ ...baseConfig, protocols: ['mpp'] })).toThrow(
+          /mpp config is missing/,
+        );
+      } finally {
+        process.env.NODE_ENV = origEnv;
+      }
     });
 
-    it('logs error in development when rpcUrl is missing', async () => {
+    it('throws in development when a Tempo RPC URL is configured nowhere', () => {
+      const origEnv = process.env.NODE_ENV;
       const origRpc = process.env.TEMPO_RPC_URL;
+      process.env.NODE_ENV = 'development';
       delete process.env.TEMPO_RPC_URL;
-      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
       try {
-        const router = createRouter({
-          ...baseConfig,
-          protocols: ['mpp'],
-          mpp: { secretKey: 'test', currency: TEMPO_USDC_ADDRESS },
-        });
-        const handler = router
-          .route('unpriced/route')
-          .unprotected()
-          .handler(async () => ({ ok: true }));
-        await handler(new NextRequest('http://localhost/api/test'));
-        expect(spy).toHaveBeenCalledWith(expect.stringContaining('Tempo RPC URL'));
+        expect(() =>
+          createRouter({
+            ...baseConfig,
+            protocols: ['mpp'],
+            mpp: { secretKey: 'test', currency: TEMPO_USDC_ADDRESS },
+          }),
+        ).toThrow(/Tempo RPC URL/);
       } finally {
-        spy.mockRestore();
+        process.env.NODE_ENV = origEnv;
         if (origRpc !== undefined) process.env.TEMPO_RPC_URL = origRpc;
       }
     });
 
-    it('logs error in development when mpp has no recipient and no payeeAddress', async () => {
-      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const router = createRouter({
-        baseUrl: 'http://localhost:3000',
-        network: 'eip155:8453',
-        protocols: ['mpp'],
-        mpp: {
-          secretKey: 'test',
-          currency: TEMPO_USDC_ADDRESS,
-          rpcUrl: 'https://rpc.example.com',
-        },
-      } as RouterConfig);
-      const handler = router
-        .route('test/route')
-        .unprotected()
-        .handler(async () => ({ ok: true }));
-      await handler(new NextRequest('http://localhost/api/test'));
-      expect(spy).toHaveBeenCalledWith(expect.stringContaining('recipient address'));
-      spy.mockRestore();
+    it('throws in development when mpp has no recipient and no payeeAddress', () => {
+      const origEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+      try {
+        expect(() =>
+          createRouter({
+            baseUrl: 'http://localhost:3000',
+            network: 'eip155:8453',
+            protocols: ['mpp'],
+            mpp: {
+              secretKey: 'test',
+              currency: TEMPO_USDC_ADDRESS,
+              rpcUrl: 'https://rpc.example.com',
+            },
+          } as RouterConfig),
+        ).toThrow(/recipient address/);
+      } finally {
+        process.env.NODE_ENV = origEnv;
+      }
     });
 
-    it('logs error in development when an x402 accept uses an unsupported network', async () => {
-      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const router = createRouter({
-        ...baseConfig,
-        x402: {
-          accepts: [
-            {
-              network: 'cosmos:osmosis-1',
-              payTo: 'osmo1deadbeefdeadbeefdeadbeefdeadbeefdeadbe',
+    it('throws in development when an x402 accept uses an unsupported network', () => {
+      const origEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+      try {
+        expect(() =>
+          createRouter({
+            ...baseConfig,
+            x402: {
+              accepts: [
+                {
+                  network: 'cosmos:osmosis-1',
+                  payTo: 'osmo1deadbeefdeadbeefdeadbeefdeadbeefdeadbe',
+                },
+              ],
             },
-          ],
-        },
-      });
-      const handler = router
-        .route('unpriced/route')
-        .unprotected()
-        .handler(async () => ({ ok: true }));
-      await handler(new NextRequest('http://localhost/api/test'));
-      expect(spy).toHaveBeenCalledWith(
-        expect.stringContaining("unsupported x402 network 'cosmos:osmosis-1'"),
-      );
-      spy.mockRestore();
+          }),
+        ).toThrow(/unsupported x402 network 'cosmos:osmosis-1'/);
+      } finally {
+        process.env.NODE_ENV = origEnv;
+      }
+    });
+
+    it('throws when an mpp session operatorKey does not match the recipient', () => {
+      expect(() =>
+        createRouter({
+          ...baseConfig,
+          protocols: ['mpp'],
+          mpp: {
+            ...validMppConfig,
+            recipient: baseConfig.payeeAddress,
+            operatorKey: sessionOperatorKey,
+            session: {},
+          },
+        }),
+      ).toThrow(/must equal[\s\S]*recipient/);
     });
 
     it('accepts mpp config with rpcUrl from env var', () => {
@@ -338,26 +350,21 @@ describe('RouterConfig.protocols', () => {
     });
 
     it('registers a .metered() route when mpp.session and operatorKey are both set', () => {
-      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      try {
-        const router = createRouter({
-          ...baseConfig,
-          protocols: ['mpp'],
-          mpp: {
-            ...validMppConfig,
-            recipient: baseConfig.payeeAddress,
-            operatorKey: `0x${'1'.repeat(64)}`,
-            session: {},
-          },
-        });
-        router
-          .route('metered/route')
-          .metered({ maxPrice: '0.05', tickCost: '0.0001', protocols: ['mpp'] })
-          .handler(async () => ({}));
-        expect(router.registry.get('metered/route')).toBeDefined();
-      } finally {
-        spy.mockRestore();
-      }
+      const router = createRouter({
+        ...baseConfig,
+        protocols: ['mpp'],
+        mpp: {
+          ...validMppConfig,
+          recipient: sessionOperatorAddress,
+          operatorKey: sessionOperatorKey,
+          session: {},
+        },
+      });
+      router
+        .route('metered/route')
+        .metered({ maxPrice: '0.05', tickCost: '0.0001', protocols: ['mpp'] })
+        .handler(async () => ({}));
+      expect(router.registry.get('metered/route')).toBeDefined();
     });
   });
 

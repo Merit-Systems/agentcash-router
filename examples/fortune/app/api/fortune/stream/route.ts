@@ -12,17 +12,7 @@ const StreamSchema = z.object({
   prompt: z.string().min(1).max(280),
 });
 
-const FORTUNE_TOKENS = [
-  'A',
-  'fortunate',
-  'turn',
-  'awaits',
-  'you',
-  'on',
-  'the',
-  'next',
-  'block.',
-];
+const FORTUNE_TOKENS = ['A', 'fortunate', 'turn', 'awaits', 'you', 'on', 'the', 'next', 'block.'];
 
 export const POST = router
   .route('fortune/stream')

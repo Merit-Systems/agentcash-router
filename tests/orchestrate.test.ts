@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { decodePaymentRequiredHeader } from '@x402/core/http';
 import { z } from 'zod';
 import { createRequestHandler, type RouterDeps } from '../src/pipeline/orchestrate.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
@@ -597,6 +598,33 @@ describe('discovery probe (x402scan prober)', () => {
       // validateFn should NOT be called — body failed parse
       expect(validateFn).not.toHaveBeenCalled();
     });
+
+    it('challenge nests SIWX fields under extensions.sign-in-with-x.info', async () => {
+      const entry = makeEntry({ authMode: 'siwx', protocols: [], pricing: undefined });
+      const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+      const res = await handler(
+        new NextRequest('http://localhost:3000/api/test', { method: 'POST' }),
+      );
+      expect(res.status).toBe(402);
+
+      const body = await res.json();
+      const ext = body.extensions['sign-in-with-x'];
+      expect(ext.info).toMatchObject({
+        domain: expect.any(String),
+        uri: expect.any(String),
+        version: expect.any(String),
+        chainId: expect.any(String),
+        type: expect.any(String),
+        nonce: expect.any(String),
+        issuedAt: expect.any(String),
+      });
+      expect(Array.isArray(ext.supportedChains)).toBe(true);
+
+      // The header-encoded challenge must stay identical to the JSON body.
+      const header = res.headers.get('PAYMENT-REQUIRED');
+      expect(header).toBeTruthy();
+      expect(decodePaymentRequiredHeader(header!).extensions).toEqual(body.extensions);
+    });
   });
 
   describe('payment present with invalid body still returns 400', () => {
@@ -631,6 +659,69 @@ describe('discovery probe (x402scan prober)', () => {
       const res = await handler(req);
       expect(res.status).toBe(400);
     });
+  });
+});
+
+describe('query schema validation', () => {
+  const querySchema = z.object({ limit: z.coerce.number().int().positive() });
+
+  it('unprotected: valid query reaches the handler with parsed data', async () => {
+    const entry = makeEntry({
+      authMode: 'unprotected',
+      pricing: undefined,
+      querySchema,
+      method: 'GET',
+    });
+    let seen: unknown;
+    const handler = createRequestHandler(
+      entry,
+      async ({ query }) => {
+        seen = query;
+        return { ok: true };
+      },
+      makeDeps(),
+    );
+    const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=5'));
+    expect(res.status).toBe(200);
+    expect(seen).toEqual({ limit: 5 });
+  });
+
+  it('unprotected: invalid query returns a structured 400 before the handler runs', async () => {
+    const entry = makeEntry({
+      authMode: 'unprotected',
+      pricing: undefined,
+      querySchema,
+      method: 'GET',
+    });
+    let handlerRan = false;
+    const handler = createRequestHandler(
+      entry,
+      async () => {
+        handlerRan = true;
+        return {};
+      },
+      makeDeps(),
+    );
+    const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=abc'));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.issues.length).toBeGreaterThan(0);
+    expect(handlerRan).toBe(false);
+  });
+
+  it('paid: invalid query returns 400 instead of a 402 challenge', async () => {
+    const entry = makeEntry({ querySchema, method: 'GET' });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=abc'));
+    expect(res.status).toBe(400);
+  });
+
+  it('paid: valid query still issues a 402 challenge on a probe request', async () => {
+    const entry = makeEntry({ querySchema, method: 'GET' });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=5'));
+    expect(res.status).toBe(402);
   });
 });
 

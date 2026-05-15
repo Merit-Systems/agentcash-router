@@ -2,6 +2,7 @@ export type { FlowCtx, RouterDeps, SettleScope } from './types.js';
 
 export { preflight } from './preflight.js';
 export { parseBody } from './parse-body.js';
+export { validateQuery } from './parse-query.js';
 export { runValidate } from './run-validate.js';
 export { runHandlerOnly } from './run-handler-only.js';
 export { finalize, settleAndFinalizeRequest, settleAndFinalizeStream } from './finalize/index.js';

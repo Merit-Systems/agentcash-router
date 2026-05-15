@@ -28,6 +28,7 @@ export type RouterConfigIssueCode =
   | 'invalid_mpp_fee_payer_key'
   | 'invalid_mpp_operator_key'
   | 'mpp_operator_equals_fee_payer'
+  | 'mpp_operator_recipient_mismatch'
   | 'missing_discovery_title'
   | 'missing_discovery_description'
   | 'missing_discovery_guidance'
@@ -57,7 +58,6 @@ export interface IssueParams {
 /** Internal — options for `validateRouterConfig` / `getRouterConfigIssues`. */
 export interface ValidateOptions {
   env?: Record<string, string | undefined>;
-  requireCdpKeys?: boolean;
 }
 
 /** Options for {@link createRouterFromEnv} / {@link routerConfigFromEnv}. */

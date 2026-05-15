@@ -1,4 +1,6 @@
 dist/
 node_modules/
+.next/
 *.tgz
 pnpm-lock.yaml
+next-env.d.ts
