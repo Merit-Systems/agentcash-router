@@ -9,7 +9,7 @@
 
 <p align="center">
   <strong>The fastest way to ship an API on x402 and MPP.</strong><br/>
-  x402 and MPP payments, compatible discovery, and minimal boilerplate. With @agentcash/router, agents on <a href="https://agentcash.dev">AgentCash</a> and across the agentic commerce ecosystem are compatible and call your endpoints from day one.
+  x402 and MPP payments, compatible discovery, and minimal boilerplate. With @agentcash/router, agents on <a href="https://agentcash.dev">AgentCash</a> and across the agentic commerce ecosystem can call your endpoints from day one.
 </p>
 
 <p align="center">
