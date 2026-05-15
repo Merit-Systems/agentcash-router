@@ -141,6 +141,8 @@ export const GET = router.openapi();
 
 The barrel forces every route module to load before the discovery handler walks the registry — Next.js otherwise lazy-loads route files on first hit, and unloaded routes don't appear in the spec.
 
+The `openapi.json` should be hosted at `GET <origin>/openapi.json`. 
+
 ## Auth modes
 
 | Method | Purpose |

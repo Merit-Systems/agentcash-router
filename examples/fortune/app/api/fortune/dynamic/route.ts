@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { HttpError } from '@agentcash/router';
 import { router } from '@/lib/router';
 
-// Tests function-based dynamic pricing — the price is computed from the
-// request body, and the pricing function also pre-payment validates. The
+// Tests function-based compute pricing — the price is computed from the
+// request body, and the compute function also pre-payment validates. The
 // challenge price varies by `depth`.
 // agentcash invokes this with:
 //   agentcash fetch http://localhost:3000/api/fortune/dynamic \
@@ -68,7 +68,7 @@ const pricingFn = async (body: Record<string, unknown>) => {
 
 export const POST = router
   .route('fortune/dynamic')
-  .description('Dynamic pricing fortune with pre-payment validation')
+  .description('Body-derived pricing fortune with pre-payment validation')
   .paid(pricingFn, { maxPrice: '10.00' })
   .body(DynamicSchema)
   .handler(async ({ body, wallet }) => {

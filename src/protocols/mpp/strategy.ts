@@ -49,7 +49,7 @@ export const mppStrategy: PaymentStrategy = {
     const info = readMppCredential(args.request);
     if (!info) return { ok: false, kind: 'invalid' };
 
-    if (args.routeEntry.dynamicPrice) {
+    if (args.routeEntry.billing === 'metered') {
       if (!info.sessionAction) return { ok: false, kind: 'invalid' };
       return verifySessionMode(args, info);
     }
@@ -113,7 +113,7 @@ export const mppStrategy: PaymentStrategy = {
 
     const sessionsConfigured =
       args.deps.mppSessionConfig && (args.deps.mppx.sessionRequest || args.deps.mppx.sessionStream);
-    if (args.routeEntry.dynamicPrice && sessionsConfigured) {
+    if (args.routeEntry.billing === 'metered' && sessionsConfigured) {
       const tickCost = args.routeEntry.tickCost;
       const computedDeposit =
         tickCost !== undefined

@@ -55,7 +55,7 @@ async function runHandler(ctx: FlowCtx, handlerCtx: HandlerContext): Promise<Sta
   if (isAsyncIterable(returned) && !isThenable(returned)) {
     return errorResult(
       new HttpError(
-        `route '${ctx.routeEntry.key}': streaming handlers require .paid({ dynamic: true })`,
+        `route '${ctx.routeEntry.key}': streaming handlers require .metered()`,
         500,
       ),
     );

@@ -1,5 +1,7 @@
 import type { NextResponse } from 'next/server';
 import type { PaymentStrategy, VerifySuccess } from '../../../protocols/types.js';
+import { atomicToDecimal } from '../../../pricing/format.js';
+import { HttpError, type RouteEntry } from '../../../types.js';
 import {
   errorMessage,
   finalize,
@@ -37,7 +39,7 @@ export async function runDynamicRequestFlow(args: {
   const beforeErr = await runBeforeSettle(ctx, settleScope);
   if (beforeErr) return beforeErr;
 
-  const billedAmount = routeEntry.tickCost!;
+  const billedAmount = computeBilledAmount(routeEntry, result);
 
   return settleAndFinalizeRequest({
     ctx,
@@ -55,4 +57,18 @@ export async function runDynamicRequestFlow(args: {
       );
     },
   });
+}
+
+function computeBilledAmount(routeEntry: RouteEntry, result: DynamicRequestResult): string {
+  if (routeEntry.billing === 'upto') {
+    const total = result.uptoContext?.atomicTotal() ?? 0n;
+    if (total <= 0n) {
+      throw new HttpError(
+        `route '${routeEntry.key}': handler did not call charge(amount) — upto routes must accumulate a non-zero billed amount`,
+        500,
+      );
+    }
+    return atomicToDecimal(total);
+  }
+  return routeEntry.tickCost!;
 }

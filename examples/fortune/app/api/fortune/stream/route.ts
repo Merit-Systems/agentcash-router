@@ -27,11 +27,10 @@ const FORTUNE_TOKENS = [
 export const POST = router
   .route('fortune/stream')
   .description('Streaming fortune — bills per yielded token via MPP session vouchers')
-  .paid({
-    dynamic: true,
+  .metered({
     tickCost: '0.0001',
-    unitType: 'token',
     maxPrice: '0.05',
+    unitType: 'token',
     protocols: ['mpp'],
   })
   .body(StreamSchema)

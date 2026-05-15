@@ -188,6 +188,7 @@ function makeEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
   return {
     key: 'test/route',
     authMode: 'paid',
+    billing: 'exact',
     pricing: '0.02',
     protocols: ['x402'],
     method: 'POST',
@@ -295,6 +296,7 @@ function makeMPPEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
   return {
     key: 'test/mpp-route',
     authMode: 'paid',
+    billing: 'exact',
     pricing: '0.02',
     protocols: ['mpp'],
     method: 'POST',

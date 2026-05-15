@@ -17,10 +17,15 @@ function makeEntry(): RouteEntry {
   return {
     key: 'test/route',
     authMode: 'paid',
+    billing: 'exact',
     pricing: '0.10',
     protocols: ['x402'],
     method: 'POST',
   };
+}
+
+function makeUptoRouteEntry(): RouteEntry {
+  return { ...makeEntry(), key: 'test/upto-route', billing: 'upto', maxPrice: '0.10' };
 }
 
 function makeFacilitator(network: string, url: string): ResolvedX402Facilitator {
@@ -107,23 +112,46 @@ describe('upto scheme', () => {
         spy.mockRestore();
       }
     });
+
+    it('rejects a fixed-price .paid() route when only an upto accept is configured', () => {
+      // An `upto`-only accept list cannot serve a fixed-price route: route-scoped
+      // accept selection would leave the exact route with no x402 requirement.
+      // The builder rejects this at registration rather than failing at runtime.
+      const router = createRouter({
+        payeeAddress: KNOWN_PAYEE,
+        baseUrl: 'http://localhost:3000',
+        x402: {
+          accepts: [
+            { scheme: 'upto', network: BASE_MAINNET_NETWORK, asset: USDC_ASSET, decimals: 6 },
+          ],
+        },
+      });
+      expect(() => {
+        router
+          .route('exact/route')
+          .paid('0.10')
+          .handler(async () => ({}));
+      }).toThrow(/needs a non-'upto' x402 accept/);
+    });
   });
 
   describe('challenge generation', () => {
-    it('includes upto requirement in 402 challenge alongside exact', async () => {
+    const bothAccepts: OrchestrateDeps['x402Accepts'] = [
+      { scheme: 'exact', network: BASE_MAINNET_NETWORK, payTo: KNOWN_PAYEE },
+      {
+        scheme: 'upto',
+        network: BASE_MAINNET_NETWORK,
+        payTo: KNOWN_PAYEE,
+        asset: USDC_ASSET,
+        decimals: 6,
+        maxTimeoutSeconds: 300,
+      },
+    ];
+
+    it('an exact route advertises only the exact scheme, never upto', async () => {
       await withPassThroughFacilitatorAccepts(async () => {
         const server = new FakeX402Server();
-        const deps = makeDeps(server, [
-          { scheme: 'exact', network: BASE_MAINNET_NETWORK, payTo: KNOWN_PAYEE },
-          {
-            scheme: 'upto',
-            network: BASE_MAINNET_NETWORK,
-            payTo: KNOWN_PAYEE,
-            asset: USDC_ASSET,
-            decimals: 6,
-            maxTimeoutSeconds: 300,
-          },
-        ]);
+        const deps = makeDeps(server, bothAccepts);
 
         const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), deps);
         const response = await handler(new NextRequest(URL, { method: 'POST' }));
@@ -132,17 +160,33 @@ describe('upto scheme', () => {
         const challenge = decodePaymentRequiredHeader(response.headers.get('PAYMENT-REQUIRED')!);
 
         const exactAccept = challenge.accepts.find((a) => a.scheme === 'exact');
-        const uptoAccept = challenge.accepts.find((a) => a.scheme === 'upto');
-
         expect(exactAccept).toBeDefined();
         expect(exactAccept!.network).toBe(BASE_MAINNET_NETWORK);
+        expect(challenge.accepts.find((a) => a.scheme === 'upto')).toBeUndefined();
+      });
+    });
 
+    it('an upto route advertises only the upto scheme, never exact', async () => {
+      await withPassThroughFacilitatorAccepts(async () => {
+        const server = new FakeX402Server();
+        const deps = makeDeps(server, bothAccepts);
+
+        const handler = createRequestHandler(
+          makeUptoRouteEntry(),
+          async () => ({ ok: true }),
+          deps,
+        );
+        const response = await handler(new NextRequest(URL, { method: 'POST' }));
+
+        expect(response.status).toBe(402);
+        const challenge = decodePaymentRequiredHeader(response.headers.get('PAYMENT-REQUIRED')!);
+
+        const uptoAccept = challenge.accepts.find((a) => a.scheme === 'upto');
         expect(uptoAccept).toBeDefined();
         expect(uptoAccept!.network).toBe(BASE_MAINNET_NETWORK);
-        // Asset comes from the registered UptoEvmScheme's network defaults
-        // (real upstream picks USDC for Base); the fake stamps `mock-usdc`.
         expect(uptoAccept!.asset).toBeTruthy();
         expect(uptoAccept!.payTo).toBe(KNOWN_PAYEE);
+        expect(challenge.accepts.find((a) => a.scheme === 'exact')).toBeUndefined();
       });
     });
 
@@ -160,7 +204,11 @@ describe('upto scheme', () => {
           },
         ]);
 
-        const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), deps);
+        const handler = createRequestHandler(
+          makeUptoRouteEntry(),
+          async () => ({ ok: true }),
+          deps,
+        );
         const response = await handler(new NextRequest(URL, { method: 'POST' }));
 
         expect(response.status).toBe(402);
@@ -175,10 +223,9 @@ describe('upto scheme', () => {
   });
 
   describe('payment verification', () => {
-    it('verifies and settles upto payment', async () => {
+    it('verifies and settles an upto payment on an upto route', async () => {
       const server = new FakeX402Server();
       const deps = makeDeps(server, [
-        { scheme: 'exact', network: BASE_MAINNET_NETWORK, payTo: KNOWN_PAYEE },
         {
           scheme: 'upto',
           network: BASE_MAINNET_NETWORK,
@@ -203,7 +250,15 @@ describe('upto scheme', () => {
         payload: { payer: KNOWN_PAYER },
       });
 
-      const handler = createRequestHandler(makeEntry(), async () => ({ settled: true }), deps);
+      const handler = createRequestHandler(
+        makeUptoRouteEntry(),
+        async ({ charge }) => {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          await (charge as (a: string) => Promise<void>)!('0.05');
+          return { settled: true };
+        },
+        deps,
+      );
       const response = await handler(
         new NextRequest(URL, {
           method: 'POST',
@@ -216,19 +271,68 @@ describe('upto scheme', () => {
       const settled = server.settledPayments[0]!.requirements as { scheme?: string };
       expect(settled.scheme).toBe('upto');
     });
+
+    it('an exact route rejects an upto-scheme payment (route-scoped accepts)', async () => {
+      const server = new FakeX402Server();
+      // A conforming facilitator returns no match when the payload's scheme is
+      // absent from the server-built requirements. The default fake falls back
+      // to `available[0]`, which would mask the rejection this test asserts.
+      server.findMatchingRequirements = ((
+        available: Array<{ network?: string; scheme?: string }>,
+        payload: { accepted?: { network?: string; scheme?: string } },
+      ) =>
+        available.find(
+          (r) => r.network === payload.accepted?.network && r.scheme === payload.accepted?.scheme,
+        ) ?? null) as unknown as FakeX402Server['findMatchingRequirements'];
+
+      // The route is `.paid()` (exact) but both accepts are configured server-wide;
+      // route-scoped selection must narrow verification to the `exact` accept only.
+      const deps = makeDeps(server, [
+        { scheme: 'exact', network: BASE_MAINNET_NETWORK, payTo: KNOWN_PAYEE },
+        {
+          scheme: 'upto',
+          network: BASE_MAINNET_NETWORK,
+          payTo: KNOWN_PAYEE,
+          asset: USDC_ASSET,
+          decimals: 6,
+          maxTimeoutSeconds: 300,
+        },
+      ]);
+
+      const uptoPayment = encodePaymentSignatureHeader({
+        x402Version: 2,
+        resource: { url: URL, method: 'POST' },
+        accepted: {
+          scheme: 'upto',
+          network: BASE_MAINNET_NETWORK,
+          amount: '100000',
+          asset: USDC_ASSET,
+          payTo: KNOWN_PAYEE,
+          maxTimeoutSeconds: 300,
+        },
+        payload: { payer: KNOWN_PAYER },
+      });
+
+      const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), deps);
+      const response = await handler(
+        new NextRequest(URL, { method: 'POST', headers: { 'X-PAYMENT': uptoPayment } }),
+      );
+
+      expect(response.status).toBe(402);
+      expect(server.settledPayments).toHaveLength(0);
+    });
   });
 
-  describe('dynamic pricing (handler-driven)', () => {
-    function makeDynamicEntry(): RouteEntry {
+  describe('upto pricing (handler-driven)', () => {
+    function makeUptoEntry(): RouteEntry {
       return {
-        key: 'test/dynamic-route',
+        key: 'test/upto-route',
         authMode: 'paid',
-        pricing: '0.10', // = maxPrice when single-arg .paid({ dynamic, maxPrice })
+        pricing: '0.10', // = maxPrice when .upTo(maxPrice)
         protocols: ['x402'],
         method: 'POST',
-        dynamicPrice: true,
+        billing: 'upto',
         maxPrice: '0.10',
-        tickCost: '0.0001',
         unitType: 'token',
       };
     }
@@ -262,14 +366,23 @@ describe('upto scheme', () => {
       ]);
     }
 
-    it('request-mode: forwards tickCost as $-tagged settlement override', async () => {
-      // Request-mode dynamic handlers have no `charge()` callback — every
-      // accepted request bills exactly `tickCost`. The settlement override
-      // forwards `tickCost` to the x402 server so Permit2Proxy settles for
-      // that amount (≤ the upto cap).
+    it('handler charge(amount) accumulates into the $-tagged settlement override', async () => {
+      // Upto handlers call `charge(amount)` one or more times; the accumulated
+      // total is forwarded to the x402 server as the settlement override
+      // amount so Permit2Proxy settles for that amount (≤ the upto cap).
       const server = new FakeX402Server();
       const deps = makeUptoDeps(server);
-      const handler = createRequestHandler(makeDynamicEntry(), async () => ({ ok: true }), deps);
+      const handler = createRequestHandler(
+        makeUptoEntry(),
+        async ({ charge }) => {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          await (charge as (a: string) => Promise<void>)!('0.0001');
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          await (charge as (a: string) => Promise<void>)!('0.0002');
+          return { ok: true };
+        },
+        deps,
+      );
 
       const res = await handler(
         new NextRequest(URL, { method: 'POST', headers: { 'X-PAYMENT': makeUptoPayment() } }),
@@ -277,20 +390,20 @@ describe('upto scheme', () => {
 
       expect(res.status).toBe(200);
       expect(server.settledPayments).toHaveLength(1);
-      expect(server.settledPayments[0]!.overrides).toEqual({ amount: '$0.0001' });
+      expect(server.settledPayments[0]!.overrides).toEqual({ amount: '$0.0003' });
     });
 
-    it('streaming: forwards billed total as $-tagged settlement override', async () => {
-      // x402 has no native streaming wrapper — the strategy rejects async
-      // generator handlers at settleStream. This test guards that the rejection
-      // is clean (500, no settle) rather than crashing or silently billing.
+    it('streaming on an upto route is rejected (500, no settle)', async () => {
+      // x402 has no native streaming wrapper. Even if the registry has
+      // streaming: true with an upto entry, dynamic-invoke rejects async
+      // generator handlers cleanly (500, no settle).
       const server = new FakeX402Server();
       const deps = makeUptoDeps(server);
       const handler = createRequestHandler(
-        { ...makeDynamicEntry(), streaming: true },
+        { ...makeUptoEntry(), streaming: true },
         async function* ({ charge }) {
-          await charge!();
-          await charge!();
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          await (charge as (a: string) => Promise<void>)!('0.0001');
           yield 'chunk';
         },
         deps,

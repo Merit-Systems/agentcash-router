@@ -1,5 +1,6 @@
 import type { NextRequest, NextResponse } from 'next/server';
-import type { ChargeContext } from '../../pricing/charge-context.js';
+import type { ChargeContext } from '../../pricing/metered-charge.js';
+import type { UptoChargeContext } from '../../pricing/upto-charge.js';
 import type { HandlerContext, HandlerPaymentContext, RouteEntry } from '../../types.js';
 import type { RouterDeps } from '../../protocols/types.js';
 export type { RouterDeps } from '../../protocols/types.js';
@@ -29,6 +30,8 @@ export type DynamicRequestResult = {
   response: NextResponse;
   rawResult: unknown;
   handlerError?: unknown;
+  /** Present when the route is `.upTo()`; bill the accumulated total instead of tickCost. */
+  uptoContext?: UptoChargeContext;
 };
 
 export type DynamicStreamResult = {

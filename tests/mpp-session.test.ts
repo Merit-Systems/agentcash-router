@@ -201,7 +201,7 @@ function makeDynamicSessionEntry(overrides: Partial<RouteEntry> = {}): RouteEntr
     pricing: '0.05',
     protocols: ['mpp'],
     method: 'POST',
-    dynamicPrice: true,
+    billing: 'metered',
     maxPrice: '0.05',
     tickCost: '0.0001',
     unitType: 'token',
@@ -218,6 +218,7 @@ function makeStaticMppEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
   return {
     key: 'test/static-mpp',
     authMode: 'paid',
+    billing: 'exact',
     pricing: '0.02',
     protocols: ['mpp'],
     method: 'POST',
@@ -676,35 +677,49 @@ describe('MPP session — registration validation', () => {
     return new RouteBuilder('test/route', new RouteRegistry(), deps);
   }
 
-  it('throws when .paid({ dynamic: true }) on MPP route without session config', () => {
+  it('throws when .metered() on MPP route without session config', () => {
     const fake = createFakeSessionMppx();
     const deps = makeSessionDeps(fake);
     deps.mppSessionConfig = null; // no session config
     const builder = makeBuilder(deps);
     expect(() =>
       builder
-        .paid({ dynamic: true, maxPrice: '0.05', tickCost: '0.0001', protocols: ['mpp'] })
+        .metered({ maxPrice: '0.05', tickCost: '0.0001', protocols: ['mpp'] })
         .body(bodySchema)
         .handler(async () => ({})),
-    ).toThrow(/requires session mode/);
+    ).toThrow(/requires MPP session mode/);
   });
 
-  it('throws when .paid({ dynamic: true }) without tickCost', () => {
+  it('throws when .metered() without tickCost', () => {
     const fake = createFakeSessionMppx();
     const builder = makeBuilder(makeSessionDeps(fake));
-    expect(() => builder.paid({ dynamic: true, maxPrice: '0.05', protocols: ['mpp'] })).toThrow(
-      /requires tickCost/,
-    );
+    expect(() =>
+      // @ts-expect-error — exercising the runtime guard when tickCost is omitted
+      builder.metered({ maxPrice: '0.05', protocols: ['mpp'] }),
+    ).toThrow(/requires tickCost/);
   });
 
-  it('throws when .paid({ dynamic: true }) on x402 route without upto accept', () => {
+  it("rejects .metered() when protocols includes 'x402' (MPP-only)", () => {
     const fake = createFakeSessionMppx();
     const deps = makeSessionDeps(fake);
     deps.x402Accepts = [{ scheme: 'exact', network: 'eip155:8453', payTo: KNOWN_PAYEE }];
     const builder = makeBuilder(deps);
     expect(() =>
       builder
-        .paid({ dynamic: true, maxPrice: '0.05', tickCost: '0.0001', protocols: ['x402'] })
+        .metered({ maxPrice: '0.05', tickCost: '0.0001', protocols: ['x402'] })
+        .body(bodySchema)
+        .handler(async () => ({})),
+    ).toThrow(/MPP-only/);
+  });
+
+  it("throws when .upTo() on x402 route without upto accept", () => {
+    const fake = createFakeSessionMppx();
+    const deps = makeSessionDeps(fake);
+    deps.x402Accepts = [{ scheme: 'exact', network: 'eip155:8453', payTo: KNOWN_PAYEE }];
+    const builder = makeBuilder(deps);
+    expect(() =>
+      builder
+        .upTo({ maxPrice: '0.05', protocols: ['x402'] })
         .body(bodySchema)
         .handler(async () => ({})),
     ).toThrow(/requires an 'upto' accept/);

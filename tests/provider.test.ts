@@ -57,6 +57,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'provider/test',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'test-api',
@@ -93,6 +94,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'quota/healthy',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'exa',
@@ -119,6 +121,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'quota/warn',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'apollo',
@@ -142,6 +145,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'quota/critical',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'firecrawl',
@@ -166,6 +170,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'quota/hardstop',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'whitepages',
@@ -191,6 +196,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'quota/error',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'test',
@@ -217,6 +223,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'quota/null',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'test',
@@ -239,6 +246,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'quota/throws',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'broken',
@@ -264,6 +272,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'paid/quota',
       authMode: 'paid',
+      billing: 'exact',
       pricing: '0.02',
       protocols: ['x402'],
       method: 'POST',
@@ -295,6 +304,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'quota/nullremaining',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'opaque-api',
