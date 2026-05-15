@@ -24,9 +24,10 @@
 
 ```bash
 pnpm add @agentcash/router
-pnpm add next zod @x402/core @x402/evm @x402/extensions @x402/svm @coinbase/x402 zod-openapi # peer dependencies
-pnpm add mppx  # optional, for MPP support
+pnpm add next zod  # peer dependencies
 ```
+
+`next` and `zod` are peer dependencies — the router shares your app's copy. Everything else (the x402 packages, `mppx`, `viem`, `zod-openapi`) is bundled as a regular dependency and installed automatically.
 
 ## Environment
 
