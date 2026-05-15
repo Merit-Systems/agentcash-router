@@ -22,20 +22,18 @@ export async function buildChallengeExtensions(
         ? toJSON(routeEntry.querySchema)
         : undefined;
     const outputSchema = routeEntry.outputSchema ? toJSON(routeEntry.outputSchema) : undefined;
-    if (inputSchema) {
-      const config: Record<string, unknown> = {
-        method: routeEntry.method,
-        bodyType: routeEntry.bodySchema ? 'json' : undefined,
-        inputSchema,
-      };
-      if (routeEntry.inputExample !== undefined) {
-        config.input = routeEntry.inputExample;
-      }
-      if (outputSchema && routeEntry.outputExample !== undefined) {
-        config.output = { schema: outputSchema, example: routeEntry.outputExample };
-      }
-      extensions = declareDiscoveryExtension(config);
+    const isBodyMethod =
+      routeEntry.method === 'POST' || routeEntry.method === 'PUT' || routeEntry.method === 'PATCH';
+    const config: Record<string, unknown> = { method: routeEntry.method };
+    if (isBodyMethod) config.bodyType = 'json';
+    if (inputSchema) config.inputSchema = inputSchema;
+    if (routeEntry.inputExample !== undefined) {
+      config.input = routeEntry.inputExample;
     }
+    if (outputSchema && routeEntry.outputExample !== undefined) {
+      config.output = { schema: outputSchema, example: routeEntry.outputExample };
+    }
+    extensions = declareDiscoveryExtension(config);
   } catch (err) {
     ctx.report(
       'warn',

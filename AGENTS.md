@@ -39,6 +39,10 @@ src/
 
 `auth check -> body parse -> validate -> 402 challenge -> payment verify -> handler -> settle -> finalize`
 
+## Naming
+
+Constructor-style functions use `build<Noun>` — one verb, one domain noun. Name them after the domain concept, never after an HTTP status code or transport detail (the function that builds a payment challenge is `buildChallengeResponse`, not `build402`). The challenge family shares the `Challenge` backbone: `buildChallengeResponse`, `buildChallengeExtensions`, `buildSiwxChallenge`, `buildSessionChallenge`, `buildX402Challenge`.
+
 ## Critical rules
 
 - **Error handling.** Respect `.status` on any thrown error, not just `HttpError`. Pattern: `throw Object.assign(new Error('msg'), { status: 409 })`.

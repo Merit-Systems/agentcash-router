@@ -389,6 +389,18 @@ describe('probe request (no auth header)', () => {
     const challenge = JSON.parse(Buffer.from(encoded, 'base64').toString());
     expect(challenge.accepts[0].amount ?? challenge.accepts[0].maxAmountRequired).toBe('20000');
   });
+
+  it('emits a bazaar discovery extension for routes with no input schema', async () => {
+    const entry = makeEntry();
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(makeProbeRequest());
+    expect(res.status).toBe(402);
+    const encoded = res.headers.get('PAYMENT-REQUIRED')!;
+    const challenge = JSON.parse(Buffer.from(encoded, 'base64').toString());
+    expect(challenge.extensions?.bazaar).toBeDefined();
+    expect(challenge.extensions.bazaar.info.input.type).toBe('http');
+    expect(challenge.extensions.bazaar.info.input.bodyType).toBe('json');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -506,6 +518,24 @@ describe('discovery probe (x402scan prober)', () => {
       expect(res.status).toBe(400);
       // validateFn should NOT be called — body failed parse
       expect(validateFn).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 with an Invalid JSON error for malformed request bodies', async () => {
+      const entry = makeEntry({
+        pricing: (_body: unknown) => '0.05',
+        maxPrice: '5.00',
+        bodySchema,
+      });
+      const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+      const req = new NextRequest('http://localhost:3000/api/test', {
+        method: 'POST',
+        body: '{not json',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const res = await handler(req);
+      expect(res.status).toBe(400);
+      expect(res.headers.get('PAYMENT-REQUIRED')).toBeNull();
+      expect((await res.json()).error).toBe('Invalid JSON');
     });
   });
 

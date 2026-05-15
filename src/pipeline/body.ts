@@ -1,12 +1,19 @@
 import type { ZodType } from 'zod';
 
+export class MalformedJsonError extends Error {
+  constructor() {
+    super('Invalid JSON');
+    this.name = 'MalformedJsonError';
+  }
+}
+
 export async function bufferBody(request: Request): Promise<unknown> {
   const text = await request.text();
-  if (!text) return undefined;
+  if (!text.trim()) return undefined;
   try {
     return JSON.parse(text);
   } catch {
-    return undefined;
+    throw new MalformedJsonError();
   }
 }
 

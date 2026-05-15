@@ -11,7 +11,7 @@ import {
   type FlowCtx,
 } from '../../steps/index.js';
 import { invokePaidStatic } from './static-invoke.js';
-import { build402 } from '../build402.js';
+import { buildChallengeResponse } from '../challenge-response.js';
 import { resolveStaticBodyAndPrice } from './static-body-and-price.js';
 import { runStaticRequestFlow } from './static-request.js';
 
@@ -41,7 +41,7 @@ export async function runStaticPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   if (!incomingStrategy) {
     const initError = protocolInitError(routeEntry, deps);
     if (initError) return fail(ctx, 500, initError);
-    return build402(ctx, pricing, earlyBody);
+    return buildChallengeResponse(ctx, pricing, earlyBody);
   }
 
   const bodyAndPrice = await resolveStaticBodyAndPrice({ ctx, pricing });
@@ -61,7 +61,7 @@ export async function runStaticPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
     if (verifyOutcome.kind === 'config') {
       return fail(ctx, 500, verifyOutcome.message, parsedBody);
     }
-    return build402(ctx, pricing, parsedBody, verifyOutcome.failure);
+    return buildChallengeResponse(ctx, pricing, parsedBody, verifyOutcome.failure);
   }
 
   ctx.pluginCtx.setVerifiedWallet(verifyOutcome.wallet);

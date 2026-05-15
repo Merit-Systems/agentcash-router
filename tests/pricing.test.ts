@@ -115,6 +115,11 @@ describe('TieredPricing', () => {
     expect(await p.challengeQuote(undefined)).toBe('2.00');
   });
 
+  it('challengeQuote falls back to max tier when body lacks the discriminator field', async () => {
+    const p = new TieredPricing({ field: 'tier', tiers });
+    expect(await p.challengeQuote({})).toBe('2.00');
+  });
+
   it('rejects unknown tier with status 400', async () => {
     const p = new TieredPricing({ field: 'tier', tiers });
     await expect(p.quote({ tier: 'unknown' })).rejects.toMatchObject({ status: 400 });
