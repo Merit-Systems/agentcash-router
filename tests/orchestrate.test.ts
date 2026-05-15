@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { createRequestHandler, type OrchestrateDeps } from '../src/pipeline/orchestrate.js';
+import { createRequestHandler, type RouterDeps } from '../src/pipeline/orchestrate.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
@@ -196,7 +196,7 @@ function makeEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
   };
 }
 
-function makeDeps(overrides: Partial<OrchestrateDeps> = {}): OrchestrateDeps {
+function makeDeps(overrides: Partial<RouterDeps> = {}): RouterDeps {
   const server = new FakeX402Server();
   return {
     x402Server: server as unknown as Record<string, Function>,
@@ -278,7 +278,7 @@ function createFakeMppx() {
 }
 
 // MPP-specific helpers
-function makeMPPDeps(overrides: Partial<OrchestrateDeps> = {}): OrchestrateDeps {
+function makeMPPDeps(overrides: Partial<RouterDeps> = {}): RouterDeps {
   return {
     x402Server: null,
     initPromise: Promise.resolve(),
@@ -1462,7 +1462,7 @@ describe('x402 challenge build failure (facilitator 429 / empty supported kinds)
     };
 
     const entry = makeEntry();
-    const deps = makeDeps({ x402Server: brokenServer as unknown as OrchestrateDeps['x402Server'] });
+    const deps = makeDeps({ x402Server: brokenServer as unknown as RouterDeps['x402Server'] });
     const handler = createRequestHandler(entry, async () => ({}), deps);
     const res = await handler(makeProbeRequest());
 

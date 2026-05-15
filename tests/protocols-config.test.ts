@@ -318,6 +318,49 @@ describe('RouterConfig.protocols', () => {
     });
   });
 
+  describe('metered route session requirements', () => {
+    it('throws when a .metered() route is defined with mpp.session but no operatorKey', () => {
+      const router = createRouter({
+        ...baseConfig,
+        protocols: ['mpp'],
+        mpp: {
+          ...validMppConfig,
+          recipient: baseConfig.payeeAddress,
+          session: {},
+        },
+      });
+      expect(() =>
+        router
+          .route('metered/route')
+          .metered({ maxPrice: '0.05', tickCost: '0.0001', protocols: ['mpp'] })
+          .handler(async () => ({})),
+      ).toThrow(/requires MPP session mode/);
+    });
+
+    it('registers a .metered() route when mpp.session and operatorKey are both set', () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const router = createRouter({
+          ...baseConfig,
+          protocols: ['mpp'],
+          mpp: {
+            ...validMppConfig,
+            recipient: baseConfig.payeeAddress,
+            operatorKey: `0x${'1'.repeat(64)}`,
+            session: {},
+          },
+        });
+        router
+          .route('metered/route')
+          .metered({ maxPrice: '0.05', tickCost: '0.0001', protocols: ['mpp'] })
+          .handler(async () => ({}));
+        expect(router.registry.get('metered/route')).toBeDefined();
+      } finally {
+        spy.mockRestore();
+      }
+    });
+  });
+
   describe('interaction with manual pricing', () => {
     it('does not affect manually-priced routes', () => {
       const router = createRouter({

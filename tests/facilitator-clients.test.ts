@@ -85,4 +85,42 @@ describe('createFacilitatorClients', () => {
     expect(solanaSupported.kinds.map((k) => k.network)).toEqual([SOLANA_NETWORK]);
     expect(solanaSupported.kinds.every((k) => k.scheme === 'exact')).toBe(true);
   });
+
+  it("merges the facilitator's per-kind extra into the scoped upto kind", async () => {
+    const cdpUrl = 'https://cdp.example';
+
+    const facilitatorsByNetwork: ResolvedX402Facilitators = {
+      [EVM_NETWORK]: {
+        family: 'evm',
+        network: EVM_NETWORK,
+        url: cdpUrl,
+        config: { url: cdpUrl },
+      },
+    };
+
+    const HTTP = fakeHttpFacilitator({
+      [cdpUrl]: {
+        kinds: [
+          { x402Version: 2, scheme: 'exact', network: EVM_NETWORK },
+          {
+            x402Version: 2,
+            scheme: 'upto',
+            network: EVM_NETWORK,
+            extra: { facilitatorAddress: '0xFacilitator' },
+          },
+        ],
+        extensions: [],
+        signers: {},
+      },
+    });
+
+    const [evmClient] = createFacilitatorClients(facilitatorsByNetwork, HTTP, undefined);
+
+    const supported = await evmClient.getSupported();
+    const uptoKind = supported.kinds.find((k) => k.scheme === 'upto');
+    // The upto scheme needs facilitatorAddress in extra; scoping must not drop it.
+    expect(uptoKind?.extra).toEqual({ facilitatorAddress: '0xFacilitator' });
+    const exactKind = supported.kinds.find((k) => k.scheme === 'exact');
+    expect(exactKind?.extra).toBeUndefined();
+  });
 });

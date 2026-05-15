@@ -21,7 +21,7 @@ import type {
   PayToConfig,
 } from './types.js';
 import type { RouteRegistry } from './registry.js';
-import type { OrchestrateDeps, RouteHandler } from './pipeline/orchestrate.js';
+import type { RouterDeps, RouteHandler } from './pipeline/orchestrate.js';
 import { createRequestHandler } from './pipeline/orchestrate.js';
 import { isPositiveDecimal } from './pricing/format.js';
 import { validateExamples } from './validate-examples.js';
@@ -41,9 +41,7 @@ type InputTypeFor<TBody, TQuery> = [TBody] extends [undefined]
   : TBody;
 
 type RequestHandlerFn<TBody, TQuery> = (ctx: HandlerContext<TBody, TQuery>) => Promise<unknown>;
-type UptoHandlerFn<TBody, TQuery> = (
-  ctx: UptoHandlerContext<TBody, TQuery>,
-) => Promise<unknown>;
+type UptoHandlerFn<TBody, TQuery> = (ctx: UptoHandlerContext<TBody, TQuery>) => Promise<unknown>;
 
 type StreamingHandlerFn<TBody, TQuery> = (
   ctx: StreamingHandlerContext<TBody, TQuery>,
@@ -87,7 +85,7 @@ type StreamArg<
 type BuilderState<TBody> = {
   key: string;
   registry: RouteRegistry;
-  deps: OrchestrateDeps;
+  deps: RouterDeps;
   authMode: AuthMode | null;
   pricing: PricingConfig | undefined;
   siwxEnabled: boolean;
@@ -134,7 +132,7 @@ export class RouteBuilder<
   constructor(
     key: string,
     registry: RouteRegistry,
-    deps: OrchestrateDeps,
+    deps: RouterDeps,
     defaults?: RouteBuilderDefaults,
   ) {
     this.#s = {
@@ -334,7 +332,23 @@ export class RouteBuilder<
     >;
     next.#s.authMode = 'paid';
     next.#s.pricing = pricing;
-    if (resolvedOptions.protocols) {
+    if (billing === 'upto') {
+      // .upTo() is x402-only — handler-computed billing settles a single x402 payment.
+      if (resolvedOptions.protocols?.some((p) => p !== 'x402')) {
+        throw new Error(
+          `route '${this.#s.key}': .upTo() is x402-only — remove the conflicting protocols override.`,
+        );
+      }
+      next.#s.protocols = ['x402'];
+    } else if (billing === 'metered') {
+      // .metered() is MPP-only — per-tick billing runs over an MPP payment channel.
+      if (resolvedOptions.protocols?.some((p) => p !== 'mpp')) {
+        throw new Error(
+          `route '${this.#s.key}': .metered() is MPP-only — remove the conflicting protocols override.`,
+        );
+      }
+      next.#s.protocols = ['mpp'];
+    } else if (resolvedOptions.protocols) {
       next.#s.protocols = [...resolvedOptions.protocols];
     } else if (next.#s.protocols.length === 0) {
       next.#s.protocols = ['x402'];
@@ -347,22 +361,6 @@ export class RouteBuilder<
     next.#s.billing = billing;
     if (tickCost) next.#s.tickCost = tickCost;
     if (unitType) next.#s.unitType = unitType;
-
-    if (billing === 'upto') {
-      const onlyX402 =
-        next.#s.protocols.length > 0 && next.#s.protocols.every((p) => p === 'x402');
-      if (!onlyX402) {
-        throw new Error(
-          `route '${this.#s.key}': .upTo() is x402-only. Set protocols: ['x402'] or rely on the default.`,
-        );
-      }
-    }
-    if (billing === 'metered') {
-      const onlyMpp = next.#s.protocols.length > 0 && next.#s.protocols.every((p) => p === 'mpp');
-      if (!onlyMpp) {
-        throw new Error(`route '${this.#s.key}': .metered() is MPP-only. Set protocols: ['mpp'].`);
-      }
-    }
 
     if (typeof pricing === 'object' && 'tiers' in pricing) {
       for (const [tierKey, tierConfig] of Object.entries(pricing.tiers)) {
@@ -413,15 +411,7 @@ export class RouteBuilder<
       );
     }
 
-    const next = this.fork() as RouteBuilder<
-      TBody,
-      TQuery,
-      TOutput,
-      True,
-      False,
-      HasBody,
-      Bill
-    >;
+    const next = this.fork() as RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, Bill>;
     next.#s.siwxEnabled = true;
 
     if (next.#s.authMode === 'paid' || next.#s.pricing) {
@@ -492,15 +482,7 @@ export class RouteBuilder<
       );
     }
 
-    const next = this.fork() as RouteBuilder<
-      TBody,
-      TQuery,
-      TOutput,
-      True,
-      False,
-      HasBody,
-      Bill
-    >;
+    const next = this.fork() as RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, Bill>;
     next.#s.authMode = 'unprotected';
     next.#s.protocols = [];
     return next;
@@ -537,9 +519,7 @@ export class RouteBuilder<
    *   .handler(async ({ body }) => search(body.query));
    * ```
    */
-  body<T>(
-    schema: ZodType<T>,
-  ): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True, Bill> {
+  body<T>(schema: ZodType<T>): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True, Bill> {
     const next = this.fork() as unknown as RouteBuilder<
       T,
       TQuery,
@@ -564,9 +544,7 @@ export class RouteBuilder<
    *   .handler(async ({ query }) => getById(query.id));
    * ```
    */
-  query<T>(
-    schema: ZodType<T>,
-  ): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody, Bill> {
+  query<T>(schema: ZodType<T>): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody, Bill> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       T,
@@ -593,9 +571,7 @@ export class RouteBuilder<
    *   .handler(async () => ({ result: 'ok' }));
    * ```
    */
-  output<T>(
-    schema: ZodType<T>,
-  ): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody, Bill> {
+  output<T>(schema: ZodType<T>): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody, Bill> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       TQuery,

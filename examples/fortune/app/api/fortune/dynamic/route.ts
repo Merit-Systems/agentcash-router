@@ -62,14 +62,17 @@ const pricingFn = async (body: Record<string, unknown>) => {
     throw new HttpError('Wealth + comprehensive is temporarily unavailable', 400);
   }
 
-  const cost = pricing[depth] ?? pricing.brief;
+  let cost: number = pricing[depth] ?? pricing.brief;
+  if (cost > 1.00) {
+    cost = 0.99;
+  }
   return cost.toFixed(2);
 };
 
 export const POST = router
   .route('fortune/dynamic')
   .description('Body-derived pricing fortune with pre-payment validation')
-  .paid(pricingFn, { maxPrice: '10.00' })
+  .paid(pricingFn, { maxPrice: '1.00' })
   .body(DynamicSchema)
   .handler(async ({ body, wallet }) => {
     const fortune = fortunes[body.category]?.[body.depth] ?? 'The future is unclear.';

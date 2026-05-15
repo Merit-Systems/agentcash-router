@@ -26,9 +26,7 @@ export function buildBaseHandlerCtx(
 }
 
 export function toResponse(rawResult: unknown): NextResponse {
-  return rawResult instanceof Response
-    ? (rawResult as NextResponse)
-    : NextResponse.json(rawResult);
+  return rawResult instanceof Response ? (rawResult as NextResponse) : NextResponse.json(rawResult);
 }
 
 export function errorResult(error: unknown): DynamicRequestResult {

@@ -4,9 +4,9 @@ import { RouteRegistry } from '../src/registry.js';
 import { RouteBuilder } from '../src/builder.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
-import type { OrchestrateDeps } from '../src/pipeline/orchestrate.js';
+import type { RouterDeps } from '../src/pipeline/orchestrate.js';
 
-function makeDeps(): OrchestrateDeps {
+function makeDeps(): RouterDeps {
   return {
     x402Server: null,
     initPromise: Promise.resolve(),

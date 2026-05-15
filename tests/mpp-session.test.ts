@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { RouteRegistry } from '../src/registry.js';
 import { RouteBuilder } from '../src/builder.js';
-import { createRequestHandler, type OrchestrateDeps } from '../src/pipeline/orchestrate.js';
+import { createRequestHandler, type RouterDeps } from '../src/pipeline/orchestrate.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import type { HandlerPaymentContext, RouteEntry, SettlementSettledContext } from '../src/types.js';
@@ -124,7 +124,7 @@ function createFakeSessionMppx(
       charge,
       sessionRequest: session,
       sessionStream: session,
-    } as unknown as NonNullable<OrchestrateDeps['mppx']>,
+    } as unknown as NonNullable<RouterDeps['mppx']>,
   };
 }
 
@@ -178,8 +178,8 @@ function responseFromIterable(gen: AsyncIterable<unknown>): Response {
 
 function makeSessionDeps(
   fake: ReturnType<typeof createFakeSessionMppx>,
-  overrides: Partial<OrchestrateDeps> = {},
-): OrchestrateDeps {
+  overrides: Partial<RouterDeps> = {},
+): RouterDeps {
   return {
     x402Server: null,
     initPromise: Promise.resolve(),
@@ -364,7 +364,7 @@ describe('MPP session — credential routing', () => {
     // Drop the session middleware references so the verify path hits the
     // "MPP sessions not configured" guard at runtime.
     const deps = makeSessionDeps(fake);
-    deps.mppx = { charge: fake.mppx!.charge } as NonNullable<OrchestrateDeps['mppx']>;
+    deps.mppx = { charge: fake.mppx!.charge } as NonNullable<RouterDeps['mppx']>;
     deps.mppSessionConfig = null;
     const handler = createRequestHandler(entry, async () => ({ ok: true }), deps);
     const res = await handler(withSessionCredential({ action: 'voucher', body: { prompt: 'hi' } }));
@@ -673,7 +673,7 @@ describe('MPP session — streaming handlers (async generator)', () => {
 });
 
 describe('MPP session — registration validation', () => {
-  function makeBuilder(deps: OrchestrateDeps) {
+  function makeBuilder(deps: RouterDeps) {
     return new RouteBuilder('test/route', new RouteRegistry(), deps);
   }
 
@@ -712,7 +712,7 @@ describe('MPP session — registration validation', () => {
     ).toThrow(/MPP-only/);
   });
 
-  it("throws when .upTo() on x402 route without upto accept", () => {
+  it('throws when .upTo() on x402 route without upto accept', () => {
     const fake = createFakeSessionMppx();
     const deps = makeSessionDeps(fake);
     deps.x402Accepts = [{ scheme: 'exact', network: 'eip155:8453', payTo: KNOWN_PAYEE }];

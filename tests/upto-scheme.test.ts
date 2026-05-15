@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { decodePaymentRequiredHeader, encodePaymentSignatureHeader } from '@x402/core/http';
-import { createRequestHandler, type OrchestrateDeps } from '../src/pipeline/orchestrate.js';
+import { createRequestHandler, type RouterDeps } from '../src/pipeline/orchestrate.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
@@ -37,12 +37,9 @@ function makeFacilitator(network: string, url: string): ResolvedX402Facilitator 
   };
 }
 
-function makeDeps(
-  server: FakeX402Server,
-  accepts: OrchestrateDeps['x402Accepts'],
-): OrchestrateDeps {
+function makeDeps(server: FakeX402Server, accepts: RouterDeps['x402Accepts']): RouterDeps {
   return {
-    x402Server: server as unknown as OrchestrateDeps['x402Server'],
+    x402Server: server as unknown as RouterDeps['x402Server'],
     initPromise: Promise.resolve(),
     nonceStore: new MemoryNonceStore(),
     entitlementStore: new MemoryEntitlementStore(),
@@ -136,7 +133,7 @@ describe('upto scheme', () => {
   });
 
   describe('challenge generation', () => {
-    const bothAccepts: OrchestrateDeps['x402Accepts'] = [
+    const bothAccepts: RouterDeps['x402Accepts'] = [
       { scheme: 'exact', network: BASE_MAINNET_NETWORK, payTo: KNOWN_PAYEE },
       {
         scheme: 'upto',
@@ -353,7 +350,7 @@ describe('upto scheme', () => {
       });
     }
 
-    function makeUptoDeps(server: FakeX402Server): OrchestrateDeps {
+    function makeUptoDeps(server: FakeX402Server): RouterDeps {
       return makeDeps(server, [
         {
           scheme: 'upto',

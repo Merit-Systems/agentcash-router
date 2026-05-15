@@ -6,8 +6,6 @@ import { runPaidFlow } from './flows/paid.js';
 import { runSiwxOnlyFlow } from './flows/siwx-only.js';
 import { runUnprotectedFlow } from './flows/unprotected.js';
 
-/** @deprecated alias kept for downstream consumers; use `RouterDeps`. */
-export type OrchestrateDeps = RouterDeps;
 export type { RouterDeps } from './steps/index.js';
 
 export type RouteHandler =

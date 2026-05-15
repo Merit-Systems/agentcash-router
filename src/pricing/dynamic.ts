@@ -1,4 +1,4 @@
-import type { AlertFn } from '../types.js';
+import { HttpError, type AlertFn } from '../types.js';
 import { compareDecimals } from './format.js';
 import type { PricingDescriptor, PricingStrategy } from './types.js';
 
@@ -22,6 +22,7 @@ export class DynamicPricing implements PricingStrategy {
       const raw = await this.opts.fn(body);
       return this.cap(raw, body);
     } catch (err) {
+      if (err instanceof HttpError) throw err;
       this.alert('error', `Pricing function failed: ${msg(err)}`, {
         error: err instanceof Error ? err.stack : String(err),
         body,

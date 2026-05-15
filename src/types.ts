@@ -247,10 +247,10 @@ export interface StreamingHandlerContext<
 }
 
 /** Handler context for `.upTo()` routes (x402-only). Call `charge(amount)` one or more times; the request settles for the accumulated total capped at `maxPrice`. */
-export interface UptoHandlerContext<
-  TBody = undefined,
-  TQuery = undefined,
-> extends HandlerContext<TBody, TQuery> {
+export interface UptoHandlerContext<TBody = undefined, TQuery = undefined> extends HandlerContext<
+  TBody,
+  TQuery
+> {
   charge: UptoChargeFn;
 }
 

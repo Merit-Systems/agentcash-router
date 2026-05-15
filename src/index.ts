@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import type { NextResponse } from 'next/server';
 import type { RouterConfig } from './types.js';
 import type { RouteDefinition, RouteMethod } from './types.js';
-import type { OrchestrateDeps } from './pipeline/orchestrate.js';
+import type { RouterDeps } from './pipeline/orchestrate.js';
 import { RouteRegistry } from './registry.js';
 import { RouteBuilder } from './builder.js';
 import {
@@ -100,7 +100,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     }
   }
 
-  const deps: OrchestrateDeps = {
+  const deps: RouterDeps = {
     x402Server: null,
     initPromise: Promise.resolve(),
     plugin: config.plugin,
@@ -113,9 +113,10 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     x402Accepts,
     mppx: null,
     tempoClient: null,
-    mppSessionConfig: config.mpp?.session
-      ? { depositMultiplier: config.mpp.session.depositMultiplier ?? 10 }
-      : null,
+    mppSessionConfig:
+      config.mpp?.session && config.mpp.operatorKey
+        ? { depositMultiplier: config.mpp.session.depositMultiplier ?? 10 }
+        : null,
   };
 
   deps.initPromise = (async () => {

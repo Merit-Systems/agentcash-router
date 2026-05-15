@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { createRequestHandler, type OrchestrateDeps } from '../src/pipeline/orchestrate.js';
+import { createRequestHandler, type RouterDeps } from '../src/pipeline/orchestrate.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
@@ -30,7 +30,7 @@ function makeSpyPlugin(): RouterPlugin & {
   };
 }
 
-function makeDeps(plugin?: RouterPlugin): OrchestrateDeps {
+function makeDeps(plugin?: RouterPlugin): RouterDeps {
   const server = new FakeX402Server();
   return {
     x402Server: server as unknown as Record<string, Function>,
@@ -323,7 +323,7 @@ describe('provider quota extraction', () => {
 });
 
 describe('.provider() builder method', () => {
-  function makeBuilderDeps(): OrchestrateDeps {
+  function makeBuilderDeps(): RouterDeps {
     return {
       x402Server: null,
       initPromise: Promise.resolve(),

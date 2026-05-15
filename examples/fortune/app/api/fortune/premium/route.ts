@@ -59,7 +59,7 @@
       const fortunes = premiumFortunes[body.category];
       const fortune = fortunes[Math.floor(Math.random() * fortunes.length)];
 
-      const amount = (Math.random() * 0.004 + 0.0005).toString();
+      const amount = (Math.random() * 0.004 + 0.0005).toFixed(6);
       
       await charge(amount);
       return {
