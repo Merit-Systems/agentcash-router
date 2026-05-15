@@ -69,7 +69,7 @@ Expect: `"protocol": "mpp"`, a `channelId`, and a concatenated stream of `{"even
 
 The example also advertises Solana in `x402.accepts` when `SOLANA_PAYEE_ADDRESS` is set. Solana support is narrower than Base/Tempo: **only x402 `exact` (static-priced) and SIWX work** — `upto` is Base-only and MPP is Tempo-only, so tests 2/3/4/5 above have no Solana counterpart.
 
-Force the wallet onto Solana with `--payment-network solana`. Fund the Solana account first (`$CLI list-accounts` shows the deposit link).
+Force the wallet onto Solana with `--payment-network solana`. Fund the Solana account first (`$CLI accounts` shows the deposit link).
 
 ### S1. x402 `exact` on Solana
 
