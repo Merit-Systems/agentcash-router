@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.9.2
+
+### Patch Changes
+
+- 2708b90: Correct the README install instructions: `next` and `zod` are now the only peer dependencies. The x402 packages, `mppx`, `viem`, and `zod-openapi` install automatically as regular dependencies.
+
 ## 1.9.1
 
 ### Patch Changes
