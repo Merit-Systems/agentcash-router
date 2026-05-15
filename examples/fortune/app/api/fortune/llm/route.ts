@@ -1,14 +1,14 @@
 import { z } from 'zod';
 import { router } from '@/lib/router';
 
-// Tests MPP session request-mode and x402 upto — one tick committed per
-// request at credential verify. Handler returns a value (not a generator),
-// so there is no `charge()` callback.
+// Tests MPP session request-mode — one tick committed per request at
+// credential verify. Handler returns a value (not a generator), so there
+// is no `charge()` callback. For x402 single-settle billing, see
+// `/api/fortune/premium`, which uses `.upTo()` and calls
+// `charge(amount)` from the handler.
 // agentcash invokes this with:
 //   agentcash fetch http://localhost:3000/api/fortune/llm \
-//     --method POST -p mpp -b '{"prompt":"Will I find love?"}'   # MPP session request-mode
-//   agentcash fetch http://localhost:3000/api/fortune/llm \
-//     --method POST -p x402 -b '{"prompt":"Will I find love?"}'  # x402 upto (one tick)
+//     --method POST -p mpp -b '{"prompt":"Will I find love?"}'
 
 const LlmSchema = z.object({
   prompt: z.string().min(1).max(280),
@@ -16,8 +16,13 @@ const LlmSchema = z.object({
 
 export const POST = router
   .route('fortune/llm')
-  .description('Request-mode dynamic-priced fortune — bills tickCost per request')
-  .paid({ dynamic: true, tickCost: '0.001', unitType: 'request', maxPrice: '0.01' })
+  .description('Request-mode metered fortune — bills tickCost per request via MPP session')
+  .metered({
+    tickCost: '0.001',
+    maxPrice: '0.01',
+    unitType: 'request',
+    protocols: ['mpp'],
+  })
   .body(LlmSchema)
   .handler(async ({ wallet }) => {
     const fortunes = [

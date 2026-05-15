@@ -36,6 +36,22 @@ export function getConfiguredX402Networks(config: RouterConfig): string[] {
   return [...new Set(getConfiguredX402Accepts(config).map((accept) => accept.network))];
 }
 
+/**
+ * Narrow the server-wide accept list to the schemes a single route can honor:
+ * `.upTo()` routes advertise only `upto` accepts, every other route advertises
+ * only non-`upto` accepts. Without this, a fixed-price route would offer an
+ * `upto` requirement the CDP facilitator can't complete (missing
+ * `facilitatorAddress`), and `.upTo()` routes would offer an unfillable `exact`.
+ */
+export function selectRouteAccepts(
+  accepts: readonly X402AcceptConfig[],
+  routeEntry: Pick<RouteEntry, 'billing'>,
+): X402AcceptConfig[] {
+  return routeEntry.billing === 'upto'
+    ? accepts.filter((accept) => accept.scheme === 'upto')
+    : accepts.filter((accept) => (accept.scheme ?? 'exact') !== 'upto');
+}
+
 export async function resolveX402Accepts(
   request: Request,
   routeEntry: Pick<RouteEntry, 'payTo'>,

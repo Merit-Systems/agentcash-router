@@ -9,6 +9,7 @@ function makeEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
   return {
     key: 'test/route',
     authMode: 'paid',
+    billing: 'exact',
     protocols: ['x402'],
     method: 'POST',
     pricing: '0.02',

@@ -4,9 +4,9 @@ import { RouteRegistry } from '../src/registry.js';
 import { RouteBuilder } from '../src/builder.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
-import type { OrchestrateDeps } from '../src/pipeline/orchestrate.js';
+import type { RouterDeps } from '../src/pipeline/orchestrate.js';
 
-function makeDeps(): OrchestrateDeps {
+function makeDeps(): RouterDeps {
   return {
     x402Server: null,
     initPromise: Promise.resolve(),
@@ -114,10 +114,9 @@ describe('fluent chain', () => {
 });
 
 describe('registration-time safety', () => {
-  it('dynamic pricing without maxPrice is allowed (trust mode)', () => {
+  it('body-derived pricing without maxPrice is allowed (trust mode)', () => {
     const { builder } = makeBuilder();
-    // maxPrice is now optional for dynamic pricing (v0.3.1+)
-    expect(() => builder.paid((body: unknown) => '0.01')).not.toThrow();
+    expect(() => builder.paid((_body: unknown) => '0.01')).not.toThrow();
   });
 
   it('.handler() without an auth mode throws at registration for JS callers', () => {
@@ -152,7 +151,16 @@ describe('registration-time safety', () => {
 
   it('rejects repeated .paid() calls on the same route', () => {
     const { builder } = makeBuilder('paid/twice');
-    expect(() => builder.paid('0.01').paid('0.02')).toThrow('Cannot call .paid() more than once');
+    expect(() => builder.paid('0.01').paid('0.02')).toThrow(
+      'Cannot combine .paid(), .upTo(), and .metered()',
+    );
+  });
+
+  it('rejects combining .paid() with .upTo() on the same route', () => {
+    const { builder } = makeBuilder('paid/upto');
+    expect(() => builder.paid('0.01').upTo('0.05')).toThrow(
+      'Cannot combine .paid(), .upTo(), and .metered()',
+    );
   });
 
   it('duplicate route key overwrites silently', () => {
@@ -178,14 +186,14 @@ describe('registration-time safety', () => {
 
   it("maxPrice '0' throws at registration", () => {
     const { builder } = makeBuilder();
-    expect(() => builder.paid((body: unknown) => '0.01', { maxPrice: '0' })).toThrow(
+    expect(() => builder.paid((_body: unknown) => '0.01', { maxPrice: '0' })).toThrow(
       'must be a positive decimal',
     );
   });
 
   it("maxPrice 'abc' throws at registration", () => {
     const { builder } = makeBuilder();
-    expect(() => builder.paid((body: unknown) => '0.01', { maxPrice: 'abc' })).toThrow(
+    expect(() => builder.paid((_body: unknown) => '0.01', { maxPrice: 'abc' })).toThrow(
       'must be a positive decimal',
     );
   });

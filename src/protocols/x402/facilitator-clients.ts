@@ -51,8 +51,20 @@ function withScopedKinds(
   return {
     verify: client.verify.bind(client),
     settle: client.settle.bind(client),
-    getSupported: async () => ({ ...(await client.getSupported()), kinds }),
+    getSupported: async () => {
+      const live = await client.getSupported();
+      return { ...live, kinds: mergeKindExtras(kinds, live.kinds) };
+    },
   };
+}
+function mergeKindExtras(
+  scoped: SupportedResponse['kinds'],
+  live: SupportedResponse['kinds'],
+): SupportedResponse['kinds'] {
+  return scoped.map((kind) => {
+    const match = live.find((l) => l.scheme === kind.scheme && l.network === kind.network);
+    return match?.extra ? { ...kind, extra: { ...kind.extra, ...match.extra } } : kind;
+  });
 }
 
 function buildSupportedKinds(group: ResolvedX402FacilitatorGroup): SupportedResponse['kinds'] {

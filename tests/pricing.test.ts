@@ -6,6 +6,7 @@ import {
   TieredPricing,
 } from '../src/pricing/index.js';
 import { compareDecimals, decimalToAtomic, isPositiveDecimal } from '../src/pricing/format.js';
+import { HttpError } from '../src/types.js';
 
 describe('FixedPricing', () => {
   it('quote returns the configured price', async () => {
@@ -57,6 +58,19 @@ describe('DynamicPricing', () => {
       maxPrice: '0.50',
     });
     expect(await p.quote({})).toBe('0.50');
+  });
+
+  it('propagates an HttpError instead of falling back to maxPrice', async () => {
+    const p = new DynamicPricing({
+      fn: () => {
+        throw new HttpError('blocked', 400);
+      },
+      maxPrice: '0.50',
+    });
+    await expect(p.quote({})).rejects.toMatchObject({
+      name: 'HttpError',
+      status: 400,
+    });
   });
 
   it('rethrows when fn throws and no maxPrice fallback', async () => {

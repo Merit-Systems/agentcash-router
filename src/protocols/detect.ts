@@ -1,6 +1,7 @@
+import type { ProtocolType } from '../types.js';
 import { AUTH_SCHEME, HEADERS } from '../headers.js';
 
-export type DetectedProtocol = 'x402' | 'mpp' | 'siwx';
+export type DetectedProtocol = ProtocolType | 'siwx';
 
 export function detectProtocol(request: Request): DetectedProtocol | null {
   if (

@@ -110,7 +110,7 @@ interface X402AcceptBase {
 }
 
 export interface X402AcceptConfig extends X402AcceptBase {
-  /** `'exact'` for fixed-price one-shot payments; `'upto'` for settle-≤-cap (required for `.paid({ dynamic: true })` on x402). @default 'exact' */
+  /** `'exact'` for fixed-price one-shot payments; `'upto'` for settle-≤-cap (required for `.upTo()` routes). @default 'exact' */
   scheme?: string;
   /** Per-accept payee override. Function form receives the request and parsed body for dynamic recipient routing. Falls back to `RouterConfig.payeeAddress`. */
   payTo?: PayToConfig;
@@ -144,14 +144,27 @@ export interface PaidOptions {
   protocols?: ProtocolType[];
   maxPrice?: string;
   minPrice?: string;
-  /** Override the payment recipient. String for static, function for dynamic (receives the Request). */
+  /** Override the payment recipient. String for static, function for body-derived (receives the Request). */
   payTo?: PayToConfig;
   /** Override MPP protocol metadata in x-payment-info discovery. */
   mpp?: MppProtocolInfo;
-  /** Handler-driven dynamic pricing: handler calls `charge()` per tick, total billed is `tickCost × calls` capped at `maxPrice`. Requires `maxPrice`. Incompatible with tiered pricing. On x402 needs an `upto` accept; on MPP needs `RouterConfig.mpp.session`. */
-  dynamic?: boolean;
-  /** Per-tick cost (positive decimal-dollar string). Required for `.paid({ dynamic: true })`. Also the voucher-headroom granularity for MPP sessions. */
-  tickCost?: string;
+}
+export type PaidArg =
+  | (PaidOptions & { price: string }) // fixed price (any protocol)
+  | (PaidOptions & { field: string; tiers: Record<string, TierConfig>; default?: string }); // body-derived pricing (any protocol)
+
+export interface UpToOptions extends Omit<PaidOptions, 'maxPrice'> {
+  /** Cap on total billed amount; handler-accumulated `charge(amount)` calls cannot exceed this. */
+  maxPrice: string;
+  /** Cosmetic unit label for 402 challenges / UIs. Does not affect billing. */
+  unitType?: string;
+}
+
+export interface MeteredOptions extends Omit<PaidOptions, 'maxPrice'> {
+  /** Per-tick cost (positive decimal-dollar string). On `.handler()` bills exactly this per request; on `.stream()` is the voucher-headroom granularity. */
+  tickCost: string;
+  /** Cap on total billed amount (streaming only — request-mode bills exactly `tickCost`). */
+  maxPrice: string;
   /** Cosmetic unit label for 402 challenges / UIs (e.g. `'token'`, `'byte'`). Does not affect billing. */
   unitType?: string;
 }
@@ -210,6 +223,7 @@ export interface SettlementLifecycle<TBody = unknown> {
 }
 
 export type ChargeFn = () => Promise<void>;
+export type UptoChargeFn = (amount: string) => Promise<void>;
 
 export interface HandlerContext<TBody = undefined, TQuery = undefined> {
   body: TBody;
@@ -224,12 +238,20 @@ export interface HandlerContext<TBody = undefined, TQuery = undefined> {
   setVerifiedWallet: (addr: string) => void;
 }
 
-/** Handler context for streaming `.paid({ dynamic: true })` handlers (async generators). Call `charge()` once per billable unit. */
+/** Handler context for streaming `.metered()` handlers (async generators). Call `charge()` once per billable unit. */
 export interface StreamingHandlerContext<
   TBody = undefined,
   TQuery = undefined,
 > extends HandlerContext<TBody, TQuery> {
   charge: ChargeFn;
+}
+
+/** Handler context for `.upTo()` routes (x402-only). Call `charge(amount)` one or more times; the request settles for the accumulated total capped at `maxPrice`. */
+export interface UptoHandlerContext<TBody = undefined, TQuery = undefined> extends HandlerContext<
+  TBody,
+  TQuery
+> {
+  charge: UptoChargeFn;
 }
 
 export type OveragePolicy = 'same-rate' | 'increased-rate' | 'hard-stop';
@@ -269,9 +291,9 @@ export interface RouteEntry {
    */
   siwxEnabled?: boolean;
   pricing?: PricingConfig;
-  /** When true the route is dynamic-priced; bills `tickCost` per request (request-mode) or per `charge()` call (streaming). */
-  dynamicPrice?: boolean;
-  /** True iff handler is an async generator. Streaming handlers settle per-tick over SSE; non-streaming dynamic handlers bill exactly `tickCost` per request. Set by the builder at `.handler(fn)` time. */
+  /** `'exact'` settles a fixed price once; `'upto'` (x402-only) settles the handler-accumulated `charge(amount)` total capped at `maxPrice`; `'metered'` (MPP-only) bills per `tickCost`. */
+  billing: 'exact' | 'upto' | 'metered';
+  /** True iff handler is an async generator. Streaming handlers settle per-tick over SSE; non-streaming metered handlers bill exactly `tickCost` per request. Set by the builder at `.handler(fn)` time. */
   streaming?: boolean;
   protocols: ProtocolType[];
   bodySchema?: ZodType;
@@ -293,7 +315,7 @@ export interface RouteEntry {
   validateFn?: (body: unknown) => void | Promise<void>;
   settlement?: SettlementLifecycle;
   mppInfo?: MppProtocolInfo;
-  /** Per-tick cost (decimal-dollar). Required when `dynamicPrice` is true. */
+  /** Per-tick cost (decimal-dollar). Required when `metered` is true. */
   tickCost?: string;
   /** Cosmetic unit label for 402 challenges and client UIs. */
   unitType?: string;
@@ -321,7 +343,7 @@ export interface RouterConfig {
   network?: string;
   /** x402 protocol settings. Omit to default to a single `exact`/USDC accept on `network` paid to `payeeAddress`, verified via the Coinbase default facilitator (requires `CDP_API_KEY_ID`/`CDP_API_KEY_SECRET`). */
   x402?: {
-    /** Explicit accepts list (scheme + network + asset). Overrides the auto-generated default. Add an `upto` accept here to enable `.paid({ dynamic: true })` on x402. */
+    /** Explicit accepts list (scheme + network + asset). Overrides the auto-generated default. Add an `upto` accept here to enable `.upTo()` routes. */
     accepts?: X402AcceptConfig[];
     /** Per-chain facilitator overrides (`evm`/`solana`). Defaults to the Coinbase facilitator on EVM; set `solana` to accept Solana payments. */
     facilitators?: X402FacilitatorsConfig;
@@ -346,7 +368,7 @@ export interface RouterConfig {
     operatorKey?: string;
     /** Hex private key. Sponsors gas for client channel open/topUp. MUST resolve to a different address than `operatorKey` — Tempo rejects sender===feePayer. Validated at init. Omit to make clients pay their own gas. */
     feePayerKey?: string;
-    /** Enables MPP payment-channel sessions for `.paid({ dynamic: true })` routes (registers both request and SSE session middleware). Also requires `mpp.operatorKey`. */
+    /** Enables MPP payment-channel sessions for `.metered()` routes (registers both request and SSE session middleware). Also requires `mpp.operatorKey`. */
     session?: {
       /** Suggested deposit on the 402 challenge = `tickCost × depositMultiplier` USDC. Route `maxPrice` overrides. @default 10 */
       depositMultiplier?: number;

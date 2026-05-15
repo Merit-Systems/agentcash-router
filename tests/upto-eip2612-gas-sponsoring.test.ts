@@ -22,9 +22,8 @@ function makeFortuneLlmEntry(): RouteEntry {
     pricing: '0.01',
     protocols: ['x402'],
     method: 'POST',
-    dynamicPrice: true,
+    billing: 'upto',
     maxPrice: '0.01',
-    tickCost: '0.001',
     unitType: 'request',
   };
 }
@@ -111,6 +110,7 @@ describe('upto + EIP-2612 gas sponsoring on fortune/llm', () => {
     const entry: RouteEntry = {
       key: 'fortune/premium',
       authMode: 'paid',
+      billing: 'exact',
       pricing: '0.005',
       protocols: ['x402'],
       method: 'POST',

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { createRequestHandler, type OrchestrateDeps } from '../src/pipeline/orchestrate.js';
+import { createRequestHandler, type RouterDeps } from '../src/pipeline/orchestrate.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
@@ -30,7 +30,7 @@ function makeSpyPlugin(): RouterPlugin & {
   };
 }
 
-function makeDeps(plugin?: RouterPlugin): OrchestrateDeps {
+function makeDeps(plugin?: RouterPlugin): RouterDeps {
   const server = new FakeX402Server();
   return {
     x402Server: server as unknown as Record<string, Function>,
@@ -57,6 +57,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'provider/test',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'test-api',
@@ -93,6 +94,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'quota/healthy',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'exa',
@@ -119,6 +121,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'quota/warn',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'apollo',
@@ -142,6 +145,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'quota/critical',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'firecrawl',
@@ -166,6 +170,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'quota/hardstop',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'whitepages',
@@ -191,6 +196,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'quota/error',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'test',
@@ -217,6 +223,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'quota/null',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'test',
@@ -239,6 +246,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'quota/throws',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'broken',
@@ -264,6 +272,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'paid/quota',
       authMode: 'paid',
+      billing: 'exact',
       pricing: '0.02',
       protocols: ['x402'],
       method: 'POST',
@@ -295,6 +304,7 @@ describe('provider quota extraction', () => {
     const entry: RouteEntry = {
       key: 'quota/nullremaining',
       authMode: 'unprotected',
+      billing: 'exact',
       protocols: [],
       method: 'POST',
       providerName: 'opaque-api',
@@ -313,7 +323,7 @@ describe('provider quota extraction', () => {
 });
 
 describe('.provider() builder method', () => {
-  function makeBuilderDeps(): OrchestrateDeps {
+  function makeBuilderDeps(): RouterDeps {
     return {
       x402Server: null,
       initPromise: Promise.resolve(),

@@ -56,9 +56,9 @@ export async function buildChallengeExtensions(
       /* optional enrichment */
     }
   }
-  const hasEvmUpto = ctx.deps.x402Accepts.some(
-    (accept) => accept.scheme === 'upto' && isEvmNetwork(accept.network),
-  );
+  const hasEvmUpto =
+    ctx.routeEntry.billing === 'upto' &&
+    ctx.deps.x402Accepts.some((accept) => accept.scheme === 'upto' && isEvmNetwork(accept.network));
   if (hasEvmUpto) {
     try {
       const { declareEip2612GasSponsoringExtension } = await import('@x402/extensions');

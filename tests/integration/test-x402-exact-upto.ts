@@ -6,9 +6,9 @@
  *
  *   1. Static-priced route via `exact` scheme — `/api/fortune/premium` is
  *      priced at $0.005 (from `prices` in `lib/router.ts`). Routes without
- *      `dynamic: true` advertise `scheme: 'exact'` in the 402 challenge.
- *   2. Dynamic-priced route via `upto` scheme — `/api/fortune/llm` is
- *      `.paid({ dynamic: true, tickCost: '0.001', maxPrice: '0.01' })`. This
+ *      `upto: true` advertise `scheme: 'exact'` in the 402 challenge.
+ *   2. Upto route via `upto` scheme — `/api/fortune/premium` is
+ *      `.upTo({ maxPrice: '0.05' })` and calls `charge(amount)`. This
  *      is the SAME route the MPP session test hits, by design: the router
  *      advertises both `scheme: 'upto'` (x402) AND `intent: 'session'`
  *      (MPP) in the same 402 challenge, and the client picks one. Here we

@@ -13,7 +13,7 @@ import type {
   VerifyArgs,
   VerifyOutcome,
 } from '../types.js';
-import { resolveX402Accepts } from './accepts.js';
+import { resolveX402Accepts, selectRouteAccepts } from './accepts.js';
 import { buildX402Challenge } from './challenge.js';
 import { settleX402Payment } from './settle.js';
 import { verifyX402Payment, type VerifyPaymentFailure } from './verify.js';
@@ -72,7 +72,7 @@ async function verifyX402(args: VerifyArgs): Promise<VerifyOutcome> {
   const accepts = await resolveX402Accepts(
     request,
     routeEntry,
-    deps.x402Accepts,
+    selectRouteAccepts(deps.x402Accepts, routeEntry),
     deps.payeeAddress,
     body,
   );
@@ -125,7 +125,7 @@ async function settleX402(args: SettleArgs): Promise<SettleOutcome> {
   const { response, payment, token, deps, routeEntry, billedAmount, report } = args;
   const { payload, requirements } = token as X402Token;
 
-  const override = routeEntry.dynamicPrice ? { amount: billedAmount } : undefined;
+  const override = routeEntry.billing === 'exact' ? undefined : { amount: billedAmount };
 
   try {
     const settle = await settleX402Payment(deps.x402Server!, payload, requirements, override);
@@ -162,7 +162,7 @@ async function buildX402ChallengeContribution(args: ChallengeArgs): Promise<Chal
   const accepts = await resolveX402Accepts(
     request,
     routeEntry,
-    deps.x402Accepts,
+    selectRouteAccepts(deps.x402Accepts, routeEntry),
     deps.payeeAddress,
     body,
   );

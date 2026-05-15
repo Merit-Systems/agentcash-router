@@ -5,7 +5,7 @@ import {
   decodePaymentResponseHeader,
   encodePaymentSignatureHeader,
 } from '@x402/core/http';
-import { createRequestHandler, type OrchestrateDeps } from '../src/pipeline/orchestrate.js';
+import { createRequestHandler, type RouterDeps } from '../src/pipeline/orchestrate.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
@@ -34,15 +34,16 @@ function makeEntry(): RouteEntry {
   return {
     key: 'test/route',
     authMode: 'paid',
+    billing: 'exact',
     pricing: '0.02',
     protocols: ['x402'],
     method: 'POST',
   };
 }
 
-function makeDeps(server: FakeX402Server): OrchestrateDeps {
+function makeDeps(server: FakeX402Server): RouterDeps {
   return {
-    x402Server: server as unknown as OrchestrateDeps['x402Server'],
+    x402Server: server as unknown as RouterDeps['x402Server'],
     initPromise: Promise.resolve(),
     nonceStore: new MemoryNonceStore(),
     entitlementStore: new MemoryEntitlementStore(),

@@ -3,26 +3,36 @@ import type { ZodType } from 'zod';
 import type {
   HandlerContext,
   StreamingHandlerContext,
+  UptoHandlerContext,
   RouteEntry,
   PricingConfig,
   PaidOptions,
+  PaidArg,
+  UpToOptions,
+  MeteredOptions,
   AuthMode,
   ProtocolType,
   ProviderConfig,
   MppProtocolInfo,
+  TierConfig,
   JsonObject,
   JsonValue,
   SettlementLifecycle,
   PayToConfig,
 } from './types.js';
 import type { RouteRegistry } from './registry.js';
-import type { OrchestrateDeps, RouteHandler } from './pipeline/orchestrate.js';
+import type { RouterDeps, RouteHandler } from './pipeline/orchestrate.js';
 import { createRequestHandler } from './pipeline/orchestrate.js';
 import { isPositiveDecimal } from './pricing/format.js';
 import { validateExamples } from './validate-examples.js';
 
 type True = true;
 type False = false;
+
+declare const ROUTE_ERROR: unique symbol;
+export interface RouteError<M extends string> {
+  readonly [ROUTE_ERROR]: M;
+}
 
 type InputTypeFor<TBody, TQuery> = [TBody] extends [undefined]
   ? [TQuery] extends [undefined]
@@ -31,10 +41,14 @@ type InputTypeFor<TBody, TQuery> = [TBody] extends [undefined]
   : TBody;
 
 type RequestHandlerFn<TBody, TQuery> = (ctx: HandlerContext<TBody, TQuery>) => Promise<unknown>;
+type UptoHandlerFn<TBody, TQuery> = (ctx: UptoHandlerContext<TBody, TQuery>) => Promise<unknown>;
 
 type StreamingHandlerFn<TBody, TQuery> = (
   ctx: StreamingHandlerContext<TBody, TQuery>,
 ) => AsyncIterable<unknown>;
+
+/** Discriminator threaded through the builder so `.handler()` / `.stream()` can pick the right handler shape. */
+export type BillingMode = 'none' | 'upto' | 'metered';
 
 type HandlerArg<
   TBody,
@@ -42,15 +56,14 @@ type HandlerArg<
   HasAuth extends boolean,
   NeedsBody extends boolean,
   HasBody extends boolean,
+  Bill extends BillingMode,
 > = HasAuth extends true
   ? [NeedsBody, HasBody] extends [true, false]
-    ? {
-        __missing: 'Call .body(schema) — dynamic/tiered pricing requires a body schema to resolve the price against';
-      }
-    : RequestHandlerFn<TBody, TQuery>
-  : {
-      __missing: 'Select an auth mode: .paid(pricing), .siwx(), .apiKey(resolver), or .unprotected()';
-    };
+    ? RouteError<'Call .body(schema) — body-derived/tiered pricing reads the parsed body'>
+    : Bill extends 'upto'
+      ? UptoHandlerFn<TBody, TQuery>
+      : RequestHandlerFn<TBody, TQuery>
+  : RouteError<'Pick an auth mode first: .paid(...), .upTo(...), .metered(...), .siwx(), .apiKey(...), or .unprotected()'>;
 
 type StreamArg<
   TBody,
@@ -58,32 +71,28 @@ type StreamArg<
   HasAuth extends boolean,
   NeedsBody extends boolean,
   HasBody extends boolean,
-  IsDynamic extends boolean,
+  Bill extends BillingMode,
 > = HasAuth extends true
-  ? IsDynamic extends true
+  ? Bill extends 'metered'
     ? [NeedsBody, HasBody] extends [true, false]
-      ? {
-          __missing: 'Call .body(schema) — dynamic pricing requires a body schema to resolve the price against';
-        }
+      ? RouteError<'Call .body(schema) — metered pricing reads the parsed body'>
       : StreamingHandlerFn<TBody, TQuery>
-    : {
-        __missing: 'Streaming handlers require .paid({ dynamic: true, tickCost, unitType, maxPrice }) — static/free routes cannot meter per-chunk billing';
-      }
-  : {
-      __missing: 'Select an auth mode: .paid({ dynamic: true, ... }) — streaming requires handler-driven dynamic pricing';
-    };
+    : Bill extends 'upto'
+      ? RouteError<'Streaming is not supported on .upTo() — use .metered() on MPP for per-yield billing'>
+      : RouteError<'Streaming requires .metered({ tickCost, maxPrice }) — static/free routes cannot meter per-chunk billing'>
+  : RouteError<'Pick an auth mode first: .metered({ ... }) — streaming requires metered pricing'>;
 
 type BuilderState<TBody> = {
   key: string;
   registry: RouteRegistry;
-  deps: OrchestrateDeps;
+  deps: RouterDeps;
   authMode: AuthMode | null;
   pricing: PricingConfig | undefined;
   siwxEnabled: boolean;
   protocols: ProtocolType[];
   maxPrice: string | undefined;
   minPrice: string | undefined;
-  dynamicPrice: boolean;
+  billing: 'exact' | 'upto' | 'metered';
   tickCost: string | undefined;
   unitType: string | undefined;
   payTo: PayToConfig | undefined;
@@ -116,14 +125,14 @@ export class RouteBuilder<
   HasAuth extends boolean = false,
   NeedsBody extends boolean = false,
   HasBody extends boolean = false,
-  IsDynamic extends boolean = false,
+  Bill extends BillingMode = 'none',
 > {
   #s: BuilderState<TBody>;
 
   constructor(
     key: string,
     registry: RouteRegistry,
-    deps: OrchestrateDeps,
+    deps: RouterDeps,
     defaults?: RouteBuilderDefaults,
   ) {
     this.#s = {
@@ -136,7 +145,7 @@ export class RouteBuilder<
       protocols: defaults?.protocols ? [...defaults.protocols] : ['x402'],
       maxPrice: undefined,
       minPrice: undefined,
-      dynamicPrice: false,
+      billing: 'exact',
       tickCost: undefined,
       unitType: undefined,
       payTo: undefined,
@@ -160,7 +169,7 @@ export class RouteBuilder<
   }
 
   private fork(): this {
-    const next = new RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic>(
+    const next = new RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill>(
       this.#s.key,
       this.#s.registry,
       this.#s.deps,
@@ -170,7 +179,7 @@ export class RouteBuilder<
   }
 
   /**
-   * Charge a fixed price per request, denominated in USDC as a decimal string.
+   * Fixed-price string sugar: `paid('0.01')` charges 0.01 USDC per request.
    *
    * @example
    * ```ts
@@ -178,79 +187,137 @@ export class RouteBuilder<
    * ```
    */
   paid(
-    pricing: string,
+    price: string,
     options?: PaidOptions,
-  ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, IsDynamic>;
-  /**
-   * Configure handler-driven dynamic pricing — each tick costs `tickCost` USDC,
-   * capped at `maxPrice`. Pair with `.handler()` for one-tick-per-request
-   * billing, or with `.stream()` for per-yield metering.
-   *
-   * @example
-   * ```ts
-   * router
-   *   .route('llm/stream')
-   *   .paid({ dynamic: true, tickCost: '0.0001', unitType: 'token', maxPrice: '0.05' })
-   *   .stream(async function* ({ charge }) { await charge(); yield 'hi'; });
-   * ```
-   */
-  paid(
-    options: PaidOptions & { dynamic: true; maxPrice: string },
-  ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, True>;
+  ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, 'none'>;
   /**
    * Compute the price from the parsed body before issuing the 402 challenge.
-   * Throw an `HttpError` from the pricing function to reject the request before
-   * payment is requested.
+   * Throw an `HttpError` from the pricing function to reject the request
+   * before payment is requested. Requires `.body(schema)`.
    *
    * @example
    * ```ts
-   * router
-   *   .route('llm')
+   * router.route('llm')
    *   .paid((body) => `${body.tokens * 0.0001}`, { maxPrice: '5.00' })
    *   .body(schema)
    *   .handler(handler);
    * ```
    */
   paid<TBodyIn>(
-    pricing: (body: TBodyIn) => string | Promise<string>,
-    options?: PaidOptions & { maxPrice?: string },
-  ): RouteBuilder<TBody, TQuery, TOutput, True, True, HasBody, IsDynamic>;
+    fn: (body: TBodyIn) => string | Promise<string>,
+    options?: PaidOptions,
+  ): RouteBuilder<TBody, TQuery, TOutput, True, True, HasBody, 'none'>;
   /**
-   * Select a price tier from `body[field]`, optionally falling back to the
-   * `default` tier when the value is missing. The 402 challenge advertises the
-   * highest tier price.
+   * Options-object form of fixed or body-derived pricing. Pass exactly one of:
+   *
+   * - `{ price }` — fixed price (object form of the string sugar).
+   * - `{ field, tiers, default? }` — pick a tier from `body[field]`.
+   *
+   * Common knobs (`protocols`, `maxPrice`, `minPrice`, `payTo`, `mpp`) live
+   * alongside the pricing shape. For handler-computed billing use `.upTo()`;
+   * for per-tick billing use `.metered()`.
    *
    * @example
    * ```ts
-   * router
-   *   .route('upload')
+   * router.route('upload')
    *   .paid({ field: 'size', tiers: { sm: { price: '0.01' }, lg: { price: '0.10' } } })
-   *   .body(schema)
-   *   .handler(handler);
+   *   .body(schema).handler(handler);
    * ```
    */
+  paid<T extends PaidArg>(
+    arg: T,
+  ): RouteBuilder<
+    TBody,
+    TQuery,
+    TOutput,
+    True,
+    T extends { tiers: Record<string, TierConfig> } ? True : False,
+    HasBody,
+    'none'
+  >;
   paid(
-    pricing: {
-      field: string;
-      tiers: Record<string, { price: string; label?: string }>;
-      default?: string;
-    },
+    arg: string | PaidArg | ((body: never) => string | Promise<string>),
     options?: PaidOptions,
-  ): RouteBuilder<TBody, TQuery, TOutput, True, True, HasBody, IsDynamic>;
-  paid(
-    pricingOrOptions: PricingConfig | (PaidOptions & { dynamic: true; maxPrice: string }),
-    options?: PaidOptions,
-  ): RouteBuilder<TBody, TQuery, TOutput, True, boolean, HasBody, boolean> {
-    const { pricing, resolvedOptions } = resolvePaidArgs(this.#s.key, pricingOrOptions, options);
+  ): RouteBuilder<TBody, TQuery, TOutput, True, boolean, HasBody, 'none'> {
+    return this.applyPaid(normalizePaidArg(this.#s.key, arg, options), 'paid') as RouteBuilder<
+      TBody,
+      TQuery,
+      TOutput,
+      True,
+      boolean,
+      HasBody,
+      'none'
+    >;
+  }
+
+  /**
+   * x402-only handler-computed billing. The handler receives `charge(amount)`
+   * and the request settles once for the accumulated total, capped at
+   * `maxPrice`. Requires an `'upto'` accept on at least one configured network.
+   * Pass a bare string as sugar for `{ maxPrice }`.
+   *
+   * @example
+   * ```ts
+   * router.route('llm')
+   *   .upTo('0.05')
+   *   .body(schema)
+   *   .handler(async ({ body, charge }) => { await charge('0.001'); ... });
+   * ```
+   */
+  upTo(
+    arg: string | UpToOptions,
+  ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, 'upto'> {
+    return this.applyPaid(normalizeUpToArg(this.#s.key, arg), 'upTo') as RouteBuilder<
+      TBody,
+      TQuery,
+      TOutput,
+      True,
+      False,
+      HasBody,
+      'upto'
+    >;
+  }
+
+  /**
+   * MPP-only per-tick billing. `.handler()` bills exactly `tickCost`;
+   * `.stream()` calls `charge()` (no-arg) per yield, settling per tick up to
+   * `maxPrice`. Requires `RouterConfig.mpp.session`.
+   *
+   * @example
+   * ```ts
+   * router.route('llm/stream')
+   *   .metered({ tickCost: '0.0001', maxPrice: '0.05', unitType: 'token' })
+   *   .stream(async function* ({ charge }) { await charge(); yield 'hi'; });
+   * ```
+   */
+  metered(
+    options: MeteredOptions,
+  ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, 'metered'> {
+    return this.applyPaid(normalizeMeteredArg(this.#s.key, options), 'metered') as RouteBuilder<
+      TBody,
+      TQuery,
+      TOutput,
+      True,
+      False,
+      HasBody,
+      'metered'
+    >;
+  }
+
+  private applyPaid(
+    normalized: NormalizedPaidArg,
+    method: 'paid' | 'upTo' | 'metered',
+  ): RouteBuilder<TBody, TQuery, TOutput, True, boolean, HasBody, BillingMode> {
+    const { pricing, resolvedOptions, billing, tickCost, unitType, maxPrice } = normalized;
 
     if (this.#s.authMode === 'unprotected') {
       throw new Error(
-        `route '${this.#s.key}': Cannot combine .unprotected() and .paid() on the same route.`,
+        `route '${this.#s.key}': Cannot combine .unprotected() and .${method}() on the same route.`,
       );
     }
     if (this.#s.pricing !== undefined) {
       throw new Error(
-        `route '${this.#s.key}': Cannot call .paid() more than once on the same route.`,
+        `route '${this.#s.key}': Cannot combine .paid(), .upTo(), and .metered() — pick one pricing mode.`,
       );
     }
 
@@ -261,29 +328,41 @@ export class RouteBuilder<
       True,
       boolean,
       HasBody,
-      boolean
+      BillingMode
     >;
     next.#s.authMode = 'paid';
     next.#s.pricing = pricing;
-    if (resolvedOptions?.protocols) {
+    if (billing === 'upto') {
+      // .upTo() is x402-only — handler-computed billing settles a single x402 payment.
+      if (resolvedOptions.protocols?.some((p) => p !== 'x402')) {
+        throw new Error(
+          `route '${this.#s.key}': .upTo() is x402-only — remove the conflicting protocols override.`,
+        );
+      }
+      next.#s.protocols = ['x402'];
+    } else if (billing === 'metered') {
+      // .metered() is MPP-only — per-tick billing runs over an MPP payment channel.
+      if (resolvedOptions.protocols?.some((p) => p !== 'mpp')) {
+        throw new Error(
+          `route '${this.#s.key}': .metered() is MPP-only — remove the conflicting protocols override.`,
+        );
+      }
+      next.#s.protocols = ['mpp'];
+    } else if (resolvedOptions.protocols) {
       next.#s.protocols = [...resolvedOptions.protocols];
     } else if (next.#s.protocols.length === 0) {
       next.#s.protocols = ['x402'];
     }
-    if (resolvedOptions?.maxPrice) next.#s.maxPrice = resolvedOptions.maxPrice;
-    if (resolvedOptions?.minPrice) next.#s.minPrice = resolvedOptions.minPrice;
-    if (resolvedOptions?.payTo) next.#s.payTo = resolvedOptions.payTo;
-    if (resolvedOptions?.mpp) next.#s.mppInfo = resolvedOptions.mpp;
-    if (resolvedOptions?.dynamic) next.#s.dynamicPrice = true;
-    if (resolvedOptions?.tickCost) next.#s.tickCost = resolvedOptions.tickCost;
-    if (resolvedOptions?.unitType) next.#s.unitType = resolvedOptions.unitType;
+    if (resolvedOptions.maxPrice) next.#s.maxPrice = resolvedOptions.maxPrice;
+    if (maxPrice) next.#s.maxPrice = maxPrice;
+    if (resolvedOptions.minPrice) next.#s.minPrice = resolvedOptions.minPrice;
+    if (resolvedOptions.payTo) next.#s.payTo = resolvedOptions.payTo;
+    if (resolvedOptions.mpp) next.#s.mppInfo = resolvedOptions.mpp;
+    next.#s.billing = billing;
+    if (tickCost) next.#s.tickCost = tickCost;
+    if (unitType) next.#s.unitType = unitType;
 
     if (typeof pricing === 'object' && 'tiers' in pricing) {
-      if (next.#s.dynamicPrice) {
-        throw new Error(
-          `route '${this.#s.key}': .paid({ dynamic: true }) is incompatible with tiered pricing`,
-        );
-      }
       for (const [tierKey, tierConfig] of Object.entries(pricing.tiers)) {
         if (!tierKey) {
           throw new Error(`route '${this.#s.key}': tier key cannot be empty`);
@@ -295,21 +374,15 @@ export class RouteBuilder<
         }
       }
     }
-    if (resolvedOptions?.maxPrice !== undefined && !isPositiveDecimal(resolvedOptions.maxPrice)) {
+    if (next.#s.maxPrice !== undefined && !isPositiveDecimal(next.#s.maxPrice)) {
       throw new Error(
-        `route '${this.#s.key}': maxPrice '${resolvedOptions.maxPrice}' must be a positive decimal string`,
+        `route '${this.#s.key}': maxPrice '${next.#s.maxPrice}' must be a positive decimal string`,
       );
     }
-    if (resolvedOptions?.tickCost !== undefined && !isPositiveDecimal(resolvedOptions.tickCost)) {
+    if (next.#s.tickCost !== undefined && !isPositiveDecimal(next.#s.tickCost)) {
       throw new Error(
-        `route '${this.#s.key}': tickCost '${resolvedOptions.tickCost}' must be a positive decimal string`,
+        `route '${this.#s.key}': tickCost '${next.#s.tickCost}' must be a positive decimal string`,
       );
-    }
-    if (next.#s.dynamicPrice && !next.#s.maxPrice) {
-      throw new Error(`route '${this.#s.key}': .paid({ dynamic: true }) requires maxPrice`);
-    }
-    if (next.#s.dynamicPrice && !next.#s.tickCost) {
-      throw new Error(`route '${this.#s.key}': .paid({ dynamic: true }) requires tickCost`);
     }
 
     return next;
@@ -325,7 +398,7 @@ export class RouteBuilder<
    * router.route('profile').siwx().handler(async ({ wallet }) => getProfile(wallet));
    * ```
    */
-  siwx(): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, IsDynamic> {
+  siwx(): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, Bill> {
     if (this.#s.authMode === 'unprotected') {
       throw new Error(
         `route '${this.#s.key}': Cannot combine .unprotected() and .siwx() on the same route.`,
@@ -338,15 +411,7 @@ export class RouteBuilder<
       );
     }
 
-    const next = this.fork() as RouteBuilder<
-      TBody,
-      TQuery,
-      TOutput,
-      True,
-      False,
-      HasBody,
-      IsDynamic
-    >;
+    const next = this.fork() as RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, Bill>;
     next.#s.siwxEnabled = true;
 
     if (next.#s.authMode === 'paid' || next.#s.pricing) {
@@ -375,7 +440,7 @@ export class RouteBuilder<
    */
   apiKey(
     resolver: (key: string) => unknown | Promise<unknown>,
-  ): RouteBuilder<TBody, TQuery, TOutput, True, NeedsBody, HasBody, IsDynamic> {
+  ): RouteBuilder<TBody, TQuery, TOutput, True, NeedsBody, HasBody, Bill> {
     if (this.#s.siwxEnabled) {
       throw new Error(
         `route '${this.#s.key}': Combining .apiKey() and .siwx() is not supported on the same route.`,
@@ -388,7 +453,7 @@ export class RouteBuilder<
       True,
       NeedsBody,
       HasBody,
-      IsDynamic
+      Bill
     >;
     next.#s.authMode = 'apiKey';
     next.#s.apiKeyResolver = resolver;
@@ -404,7 +469,7 @@ export class RouteBuilder<
    * router.route('health').unprotected().handler(async () => ({ status: 'ok' }));
    * ```
    */
-  unprotected(): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, IsDynamic> {
+  unprotected(): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, Bill> {
     if (this.#s.authMode && this.#s.authMode !== 'unprotected') {
       throw new Error(
         `route '${this.#s.key}': Cannot combine .unprotected() and .${this.#s.authMode}() on the same route.`,
@@ -417,15 +482,7 @@ export class RouteBuilder<
       );
     }
 
-    const next = this.fork() as RouteBuilder<
-      TBody,
-      TQuery,
-      TOutput,
-      True,
-      False,
-      HasBody,
-      IsDynamic
-    >;
+    const next = this.fork() as RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, Bill>;
     next.#s.authMode = 'unprotected';
     next.#s.protocols = [];
     return next;
@@ -462,9 +519,7 @@ export class RouteBuilder<
    *   .handler(async ({ body }) => search(body.query));
    * ```
    */
-  body<T>(
-    schema: ZodType<T>,
-  ): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True, IsDynamic> {
+  body<T>(schema: ZodType<T>): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True, Bill> {
     const next = this.fork() as unknown as RouteBuilder<
       T,
       TQuery,
@@ -472,7 +527,7 @@ export class RouteBuilder<
       HasAuth,
       NeedsBody,
       True,
-      IsDynamic
+      Bill
     >;
     next.#s.bodySchema = schema;
     return next;
@@ -489,9 +544,7 @@ export class RouteBuilder<
    *   .handler(async ({ query }) => getById(query.id));
    * ```
    */
-  query<T>(
-    schema: ZodType<T>,
-  ): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic> {
+  query<T>(schema: ZodType<T>): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody, Bill> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       T,
@@ -499,7 +552,7 @@ export class RouteBuilder<
       HasAuth,
       NeedsBody,
       HasBody,
-      IsDynamic
+      Bill
     >;
     next.#s.querySchema = schema;
     next.#s.method = 'GET';
@@ -518,9 +571,7 @@ export class RouteBuilder<
    *   .handler(async () => ({ result: 'ok' }));
    * ```
    */
-  output<T>(
-    schema: ZodType<T>,
-  ): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody, IsDynamic> {
+  output<T>(schema: ZodType<T>): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody, Bill> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       TQuery,
@@ -528,7 +579,7 @@ export class RouteBuilder<
       HasAuth,
       NeedsBody,
       HasBody,
-      IsDynamic
+      Bill
     >;
     next.#s.outputSchema = schema;
     return next;
@@ -545,7 +596,7 @@ export class RouteBuilder<
    */
   inputExample(
     example: InputTypeFor<TBody, TQuery> & JsonObject,
-  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic> {
+  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       TQuery,
@@ -553,7 +604,7 @@ export class RouteBuilder<
       HasAuth,
       NeedsBody,
       HasBody,
-      IsDynamic
+      Bill
     >;
     next.#s.inputExample = example;
     next.#s.hasInputExample = true;
@@ -571,7 +622,7 @@ export class RouteBuilder<
    */
   outputExample(
     example: TOutput & JsonValue,
-  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic> {
+  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       TQuery,
@@ -579,7 +630,7 @@ export class RouteBuilder<
       HasAuth,
       NeedsBody,
       HasBody,
-      IsDynamic
+      Bill
     >;
     next.#s.outputExample = example;
     next.#s.hasOutputExample = true;
@@ -647,10 +698,10 @@ export class RouteBuilder<
    */
   validate(
     fn: (body: TBody) => void | Promise<void>,
-  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic> {
+  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill> {
     const next = this.fork();
     next.#s.validateFn = fn;
-    return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic>;
+    return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill>;
   }
 
   /**
@@ -668,10 +719,10 @@ export class RouteBuilder<
    */
   settlement(
     lifecycle: SettlementLifecycle<TBody>,
-  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic> {
+  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill> {
     const next = this.fork();
     next.#s.settlement = lifecycle;
-    return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, IsDynamic>;
+    return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill>;
   }
 
   /**
@@ -689,7 +740,7 @@ export class RouteBuilder<
    * ```
    */
   handler(
-    fn: HandlerArg<TBody, TQuery, HasAuth, NeedsBody, HasBody>,
+    fn: HandlerArg<TBody, TQuery, HasAuth, NeedsBody, HasBody, Bill>,
   ): (request: NextRequest) => Promise<Response> {
     return this.register(fn as unknown as RouteHandler, false);
   }
@@ -697,13 +748,13 @@ export class RouteBuilder<
   /**
    * Register a streaming handler (`async function*`) and return the Next.js
    * route function. Each `charge()` call bills one tick (`tickCost` USDC) up
-   * to `maxPrice`; requires `.paid({ dynamic: true, ... })` and MPP session mode.
+   * to `maxPrice`; requires `.metered({ ... })` and MPP session mode.
    *
    * @example
    * ```ts
    * export const POST = router
    *   .route('llm/stream')
-   *   .paid({ dynamic: true, tickCost: '0.0001', unitType: 'token', maxPrice: '0.05' })
+   *   .metered({ tickCost: '0.0001', maxPrice: '0.05', unitType: 'token' })
    *   .body(schema)
    *   .stream(async function* ({ body, charge }) {
    *     for await (const token of streamLLM(body.prompt)) {
@@ -714,7 +765,7 @@ export class RouteBuilder<
    * ```
    */
   stream(
-    fn: StreamArg<TBody, TQuery, HasAuth, NeedsBody, HasBody, IsDynamic>,
+    fn: StreamArg<TBody, TQuery, HasAuth, NeedsBody, HasBody, Bill>,
   ): (request: NextRequest) => Promise<Response> {
     return this.register(fn as unknown as RouteHandler, true);
   }
@@ -725,7 +776,7 @@ export class RouteBuilder<
   ): (request: NextRequest) => Promise<Response> {
     if (!this.#s.authMode) {
       throw new Error(
-        `route '${this.#s.key}': Select an auth mode: .paid(pricing), .siwx(), .apiKey(resolver), or .unprotected()`,
+        `route '${this.#s.key}': Select an auth mode: .paid(pricing), .upTo(maxPrice), .metered(options), .siwx(), .apiKey(resolver), or .unprotected()`,
       );
     }
     if (this.#s.validateFn && !this.#s.bodySchema) {
@@ -736,27 +787,43 @@ export class RouteBuilder<
     if (this.#s.settlement && !this.#s.pricing) {
       throw new Error(`route '${this.#s.key}': .settlement() requires a paid route`);
     }
-    if (this.#s.dynamicPrice && this.#s.protocols.includes('x402')) {
+    if (this.#s.billing === 'upto') {
       const hasUpto = this.#s.deps.x402Accepts.some((accept) => accept.scheme === 'upto');
       if (!hasUpto) {
         throw new Error(
-          `route '${this.#s.key}': .paid({ dynamic: true }) on an x402 route requires an 'upto' accept on at least one configured network. ` +
+          `route '${this.#s.key}': .upTo() requires an 'upto' accept on at least one configured network. ` +
             `Add { scheme: 'upto', network, asset } to RouterConfig.x402.accepts.`,
         );
       }
     }
-    if (this.#s.dynamicPrice && this.#s.protocols.includes('mpp')) {
+    if (
+      this.#s.pricing !== undefined &&
+      this.#s.billing === 'exact' &&
+      this.#s.protocols.includes('x402')
+    ) {
+      const hasExact = this.#s.deps.x402Accepts.some(
+        (accept) => (accept.scheme ?? 'exact') !== 'upto',
+      );
+      if (!hasExact) {
+        throw new Error(
+          `route '${this.#s.key}': .paid() needs a non-'upto' x402 accept — an 'upto'-only accept ` +
+            `list cannot serve a fixed-price route. Add { scheme: 'exact', network } to ` +
+            `RouterConfig.x402.accepts, or use .upTo() for handler-computed billing.`,
+        );
+      }
+    }
+    if (this.#s.billing === 'metered') {
       if (!this.#s.deps.mppSessionConfig) {
         throw new Error(
-          `route '${this.#s.key}': .paid({ dynamic: true }) on an MPP route requires session mode. ` +
+          `route '${this.#s.key}': .metered() requires MPP session mode. ` +
             `Set RouterConfig.mpp.session = {} and provide mpp.operatorKey.`,
         );
       }
     }
-    if (streaming && !this.#s.dynamicPrice) {
+    if (streaming && this.#s.billing !== 'metered') {
       throw new Error(
-        `route '${this.#s.key}': .stream() requires .paid({ dynamic: true }) — ` +
-          `static/free routes can't meter per-chunk billing.`,
+        `route '${this.#s.key}': .stream() requires .metered() — ` +
+          `static/free/upto routes can't meter per-chunk billing.`,
       );
     }
 
@@ -776,7 +843,7 @@ export class RouteBuilder<
       authMode: this.#s.authMode!,
       siwxEnabled: this.#s.siwxEnabled,
       pricing: this.#s.pricing,
-      dynamicPrice: this.#s.dynamicPrice ? true : undefined,
+      billing: this.#s.billing,
       streaming: streaming ? true : undefined,
       protocols: this.#s.protocols,
       bodySchema: this.#s.bodySchema,
@@ -806,25 +873,77 @@ export class RouteBuilder<
   }
 }
 
-function resolvePaidArgs(
-  routeKey: string,
-  pricingOrOptions: PricingConfig | (PaidOptions & { dynamic: true; maxPrice: string }),
-  options?: PaidOptions,
-): { pricing: PricingConfig; resolvedOptions: PaidOptions | undefined } {
-  const isHandlerDynamicShape =
-    typeof pricingOrOptions === 'object' &&
-    pricingOrOptions !== null &&
-    typeof pricingOrOptions !== 'function' &&
-    !('tiers' in pricingOrOptions) &&
-    'dynamic' in pricingOrOptions &&
-    pricingOrOptions.dynamic;
+interface NormalizedPaidArg {
+  pricing: PricingConfig;
+  resolvedOptions: PaidOptions;
+  billing: 'exact' | 'upto' | 'metered';
+  tickCost?: string;
+  unitType?: string;
+  maxPrice?: string;
+}
 
-  if (isHandlerDynamicShape) {
-    const opts = pricingOrOptions as PaidOptions & { dynamic: true; maxPrice: string };
-    if (!opts.maxPrice) {
-      throw new Error(`route '${routeKey}': .paid({ dynamic: true }) requires maxPrice`);
-    }
-    return { pricing: opts.maxPrice, resolvedOptions: opts };
+function normalizePaidArg(
+  routeKey: string,
+  arg: string | PaidArg | ((body: never) => string | Promise<string>),
+  options?: PaidOptions,
+): NormalizedPaidArg {
+  if (typeof arg === 'string') {
+    return { pricing: arg, resolvedOptions: options ?? {}, billing: 'exact' };
   }
-  return { pricing: pricingOrOptions as PricingConfig, resolvedOptions: options };
+
+  if (typeof arg === 'function') {
+    return {
+      pricing: arg as (body: unknown) => string | Promise<string>,
+      resolvedOptions: options ?? {},
+      billing: 'exact',
+    };
+  }
+
+  if ('tiers' in arg && 'field' in arg) {
+    return {
+      pricing: { field: arg.field, tiers: arg.tiers, default: arg.default },
+      resolvedOptions: arg,
+      billing: 'exact',
+    };
+  }
+
+  if ('price' in arg && typeof arg.price === 'string') {
+    return { pricing: arg.price, resolvedOptions: arg, billing: 'exact' };
+  }
+
+  throw new Error(
+    `route '${routeKey}': .paid() requires one of: a price string, a (body) => string function, { price }, or { field, tiers }. ` +
+      `For handler-computed billing use .upTo(); for per-tick billing use .metered().`,
+  );
+}
+
+function normalizeUpToArg(routeKey: string, arg: string | UpToOptions): NormalizedPaidArg {
+  const options: UpToOptions = typeof arg === 'string' ? { maxPrice: arg } : arg;
+  if (!options.maxPrice) {
+    throw new Error(`route '${routeKey}': .upTo() requires maxPrice`);
+  }
+  return {
+    pricing: options.maxPrice,
+    resolvedOptions: options,
+    billing: 'upto',
+    unitType: options.unitType,
+    maxPrice: options.maxPrice,
+  };
+}
+
+function normalizeMeteredArg(routeKey: string, options: MeteredOptions): NormalizedPaidArg {
+  if (!options.maxPrice) {
+    throw new Error(`route '${routeKey}': .metered() requires maxPrice`);
+  }
+  if (!options.tickCost) {
+    throw new Error(`route '${routeKey}': .metered() requires tickCost`);
+  }
+  return {
+    pricing: options.maxPrice,
+    resolvedOptions: options,
+    billing: 'metered',
+    tickCost: options.tickCost,
+    unitType: options.unitType,
+    maxPrice: options.maxPrice,
+  };
 }

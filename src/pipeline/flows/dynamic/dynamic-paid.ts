@@ -13,10 +13,12 @@ import {
 import { build402 } from '../build402.js';
 import { resolveDynamicBodyAndPrice } from './dynamic-body-and-price.js';
 import { runDynamicChannelMgmtFlow } from './dynamic-channel-mgmt.js';
-import { invokeDynamic } from './dynamic-invoke.js';
+import { invokeMetered, invokeUpto } from './dynamic-invoke/index.js';
 import { resolveDynamicPreflight } from './dynamic-preflight.js';
 import { runDynamicRequestFlow } from './dynamic-request.js';
 import { runDynamicStreamFlow } from './dynamic-stream.js';
+import type { VerifySuccess } from '../../../protocols/types.js';
+import type { DynamicInvokeResult } from '../../steps/types.js';
 
 export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   const { request, routeEntry, deps, report } = ctx;
@@ -87,13 +89,8 @@ export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
     network: verifyOutcome.payment.network,
   });
 
-  const result = await invokeDynamic(
-    ctx,
-    verifyOutcome.wallet,
-    account,
-    parsedBody,
-    verifyOutcome.payment,
-  );
+  const result = await invokeDynamic(ctx, verifyOutcome, account, parsedBody);
+
   switch (result.kind) {
     case 'stream':
       return runDynamicStreamFlow({
@@ -113,5 +110,23 @@ export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
         body: parsedBody,
         result,
       });
+  }
+}
+
+async function invokeDynamic(
+  ctx: FlowCtx,
+  verifyOutcome: VerifySuccess,
+  account: unknown,
+  parsedBody: unknown,
+): Promise<DynamicInvokeResult> {
+  switch (ctx.routeEntry.billing) {
+    case 'upto':
+      return invokeUpto(ctx, verifyOutcome.wallet, account, parsedBody, verifyOutcome.payment);
+    case 'metered':
+      return invokeMetered(ctx, verifyOutcome.wallet, account, parsedBody, verifyOutcome.payment);
+    case 'exact':
+      throw new Error(
+        `route '${ctx.routeEntry.key}': exact billing must not reach the dynamic paid flow`,
+      );
   }
 }

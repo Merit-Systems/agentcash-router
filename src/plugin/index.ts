@@ -1,4 +1,4 @@
-import type { AlertEvent, ProviderQuotaEvent } from '../types.js';
+import type { AlertEvent, ProtocolType, ProviderQuotaEvent } from '../types.js';
 
 export interface RequestMeta {
   requestId: string;
@@ -25,14 +25,14 @@ export interface PluginContext {
 }
 
 export interface PaymentEvent {
-  protocol: 'x402' | 'mpp';
+  protocol: ProtocolType;
   payer: string;
   amount: string;
   network: string;
 }
 
 export interface SettlementEvent {
-  protocol: 'x402' | 'mpp';
+  protocol: ProtocolType;
   payer: string;
   transaction: string;
   network: string;
