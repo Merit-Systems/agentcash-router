@@ -13,6 +13,20 @@ export type RouteHandler =
   | ((ctx: HandlerContext) => Promise<unknown>)
   | ((ctx: StreamingHandlerContext) => AsyncIterable<unknown>);
 
+/**
+ * Whether to skip query-param validation for this request.
+ *
+ * Paid routes that receive a bare probe (no payment header) must return a
+ * 402 challenge, not a 400 validation error. Skipping `validateQuery` here
+ * lets the paid flow issue the challenge; query validation still runs once
+ * a payment is present so invalid params are caught before the handler.
+ */
+function shouldSkipQueryValidation(routeEntry: RouteEntry, request: NextRequest): boolean {
+  const isPaidRoute = !!routeEntry.pricing || routeEntry.authMode === 'paid';
+  if (!isPaidRoute) return false;
+  return selectIncomingStrategy(request, routeEntry.protocols) === null;
+}
+
 export function createRequestHandler(
   routeEntry: RouteEntry,
   handler: RouteHandler,
@@ -22,14 +36,7 @@ export function createRequestHandler(
     await deps.initPromise;
     const ctx = preflight(routeEntry, handler, deps, request);
 
-    // For paid routes with no payment header, skip query validation and let
-    // the paid flow return the 402 challenge directly. This ensures x402scan
-    // probes (bare requests with no payment) get a 402 instead of a 400
-    // validation error from missing required query params.
-    const isPaidRoute = !!routeEntry.pricing || routeEntry.authMode === 'paid';
-    const hasPayment = isPaidRoute && selectIncomingStrategy(request, routeEntry.protocols) !== null;
-
-    if (!isPaidRoute || hasPayment) {
+    if (!shouldSkipQueryValidation(routeEntry, request)) {
       const query = validateQuery(ctx);
       if (!query.ok) return query.response;
       ctx.query = query.data;
