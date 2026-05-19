@@ -165,6 +165,8 @@ function buildOperation(
     operation.security = [{ siwx: [] }];
   } else if (requiresApiKeyScheme) {
     operation.security = [{ apiKey: [] }];
+  } else if (entry.authMode === 'unprotected') {
+    operation.security = [];
   }
 
   if (entry.bodySchema) {

@@ -132,6 +132,37 @@ describe('openapi discovery document', () => {
     });
   });
 
+  it('emits `security: []` for unprotected routes so discovery sees them as public', async () => {
+    // Pairs with @agentcash/discovery's recognition of `security: []` as the
+    // OpenAPI-native unprotected override. Without this, unprotected routes emit
+    // no `security` field at all and discovery flags them as L2_AUTH_MODE_MISSING.
+    const registry = new RouteRegistry();
+    registry.register(
+      makeEntry({
+        key: 'health',
+        path: 'health',
+        method: 'GET',
+        authMode: 'unprotected',
+        pricing: undefined,
+        protocols: [],
+      }),
+    );
+
+    const handler = createOpenAPIHandler(registry, 'https://example.com', undefined, {
+      title: 'Example API',
+      version: '1.0.0',
+    });
+
+    const response = await handler(request);
+    const doc = (await response.json()) as Record<string, any>;
+
+    const operation = doc.paths['/api/health'].get;
+    expect(operation.security).toEqual([]);
+    expect(operation['x-payment-info']).toBeUndefined();
+    expect(operation.responses['402']).toBeUndefined();
+    expect(operation.responses['401']).toBeUndefined();
+  });
+
   it('emits x-discovery metadata and quote pricing for dynamic routes', async () => {
     const registry = new RouteRegistry();
     registry.register(
