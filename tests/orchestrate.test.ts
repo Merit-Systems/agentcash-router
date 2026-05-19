@@ -729,11 +729,15 @@ describe('query schema validation', () => {
   it('paid: invalid query with payment header returns 400', async () => {
     const entry = makeEntry({ querySchema, method: 'GET' });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const payload = Buffer.from(JSON.stringify({ payer: KNOWN_PAYER, amount: '0.02' })).toString('base64');
-    const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=abc', {
-      method: 'GET',
-      headers: { 'PAYMENT-SIGNATURE': payload },
-    }));
+    const payload = Buffer.from(JSON.stringify({ payer: KNOWN_PAYER, amount: '0.02' })).toString(
+      'base64',
+    );
+    const res = await handler(
+      new NextRequest('http://localhost:3000/api/test?limit=abc', {
+        method: 'GET',
+        headers: { 'PAYMENT-SIGNATURE': payload },
+      }),
+    );
     expect(res.status).toBe(400);
   });
 
