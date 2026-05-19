@@ -166,10 +166,6 @@ function buildOperation(
   } else if (requiresApiKeyScheme) {
     operation.security = [{ apiKey: [] }];
   } else if (entry.authMode === 'unprotected') {
-    // Per OpenAPI 3.x, an empty security array on an operation explicitly removes
-    // any top-level security requirement — the spec-native way to mark a route as
-    // public. Discovery consumers (@agentcash/discovery >= 1.6.6) read this as
-    // authMode: 'unprotected'; older versions ignore it (no regression).
     operation.security = [];
   }
 
