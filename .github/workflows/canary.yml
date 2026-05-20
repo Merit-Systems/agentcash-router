@@ -12,9 +12,11 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    if: github.head_ref != 'changeset-release/main'
     permissions:
       contents: read
       pull-requests: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -24,17 +26,28 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
+      - name: Ensure npm supports trusted publishing
+        run: |
+          npm install -g npm@^11.5.1
+          npm --version
+
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
 
+      - name: Use pnpm with npm trusted publishing support
+        run: npm install -g pnpm@11.0.9 && pnpm --version
+        env:
+          PNPM_CONFIG_PM_ON_FAIL: ignore
+
       - name: Publish canary
         id: publish
+        env:
+          PNPM_CONFIG_PM_ON_FAIL: ignore
         run: |
           pnpm changeset version --snapshot pr-${{ github.event.pull_request.number }}
+          pnpm install --no-frozen-lockfile --ignore-scripts
           pnpm changeset publish --tag canary --no-git-tag
           echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Update PR comment
         uses: actions/github-script@v7

@@ -30,11 +30,21 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
+      - name: Ensure npm supports trusted publishing
+        run: |
+          npm install -g npm@^11.5.1
+          npm --version
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
+
+      - name: Use pnpm with npm trusted publishing support
+        run: npm install -g pnpm@11.0.9 && pnpm --version
+        env:
+          PNPM_CONFIG_PM_ON_FAIL: ignore
 
       - name: Create Release Pull Request or Publish to npm
         id: changesets
@@ -46,4 +56,4 @@ jobs:
           commit: 'chore: version packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PNPM_CONFIG_PM_ON_FAIL: ignore
