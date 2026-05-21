@@ -163,9 +163,9 @@ router.route({ path: 'gated' })
   .handler(fn);
 ```
 
-### `.siwx()` on paid routes — pay once, identity-gated replays
+### `.siwx()` on paid routes. Pay once, identity-gated replays
 
-`.paid()` and `.upTo()` compose with `.siwx()` for a pay-once-then-replay-for-free model. The first request settles normally (x402 payment); on success the wallet is recorded in the entitlement KV. Subsequent requests that present a valid SIWX signature for that wallet skip payment and run the handler directly. On `.upTo()` routes, `charge(amount)` becomes a no-op on the SIWX replay path — the handler can keep calling it unconditionally.
+`.paid()` and `.upTo()` compose with `.siwx()` for a pay-once-then-replay-for-free model. The first request settles normally (x402 payment); on success the wallet is recorded in the entitlement KV. Subsequent requests that present a valid SIWX signature for that wallet skip payment and run the handler directly. On `.upTo()` routes, `charge(amount)` becomes a no-op on the SIWX replay path. The handler can continue to call the route unconditionally.
 
 ```typescript
 router.route({ path: 'inbox' })
@@ -174,6 +174,8 @@ router.route({ path: 'inbox' })
 ```
 
 `.metered()` is mutually exclusive with `.siwx()` — per-tick MPP billing has no entitlement model — and the builder throws at registration if you combine them.
+
+> **Gotcha:** serverless / multi-instance deployments must provide a real `kvStore` (Upstash / Vercel KV) — without one the entitlement is kept in a per-process `Map`, so a wallet that paid on instance A is treated as unpaid on instance B and the user gets charged again.
 
 ## Pricing
 
