@@ -53,13 +53,13 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 | `MPP_CURRENCY` | when MPP is enabled | Tempo currency address. Use `TEMPO_USDC_ADDRESS` for Tempo USDC. |
 | `TEMPO_RPC_URL` | when MPP is enabled | Authenticated Tempo JSON-RPC endpoint. Public `rpc.tempo.xyz` returns 401. |
 | `MPP_OPERATOR_KEY` | no | Signs server-side close/settle. When set, MPP session mode is enabled automatically (required for `.metered()`: both streaming and request-mode per-tick billing). Address must equal the payee. |
-| `MPP_FEE_PAYER_KEY` | no | Sponsors client gas for channel open/topUp. Must resolve to a different address than `MPP_OPERATOR_KEY` (Tempo rejects fee-delegated txs where `sender === feePayer`). |
+| `MPP_FEE_PAYER_KEY` | no | Sponsors client gas for channel open/topUp. Must resolve to a different address than `MPP_OPERATOR_KEY` (Tempo rejects fee-delegated txs where `sender === feePayer`). **Omit to make clients pay their own gas** — the right default for most paid APIs. **If you set it, the resulting address must hold native Tempo gas before any traffic**, otherwise every paid call fails with a generic `Payment verification failed` HTTP response while the real `insufficient funds for gas` error only surfaces via the `RouterPlugin.onAlert` / `onError` hooks. |
 
 ### Other
 
 | Var | Required | Purpose |
 |-----|----------|---------|
-| `BASE_URL` | yes | Origin URL (`https://api.example.com`). Load-bearing: used as the 402 realm, OpenAPI server URL, and MPP memo prefix. Must match the public domain. |
+| `BASE_URL` | yes | Origin URL (`https://api.example.com`). Load-bearing: used as the 402 realm, OpenAPI server URL, and MPP memo prefix. Must match the public domain. **Required at build time, not just runtime** — `next build` collects `/openapi.json` and `/.well-known/x402` by calling into route handlers, and `createRouterFromEnv` validates env eagerly, so a missing value fails the build with `missing_base_url`. On Vercel, use the stable production alias (`<project>.vercel.app` or your custom domain), **not** the per-deployment URL (`<project>-<hash>-<scope>.vercel.app`). |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | no | Upstash / Vercel KV. Backs SIWX nonce, SIWX entitlement, and MPP replay. In-memory fallback is unsafe in serverless production. Providing a Kv Store is highly recommended. |
 
 ## Quick start

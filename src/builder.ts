@@ -106,6 +106,8 @@ type BuilderState<TBody> = {
   description: string | undefined;
   path: string | undefined;
   method: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH';
+  /** True once the user has called `.method()` — disables the auto-derive at register time. */
+  methodExplicit: boolean;
   apiKeyResolver: ((key: string) => unknown | Promise<unknown>) | undefined;
   providerName: string | undefined;
   providerConfig: ProviderConfig | undefined;
@@ -159,6 +161,7 @@ export class RouteBuilder<
       description: undefined,
       path: undefined,
       method: 'POST',
+      methodExplicit: false,
       apiKeyResolver: undefined,
       providerName: undefined,
       providerConfig: undefined,
@@ -695,8 +698,11 @@ export class RouteBuilder<
   }
 
   /**
-   * Override the HTTP method advertised in discovery. Defaults to `POST`, or
-   * `GET` when `.query()` has been called.
+   * Override the HTTP method advertised in discovery. Auto-derived when not
+   * called: `GET` when `.query()`, `.siwx()`, or `.unprotected()` is used
+   * without a `.body()` schema; `POST` otherwise (including any route that
+   * declares a body, `.paid()` / `.upTo()` / `.metered()` without `.query()`,
+   * and `.apiKey()`). Call `.method()` to override the auto-derived value.
    *
    * @example
    * ```ts
@@ -706,6 +712,7 @@ export class RouteBuilder<
   method(m: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH'): this {
     const next = this.fork();
     next.#s.method = m;
+    next.#s.methodExplicit = true;
     return next;
   }
 
@@ -797,6 +804,26 @@ export class RouteBuilder<
     return this.register(fn as unknown as RouteHandler, true);
   }
 
+  /**
+   * Pick the HTTP method to advertise when the user hasn't called `.method()`:
+   *   1. `.method()` called → that value.
+   *   2. `.query()` declared → GET (cleared via `.method()` if needed).
+   *   3. `.body()` declared → POST (bodies belong on POST by convention).
+   *   4. `.siwx()` or `.unprotected()` with no body → GET (matches `export const GET`).
+   *   5. Otherwise → POST (paid/upTo/metered/apiKey routes without bodies).
+   *
+   * Keeps the long-standing POST default for paid routes that omit `.body()`,
+   * while making the `.siwx()` / `.unprotected()` examples in the README emit
+   * the GET verb operators actually export from their Next.js route files.
+   */
+  private resolveMethod(): 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH' {
+    if (this.#s.methodExplicit) return this.#s.method;
+    if (this.#s.querySchema) return 'GET';
+    if (this.#s.bodySchema) return 'POST';
+    if (this.#s.siwxEnabled || this.#s.authMode === 'unprotected') return 'GET';
+    return 'POST';
+  }
+
   private register(
     handlerFn: RouteHandler,
     streaming: boolean,
@@ -865,6 +892,8 @@ export class RouteBuilder<
       this.#s.hasOutputExample,
     );
 
+    const effectiveMethod = this.resolveMethod();
+
     const entry: RouteEntry = {
       key: this.#s.key,
       authMode: this.#s.authMode!,
@@ -880,7 +909,7 @@ export class RouteBuilder<
       outputExample: this.#s.hasOutputExample ? this.#s.outputExample : undefined,
       description: this.#s.description,
       path: this.#s.path,
-      method: this.#s.method,
+      method: effectiveMethod,
       maxPrice: this.#s.maxPrice,
       minPrice: this.#s.minPrice,
       payTo: this.#s.payTo,

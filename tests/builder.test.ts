@@ -470,3 +470,77 @@ describe('registration-time safety', () => {
     ).toThrow('.outputExample() does not satisfy .output() schema');
   });
 });
+
+describe('HTTP method auto-derive', () => {
+  it('.siwx() without a body schema defaults to GET', () => {
+    const { builder, registry } = makeBuilder('siwx/no-body');
+    builder.siwx().handler(async () => ({ ok: true }));
+    expect(registry.get('siwx/no-body')?.method).toBe('GET');
+  });
+
+  it('.unprotected() without a body schema defaults to GET', () => {
+    const { builder, registry } = makeBuilder('unprotected/no-body');
+    builder.unprotected().handler(async () => ({ ok: true }));
+    expect(registry.get('unprotected/no-body')?.method).toBe('GET');
+  });
+
+  it('.siwx() with a body schema stays POST', () => {
+    const { builder, registry } = makeBuilder('siwx/with-body');
+    builder
+      .siwx()
+      .body(bodySchema)
+      .handler(async () => ({ ok: true }));
+    expect(registry.get('siwx/with-body')?.method).toBe('POST');
+  });
+
+  it('.siwx() with .query() stays GET', () => {
+    const { builder, registry } = makeBuilder('siwx/with-query');
+    builder
+      .siwx()
+      .query(querySchema)
+      .handler(async () => ({ ok: true }));
+    expect(registry.get('siwx/with-query')?.method).toBe('GET');
+  });
+
+  it('explicit .method() always wins over auto-derive', () => {
+    const { builder, registry } = makeBuilder('siwx/explicit-delete');
+    builder
+      .siwx()
+      .method('DELETE')
+      .handler(async () => ({ ok: true }));
+    expect(registry.get('siwx/explicit-delete')?.method).toBe('DELETE');
+  });
+
+  it('.method() ordering is irrelevant — set before .siwx() also wins', () => {
+    const { builder, registry } = makeBuilder('siwx/explicit-before');
+    builder
+      .method('PUT')
+      .siwx()
+      .handler(async () => ({ ok: true }));
+    expect(registry.get('siwx/explicit-before')?.method).toBe('PUT');
+  });
+
+  it('.paid() without a body schema keeps POST default', () => {
+    const { builder, registry } = makeBuilder('paid/no-body');
+    builder.paid('0.01').handler(async () => ({ ok: true }));
+    expect(registry.get('paid/no-body')?.method).toBe('POST');
+  });
+
+  it('.paid() with .query() flips to GET (existing .query() behavior)', () => {
+    const { builder, registry } = makeBuilder('paid/with-query');
+    builder
+      .paid('0.01')
+      .query(querySchema)
+      .handler(async () => ({ ok: true }));
+    expect(registry.get('paid/with-query')?.method).toBe('GET');
+  });
+
+  it('.paid().siwx() with no body defaults to GET (entitlement replay flow)', () => {
+    const { builder, registry } = makeBuilder('paid/siwx/no-body');
+    builder
+      .paid('0.01')
+      .siwx()
+      .handler(async () => ({ ok: true }));
+    expect(registry.get('paid/siwx/no-body')?.method).toBe('GET');
+  });
+});
