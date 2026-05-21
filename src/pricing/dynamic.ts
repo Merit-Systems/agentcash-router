@@ -34,11 +34,8 @@ export class DynamicPricing implements PricingStrategy {
         error: err instanceof Error ? err.stack : String(err),
         body,
       });
-      if (this.opts.maxPrice) {
-        this.alert('warn', `Using maxPrice ${this.opts.maxPrice} as fallback after pricing error`);
-        return this.opts.maxPrice;
-      }
-      throw err;
+      this.alert('warn', `Using maxPrice ${this.opts.maxPrice} as fallback after pricing error`);
+      return this.opts.maxPrice;
     }
     if (!isPositiveDecimal(priced)) {
       throw new HttpError(
@@ -63,7 +60,6 @@ export class DynamicPricing implements PricingStrategy {
   }
 
   private cap(raw: string, body: unknown): string {
-    if (!this.opts.maxPrice) return raw;
     let overCap: boolean;
     try {
       overCap = compareDecimals(raw, this.opts.maxPrice) > 0;

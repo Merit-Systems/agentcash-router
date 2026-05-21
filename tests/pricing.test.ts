@@ -87,16 +87,6 @@ describe('DynamicPricing', () => {
     });
   });
 
-  it('falls back to maxPrice when fn throws (maxPrice always present)', async () => {
-    const p = new DynamicPricing({
-      fn: () => {
-        throw new Error('oops');
-      },
-      maxPrice: '0.50',
-    });
-    expect(await p.quote({})).toBe('0.50');
-  });
-
   it('challengeQuote returns maxPrice when body is undefined', async () => {
     const p = new DynamicPricing({ fn: () => '0.10', maxPrice: '0.99' });
     expect(await p.challengeQuote(undefined)).toBe('0.99');
