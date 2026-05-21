@@ -893,6 +893,27 @@ describe('query schema validation', () => {
     expect(res.status).toBe(400);
   });
 
+  it('siwx: invalid query with MPP credential returns 400 (validation runs)', async () => {
+    const entry = makeEntry({
+      authMode: 'siwx',
+      protocols: [],
+      pricing: undefined,
+      querySchema,
+      method: 'GET',
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const mppPayload = Buffer.from(JSON.stringify({ payer: 'did:pkh:eip155:1:0xMPP' })).toString(
+      'base64',
+    );
+    const res = await handler(
+      new NextRequest('http://localhost:3000/api/test?limit=abc', {
+        method: 'GET',
+        headers: { Authorization: `Payment ${mppPayload}` },
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
   it('unprotected: missing query still returns 400 (no challenge to issue)', async () => {
     const entry = makeEntry({
       authMode: 'unprotected',
