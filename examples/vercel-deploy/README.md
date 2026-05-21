@@ -6,15 +6,15 @@ The demo API is a fortune teller. Out of the box it exercises `.paid()`, `.upTo(
 
 ## Deploy
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fagentcash-router&root-directory=examples%2Fvercel-deploy&project-name=agentcash-fortune-api&repository-name=agentcash-fortune-api&demo-title=AgentCash%20Router%20Fortune%20API&demo-description=Pay-per-call%20fortune%20API%20on%20x402%20and%20MPP&demo-url=https%3A%2F%2Fagentcash.dev&env=EVM_PAYEE_ADDRESS%2CCDP_API_KEY_ID%2CCDP_API_KEY_SECRET&envDescription=Wallet%20that%20receives%20payments%20%2B%20Coinbase%20Developer%20Platform%20API%20keys%20for%20the%20default%20x402%20facilitator.&envLink=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fagentcash-router%2Fblob%2Fmain%2Fexamples%2Fvercel-deploy%2FREADME.md%23environment-variables&stores=%5B%7B%22type%22%3A%22kv%22%7D%5D&skippable-integrations=1)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fagentcash-router%2Ftree%2Fmain%2Fexamples%2Fvercel-deploy&project-name=agentcash-fortune-api&repository-name=agentcash-fortune-api&demo-title=AgentCash%20Router%20Fortune%20API&demo-description=Pay-per-call%20fortune%20API%20on%20x402&demo-url=https%3A%2F%2Fagentcash.dev&env=EVM_PAYEE_ADDRESS%2CCDP_API_KEY_ID%2CCDP_API_KEY_SECRET&envDescription=Wallet%20that%20receives%20payments%20%2B%20Coinbase%20Developer%20Platform%20API%20keys%20for%20the%20default%20x402%20facilitator.&envLink=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fagentcash-router%2Fblob%2Fmain%2Fexamples%2Fvercel-deploy%2FREADME.md%23environment-variables&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22upstash%22%2C%22productSlug%22%3A%22upstash-kv%22%2C%22protocol%22%3A%22storage%22%7D%5D&skippable-integrations=1)
 
 The deploy button:
 
-- clones this directory only (Vercel handles the monorepo subdirectory)
-- prompts for the three required env vars with inline help
-- provisions a **Vercel KV** store automatically (skippable) — required for production-safe SIWX entitlements and MPP replay protection
-- names the project `agentcash-fortune-api` (rename in the UI before deploying if you want)
-- auto-derives `BASE_URL` from your Vercel production URL — no manual step
+- **Clones only this directory** into a fresh repo in the user's GitHub (Vercel reads the `/tree/main/examples/vercel-deploy` segment of the URL and creates a standalone repo with just these files — the rest of `agentcash-router` is not cloned).
+- Prompts for the three required env vars with inline help.
+- Provisions an **Upstash Redis** store (skippable) — required for production-safe SIWX entitlements. Without a real KV store, in-memory state is per-Lambda-instance and pay-once-then-replay routes break at scale.
+- Names the project `agentcash-fortune-api` (rename in the UI before deploying if you want).
+- Auto-derives `BASE_URL` from `VERCEL_PROJECT_PRODUCTION_URL` — no manual step.
 
 ## Environment variables
 
