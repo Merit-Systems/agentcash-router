@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.10.0
+
+### Minor Changes
+
+- e747a67: Require `maxPrice` on dynamic pricing routes to prevent zero-dollar challenges on bare probes
+
 ## 1.9.4
 
 ### Patch Changes
