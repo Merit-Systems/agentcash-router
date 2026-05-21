@@ -175,7 +175,7 @@ router.route({ path: 'inbox' })
 
 `.metered()` is mutually exclusive with `.siwx()` — per-tick MPP billing has no entitlement model — and the builder throws at registration if you combine them.
 
-> **Gotcha:** serverless / multi-instance deployments must provide a real `kvStore` (Upstash / Vercel KV) — without one the entitlement is kept in a per-process `Map`, so a wallet that paid on instance A is treated as unpaid on instance B and the user gets charged again.
+> **Gotcha:** serverless / multi-instance deployments must provide a real `kvStore` (Upstash / Vercel KV). Without one the entitlement is kept in a per-process `Map`, so a wallet that paid on instance A is treated as unpaid on instance B and the user gets charged again.
 
 ## Pricing
 
