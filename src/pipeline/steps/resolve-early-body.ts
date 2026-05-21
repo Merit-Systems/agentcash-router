@@ -23,7 +23,8 @@ export async function resolveEarlyBody(args: {
 
   const earlyClone = ctx.request.clone() as NextRequest;
   const earlyResult = await parseBody(ctx, earlyClone);
-  if (!earlyResult.ok) return { ok: false, response: earlyResult.response };
+  // Soft-fail: let the 402 challenge use maxPrice / highest tier as fallback.
+  if (!earlyResult.ok) return { ok: true, earlyBody: undefined };
 
   const validateErr = await runValidate(ctx, earlyResult.data);
   if (validateErr) return { ok: false, response: validateErr };

@@ -422,7 +422,7 @@ describe('discovery probe (x402scan prober)', () => {
   }
 
   describe('x402 routes', () => {
-    it('returns 400 with dynamic pricing and empty probe body', async () => {
+    it('returns 402 challenge with dynamic pricing and empty probe body', async () => {
       const entry = makeEntry({
         pricing: (_body: unknown) => '0.05',
         maxPrice: '5.00',
@@ -430,11 +430,11 @@ describe('discovery probe (x402scan prober)', () => {
       });
       const handler = createRequestHandler(entry, async () => ({}), makeDeps());
       const res = await handler(makeX402ScanProbe());
-      expect(res.status).toBe(400);
-      expect(res.headers.get('PAYMENT-REQUIRED')).toBeNull();
+      expect(res.status).toBe(402);
+      expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
     });
 
-    it('returns 400 with no body at all when dynamic pricing needs body data', async () => {
+    it('returns 402 challenge with no body at all when dynamic pricing needs body data', async () => {
       const entry = makeEntry({
         pricing: (_body: unknown) => '0.05',
         maxPrice: '5.00',
@@ -444,10 +444,11 @@ describe('discovery probe (x402scan prober)', () => {
       // No body, no Content-Type — bare probe
       const req = new NextRequest('http://localhost:3000/api/test', { method: 'POST' });
       const res = await handler(req);
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(402);
+      expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
     });
 
-    it('returns 400 when probe body fails schema validation', async () => {
+    it('returns 402 challenge when probe body fails schema validation (uses maxPrice)', async () => {
       const pricingFn = vi.fn((_body: unknown) => '0.05');
       const entry = makeEntry({
         pricing: pricingFn,
@@ -456,13 +457,13 @@ describe('discovery probe (x402scan prober)', () => {
       });
       const handler = createRequestHandler(entry, async () => ({}), makeDeps());
       const res = await handler(makeX402ScanProbe());
-      expect(res.status).toBe(400);
-      expect(res.headers.get('PAYMENT-REQUIRED')).toBeNull();
-      // Pricing function should NOT be called — body was invalid
+      expect(res.status).toBe(402);
+      expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
+      // Pricing function should NOT be called — body parse failed, challengeQuote uses maxPrice
       expect(pricingFn).not.toHaveBeenCalled();
     });
 
-    it('returns 400 for schema-excluded enum values before payment challenge', async () => {
+    it('returns 402 challenge for schema-excluded enum values (uses maxPrice)', async () => {
       const pricingFn = vi.fn((body: unknown) => {
         const tier = (body as { tier: string }).tier;
         return tier === 'short-10mb' ? '0.005' : '2.00';
@@ -483,8 +484,8 @@ describe('discovery probe (x402scan prober)', () => {
 
       const res = await handler(req);
 
-      expect(res.status).toBe(400);
-      expect(res.headers.get('PAYMENT-REQUIRED')).toBeNull();
+      expect(res.status).toBe(402);
+      expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
       expect(pricingFn).not.toHaveBeenCalled();
     });
 
@@ -506,7 +507,48 @@ describe('discovery probe (x402scan prober)', () => {
       expect(pricingFn).toHaveBeenCalled();
     });
 
-    it('returns 400 when validateFn exists but body fails parse', async () => {
+    it('returns error when probe sends valid body but validateFn rejects', async () => {
+      const entry = makeEntry({
+        pricing: (_body: unknown) => '0.05',
+        maxPrice: '5.00',
+        bodySchema,
+        validateFn: () => {
+          throw Object.assign(new Error('Domain already taken'), { status: 409 });
+        },
+      });
+      const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+      const req = new NextRequest('http://localhost:3000/api/test', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'taken.com' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const res = await handler(req);
+      expect(res.status).toBe(409);
+      expect(res.headers.get('PAYMENT-REQUIRED')).toBeNull();
+    });
+
+    it('returns 402 with accurate price when probe sends valid body and validateFn passes', async () => {
+      const pricingFn = vi.fn((_body: unknown) => '0.05');
+      const validateFn = vi.fn();
+      const entry = makeEntry({
+        pricing: pricingFn,
+        maxPrice: '5.00',
+        bodySchema,
+        validateFn,
+      });
+      const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+      const req = new NextRequest('http://localhost:3000/api/test', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'available.com' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const res = await handler(req);
+      expect(res.status).toBe(402);
+      expect(validateFn).toHaveBeenCalled();
+      expect(pricingFn).toHaveBeenCalled();
+    });
+
+    it('returns 402 challenge when validateFn exists but body fails parse', async () => {
       const validateFn = vi.fn();
       const entry = makeEntry({
         pricing: (_body: unknown) => '0.05',
@@ -516,12 +558,13 @@ describe('discovery probe (x402scan prober)', () => {
       });
       const handler = createRequestHandler(entry, async () => ({}), makeDeps());
       const res = await handler(makeX402ScanProbe());
-      expect(res.status).toBe(400);
-      // validateFn should NOT be called — body failed parse
+      expect(res.status).toBe(402);
+      expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
+      // validateFn should NOT be called — body failed parse, soft-failed to 402
       expect(validateFn).not.toHaveBeenCalled();
     });
 
-    it('returns 400 with an Invalid JSON error for malformed request bodies', async () => {
+    it('returns 402 challenge for malformed JSON request bodies', async () => {
       const entry = makeEntry({
         pricing: (_body: unknown) => '0.05',
         maxPrice: '5.00',
@@ -534,14 +577,13 @@ describe('discovery probe (x402scan prober)', () => {
         headers: { 'Content-Type': 'application/json' },
       });
       const res = await handler(req);
-      expect(res.status).toBe(400);
-      expect(res.headers.get('PAYMENT-REQUIRED')).toBeNull();
-      expect((await res.json()).error).toBe('Invalid JSON');
+      expect(res.status).toBe(402);
+      expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
     });
   });
 
   describe('MPP routes', () => {
-    it('returns 400 with dynamic pricing and empty probe body', async () => {
+    it('returns 402 challenge with dynamic pricing and empty probe body', async () => {
       const entry = makeMPPEntry({
         pricing: (_body: unknown) => '0.05',
         maxPrice: '5.00',
@@ -549,11 +591,11 @@ describe('discovery probe (x402scan prober)', () => {
       });
       const handler = createRequestHandler(entry, async () => ({}), makeMPPDeps());
       const res = await handler(makeX402ScanProbe());
-      expect(res.status).toBe(400);
-      expect(res.headers.get('WWW-Authenticate')).toBeNull();
+      expect(res.status).toBe(402);
+      expect(res.headers.get('WWW-Authenticate')).toBeTruthy();
     });
 
-    it('returns 400 with no body at all when dynamic pricing needs body data', async () => {
+    it('returns 402 challenge with no body at all when dynamic pricing needs body data', async () => {
       const entry = makeMPPEntry({
         pricing: (_body: unknown) => '0.05',
         maxPrice: '5.00',
@@ -562,12 +604,13 @@ describe('discovery probe (x402scan prober)', () => {
       const handler = createRequestHandler(entry, async () => ({}), makeMPPDeps());
       const req = new NextRequest('http://localhost:3000/api/test', { method: 'POST' });
       const res = await handler(req);
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(402);
+      expect(res.headers.get('WWW-Authenticate')).toBeTruthy();
     });
   });
 
   describe('dual-protocol routes', () => {
-    it('returns 400 before x402 or MPP challenges when probe body is invalid', async () => {
+    it('returns 402 challenge with both x402 and MPP headers when probe body is invalid', async () => {
       const entry = makeEntry({
         pricing: (_body: unknown) => '0.05',
         maxPrice: '5.00',
@@ -577,9 +620,9 @@ describe('discovery probe (x402scan prober)', () => {
       const deps = makeDeps({ mppx: createFakeMppx() });
       const handler = createRequestHandler(entry, async () => ({}), deps);
       const res = await handler(makeX402ScanProbe());
-      expect(res.status).toBe(400);
-      expect(res.headers.get('PAYMENT-REQUIRED')).toBeNull();
-      expect(res.headers.get('WWW-Authenticate')).toBeNull();
+      expect(res.status).toBe(402);
+      expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
+      expect(res.headers.get('WWW-Authenticate')).toBeTruthy();
     });
   });
 
@@ -710,10 +753,34 @@ describe('query schema validation', () => {
     expect(handlerRan).toBe(false);
   });
 
-  it('paid: invalid query returns 400 instead of a 402 challenge', async () => {
+  it('paid: missing query on unpaid probe returns 402 challenge (not 400)', async () => {
+    const entry = makeEntry({ querySchema, method: 'GET' });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(new NextRequest('http://localhost:3000/api/test'));
+    expect(res.status).toBe(402);
+    expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
+  });
+
+  it('paid: invalid query on unpaid probe returns 402 challenge (not 400)', async () => {
     const entry = makeEntry({ querySchema, method: 'GET' });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
     const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=abc'));
+    expect(res.status).toBe(402);
+    expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
+  });
+
+  it('paid: invalid query with payment header returns 400', async () => {
+    const entry = makeEntry({ querySchema, method: 'GET' });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const payload = Buffer.from(JSON.stringify({ payer: KNOWN_PAYER, amount: '0.02' })).toString(
+      'base64',
+    );
+    const res = await handler(
+      new NextRequest('http://localhost:3000/api/test?limit=abc', {
+        method: 'GET',
+        headers: { 'PAYMENT-SIGNATURE': payload },
+      }),
+    );
     expect(res.status).toBe(400);
   });
 
@@ -722,6 +789,48 @@ describe('query schema validation', () => {
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
     const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=5'));
     expect(res.status).toBe(402);
+  });
+
+  it('upto GET with query params returns 402 on bare probe', async () => {
+    const entry = makeEntry({
+      pricing: (_body: unknown) => '0.10',
+      maxPrice: '1.00',
+      billing: 'upto',
+      querySchema,
+      method: 'GET',
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(new NextRequest('http://localhost:3000/api/test'));
+    expect(res.status).toBe(402);
+    expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
+  });
+
+  it('upto GET with invalid query params returns 402 on bare probe', async () => {
+    const entry = makeEntry({
+      pricing: (_body: unknown) => '0.10',
+      maxPrice: '1.00',
+      billing: 'upto',
+      querySchema,
+      method: 'GET',
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=abc'));
+    expect(res.status).toBe(402);
+    expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
+  });
+
+  it('metered MPP route with query params returns 402 on bare probe', async () => {
+    const entry = makeMPPEntry({
+      pricing: '0.01',
+      maxPrice: '0.05',
+      billing: 'metered',
+      querySchema,
+      method: 'GET',
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeMPPDeps());
+    const res = await handler(new NextRequest('http://localhost:3000/api/test'));
+    expect(res.status).toBe(402);
+    expect(res.headers.get('WWW-Authenticate')).toBeTruthy();
   });
 });
 
