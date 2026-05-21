@@ -385,6 +385,11 @@ export class RouteBuilder<
         `route '${this.#s.key}': price '${pricing}' must be a positive decimal string`,
       );
     }
+    if (typeof pricing === 'function' && next.#s.maxPrice === undefined) {
+      throw new Error(
+        `route '${this.#s.key}': dynamic pricing requires maxPrice — without it, bare probes would advertise a $0 challenge`,
+      );
+    }
     if (next.#s.maxPrice !== undefined && !isPositiveDecimal(next.#s.maxPrice)) {
       throw new Error(
         `route '${this.#s.key}': maxPrice '${next.#s.maxPrice}' must be a positive decimal string`,

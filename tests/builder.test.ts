@@ -147,9 +147,16 @@ describe('fluent chain', () => {
 });
 
 describe('registration-time safety', () => {
-  it('body-derived pricing without maxPrice is allowed (trust mode)', () => {
+  it('dynamic pricing without maxPrice throws at registration', () => {
     const { builder } = makeBuilder();
-    expect(() => builder.paid((_body: unknown) => '0.01')).not.toThrow();
+    expect(() => builder.paid((_body: unknown) => '0.01')).toThrow(
+      'dynamic pricing requires maxPrice',
+    );
+  });
+
+  it('dynamic pricing with maxPrice is allowed', () => {
+    const { builder } = makeBuilder();
+    expect(() => builder.paid((_body: unknown) => '0.01', { maxPrice: '5.00' })).not.toThrow();
   });
 
   it('.handler() without an auth mode throws at registration for JS callers', () => {
@@ -281,9 +288,9 @@ describe('registration-time safety', () => {
 
   it("minPrice 'abc' throws at registration", () => {
     const { builder } = makeBuilder();
-    expect(() => builder.paid((_body: unknown) => '0.01', { minPrice: 'abc' })).toThrow(
-      'must be a positive decimal',
-    );
+    expect(() =>
+      builder.paid((_body: unknown) => '0.01', { maxPrice: '5.00', minPrice: 'abc' }),
+    ).toThrow('must be a positive decimal');
   });
 
   it('.validate() without .body() throws at registration', () => {

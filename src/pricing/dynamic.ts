@@ -44,7 +44,7 @@ export class DynamicPricing implements PricingStrategy {
   }
 
   challengeQuote(body: unknown | undefined): Promise<string> {
-    if (body === undefined) return Promise.resolve(this.opts.maxPrice ?? '0');
+    if (body === undefined) return Promise.resolve(this.opts.maxPrice!);
     return this.quote(body);
   }
 
@@ -52,7 +52,7 @@ export class DynamicPricing implements PricingStrategy {
     return {
       mode: 'dynamic',
       min: this.opts.minPrice ?? '0',
-      max: this.opts.maxPrice ?? '0',
+      max: this.opts.maxPrice!,
     };
   }
 
