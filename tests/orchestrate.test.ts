@@ -529,14 +529,12 @@ describe('discovery probe (x402scan prober)', () => {
 
     it('returns 402 with accurate price when probe sends valid body and validateFn passes', async () => {
       const pricingFn = vi.fn((_body: unknown) => '0.05');
-      let validateCalled = false;
+      const validateFn = vi.fn();
       const entry = makeEntry({
         pricing: pricingFn,
         maxPrice: '5.00',
         bodySchema,
-        validateFn: () => {
-          validateCalled = true;
-        },
+        validateFn,
       });
       const handler = createRequestHandler(entry, async () => ({}), makeDeps());
       const req = new NextRequest('http://localhost:3000/api/test', {
@@ -546,7 +544,7 @@ describe('discovery probe (x402scan prober)', () => {
       });
       const res = await handler(req);
       expect(res.status).toBe(402);
-      expect(validateCalled).toBe(true);
+      expect(validateFn).toHaveBeenCalled();
       expect(pricingFn).toHaveBeenCalled();
     });
 
@@ -797,7 +795,6 @@ describe('query schema validation', () => {
     const entry = makeEntry({
       pricing: (_body: unknown) => '0.10',
       maxPrice: '1.00',
-      billing: 'upto',
       querySchema,
       method: 'GET',
     });
@@ -811,7 +808,6 @@ describe('query schema validation', () => {
     const entry = makeEntry({
       pricing: (_body: unknown) => '0.10',
       maxPrice: '1.00',
-      billing: 'upto',
       querySchema,
       method: 'GET',
     });
