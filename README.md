@@ -119,6 +119,7 @@ export const POST = router.route({ path: 'search' })
 // app/api/inbox/status/route.ts
 export const GET = router.route({ path: 'inbox/status' })
   .siwx()
+  .method('GET')
   .handler(async ({ wallet }) => getStatus(wallet));
 ```
 
