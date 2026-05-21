@@ -26,9 +26,9 @@ export async function runSiwxOnlyFlow(ctx: FlowCtx): Promise<NextResponse> {
     if (earlyBody.ok) {
       const validateErr = await runValidate(ctx, earlyBody.data);
       if (validateErr) return validateErr;
-    } else {
-      return earlyBody.response;
     }
+    // Soft-fail: if body parse fails, skip validateFn and issue the SIWX challenge.
+    // validateFn can't run without a parsed body anyway.
   }
 
   const siwxHeader = request.headers.get(HEADERS.SIWX);
