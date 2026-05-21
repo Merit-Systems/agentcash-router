@@ -6,7 +6,7 @@ export type DynamicPricingFn = (body: unknown) => string | Promise<string>;
 
 interface DynamicPricingOptions {
   fn: DynamicPricingFn;
-  maxPrice?: string;
+  maxPrice: string;
   minPrice?: string;
   route?: string;
   alert?: AlertFn;
@@ -15,7 +15,13 @@ interface DynamicPricingOptions {
 export class DynamicPricing implements PricingStrategy {
   readonly needsBody = true;
 
-  constructor(private readonly opts: DynamicPricingOptions) {}
+  constructor(private readonly opts: DynamicPricingOptions) {
+    if (!isPositiveDecimal(opts.maxPrice)) {
+      throw new Error(
+        `route '${opts.route ?? 'unknown'}': dynamic pricing requires a positive maxPrice, got '${opts.maxPrice}'`,
+      );
+    }
+  }
 
   async quote(body: unknown): Promise<string> {
     let priced: string;
@@ -44,7 +50,7 @@ export class DynamicPricing implements PricingStrategy {
   }
 
   challengeQuote(body: unknown | undefined): Promise<string> {
-    if (body === undefined) return Promise.resolve(this.opts.maxPrice!);
+    if (body === undefined) return Promise.resolve(this.opts.maxPrice);
     return this.quote(body);
   }
 
@@ -52,7 +58,7 @@ export class DynamicPricing implements PricingStrategy {
     return {
       mode: 'dynamic',
       min: this.opts.minPrice ?? '0',
-      max: this.opts.maxPrice!,
+      max: this.opts.maxPrice,
     };
   }
 
