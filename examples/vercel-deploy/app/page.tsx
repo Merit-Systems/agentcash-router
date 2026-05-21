@@ -24,6 +24,22 @@ const ROUTES: Array<{
     agentcashFlag: '-p x402',
   },
   {
+    path: '/api/fortune/llm',
+    method: 'POST',
+    mode: '.metered({ unitType: "request" })',
+    description: 'MPP session, request-mode metered billing. Returns 503 until MPP_OPERATOR_KEY is set.',
+    body: { prompt: 'Will I find love?' },
+    agentcashFlag: '-p mpp',
+  },
+  {
+    path: '/api/fortune/stream',
+    method: 'POST',
+    mode: '.metered({ unitType: "token" }).stream()',
+    description: 'MPP session, SSE streaming with per-token billing. Returns 503 until MPP_OPERATOR_KEY is set.',
+    body: { prompt: 'What awaits me?' },
+    agentcashFlag: '--stream',
+  },
+  {
     path: '/api/fortune/dynamic',
     method: 'POST',
     mode: '.paid(pricingFn)',

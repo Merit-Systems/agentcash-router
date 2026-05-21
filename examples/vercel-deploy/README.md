@@ -1,8 +1,8 @@
 # Deploy to Vercel · AgentCash Router
 
-A standalone Next.js template that ships a pay-per-call API on **x402**, powered by [`@agentcash/router`](https://www.npmjs.com/package/@agentcash/router). Deploy in one click, customize the routes, and you have an agent-callable API on a custom domain.
+A standalone Next.js template that ships a pay-per-call API on **x402** and **MPP**, powered by [`@agentcash/router`](https://www.npmjs.com/package/@agentcash/router). Deploy in one click, customize the routes, and you have an agent-callable API on a custom domain.
 
-The demo API is a fortune teller. Out of the box it exercises `.paid()`, `.upTo()`, `.paid(fn)` (body-derived pricing), `.siwx()`, and `.upTo().siwx()` (pay-once-then-replay). MPP streaming and request-mode billing are supported by `@agentcash/router` but require extra env vars and are not enabled by default — see [Enabling MPP](#enabling-mpp) below.
+The demo API is a fortune teller. Every router pricing mode is exercised: `.paid()` fixed-price, `.upTo()` handler-driven, `.paid(fn)` body-derived, `.metered()` request and streaming (MPP), `.siwx()` identity, and `.upTo().siwx()` pay-once-then-replay. x402 routes work the moment you deploy; MPP routes 503 until you set `MPP_OPERATOR_KEY` — one extra env var flips them on. See [Enabling MPP](#enabling-mpp) below.
 
 ## Deploy
 
@@ -25,8 +25,8 @@ The deploy button:
 | `CDP_API_KEY_SECRET` | yes | Matching CDP secret. |
 | `BASE_URL` | no | Origin URL used as the 402 realm, OpenAPI server URL, and MPP memo prefix. **On Vercel, leave unset** — this template auto-derives it from `VERCEL_PROJECT_PRODUCTION_URL`. Set explicitly only if you want to pin a custom domain. |
 | `SOLANA_PAYEE_ADDRESS` | no | When set, the router also accepts Solana payments. `.upTo()` is Base-only and `.metered()` is MPP-only; Solana clients can only pay static-priced `.paid()` routes. |
-| `MPP_SECRET_KEY`, `MPP_CURRENCY`, `TEMPO_RPC_URL` | no | Enable MPP (Tempo). Setting `MPP_SECRET_KEY` toggles MPP on. Public `rpc.tempo.xyz` returns 401 — use the authenticated URL. |
-| `MPP_OPERATOR_KEY` | no | Enables MPP session mode (required for `.metered()` request and streaming routes). Must resolve to the same address as `EVM_PAYEE_ADDRESS`. |
+| `MPP_OPERATOR_KEY` | no | Enables MPP. Tempo-compatible EVM private key that resolves to the same address as `EVM_PAYEE_ADDRESS`. Setting this flips on the `.metered()` routes; the template auto-derives `MPP_CURRENCY`, `TEMPO_RPC_URL`, and `MPP_SECRET_KEY` from it. See [Enabling MPP](#enabling-mpp). |
+| `MPP_SECRET_KEY`, `MPP_CURRENCY`, `TEMPO_RPC_URL` | no | Override the auto-derived MPP defaults. Useful for production-grade `MPP_SECRET_KEY` (`openssl rand -hex 32`) or an authenticated Tempo RPC URL. |
 | `MPP_FEE_PAYER_KEY` | no | Sponsors client gas for MPP channel open/topUp. Must differ from the operator address. Holding native Tempo gas is your responsibility. Omit to make clients pay their own gas — the right default. |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | auto on Vercel | Vercel KV / Upstash credentials. Auto-injected when you attach the KV store via the deploy button. Without these, in-memory SIWX/MPP state lives per-Lambda-instance and breaks at scale. |
 
@@ -57,16 +57,23 @@ The landing page at `/` lists every endpoint with a copy-pasteable `npx agentcas
 
 ## Enabling MPP
 
-MPP (multi-payment protocol on Tempo) adds streaming and per-request metered billing on top of x402. To enable in this template:
+MPP (multi-payment protocol on Tempo) adds per-request metered billing and SSE token-by-token streaming on top of x402. The route files are already in the template — they just refuse to register until MPP is configured. To turn them on:
 
-1. Set `MPP_SECRET_KEY`, `MPP_CURRENCY`, `TEMPO_RPC_URL`, and `MPP_OPERATOR_KEY` in your Vercel project. `MPP_OPERATOR_KEY` must resolve to the same address as `EVM_PAYEE_ADDRESS`.
-2. Copy `examples/fortune/app/api/fortune/llm/` and `examples/fortune/app/api/fortune/stream/` from the repo into this template's `app/api/fortune/`.
-3. Add the imports to `lib/routes.ts`:
-   ```ts
-   import '@/app/api/fortune/llm/route';
-   import '@/app/api/fortune/stream/route';
-   ```
-4. Push. The new routes appear in `/openapi.json` and `/.well-known/x402` automatically.
+1. **Pick an MPP operator key.** It must be a Tempo-compatible EVM private key that resolves to the same address as `EVM_PAYEE_ADDRESS`. This key signs MPP session close transactions, so treat it like a hot wallet (small balance, narrow scope).
+
+2. **Add `MPP_OPERATOR_KEY` to your Vercel project's environment variables** and trigger a redeploy. That's the minimum.
+
+   The template auto-derives the other three MPP env vars from this single value:
+
+   | Var | Default | When you'd override |
+   |---|---|---|
+   | `MPP_CURRENCY` | Tempo USDC (`0x20c0...8b50`) | Charging in a non-USDC Tempo currency |
+   | `TEMPO_RPC_URL` | `https://rpc.tempo.xyz` | Public endpoint can return 401 under load — paste an authenticated URL here when that happens |
+   | `MPP_SECRET_KEY` | SHA-256 of `agentcash-template-mpp:` + operator key (stable across deploys, never written to disk) | Production hardness — generate your own with `openssl rand -hex 32` |
+
+3. **Optional: sponsor client gas with `MPP_FEE_PAYER_KEY`.** A separate Tempo key (different address from the operator) that pays for MPP channel open/topUp on behalf of clients. Must hold native Tempo gas before any traffic — otherwise paid calls fail with a generic "Payment verification failed" while the actual `insufficient funds` error only surfaces through the router's `onAlert` plugin hook (which this template forwards to the Vercel Functions log). Omit to make clients pay their own gas — the right default for most paid APIs.
+
+4. **Verify.** After the redeploy completes, hit `/openapi.json` and the MPP routes should now appear in the spec. Or run `npx agentcash fetch <origin>/api/fortune/llm --method POST -p mpp -b '{"prompt":"test"}'` and confirm settlement.
 
 ## Customizing for your own API
 
