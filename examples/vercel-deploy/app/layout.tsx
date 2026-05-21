@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 
 export const metadata: Metadata = {
-  title: 'AgentCash Router · Fortune API',
+  title: 'AgentCash Router · Fortune Demo',
   description:
     'Pay-per-call fortune API on x402 and MPP, deployed in one click to Vercel.',
 };

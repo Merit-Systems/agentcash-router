@@ -101,7 +101,7 @@ export default async function Page() {
           </span>
         </div>
         <h1 style={{ fontSize: 40, margin: '0 0 12px', lineHeight: 1.1 }}>
-          Fortune API
+          Fortune Demo
         </h1>
         <p style={{ fontSize: 18, color: '#bbb', margin: 0 }}>
           A pay-per-call API on x402 and MPP, deployed live at{' '}

@@ -43,8 +43,9 @@ const loggingPlugin: RouterPlugin = {
 };
 
 export const router = createRouterFromEnv({
-  title: 'Fortune API',
-  description: 'Pay-per-call fortune-telling API. Powered by @agentcash/router.',
+  title: 'Fortune Demo',
+  description:
+    'Pay-per-call fortune-telling API on x402 and MPP. Powered by @agentcash/router.',
   guidance:
     'POST /api/fortune for a single fortune ($0.001, x402 exact or MPP one-shot). ' +
     'POST /api/fortune/premium for x402 upto (handler calls charge(amount)). ' +
