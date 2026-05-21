@@ -1266,6 +1266,33 @@ describe('paid + SIWX acceleration', () => {
     const accelerated = await handler(makeSIWXRequest(KNOWN_PAYER, 'post-payment-nonce'));
     expect(accelerated.status).toBe(200);
   });
+
+  it('upto + SIWX fast path provides a no-op charge() to entitled handlers', async () => {
+    const deps = makeDeps();
+    await deps.entitlementStore.grant('test/route', '0xwallet');
+    const entry = makeEntry({
+      authMode: 'paid',
+      billing: 'upto',
+      pricing: '0.05',
+      maxPrice: '0.05',
+      siwxEnabled: true,
+    });
+
+    let chargeCalled = false;
+    const handler = createRequestHandler(
+      entry,
+      async (ctx) => {
+        await (ctx as { charge: (amount: string) => Promise<void> }).charge('0.01');
+        chargeCalled = true;
+        return { ok: true };
+      },
+      deps,
+    );
+
+    const res = await handler(makeSIWXRequest('0xWallet', 'upto-entitled-nonce'));
+    expect(res.status).toBe(200);
+    expect(chargeCalled).toBe(true);
+  });
 });
 
 describe('unprotected route', () => {

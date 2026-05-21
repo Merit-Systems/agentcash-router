@@ -320,6 +320,12 @@ export class RouteBuilder<
         `route '${this.#s.key}': Cannot combine .paid(), .upTo(), and .metered() — pick one pricing mode.`,
       );
     }
+    if (this.#s.siwxEnabled && billing === 'metered') {
+      throw new Error(
+        `route '${this.#s.key}': Cannot combine .siwx() and .metered() — per-tick MPP billing has no entitlement model. ` +
+          `Use .paid() or .upTo() with .siwx(), or drop .siwx() for metered routes.`,
+      );
+    }
 
     const next = this.fork() as RouteBuilder<
       TBody,
@@ -400,12 +406,16 @@ export class RouteBuilder<
 
   /**
    * Require Sign-In-with-X wallet identity on this route — clients prove
-   * control of a wallet via a signed challenge. Combine with `.paid()` to gate
-   * a paid route on a verified wallet identity.
+   * control of a wallet via a signed challenge. Composes with `.paid()` and
+   * `.upTo()` for pay-once-then-replay: the first request settles normally,
+   * subsequent requests with a valid SIWX signature for the same wallet skip
+   * payment (on `.upTo()`, `charge(amount)` becomes a no-op on the replay).
+   * Mutually exclusive with `.metered()`.
    *
    * @example
    * ```ts
    * router.route('profile').siwx().handler(async ({ wallet }) => getProfile(wallet));
+   * router.route('inbox').paid('0.01').siwx().handler(async ({ wallet }) => getInbox(wallet));
    * ```
    */
   siwx(): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, Bill> {
@@ -418,6 +428,13 @@ export class RouteBuilder<
     if (this.#s.apiKeyResolver) {
       throw new Error(
         `route '${this.#s.key}': Combining .siwx() and .apiKey() is not supported on the same route.`,
+      );
+    }
+
+    if (this.#s.billing === 'metered') {
+      throw new Error(
+        `route '${this.#s.key}': Cannot combine .metered() and .siwx() — per-tick MPP billing has no entitlement model. ` +
+          `Use .paid() or .upTo() with .siwx(), or drop .siwx() for metered routes.`,
       );
     }
 

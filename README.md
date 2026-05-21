@@ -163,6 +163,18 @@ router.route({ path: 'gated' })
   .handler(fn);
 ```
 
+### `.siwx()` on paid routes — pay once, identity-gated replays
+
+`.paid()` and `.upTo()` compose with `.siwx()` for a pay-once-then-replay-for-free model. The first request settles normally (x402 payment); on success the wallet is recorded in the entitlement KV. Subsequent requests that present a valid SIWX signature for that wallet skip payment and run the handler directly. On `.upTo()` routes, `charge(amount)` becomes a no-op on the SIWX replay path — the handler can keep calling it unconditionally.
+
+```typescript
+router.route({ path: 'inbox' })
+  .paid('0.01').siwx()  // first call pays $0.01, later calls present a SIWX sig instead
+  .handler(async ({ wallet }) => getInbox(wallet));
+```
+
+`.metered()` is mutually exclusive with `.siwx()` — per-tick MPP billing has no entitlement model — and the builder throws at registration if you combine them.
+
 ## Pricing
 
 `.paid()`, `.upTo()`, and `.metered()` are mutually exclusive pricing modes: pick one per route.
