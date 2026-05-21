@@ -65,6 +65,30 @@ $CLI fetch http://localhost:3000/api/fortune/stream \
 
 Expect: `"protocol": "mpp"`, a `channelId`, and a concatenated stream of `{"event":"prompt"}`, ~9 `{"event":"token"}` lines, and one trailing `{"event":"done"}`. Route is `.metered({ tickCost: '0.0001', maxPrice: '0.05', unitType: 'token' }).stream(async function*)` — each `charge()` call inside the generator bills one tick.
 
+### 6. x402 `upto` + SIWX entitlement — pay once, replay free
+
+Tests `.upTo('0.005').siwx()` — the first call pays via x402, settles on chain, and grants a SIWX entitlement to the paying wallet. The second call from the same wallet presents a SIWX signature instead of a payment and runs the handler for free. The handler's `charge('0.002')` accumulates real billing on the first call; on the SIWX replay it's a no-op (server-side fast path drops it).
+
+**First call — pay:**
+
+```bash
+$CLI fetch http://localhost:3000/api/fortune/membership --method POST -p x402
+```
+
+Expect: `"protocol": "x402"`, `"network": "base"`, a `transactionHash`, and the response includes a `wallet` address. Server has now written `('fortune/membership', <wallet>)` to the entitlement KV.
+
+**Second call — same wallet, no payment:**
+
+```bash
+$CLI fetch http://localhost:3000/api/fortune/membership --method POST
+```
+
+Expect: `200 OK`, **no `transactionHash`**, same `wallet` echoed back. `agentcash fetch` defaults to "auth before payment", so it presents the SIWX signature; the server's `trySiwxFastPath` matches the entitlement and runs the handler without re-settling.
+
+**Verifying the no-op charge:** the handler returns `200` even though it calls `await charge('0.002')` on the replay. If charge were unhandled on the SIWX fast path, the response would be a 500 (`charge is not a function`). Seeing the response body confirms the no-op wiring in `src/pipeline/flows/static/static-invoke.ts`.
+
+**Resetting between runs:** the entitlement is keyed by route + wallet and persists for the KV TTL (in-memory by default, ~24h on Upstash/Vercel KV). To re-test the paid path with the same wallet, restart the dev server (in-memory KV resets) or use a fresh wallet.
+
 ## Solana variant
 
 The example also advertises Solana in `x402.accepts` when `SOLANA_PAYEE_ADDRESS` is set. Solana support is narrower than Base/Tempo: **only x402 `exact` (static-priced) and SIWX work** — `upto` is Base-only and MPP is Tempo-only, so tests 2/3/4/5 above have no Solana counterpart.

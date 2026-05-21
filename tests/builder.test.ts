@@ -14,7 +14,10 @@ function makeDeps(): RouterDeps {
     entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: '0x1234',
     network: 'eip155:8453',
-    x402Accepts: [{ network: 'eip155:8453', payTo: '0x1234' }],
+    x402Accepts: [
+      { network: 'eip155:8453', payTo: '0x1234' },
+      { scheme: 'upto', network: 'eip155:8453', payTo: '0x1234' },
+    ],
   };
 }
 
@@ -111,6 +114,36 @@ describe('fluent chain', () => {
     expect(entry?.siwxEnabled).toBe(true);
     expect(entry?.protocols).toEqual(['x402']);
   });
+
+  it('.upTo().siwx().handler() enables SIWX acceleration on upto routes', () => {
+    const { builder, registry } = makeBuilder('upto/siwx');
+    const handler = builder
+      .upTo('0.05')
+      .siwx()
+      .handler(async ({ charge }) => {
+        await charge('0.01');
+        return { ok: true };
+      });
+
+    expect(typeof handler).toBe('function');
+    const entry = registry.get('upto/siwx');
+    expect(entry?.authMode).toBe('paid');
+    expect(entry?.billing).toBe('upto');
+    expect(entry?.siwxEnabled).toBe(true);
+    expect(entry?.protocols).toEqual(['x402']);
+  });
+
+  it('.siwx().upTo().handler() is order-agnostic', () => {
+    const { builder, registry } = makeBuilder('siwx/upto');
+    builder
+      .siwx()
+      .upTo('0.05')
+      .handler(async () => ({ ok: true }));
+    const entry = registry.get('siwx/upto');
+    expect(entry?.authMode).toBe('paid');
+    expect(entry?.billing).toBe('upto');
+    expect(entry?.siwxEnabled).toBe(true);
+  });
 });
 
 describe('registration-time safety', () => {
@@ -160,6 +193,20 @@ describe('registration-time safety', () => {
     const { builder } = makeBuilder('paid/upto');
     expect(() => builder.paid('0.01').upTo('0.05')).toThrow(
       'Cannot combine .paid(), .upTo(), and .metered()',
+    );
+  });
+
+  it('rejects .siwx() after .metered()', () => {
+    const { builder } = makeBuilder('metered/siwx');
+    expect(() => builder.metered({ tickCost: '0.001', maxPrice: '0.05' }).siwx()).toThrow(
+      'Cannot combine .metered() and .siwx()',
+    );
+  });
+
+  it('rejects .metered() after .siwx()', () => {
+    const { builder } = makeBuilder('siwx/metered');
+    expect(() => builder.siwx().metered({ tickCost: '0.001', maxPrice: '0.05' })).toThrow(
+      'Cannot combine .siwx() and .metered()',
     );
   });
 

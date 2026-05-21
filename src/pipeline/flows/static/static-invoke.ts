@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import type { HandlerContext, HandlerPaymentContext } from '../../../types.js';
+import type { HandlerContext, HandlerPaymentContext, UptoHandlerContext } from '../../../types.js';
 import { HttpError } from '../../../types.js';
 import type { FlowCtx, StaticRequestResult } from '../../steps/types.js';
 
@@ -19,7 +19,10 @@ export function invokeUnauthed(
   account: unknown,
   body: unknown,
 ): Promise<StaticRequestResult> {
-  return runHandler(ctx, buildHandlerCtx(ctx, wallet, account, body, null));
+  const base = buildHandlerCtx(ctx, wallet, account, body, null);
+  if (ctx.routeEntry.billing !== 'upto') return runHandler(ctx, base);
+  const uptoCtx: UptoHandlerContext = { ...base, charge: async () => {} };
+  return runHandler(ctx, uptoCtx);
 }
 
 function buildHandlerCtx(
