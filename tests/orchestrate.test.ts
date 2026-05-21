@@ -791,10 +791,11 @@ describe('query schema validation', () => {
     expect(res.status).toBe(402);
   });
 
-  it('dynamic-priced GET with query params returns 402 on bare probe', async () => {
+  it('upto GET with query params returns 402 on bare probe', async () => {
     const entry = makeEntry({
       pricing: (_body: unknown) => '0.10',
       maxPrice: '1.00',
+      billing: 'upto',
       querySchema,
       method: 'GET',
     });
@@ -804,10 +805,11 @@ describe('query schema validation', () => {
     expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
   });
 
-  it('dynamic-priced GET with invalid query params returns 402 on bare probe', async () => {
+  it('upto GET with invalid query params returns 402 on bare probe', async () => {
     const entry = makeEntry({
       pricing: (_body: unknown) => '0.10',
       maxPrice: '1.00',
+      billing: 'upto',
       querySchema,
       method: 'GET',
     });
@@ -815,6 +817,20 @@ describe('query schema validation', () => {
     const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=abc'));
     expect(res.status).toBe(402);
     expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
+  });
+
+  it('metered MPP route with query params returns 402 on bare probe', async () => {
+    const entry = makeMPPEntry({
+      pricing: '0.01',
+      maxPrice: '0.05',
+      billing: 'metered',
+      querySchema,
+      method: 'GET',
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeMPPDeps());
+    const res = await handler(new NextRequest('http://localhost:3000/api/test'));
+    expect(res.status).toBe(402);
+    expect(res.headers.get('WWW-Authenticate')).toBeTruthy();
   });
 });
 
