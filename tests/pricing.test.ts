@@ -25,9 +25,22 @@ describe('FixedPricing', () => {
 });
 
 describe('DynamicPricing', () => {
+  it('rejects construction without maxPrice', () => {
+    expect(
+      () => new DynamicPricing({ fn: () => '0.01', maxPrice: undefined as unknown as string }),
+    ).toThrow('requires a positive maxPrice');
+  });
+
+  it('rejects construction with zero maxPrice', () => {
+    expect(() => new DynamicPricing({ fn: () => '0.01', maxPrice: '0' })).toThrow(
+      'requires a positive maxPrice',
+    );
+  });
+
   it('calls the price function with parsed body', async () => {
     const p = new DynamicPricing({
       fn: (body) => ((body as { size: number }).size * 0.01).toFixed(2),
+      maxPrice: '1.00',
     });
     expect(await p.quote({ size: 5 })).toBe('0.05');
   });
@@ -35,6 +48,7 @@ describe('DynamicPricing', () => {
   it('supports async price functions', async () => {
     const p = new DynamicPricing({
       fn: async (body) => ((body as { tier: string }).tier === 'pro' ? '1.00' : '0.50'),
+      maxPrice: '1.00',
     });
     expect(await p.quote({ tier: 'pro' })).toBe('1.00');
   });
@@ -73,15 +87,6 @@ describe('DynamicPricing', () => {
     });
   });
 
-  it('rethrows when fn throws and no maxPrice fallback', async () => {
-    const p = new DynamicPricing({
-      fn: () => {
-        throw new Error('oops');
-      },
-    });
-    await expect(p.quote({})).rejects.toThrow('oops');
-  });
-
   it('challengeQuote returns maxPrice when body is undefined', async () => {
     const p = new DynamicPricing({ fn: () => '0.10', maxPrice: '0.99' });
     expect(await p.challengeQuote(undefined)).toBe('0.99');
@@ -97,13 +102,17 @@ describe('DynamicPricing', () => {
     expect(p.describe()).toEqual({ mode: 'dynamic', min: '0.01', max: '5.00' });
   });
 
-  it('throws 500 when fn returns a malformed amount and no maxPrice', async () => {
-    const p = new DynamicPricing({ fn: () => 'not-a-price', route: 'test/route' });
-    await expect(p.quote({})).rejects.toMatchObject({ name: 'HttpError', status: 500 });
+  it('caps malformed fn return to maxPrice', async () => {
+    const p = new DynamicPricing({
+      fn: () => 'not-a-price',
+      maxPrice: '1.00',
+      route: 'test/route',
+    });
+    expect(await p.quote({})).toBe('1.00');
   });
 
-  it('throws 500 when fn returns a non-positive amount and no maxPrice', async () => {
-    const p = new DynamicPricing({ fn: () => '0', route: 'test/route' });
+  it('throws 500 when fn returns a non-positive amount', async () => {
+    const p = new DynamicPricing({ fn: () => '0', maxPrice: '1.00', route: 'test/route' });
     await expect(p.quote({})).rejects.toMatchObject({ status: 500 });
   });
 });
@@ -209,8 +218,12 @@ describe('selectPricing', () => {
     expect(selectPricing('0.02')).toBeInstanceOf(FixedPricing);
   });
 
-  it('returns DynamicPricing for function', () => {
-    expect(selectPricing(() => '0.01')).toBeInstanceOf(DynamicPricing);
+  it('returns DynamicPricing for function with maxPrice', () => {
+    expect(selectPricing(() => '0.01', { maxPrice: '1.00' })).toBeInstanceOf(DynamicPricing);
+  });
+
+  it('throws for function without maxPrice', () => {
+    expect(() => selectPricing(() => '0.01')).toThrow('dynamic pricing requires maxPrice');
   });
 
   it('returns TieredPricing for tiered config', () => {

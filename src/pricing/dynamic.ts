@@ -6,7 +6,7 @@ export type DynamicPricingFn = (body: unknown) => string | Promise<string>;
 
 interface DynamicPricingOptions {
   fn: DynamicPricingFn;
-  maxPrice?: string;
+  maxPrice: string;
   minPrice?: string;
   route?: string;
   alert?: AlertFn;
@@ -15,7 +15,13 @@ interface DynamicPricingOptions {
 export class DynamicPricing implements PricingStrategy {
   readonly needsBody = true;
 
-  constructor(private readonly opts: DynamicPricingOptions) {}
+  constructor(private readonly opts: DynamicPricingOptions) {
+    if (!isPositiveDecimal(opts.maxPrice)) {
+      throw new Error(
+        `route '${opts.route ?? 'unknown'}': dynamic pricing requires a positive maxPrice, got '${opts.maxPrice}'`,
+      );
+    }
+  }
 
   async quote(body: unknown): Promise<string> {
     let priced: string;
@@ -28,11 +34,8 @@ export class DynamicPricing implements PricingStrategy {
         error: err instanceof Error ? err.stack : String(err),
         body,
       });
-      if (this.opts.maxPrice) {
-        this.alert('warn', `Using maxPrice ${this.opts.maxPrice} as fallback after pricing error`);
-        return this.opts.maxPrice;
-      }
-      throw err;
+      this.alert('warn', `Using maxPrice ${this.opts.maxPrice} as fallback after pricing error`);
+      return this.opts.maxPrice;
     }
     if (!isPositiveDecimal(priced)) {
       throw new HttpError(
@@ -44,7 +47,7 @@ export class DynamicPricing implements PricingStrategy {
   }
 
   challengeQuote(body: unknown | undefined): Promise<string> {
-    if (body === undefined) return Promise.resolve(this.opts.maxPrice ?? '0');
+    if (body === undefined) return Promise.resolve(this.opts.maxPrice);
     return this.quote(body);
   }
 
@@ -52,12 +55,11 @@ export class DynamicPricing implements PricingStrategy {
     return {
       mode: 'dynamic',
       min: this.opts.minPrice ?? '0',
-      max: this.opts.maxPrice ?? '0',
+      max: this.opts.maxPrice,
     };
   }
 
   private cap(raw: string, body: unknown): string {
-    if (!this.opts.maxPrice) return raw;
     let overCap: boolean;
     try {
       overCap = compareDecimals(raw, this.opts.maxPrice) > 0;

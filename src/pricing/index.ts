@@ -19,6 +19,9 @@ export function selectPricing(
   }
 
   if (typeof raw === 'function') {
+    if (!deps.maxPrice) {
+      throw new Error(`route '${deps.route ?? 'unknown'}': dynamic pricing requires maxPrice`);
+    }
     return new DynamicPricing({
       fn: raw as DynamicPricingFn,
       maxPrice: deps.maxPrice,

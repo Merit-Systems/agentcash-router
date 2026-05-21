@@ -627,7 +627,7 @@ describe('discovery probe (x402scan prober)', () => {
   });
 
   describe('SIWX routes', () => {
-    it('returns 400 when body fails parse before SIWX validation', async () => {
+    it('returns 402 SIWX challenge when body fails parse (soft-fail, not 400)', async () => {
       const validateFn = vi.fn();
       const entry = makeEntry({
         authMode: 'siwx',
@@ -637,8 +637,8 @@ describe('discovery probe (x402scan prober)', () => {
       });
       const handler = createRequestHandler(entry, async () => ({}), makeDeps());
       const res = await handler(makeX402ScanProbe());
-      expect(res.status).toBe(400);
-      // validateFn should NOT be called — body failed parse
+      expect(res.status).toBe(402);
+      // validateFn should NOT be called — body failed parse, soft-failed to challenge
       expect(validateFn).not.toHaveBeenCalled();
     });
 
@@ -831,6 +831,100 @@ describe('query schema validation', () => {
     const res = await handler(new NextRequest('http://localhost:3000/api/test'));
     expect(res.status).toBe(402);
     expect(res.headers.get('WWW-Authenticate')).toBeTruthy();
+  });
+
+  it('siwx: missing query on bare probe returns 402 challenge (not 400)', async () => {
+    const entry = makeEntry({
+      authMode: 'siwx',
+      protocols: [],
+      pricing: undefined,
+      querySchema,
+      method: 'GET',
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(new NextRequest('http://localhost:3000/api/test'));
+    expect(res.status).toBe(402);
+  });
+
+  it('siwx: invalid query on bare probe returns 402 challenge (not 400)', async () => {
+    const entry = makeEntry({
+      authMode: 'siwx',
+      protocols: [],
+      pricing: undefined,
+      querySchema,
+      method: 'GET',
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=abc'));
+    expect(res.status).toBe(402);
+  });
+
+  it('siwx: valid query on bare probe still returns 402 challenge', async () => {
+    const entry = makeEntry({
+      authMode: 'siwx',
+      protocols: [],
+      pricing: undefined,
+      querySchema,
+      method: 'GET',
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=5'));
+    expect(res.status).toBe(402);
+  });
+
+  it('siwx: invalid query with SIWX header returns 400 (validation runs)', async () => {
+    const entry = makeEntry({
+      authMode: 'siwx',
+      protocols: [],
+      pricing: undefined,
+      querySchema,
+      method: 'GET',
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const siwxPayload = Buffer.from(JSON.stringify({ wallet: '0xWallet', nonce: 'n1' })).toString(
+      'base64',
+    );
+    const res = await handler(
+      new NextRequest('http://localhost:3000/api/test?limit=abc', {
+        method: 'GET',
+        headers: { 'SIGN-IN-WITH-X': siwxPayload },
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('siwx: invalid query with MPP credential returns 400 (validation runs)', async () => {
+    const entry = makeEntry({
+      authMode: 'siwx',
+      protocols: [],
+      pricing: undefined,
+      querySchema,
+      method: 'GET',
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const mppPayload = Buffer.from(JSON.stringify({ payer: 'did:pkh:eip155:1:0xMPP' })).toString(
+      'base64',
+    );
+    const res = await handler(
+      new NextRequest('http://localhost:3000/api/test?limit=abc', {
+        method: 'GET',
+        headers: { Authorization: `Payment ${mppPayload}` },
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('unprotected: missing query still returns 400 (no challenge to issue)', async () => {
+    const entry = makeEntry({
+      authMode: 'unprotected',
+      protocols: [],
+      pricing: undefined,
+      querySchema,
+      method: 'GET',
+    });
+    const handler = createRequestHandler(entry, async () => ({}), makeDeps());
+    const res = await handler(new NextRequest('http://localhost:3000/api/test'));
+    expect(res.status).toBe(400);
   });
 });
 
