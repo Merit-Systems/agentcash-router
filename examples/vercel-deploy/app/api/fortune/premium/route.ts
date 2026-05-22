@@ -1,0 +1,67 @@
+import { z } from 'zod';
+import { router } from '@/lib/router';
+
+// x402 upto — handler-driven metered pricing settled with EIP-2612 gas-sponsoring on Base.
+// Also exercises `.validate()` running BEFORE the 402 challenge.
+//   agentcash fetch <origin>/api/fortune/premium --method POST -p x402 -b '{"category":"love"}'
+
+const PremiumSchema = z.object({
+  category: z.enum(['love', 'career', 'health']),
+});
+
+// In a real app this would be persisted (Vercel KV, Postgres, etc.).
+// In-memory is fine for the demo — it just resets between cold starts.
+const categoryUsage = new Map<string, number>([['health', 3]]);
+const CATEGORY_LIMIT = 3;
+
+const premiumFortunes: Record<string, string[]> = {
+  love: [
+    'A romantic surprise awaits you this week.',
+    'Your heart will find what it seeks.',
+    'Love is closer than you think.',
+  ],
+  career: [
+    'A promotion is on the horizon.',
+    'Your hard work will be recognized soon.',
+    'New opportunities are coming your way.',
+  ],
+  health: [
+    'Your energy levels will soar.',
+    'A healthy habit will transform your life.',
+    'Listen to your body — it knows what it needs.',
+  ],
+};
+
+export const POST = router
+  .route('fortune/premium')
+  .body(PremiumSchema)
+  .upTo('0.005')
+  .validate(async (body) => {
+    const count = categoryUsage.get(body.category) ?? 0;
+    if (count >= CATEGORY_LIMIT) {
+      throw Object.assign(
+        new Error(
+          `Category '${body.category}' limit reached (${CATEGORY_LIMIT}/day). Try another category.`,
+        ),
+        { status: 429 },
+      );
+    }
+  })
+  .description('Premium fortune with category selection (rate limited per category)')
+  .handler(async ({ body, charge }) => {
+    const count = categoryUsage.get(body.category) ?? 0;
+    categoryUsage.set(body.category, count + 1);
+
+    const fortunes = premiumFortunes[body.category];
+    const fortune = fortunes[Math.floor(Math.random() * fortunes.length)];
+
+    const amount = (Math.random() * 0.004 + 0.0005).toFixed(6);
+
+    await charge(amount);
+    return {
+      fortune,
+      category: body.category,
+      remaining: CATEGORY_LIMIT - (count + 1),
+      timestamp: new Date().toISOString(),
+    };
+  });

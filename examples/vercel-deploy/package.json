@@ -1,0 +1,26 @@
+{
+  "name": "agentcash-router-vercel-deploy",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Deploy a pay-per-call API on x402 + MPP to Vercel in one click. Fortune demo powered by @agentcash/router.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agentcash/router": "^1.9.4",
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "viem": "^2.47.6",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.0.6",
+    "@types/react-dom": "^19.0.2",
+    "typescript": "^5.7.3"
+  }
+}
