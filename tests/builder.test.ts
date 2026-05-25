@@ -293,6 +293,37 @@ describe('registration-time safety', () => {
     ).toThrow('must be a positive decimal');
   });
 
+  it('.description() over 400 chars throws at registration for paid x402 routes', () => {
+    const { builder } = makeBuilder('long/desc');
+    const longDescription = 'x'.repeat(401);
+    expect(() =>
+      builder
+        .paid('0.01')
+        .description(longDescription)
+        .handler(async () => ({})),
+    ).toThrow(/\.description\(\) is 401 chars; must be ≤ 400 chars/);
+  });
+
+  it('.description() at 400 chars is accepted', () => {
+    const { builder } = makeBuilder('ok/desc');
+    expect(() =>
+      builder
+        .paid('0.01')
+        .description('x'.repeat(400))
+        .handler(async () => ({})),
+    ).not.toThrow();
+  });
+
+  it('.description() length is not enforced on non-paid routes', () => {
+    const { builder } = makeBuilder('siwx/long-desc');
+    expect(() =>
+      builder
+        .siwx()
+        .description('x'.repeat(1000))
+        .handler(async () => ({})),
+    ).not.toThrow();
+  });
+
   it('.validate() without .body() throws at registration', () => {
     const { builder } = makeBuilder();
     expect(() =>

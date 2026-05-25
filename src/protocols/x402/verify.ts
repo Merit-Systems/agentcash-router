@@ -22,8 +22,15 @@ export interface VerifyPaymentFailure {
 
 export async function verifyX402Payment(opts: VerifyPaymentOptions) {
   const { server, request, price, accepts, report } = opts;
-  const payload = await readPaymentPayload(request);
-  if (!payload) return null;
+  const payment = await readPaymentPayload(request);
+  if (payment.kind === 'none') return null;
+  if (payment.kind === 'malformed') {
+    return invalidPaymentVerification({
+      reason: 'malformed_payment_header',
+      message: `X-PAYMENT header could not be decoded: ${payment.message}`,
+    });
+  }
+  const payload = payment.payload;
   const requirements = await buildExpectedRequirements(server, request, price, accepts, report);
   const matching = findVerifiableRequirements(server, requirements, payload);
   const accepted = payload.x402Version === 2 ? payload.accepted : undefined;
@@ -103,14 +110,26 @@ function matchesStableFields(
   );
 }
 
-async function readPaymentPayload(request: Request): Promise<PaymentPayload | null> {
+type ReadPaymentResult =
+  | { kind: 'none' }
+  | { kind: 'malformed'; message: string }
+  | { kind: 'ok'; payload: PaymentPayload };
+
+async function readPaymentPayload(request: Request): Promise<ReadPaymentResult> {
   const paymentHeader =
     request.headers.get(HEADERS.X402_PAYMENT_SIGNATURE) ??
     request.headers.get(HEADERS.X402_PAYMENT_LEGACY);
-  if (!paymentHeader) return null;
+  if (!paymentHeader) return { kind: 'none' };
 
   const { decodePaymentSignatureHeader } = await import('@x402/core/http');
-  return decodePaymentSignatureHeader(paymentHeader);
+  try {
+    return { kind: 'ok', payload: decodePaymentSignatureHeader(paymentHeader) };
+  } catch (err) {
+    return {
+      kind: 'malformed',
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 function invalidPaymentVerification(failure?: VerifyPaymentFailure) {
