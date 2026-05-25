@@ -140,6 +140,41 @@ export interface MppProtocolInfo {
   currency?: string;
 }
 
+export interface MppTempoConfig {
+  /** `'tempo'` (default when omitted) self-custodies USDC on Tempo. */
+  provider?: 'tempo';
+  /** HMAC key for signing/verifying MPP challenge nonces. Persist across deploys — rotating invalidates outstanding 402 challenges. Falls back to `MPP_SECRET_KEY`. */
+  secretKey: string;
+  /** Tempo currency contract address (0x-prefixed). Use `TEMPO_USDC_ADDRESS` for USDC on Tempo. */
+  currency: string;
+  /** MPP payee address (EVM). Overrides `payeeAddress` for MPP only. Required when `payeeAddress` is unset. MUST equal `operatorKey`'s derived address when `session` is enabled. */
+  recipient?: string;
+  /** Tempo RPC URL for on-chain verification. Falls back to `TEMPO_RPC_URL`. */
+  rpcUrl?: string;
+  /** Hex private key. Signs channel close/settle; required for `session`. Address MUST equal `recipient`/payee — mppx asserts sender===payee on settle. Validated at init. */
+  operatorKey?: string;
+  /** Hex private key. Sponsors gas for client channel open/topUp. MUST resolve to a different address than `operatorKey` — Tempo rejects sender===feePayer. Validated at init. Omit to make clients pay their own gas. */
+  feePayerKey?: string;
+  /** Enables MPP payment-channel sessions for `.metered()` routes (registers both request and SSE session middleware). Also requires `mpp.operatorKey`. */
+  session?: {
+    /** Suggested deposit on the 402 challenge = `tickCost × depositMultiplier` USDC. Route `maxPrice` overrides. @default 10 */
+    depositMultiplier?: number;
+  };
+}
+
+export interface MppStripeConfig {
+  /** `'stripe'` delegates USDC custody to Stripe — the server mints a per-request Stripe PaymentIntent in `deposit` mode and uses the returned Tempo address as `tempo.charge` recipient. No Tempo RPC, no operator key, no EVM payee required. */
+  provider: 'stripe';
+  /** HMAC key for signing/verifying MPP challenge nonces. Persist across deploys — rotating invalidates outstanding 402 challenges. Falls back to `MPP_SECRET_KEY`. */
+  secretKey: string;
+  /** Stripe secret API key (`sk_live_*` or `sk_test_*`). Used to create the per-request crypto deposit PaymentIntent. */
+  stripeSecretKey: string;
+  /** Tempo currency contract address charged through Stripe's deposit. @default TEMPO_USDC_ADDRESS */
+  currency?: string;
+  /** Stripe API version pinned for crypto deposit support. @default '2026-03-04.preview' */
+  stripeApiVersion?: string;
+}
+
 export interface PaidOptions {
   protocols?: ProtocolType[];
   maxPrice?: string;
@@ -354,26 +389,8 @@ export interface RouterConfig {
   kvStore?: import('./kv-store/index.js').KvStore | { url: string; token: string };
   /** Centralized price map keyed by route ID. `.route(key)` auto-applies `.paid(prices[key])` when `key` is listed; per-route `.paid()` still works for keys not in the map. */
   prices?: Record<string, string>;
-  /** MPP (Tempo) payment-channel config. Required when `protocols` includes `'mpp'`. */
-  mpp?: {
-    /** HMAC key for signing/verifying MPP challenge nonces. Persist across deploys — rotating invalidates outstanding 402 challenges. Falls back to `MPP_SECRET_KEY`. */
-    secretKey: string;
-    /** Tempo currency contract address (0x-prefixed). Use `TEMPO_USDC_ADDRESS` for USDC on Tempo. */
-    currency: string;
-    /** MPP payee address (EVM). Overrides `payeeAddress` for MPP only. Required when `payeeAddress` is unset. MUST equal `operatorKey`'s derived address when `session` is enabled. */
-    recipient?: string;
-    /** Tempo RPC URL for on-chain verification. Falls back to `TEMPO_RPC_URL`. */
-    rpcUrl?: string;
-    /** Hex private key. Signs channel close/settle; required for `session`. Address MUST equal `recipient`/payee — mppx asserts sender===payee on settle. Validated at init. */
-    operatorKey?: string;
-    /** Hex private key. Sponsors gas for client channel open/topUp. MUST resolve to a different address than `operatorKey` — Tempo rejects sender===feePayer. Validated at init. Omit to make clients pay their own gas. */
-    feePayerKey?: string;
-    /** Enables MPP payment-channel sessions for `.metered()` routes (registers both request and SSE session middleware). Also requires `mpp.operatorKey`. */
-    session?: {
-      /** Suggested deposit on the 402 challenge = `tickCost × depositMultiplier` USDC. Route `maxPrice` overrides. @default 10 */
-      depositMultiplier?: number;
-    };
-  };
+  /** MPP payment config. Required when `protocols` includes `'mpp'`. Discriminated by `provider`: `'tempo'` self-custodies on Tempo; `'stripe'` delegates USDC custody to Stripe (Stripe mints a fresh deposit address per request and credits your Stripe balance on settlement). */
+  mpp?: MppTempoConfig | MppStripeConfig;
   /** Payment protocols to accept on paid routes unless overridden per route. @default ['x402'] */
   protocols?: ProtocolType[];
   /** When true, `.route('key')` is rejected (use `.route({ path })`) and custom `key !== path` is rejected. Prevents discovery/openapi drift. */

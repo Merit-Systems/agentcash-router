@@ -217,6 +217,15 @@ describe('registration-time safety', () => {
     );
   });
 
+  it('rejects .metered() when MPP provider is Stripe (charge-only)', () => {
+    const reg = new RouteRegistry();
+    const deps: RouterDeps = { ...makeDeps(), mppProvider: 'stripe' };
+    const builder = new RouteBuilder('stripe/metered', reg, deps);
+    expect(() =>
+      builder.metered({ tickCost: '0.001', maxPrice: '0.05' }).handler(async () => ({ ok: true })),
+    ).toThrow('.metered() is not supported with Stripe MPP');
+  });
+
   it('duplicate route key overwrites silently', () => {
     const reg = new RouteRegistry();
     const b1 = new RouteBuilder('dup/key', reg, makeDeps());

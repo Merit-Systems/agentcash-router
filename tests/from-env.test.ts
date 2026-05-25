@@ -111,6 +111,7 @@ describe('routerConfigFromEnv', () => {
     );
     expect(config.protocols).toEqual(['x402', 'mpp']);
     expect(config.mpp).toEqual({
+      provider: 'tempo',
       secretKey: 'secret',
       currency: TEMPO_USDC_ADDRESS,
       rpcUrl: 'https://tempo.example.com',
@@ -390,5 +391,83 @@ describe('routerConfigFromEnv', () => {
         'missing_discovery_title',
       ]);
     }
+  });
+
+  describe('Stripe MPP', () => {
+    function stripeEnv(overrides: Record<string, string | undefined> = {}) {
+      return {
+        BASE_URL: 'https://api.example.com',
+        STRIPE_SECRET_KEY: 'sk_test_stripe',
+        MPP_SECRET_KEY: 'hmac-secret',
+        ...overrides,
+      };
+    }
+
+    it('enables Stripe MPP, disables x402, omits payee/network/x402 from config', () => {
+      const config = routerConfigFromEnv(validOptions({ env: stripeEnv() }));
+      expect(config.protocols).toEqual(['mpp']);
+      expect(config.payeeAddress).toBeUndefined();
+      expect(config.network).toBeUndefined();
+      expect(config.x402).toBeUndefined();
+      expect(config.mpp).toEqual({
+        provider: 'stripe',
+        secretKey: 'hmac-secret',
+        stripeSecretKey: 'sk_test_stripe',
+        currency: TEMPO_USDC_ADDRESS,
+      });
+    });
+
+    it('requires MPP_SECRET_KEY when STRIPE_SECRET_KEY is set', () => {
+      try {
+        routerConfigFromEnv(
+          validOptions({ env: { BASE_URL: 'https://api.example.com', STRIPE_SECRET_KEY: 'sk' } }),
+        );
+        expect.fail('should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(RouterConfigError);
+        expect((error as RouterConfigError).issues.map((i) => i.code)).toContain(
+          'missing_mpp_secret_key',
+        );
+      }
+    });
+
+    it('rejects Stripe + x402 env vars together with stripe_x402_conflict', () => {
+      try {
+        routerConfigFromEnv(
+          validOptions({
+            env: stripeEnv({ EVM_PAYEE_ADDRESS: PAYEE, CDP_API_KEY_ID: 'id' }),
+          }),
+        );
+        expect.fail('should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(RouterConfigError);
+        const issue = (error as RouterConfigError).issues.find(
+          (i) => i.code === 'stripe_x402_conflict',
+        );
+        expect(issue, 'expected stripe_x402_conflict issue').toBeDefined();
+        expect(issue?.message).toContain('EVM_PAYEE_ADDRESS');
+        expect(issue?.message).toContain('CDP_API_KEY_ID');
+      }
+    });
+
+    it('rejects Stripe + Tempo MPP env vars together with stripe_tempo_conflict', () => {
+      try {
+        routerConfigFromEnv(
+          validOptions({
+            env: stripeEnv({
+              TEMPO_RPC_URL: 'https://rpc.example.com',
+              MPP_CURRENCY: TEMPO_USDC_ADDRESS,
+            }),
+          }),
+        );
+        expect.fail('should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(RouterConfigError);
+        const issue = (error as RouterConfigError).issues.find(
+          (i) => i.code === 'stripe_tempo_conflict',
+        );
+        expect(issue, 'expected stripe_tempo_conflict issue').toBeDefined();
+      }
+    });
   });
 });

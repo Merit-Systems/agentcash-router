@@ -23,6 +23,8 @@ export interface RouterDeps {
   entitlementStore: EntitlementStore;
   payeeAddress: string;
   mppRecipient?: string;
+  /** Discriminates Tempo self-custody (`'tempo'`, or null when MPP is disabled) from Stripe-delegated custody (`'stripe'`). Used by the builder to give Stripe-specific errors for unsupported features (e.g. `.metered()`). */
+  mppProvider?: 'tempo' | 'stripe' | null;
   network: string;
   x402FacilitatorsByNetwork?: Record<string, ResolvedX402Facilitator>;
   x402Accepts: X402AcceptConfig[];

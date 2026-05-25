@@ -29,6 +29,8 @@ export type RouterConfigIssueCode =
   | 'invalid_mpp_operator_key'
   | 'mpp_operator_equals_fee_payer'
   | 'mpp_operator_recipient_mismatch'
+  | 'stripe_x402_conflict'
+  | 'stripe_tempo_conflict'
   | 'missing_discovery_title'
   | 'missing_discovery_description'
   | 'missing_discovery_guidance'

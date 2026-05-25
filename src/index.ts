@@ -94,6 +94,10 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     }
   }
 
+  const mppProvider: 'tempo' | 'stripe' | null = config.mpp
+    ? (config.mpp.provider ?? 'tempo')
+    : null;
+  const tempoMpp = config.mpp && config.mpp.provider !== 'stripe' ? config.mpp : undefined;
   const deps: RouterDeps = {
     x402Server: null,
     initPromise: Promise.resolve(),
@@ -101,15 +105,16 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     nonceStore,
     entitlementStore,
     payeeAddress: config.payeeAddress ?? '',
-    mppRecipient: config.mpp?.recipient ?? config.payeeAddress,
+    mppRecipient: tempoMpp?.recipient ?? config.payeeAddress,
+    mppProvider,
     network,
     x402FacilitatorsByNetwork: undefined,
     x402Accepts,
     mppx: null,
     tempoClient: null,
     mppSessionConfig:
-      config.mpp?.session && config.mpp.operatorKey
-        ? { depositMultiplier: config.mpp.session.depositMultiplier ?? 10 }
+      tempoMpp?.session && tempoMpp.operatorKey
+        ? { depositMultiplier: tempoMpp.session.depositMultiplier ?? 10 }
         : null,
   };
 
