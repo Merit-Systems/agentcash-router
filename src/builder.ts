@@ -26,6 +26,8 @@ import { createRequestHandler } from './pipeline/orchestrate.js';
 import { isPositiveDecimal } from './pricing/format.js';
 import { validateExamples } from './validate-examples.js';
 
+const MAX_X402_DESCRIPTION_LENGTH = 400;
+
 type True = true;
 type False = false;
 
@@ -856,6 +858,18 @@ export class RouteBuilder<
       throw new Error(
         `route '${this.#s.key}': .stream() requires .metered() — ` +
           `static/free/upto routes can't meter per-chunk billing.`,
+      );
+    }
+    if (
+      this.#s.description !== undefined &&
+      this.#s.description.length > MAX_X402_DESCRIPTION_LENGTH &&
+      this.#s.pricing !== undefined &&
+      this.#s.protocols.includes('x402')
+    ) {
+      throw new Error(
+        `route '${this.#s.key}': .description() is ${this.#s.description.length} chars; ` +
+          `must be ≤ ${MAX_X402_DESCRIPTION_LENGTH} chars — the CDP x402 facilitator rejects ` +
+          `payments whose 402 challenge resource.description exceeds ~500 chars.`,
       );
     }
 

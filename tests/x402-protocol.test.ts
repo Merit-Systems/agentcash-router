@@ -38,4 +38,22 @@ describe('verifyX402Payment', () => {
       }),
     ).rejects.toThrow('x402 verification succeeded without a payer address');
   });
+
+  it('returns a structured failure for a malformed X-PAYMENT header instead of throwing', async () => {
+    const request = new Request('https://api.example.com/test', {
+      headers: { 'PAYMENT-SIGNATURE': 'bogus' },
+    });
+
+    const result = await verifyX402Payment({
+      server: new FakeX402Server(),
+      request,
+      price: '0.02',
+      accepts: [{ scheme: 'exact', network: 'eip155:8453', payTo: KNOWN_PAYEE }],
+    });
+
+    expect(result).toMatchObject({
+      valid: false,
+      failure: { reason: 'malformed_payment_header' },
+    });
+  });
 });
