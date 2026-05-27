@@ -1,4 +1,5 @@
 import { headers } from 'next/headers';
+import { CodeBlock } from './code-block';
 
 const ROUTES: Array<{
   path: string;
@@ -27,7 +28,8 @@ const ROUTES: Array<{
     path: '/api/fortune/llm',
     method: 'POST',
     mode: '.metered({ unitType: "request" })',
-    description: 'MPP session, request-mode metered billing. Returns 503 until MPP_OPERATOR_KEY is set.',
+    description:
+      'MPP session, request-mode metered billing. Returns 503 until MPP_OPERATOR_KEY is set.',
     body: { prompt: 'Will I find love?' },
     agentcashFlag: '-p mpp',
   },
@@ -35,7 +37,8 @@ const ROUTES: Array<{
     path: '/api/fortune/stream',
     method: 'POST',
     mode: '.metered({ unitType: "token" }).stream()',
-    description: 'MPP session, SSE streaming with per-token billing. Returns 503 until MPP_OPERATOR_KEY is set.',
+    description:
+      'MPP session, SSE streaming with per-token billing. Returns 503 until MPP_OPERATOR_KEY is set.',
     body: { prompt: 'What awaits me?' },
     agentcashFlag: '--stream',
   },
@@ -69,7 +72,10 @@ const ROUTES: Array<{
 ];
 
 const DISCOVERY = [
-  { path: '/openapi.json', description: 'AgentCash Discovery — OpenAPI 3.x with pricing extensions.' },
+  {
+    path: '/openapi.json',
+    description: 'AgentCash Discovery — OpenAPI 3.x with pricing extensions.',
+  },
   { path: '/.well-known/x402', description: 'x402 protocol discovery endpoint.' },
   { path: '/llms.txt', description: 'Agent-readable usage guidance.' },
 ];
@@ -84,6 +90,8 @@ async function getOrigin(): Promise<string> {
 
 export default async function Page() {
   const origin = await getOrigin();
+  const tryAgentcashCommand = `npx agentcash fetch ${origin}/api/fortune --method POST -p x402`;
+  const tryCurlCommand = `curl -X POST ${origin}/api/fortune`;
 
   return (
     <main style={{ maxWidth: 880, margin: '0 auto', padding: '64px 24px 96px' }}>
@@ -100,9 +108,7 @@ export default async function Page() {
             @agentcash/router · Vercel template
           </span>
         </div>
-        <h1 style={{ fontSize: 40, margin: '0 0 12px', lineHeight: 1.1 }}>
-          Fortune Demo
-        </h1>
+        <h1 style={{ fontSize: 40, margin: '0 0 12px', lineHeight: 1.1 }}>Fortune Demo</h1>
         <p style={{ fontSize: 18, color: '#bbb', margin: 0 }}>
           A pay-per-call API on x402 and MPP, deployed live at{' '}
           <code style={codeInline}>{origin}</code>.
@@ -115,21 +121,21 @@ export default async function Page() {
           The fastest path is the{' '}
           <a href="https://agentcash.dev" style={link} target="_blank" rel="noreferrer">
             AgentCash CLI
-          </a>
-          {' '}— a single wallet, no API keys, all endpoints work out of the box.
+          </a>{' '}
+          — a single wallet, no API keys, all endpoints work out of the box.
         </p>
-        <pre style={codeBlock}>
-{`npx agentcash fetch ${origin}/api/fortune --method POST -p x402`}
-        </pre>
-        <p style={p}>Or with curl — the router returns an HTTP 402 challenge you can settle manually:</p>
-        <pre style={codeBlock}>{`curl -X POST ${origin}/api/fortune`}</pre>
+        <CodeBlock code={tryAgentcashCommand} />
+        <p style={p}>
+          Or with curl — the router returns an HTTP 402 challenge you can settle manually:
+        </p>
+        <CodeBlock code={tryCurlCommand} />
       </section>
 
       <section style={section}>
         <h2 style={h2}>Endpoints</h2>
         <p style={p}>
-          Every route demonstrates a different @agentcash/router pricing or auth mode.
-          Source: <code style={codeInline}>app/api/fortune/</code>.
+          Every route demonstrates a different @agentcash/router pricing or auth mode. Source:{' '}
+          <code style={codeInline}>app/api/fortune/</code>.
         </p>
         <div style={{ display: 'grid', gap: 12 }}>
           {ROUTES.map((r) => (
@@ -140,11 +146,11 @@ export default async function Page() {
                 <span style={{ fontSize: 12, color: '#888' }}>{r.mode}</span>
               </div>
               <p style={{ ...p, margin: '8px 0 12px' }}>{r.description}</p>
-              <pre style={codeBlock}>
-{`npx agentcash fetch ${origin}${r.path} --method ${r.method}${
+              <CodeBlock
+                code={`npx agentcash fetch ${origin}${r.path} --method ${r.method}${
                   r.agentcashFlag ? ` ${r.agentcashFlag}` : ''
                 }${r.body ? ` -b '${JSON.stringify(r.body)}'` : ''}`}
-              </pre>
+              />
             </article>
           ))}
         </div>
@@ -153,10 +159,9 @@ export default async function Page() {
       <section style={section}>
         <h2 style={h2}>Discovery</h2>
         <p style={p}>
-          Agents discover this API by reading <code style={codeInline}>/openapi.json</code>.
-          The router emits an OpenAPI 3.x spec annotated with AgentCash pricing
-          and auth extensions — drop it in <code style={codeInline}>agentcash discover</code>{' '}
-          or any compatible crawler.
+          Agents discover this API by reading <code style={codeInline}>/openapi.json</code>. The
+          router emits an OpenAPI 3.x spec annotated with AgentCash pricing and auth extensions —
+          drop it in <code style={codeInline}>agentcash discover</code> or any compatible crawler.
         </p>
         <div style={{ display: 'grid', gap: 8 }}>
           {DISCOVERY.map((d) => (
@@ -174,16 +179,14 @@ export default async function Page() {
         <h2 style={h2}>Customize</h2>
         <ol style={{ ...p, paddingLeft: 24 }}>
           <li style={{ marginBottom: 8 }}>
-            Edit <code style={codeInline}>app/api/fortune/*</code> to replace the demo
-            handlers with your real endpoints.
+            Edit <code style={codeInline}>app/api/fortune/*</code> to replace the demo handlers with
+            your real endpoints.
           </li>
           <li style={{ marginBottom: 8 }}>
-            Update <code style={codeInline}>lib/router.ts</code> with your API title,
-            description, and agent-guidance string.
+            Update <code style={codeInline}>lib/router.ts</code> with your API title, description,
+            and agent-guidance string.
           </li>
-          <li>
-            Push to GitHub. Vercel redeploys automatically.
-          </li>
+          <li>Push to GitHub. Vercel redeploys automatically.</li>
         </ol>
         <p style={{ ...p, marginTop: 16 }}>
           Full docs:{' '}
@@ -219,17 +222,6 @@ const codeInline = {
   borderRadius: 4,
   fontSize: 13,
 } as const;
-const codeBlock = {
-  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-  background: '#111',
-  border: '1px solid #222',
-  padding: '12px 14px',
-  borderRadius: 6,
-  fontSize: 13,
-  overflowX: 'auto' as const,
-  margin: '8px 0',
-  whiteSpace: 'pre-wrap' as const,
-};
 const card = {
   border: '1px solid #222',
   borderRadius: 8,

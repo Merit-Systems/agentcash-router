@@ -57,6 +57,45 @@ describe('routerConfigFromEnv', () => {
     expect(config.mpp).toBeUndefined();
   });
 
+  it('derives BASE_URL from VERCEL_PROJECT_PRODUCTION_URL when BASE_URL is unset', () => {
+    const config = routerConfigFromEnv(
+      validOptions({
+        env: {
+          EVM_PAYEE_ADDRESS: PAYEE,
+          VERCEL_PROJECT_PRODUCTION_URL: 'demo.example.vercel.app',
+        },
+      }),
+    );
+
+    expect(config.baseUrl).toBe('https://demo.example.vercel.app');
+  });
+
+  it('derives BASE_URL from VERCEL_URL when production URL is unavailable', () => {
+    const config = routerConfigFromEnv(
+      validOptions({
+        env: {
+          EVM_PAYEE_ADDRESS: PAYEE,
+          VERCEL_URL: 'demo-git-main.example.vercel.app',
+        },
+      }),
+    );
+
+    expect(config.baseUrl).toBe('https://demo-git-main.example.vercel.app');
+  });
+
+  it('prefers explicit BASE_URL over Vercel system env vars', () => {
+    const config = routerConfigFromEnv(
+      validOptions({
+        env: validEnv({
+          VERCEL_PROJECT_PRODUCTION_URL: 'demo.example.vercel.app',
+          VERCEL_URL: 'demo-git-main.example.vercel.app',
+        }),
+      }),
+    );
+
+    expect(config.baseUrl).toBe('https://api.example.com');
+  });
+
   it('canonicalizes checksummed EVM payee to lowercase', () => {
     const config = routerConfigFromEnv(
       validOptions({ env: validEnv({ EVM_PAYEE_ADDRESS: PAYEE_CHECKSUM }) }),
