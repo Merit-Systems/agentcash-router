@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.10.1
+
+### Patch Changes
+
+- 1b20341: Derive `BASE_URL` from Vercel system environment variables when it is not set explicitly.
+
 ## 1.10.0
 
 ### Minor Changes
