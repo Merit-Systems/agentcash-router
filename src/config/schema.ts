@@ -71,6 +71,9 @@ const envShape = {
     })
     .optional(),
 
+  VERCEL_PROJECT_PRODUCTION_URL: z.string().optional(),
+  VERCEL_URL: z.string().optional(),
+
   EVM_PAYEE_ADDRESS: z
     .string()
     .refine(isEvmAddress, {
@@ -160,7 +163,7 @@ const EnvInputSchema = z
       addIssue(
         ctx,
         { code: 'missing_base_url' },
-        'BASE_URL is required — the public origin used as the 402 realm, OpenAPI server URL, and MPP memo prefix. Set it to your production domain.',
+        'BASE_URL is required — the public origin used as the 402 realm, OpenAPI server URL, and MPP memo prefix. Set it to your production domain. On Vercel, the router auto-derives it from VERCEL_PROJECT_PRODUCTION_URL or VERCEL_URL.',
         ['BASE_URL'],
       );
     }
@@ -253,6 +256,25 @@ function collectKvWarnings(
     ];
   }
   return [];
+}
+
+function withHttps(host: string | undefined): string | undefined {
+  if (!host) return undefined;
+  return host.startsWith('http://') || host.startsWith('https://') ? host : `https://${host}`;
+}
+
+function deriveBaseUrlEnv(
+  env: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+  if (env.BASE_URL) return env;
+
+  const vercelBaseUrl = withHttps(env.VERCEL_PROJECT_PRODUCTION_URL) ?? withHttps(env.VERCEL_URL);
+  if (!vercelBaseUrl) return env;
+
+  return {
+    ...env,
+    BASE_URL: vercelBaseUrl,
+  };
 }
 
 // -----------------------------------------------------------------------------
@@ -477,7 +499,7 @@ export function routerConfigFromEnv<
   const TPrices extends Record<string, string> = Record<never, string>,
 >(options: CreateRouterFromEnvOptions<TPrices>): RouterConfig & { prices?: TPrices } {
   const rawEnv = options.env ?? (process.env as Record<string, string | undefined>);
-  const env = trimAll(rawEnv);
+  const env = deriveBaseUrlEnv(trimAll(rawEnv));
 
   const optionIssues: RouterConfigIssue[] = [];
   if (!options.title?.trim()) {

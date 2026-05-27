@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fagentcash-router%2Ftree%2Fmain%2Fexamples%2Fvercel-deploy&project-name=agentcash-fortune-demo&repository-name=agentcash-fortune-demo&demo-title=AgentCash%20Router%20Fortune%20Demo&demo-description=Pay-per-call%20fortune%20API%20on%20x402%20and%20MPP&demo-url=https%3A%2F%2Fagentcash.dev&env=EVM_PAYEE_ADDRESS%2CCDP_API_KEY_ID%2CCDP_API_KEY_SECRET&envDescription=Wallet%20that%20receives%20payments%20%2B%20Coinbase%20Developer%20Platform%20API%20keys%20for%20the%20default%20x402%20facilitator.&envLink=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fagentcash-router%2Fblob%2Fmain%2Fexamples%2Fvercel-deploy%2FREADME.md%23environment-variables&integration-ids=oac_V3R1GIpkoJorr6fqyiwdhl17&skippable-integrations=1">
+  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fagentcash-router%2Ftree%2Fmain%2Fexamples%2Fvercel-deploy&project-name=agentcash-fortune-demo&repository-name=agentcash-fortune-demo&demo-title=AgentCash%20Router%20Fortune%20Demo&demo-description=Pay-per-call%20fortune%20API%20on%20x402%20and%20MPP&demo-url=https%3A%2F%2Fagentcash.dev&env=EVM_PAYEE_ADDRESS%2CCDP_API_KEY_ID%2CCDP_API_KEY_SECRET&envDescription=Wallet%20that%20receives%20payments%20%2B%20Coinbase%20Developer%20Platform%20API%20keys%20for%20the%20default%20x402%20facilitator.%20Create%20keys%20in%20the%20generous%20CDP%20free%20tier%3A%20https%3A%2F%2Fportal.cdp.coinbase.com%2Fprojects%2Fapi-keys&envLink=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fagentcash-router%2Fblob%2Fmain%2Fexamples%2Fvercel-deploy%2FREADME.md%23environment-variables">
     <img alt="Deploy with Vercel" src="https://vercel.com/button">
   </a>
 </p>
@@ -42,7 +42,7 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 | Var | Required | Purpose |
 |-----|----------|---------|
 | `EVM_PAYEE_ADDRESS` | yes | EVM address that receives x402 and MPP payments (`0x…`, 20 bytes). Canonicalized to lowercase. The zero address is rejected. |
-| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | yes (EVM) | Coinbase Developer Platform credentials for the default EVM facilitator. Create an API key at https://portal.cdp.coinbase.com. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
+| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | yes (EVM) | Coinbase Developer Platform credentials for the default EVM facilitator. Create API keys in the generous CDP free tier at https://portal.cdp.coinbase.com/projects/api-keys. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
 
 ### Solana
 
@@ -65,7 +65,8 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 
 | Var | Required | Purpose |
 |-----|----------|---------|
-| `BASE_URL` | yes | Origin URL (`https://api.example.com`). Load-bearing: used as the 402 realm, OpenAPI server URL, and MPP memo prefix. Must match the public domain. |
+| `BASE_URL` | yes outside Vercel | Origin URL (`https://api.example.com`). Load-bearing: used as the 402 realm, OpenAPI server URL, and MPP memo prefix. Must match the public domain. On Vercel, `createRouterFromEnv` auto-derives this from `VERCEL_PROJECT_PRODUCTION_URL`, then `VERCEL_URL`. |
+| `VERCEL_PROJECT_PRODUCTION_URL`, `VERCEL_URL` | no | Vercel system env vars used as fallbacks when `BASE_URL` is unset. Do not set these manually; Vercel provides them during builds and runtime. |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | no | Upstash / Vercel KV. Backs SIWX nonce, SIWX entitlement, and MPP replay. In-memory fallback is unsafe in serverless production. Providing a Kv Store is highly recommended. |
 
 ## Quick start
@@ -312,4 +313,3 @@ const loggingPlugin: RouterPlugin = {
   },
 };
 ```
-

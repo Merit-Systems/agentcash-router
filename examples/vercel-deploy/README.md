@@ -6,31 +6,31 @@ The demo API is a fortune teller. Every router pricing mode is exercised: `.paid
 
 ## Deploy
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fagentcash-router%2Ftree%2Fmain%2Fexamples%2Fvercel-deploy&project-name=agentcash-fortune-demo&repository-name=agentcash-fortune-demo&demo-title=AgentCash%20Router%20Fortune%20Demo&demo-description=Pay-per-call%20fortune%20API%20on%20x402%20and%20MPP&demo-url=https%3A%2F%2Fagentcash.dev&env=EVM_PAYEE_ADDRESS%2CCDP_API_KEY_ID%2CCDP_API_KEY_SECRET&envDescription=Wallet%20that%20receives%20payments%20%2B%20Coinbase%20Developer%20Platform%20API%20keys%20for%20the%20default%20x402%20facilitator.&envLink=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fagentcash-router%2Fblob%2Fmain%2Fexamples%2Fvercel-deploy%2FREADME.md%23environment-variables&integration-ids=oac_V3R1GIpkoJorr6fqyiwdhl17&skippable-integrations=1)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fagentcash-router%2Ftree%2Fmain%2Fexamples%2Fvercel-deploy&project-name=agentcash-fortune-demo&repository-name=agentcash-fortune-demo&demo-title=AgentCash%20Router%20Fortune%20Demo&demo-description=Pay-per-call%20fortune%20API%20on%20x402%20and%20MPP&demo-url=https%3A%2F%2Fagentcash.dev&env=EVM_PAYEE_ADDRESS%2CCDP_API_KEY_ID%2CCDP_API_KEY_SECRET&envDescription=Wallet%20that%20receives%20payments%20%2B%20Coinbase%20Developer%20Platform%20API%20keys%20for%20the%20default%20x402%20facilitator.%20Create%20keys%20in%20the%20generous%20CDP%20free%20tier%3A%20https%3A%2F%2Fportal.cdp.coinbase.com%2Fprojects%2Fapi-keys&envLink=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fagentcash-router%2Fblob%2Fmain%2Fexamples%2Fvercel-deploy%2FREADME.md%23environment-variables)
 
 The deploy button:
 
 - **Clones only this directory** into a fresh repo in the user's GitHub (Vercel reads the `/tree/main/examples/vercel-deploy` segment of the URL and creates a standalone repo with just these files — the rest of `agentcash-router` is not cloned).
-- Prompts for the three required env vars with inline help.
-- Offers the **Upstash Redis** integration as a skippable add — install it during deploy or skip and add it later from the Storage tab. Required for production-safe SIWX entitlements: without a real KV store, in-memory state is per-Lambda-instance and pay-once-then-replay routes break at scale.
+- Prompts for the three required env vars with inline help. Create the CDP API keys in Coinbase's generous free tier at https://portal.cdp.coinbase.com/projects/api-keys.
+- Keeps the first deploy focused on the required x402 configuration. Add **Upstash Redis** / Vercel KV after deploy from the Vercel Storage tab for production-safe SIWX entitlements; without a real KV store, in-memory state is per-Lambda-instance and pay-once-then-replay routes break at scale.
 - Names the project `agentcash-fortune-demo` (rename in the UI before deploying if you want).
-- Auto-derives `BASE_URL` from `VERCEL_PROJECT_PRODUCTION_URL` — no manual step.
+- `@agentcash/router` auto-derives `BASE_URL` from `VERCEL_PROJECT_PRODUCTION_URL` — no manual step.
 
 ## Environment variables
 
 | Variable | Required | Purpose |
 |---|---|---|
 | `EVM_PAYEE_ADDRESS` | yes | `0x…` address that receives x402 and MPP payments on Base mainnet. Canonicalized to lowercase. Zero-address is rejected. |
-| `CDP_API_KEY_ID` | yes | Coinbase Developer Platform API key ID for the default EVM facilitator. Create at https://portal.cdp.coinbase.com. |
-| `CDP_API_KEY_SECRET` | yes | Matching CDP secret. |
-| `BASE_URL` | no | Origin URL used as the 402 realm, OpenAPI server URL, and MPP memo prefix. **On Vercel, leave unset** — this template auto-derives it from `VERCEL_PROJECT_PRODUCTION_URL`. Set explicitly only if you want to pin a custom domain. |
+| `CDP_API_KEY_ID` | yes | Coinbase Developer Platform API key ID for the default EVM facilitator. Create keys in the generous CDP free tier at https://portal.cdp.coinbase.com/projects/api-keys. |
+| `CDP_API_KEY_SECRET` | yes | Matching CDP secret from the same API key. |
+| `BASE_URL` | no | Origin URL used as the 402 realm, OpenAPI server URL, and MPP memo prefix. **On Vercel, leave unset** — `@agentcash/router` auto-derives it from `VERCEL_PROJECT_PRODUCTION_URL`, then `VERCEL_URL`. Set explicitly only if you want to pin a custom domain. |
 | `SOLANA_PAYEE_ADDRESS` | no | When set, the router also accepts Solana payments. `.upTo()` is Base-only and `.metered()` is MPP-only; Solana clients can only pay static-priced `.paid()` routes. |
 | `MPP_OPERATOR_KEY` | no | Enables MPP. Tempo-compatible EVM private key that resolves to the same address as `EVM_PAYEE_ADDRESS`. Setting this flips on the `.metered()` routes; the template auto-derives `MPP_CURRENCY`, `TEMPO_RPC_URL`, and `MPP_SECRET_KEY` from it. See [Enabling MPP](#enabling-mpp). |
 | `MPP_SECRET_KEY`, `MPP_CURRENCY`, `TEMPO_RPC_URL` | no | Override the auto-derived MPP defaults. Useful for production-grade `MPP_SECRET_KEY` (`openssl rand -hex 32`) or an authenticated Tempo RPC URL. |
 | `MPP_FEE_PAYER_KEY` | no | Sponsors client gas for MPP channel open/topUp. Must differ from the operator address. Holding native Tempo gas is your responsibility. Omit to make clients pay their own gas — the right default. |
-| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | auto on Vercel | Vercel KV / Upstash credentials. Auto-injected when you attach the KV store via the deploy button. Without these, in-memory SIWX/MPP state lives per-Lambda-instance and breaks at scale. |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | recommended for production | Vercel KV / Upstash credentials. Auto-injected when you attach a KV store from the Vercel Storage tab after deploy. Without these, in-memory SIWX/MPP state lives per-Lambda-instance and breaks at scale. |
 
-The deploy button only surfaces the three required vars by default. Add the optional MPP/Solana vars in the Vercel dashboard after the first deploy if you want to extend the rails.
+The deploy button only surfaces the three required vars by default. Add the optional MPP/Solana/KV vars in the Vercel dashboard after the first deploy if you want to extend the rails.
 
 ## Local development
 
@@ -53,7 +53,7 @@ The landing page at `/` lists every endpoint with a copy-pasteable `npx agentcas
 | `app/.well-known/x402/route.ts` | x402-native discovery (separate from `/openapi.json`). |
 | `app/llms.txt/route.ts` | LLM-readable guidance for agents that don't speak AgentCash Discovery natively. |
 | `app/page.tsx` | The landing page you saw after deploying. |
-| `next.config.ts` | Derives `BASE_URL` from Vercel system env vars when unset. |
+| `next.config.ts` | Minimal Next config; router env derivation lives in `@agentcash/router`. |
 
 ## Enabling MPP
 
@@ -86,8 +86,9 @@ MPP (multi-payment protocol on Tempo) adds per-request metered billing and SSE t
      .handler(async () => ({ hello: 'world' }));
    ```
 2. Add each new route file to `lib/routes.ts`.
-3. Update the title, description, and `guidance` in `lib/router.ts` so the discovery doc reflects what you ship.
-4. Push to GitHub. Vercel rebuilds and your `openapi.json` updates automatically.
+3. Add Upstash Redis / Vercel KV from the Vercel Storage tab before production traffic if you use `.siwx()` replay or MPP replay protection across serverless instances.
+4. Update the title, description, and `guidance` in `lib/router.ts` so the discovery doc reflects what you ship.
+5. Push to GitHub. Vercel rebuilds and your `openapi.json` updates automatically.
 
 ## How agents discover your API
 
