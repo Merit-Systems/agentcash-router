@@ -12,17 +12,17 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@x402/core':
-        specifier: ^2.11.0
-        version: 2.11.0
+        specifier: ^2.13.0
+        version: 2.13.0
       '@x402/evm':
-        specifier: ^2.11.0
-        version: 2.11.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
+        specifier: ^2.13.0
+        version: 2.13.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@x402/extensions':
-        specifier: ^2.11.0
-        version: 2.11.0(bufferutil@4.1.0)(ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10))(typescript@5.9.3)(utf-8-validate@5.0.10)
+        specifier: ^2.13.0
+        version: 2.13.0(bufferutil@4.1.0)(ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10))(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@x402/svm':
-        specifier: ^2.11.0
-        version: 2.11.0(@solana/kit@5.5.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10))(@solana/sysvars@5.5.1(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))
+        specifier: ^2.13.0
+        version: 2.13.0(@solana/kit@5.5.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10))(@solana/sysvars@5.5.1(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))
       mppx:
         specifier: ^0.6.16
         version: 0.6.16(@modelcontextprotocol/sdk@1.26.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(express@5.2.1)(hono@4.11.10)(typescript@5.9.3)(viem@2.47.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
@@ -1572,17 +1572,17 @@ packages:
   '@vitest/utils@3.2.4':
     resolution: {integrity: sha512-fB2V0JFrQSMsCo9HiSq3Ezpdv4iYaXRG1Sx8edX3MwxfyNn83mKiGzOcH+Fkxt4MHxr3y42fQi1oeAInqgX2QA==}
 
-  '@x402/core@2.11.0':
-    resolution: {integrity: sha512-aqTfZc/BULrlWnd3I0lsqRQaH4gjJd8CsPcL16XqK2Lx5c6QDm+zCljgUVS1yj9BGJoZeQWTzI5hE+SVFkqMTw==}
+  '@x402/core@2.13.0':
+    resolution: {integrity: sha512-wZjjYZ9UxXZh8O2uP/x0u4M4Dvuw5hHdN7uzEseoS4V9fkMewi+VAx9Wd98PdU9VegvG24+ES88fgFB4C5QVUw==}
 
-  '@x402/evm@2.11.0':
-    resolution: {integrity: sha512-F8uU1txDZA+wc/sEnmaHAyYvoTi/w39r7K3a44MmQHSxECDTEuB3A0FwbxOxUPLN1eyCxTAFKEiqlGe3bwybKA==}
+  '@x402/evm@2.13.0':
+    resolution: {integrity: sha512-EA1nXu5brkzWhpDX2OSKES30i/H6rNnqWSoEI/KXQ3OVz5vbW1bH8jd0tRHjx+w7kEkVl4Wr680Td0JCDCfocQ==}
 
-  '@x402/extensions@2.11.0':
-    resolution: {integrity: sha512-S0SOoUsx4WtWqiWZuqslSzhopW/JcrEbnEC5l2sIQH/TABWzR0DgJLy36C43tD6TOJc0tEPN9bHuD+V8DYWomA==}
+  '@x402/extensions@2.13.0':
+    resolution: {integrity: sha512-ZGUwJu0dGIY8QMTY/RsiSB1l0PAjyW9SS34AV+AYRgfJUaKbGeUHOcuXqgO5UziFDIfz1ebO5U7d7XBSrk/0CA==}
 
-  '@x402/svm@2.11.0':
-    resolution: {integrity: sha512-MmhLlEeb3FtgTxO4n3RkZszKEBBnYLfNnX8P3TvqVYP1u9gY2SgbYW4K3TsPAv00edCxoCOqYixI2JurYjW4Sw==}
+  '@x402/svm@2.13.0':
+    resolution: {integrity: sha512-qgR7GY+A8mZ+y/6iDRIHG11S415OFw7dp4QQHP08cu8wrSENZPCKfl62OGWTZGfAAR9jnaWK2w4/HUarOqTS4A==}
     peerDependencies:
       '@solana/kit': '>=5.1.0'
 
@@ -2534,6 +2534,14 @@ packages:
       typescript:
         optional: true
 
+  ox@0.14.25:
+    resolution: {integrity: sha512-8DoibKtxE8yw63Y2jjMhlbjaURev6WCx4QR4MWLusl2/qIaeTzMJMBIYIDl1KOF45+8H1Ur6eLTdPlUoO8PlRw==}
+    peerDependencies:
+      typescript: '>=5.4.0'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
   ox@0.14.7:
     resolution: {integrity: sha512-zSQ/cfBdolj7U4++NAvH7sI+VG0T3pEohITCgcQj8KlawvTDY4vGVhDT64Atsm0d6adWfIYHDpu88iUBMMp+AQ==}
     peerDependencies:
@@ -3052,6 +3060,14 @@ packages:
       typescript:
         optional: true
 
+  viem@2.51.3:
+    resolution: {integrity: sha512-DA4EbrsvatzzLo6MwcWWiv6kI6dIr3I9HH9B6qsJaClN/s0AjIDUz5RIxl+VmGrovIUCcIvG8744yuGH7d37zw==}
+    peerDependencies:
+      typescript: '>=5.0.4'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
   vite-node@3.2.4:
     resolution: {integrity: sha512-EbKSKh+bh1E1IFxeO0pg1n4dvoOTt0UDiXMd/qn++r98+jPO1xtJilvXldeuQ8giIB5IkpjCgMleHMNEsGH6pg==}
     engines: {node: ^18.0.0 || ^20.0.0 || >=22.0.0}
@@ -3190,6 +3206,18 @@ packages:
 
   ws@8.19.0:
     resolution: {integrity: sha512-blAT2mjOEIi0ZzruJfIhb3nps74PRWTCz1IjglWEEpQl5XS/UNama6u2/rjFkDDouqr4L67ry+1aGIALViWjDg==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
+  ws@8.20.1:
+    resolution: {integrity: sha512-It4dO0K5v//JtTXuPkfEOaI3uUN87iYPnqo/ZzqCoG3g8uhA66QUMs/SrM0YK7/NAu+r4LMh/9dq2A7k+rHs+w==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -3411,7 +3439,7 @@ snapshots:
   '@coinbase/x402@2.1.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10)':
     dependencies:
       '@coinbase/cdp-sdk': 1.44.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10)
-      '@x402/core': 2.11.0
+      '@x402/core': 2.13.0
       viem: 2.47.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
       zod: 3.25.76
     transitivePeerDependencies:
@@ -4025,12 +4053,12 @@ snapshots:
       '@noble/hashes': 1.8.0
       apg-js: 4.4.0
 
-  '@signinwithethereum/siwe@4.2.0(ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10))(viem@2.47.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))':
+  '@signinwithethereum/siwe@4.2.0(ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10))(viem@2.51.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))':
     dependencies:
       '@signinwithethereum/siwe-parser': 4.2.0
     optionalDependencies:
       ethers: 6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
-      viem: 2.47.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
+      viem: 2.51.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
 
   '@solana-program/compute-budget@0.11.0(@solana/kit@5.5.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10))':
     dependencies:
@@ -4704,30 +4732,30 @@ snapshots:
       loupe: 3.2.1
       tinyrainbow: 2.0.0
 
-  '@x402/core@2.11.0':
+  '@x402/core@2.13.0':
     dependencies:
       zod: 3.25.76
 
-  '@x402/evm@2.11.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)':
+  '@x402/evm@2.13.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)':
     dependencies:
-      '@x402/core': 2.11.0
-      viem: 2.47.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
+      '@x402/core': 2.13.0
+      viem: 2.51.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
       zod: 3.25.76
     transitivePeerDependencies:
       - bufferutil
       - typescript
       - utf-8-validate
 
-  '@x402/extensions@2.11.0(bufferutil@4.1.0)(ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10))(typescript@5.9.3)(utf-8-validate@5.0.10)':
+  '@x402/extensions@2.13.0(bufferutil@4.1.0)(ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10))(typescript@5.9.3)(utf-8-validate@5.0.10)':
     dependencies:
       '@noble/curves': 1.9.7
       '@scure/base': 1.2.6
-      '@signinwithethereum/siwe': 4.2.0(ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10))(viem@2.47.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
-      '@x402/core': 2.11.0
+      '@signinwithethereum/siwe': 4.2.0(ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10))(viem@2.51.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
+      '@x402/core': 2.13.0
       ajv: 8.17.1
       jose: 5.10.0
       tweetnacl: 1.0.3
-      viem: 2.47.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
+      viem: 2.51.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
       zod: 3.25.76
     transitivePeerDependencies:
       - bufferutil
@@ -4735,13 +4763,13 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@x402/svm@2.11.0(@solana/kit@5.5.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10))(@solana/sysvars@5.5.1(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))':
+  '@x402/svm@2.13.0(@solana/kit@5.5.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10))(@solana/sysvars@5.5.1(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))':
     dependencies:
       '@solana-program/compute-budget': 0.11.0(@solana/kit@5.5.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10))
       '@solana-program/token': 0.9.0(@solana/kit@5.5.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10))
       '@solana-program/token-2022': 0.6.1(@solana/kit@5.5.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10))(@solana/sysvars@5.5.1(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))
       '@solana/kit': 5.5.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@5.0.10)
-      '@x402/core': 2.11.0
+      '@x402/core': 2.13.0
     transitivePeerDependencies:
       - '@solana/sysvars'
 
@@ -4759,6 +4787,11 @@ snapshots:
     optionalDependencies:
       typescript: 5.9.3
       zod: 4.3.6
+
+  abitype@1.2.4(typescript@5.9.3)(zod@3.25.76):
+    optionalDependencies:
+      typescript: 5.9.3
+      zod: 3.25.76
 
   abitype@1.2.4(typescript@5.9.3)(zod@4.3.6):
     optionalDependencies:
@@ -5458,6 +5491,10 @@ snapshots:
     dependencies:
       ws: 8.18.3(bufferutil@4.1.0)(utf-8-validate@5.0.10)
 
+  isows@1.0.7(ws@8.20.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)):
+    dependencies:
+      ws: 8.20.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+
   jackspeak@4.2.3:
     dependencies:
       '@isaacs/cliui': 9.0.0
@@ -5705,6 +5742,21 @@ snapshots:
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
       abitype: 1.2.4(typescript@5.9.3)(zod@4.3.6)
+      eventemitter3: 5.0.1
+    optionalDependencies:
+      typescript: 5.9.3
+    transitivePeerDependencies:
+      - zod
+
+  ox@0.14.25(typescript@5.9.3)(zod@3.25.76):
+    dependencies:
+      '@adraffy/ens-normalize': 1.11.1
+      '@noble/ciphers': 1.3.0
+      '@noble/curves': 1.9.1
+      '@noble/hashes': 1.8.0
+      '@scure/bip32': 1.7.0
+      '@scure/bip39': 1.6.0
+      abitype: 1.2.4(typescript@5.9.3)(zod@3.25.76)
       eventemitter3: 5.0.1
     optionalDependencies:
       typescript: 5.9.3
@@ -6321,6 +6373,23 @@ snapshots:
       - utf-8-validate
       - zod
 
+  viem@2.51.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76):
+    dependencies:
+      '@noble/curves': 1.9.1
+      '@noble/hashes': 1.8.0
+      '@scure/bip32': 1.7.0
+      '@scure/bip39': 1.6.0
+      abitype: 1.2.3(typescript@5.9.3)(zod@3.25.76)
+      isows: 1.0.7(ws@8.20.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))
+      ox: 0.14.25(typescript@5.9.3)(zod@3.25.76)
+      ws: 8.20.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+    optionalDependencies:
+      typescript: 5.9.3
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+      - zod
+
   vite-node@3.2.4(@types/node@22.19.11)(jiti@2.7.0)(yaml@2.9.0):
     dependencies:
       cac: 6.7.14
@@ -6436,6 +6505,11 @@ snapshots:
       utf-8-validate: 5.0.10
 
   ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@5.0.10):
+    optionalDependencies:
+      bufferutil: 4.1.0
+      utf-8-validate: 5.0.10
+
+  ws@8.20.1(bufferutil@4.1.0)(utf-8-validate@5.0.10):
     optionalDependencies:
       bufferutil: 4.1.0
       utf-8-validate: 5.0.10

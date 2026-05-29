@@ -10,7 +10,8 @@ export async function createX402Server(config: RouterConfig, kvStore?: KvStore) 
   const { x402ResourceServer, HTTPFacilitatorClient } = await import('@x402/core/server');
   const { registerExactEvmScheme } = await import('@x402/evm/exact/server');
   const { bazaarResourceServerExtension } = await import('@x402/extensions/bazaar');
-  const { siwxResourceServerExtension } = await import('@x402/extensions/sign-in-with-x');
+  const { createSIWxResourceServerExtension, InMemorySIWxStorage } =
+    await import('@x402/extensions/sign-in-with-x');
   const { facilitator: defaultFacilitator } = await import('@coinbase/x402');
   const configuredNetworks = getConfiguredX402Networks(config);
   const facilitatorsByNetwork = getResolvedX402Facilitators(
@@ -41,7 +42,17 @@ export async function createX402Server(config: RouterConfig, kvStore?: KvStore) 
     registerExactSvmScheme(server, { networks: svmNetworks });
   }
   server.registerExtension(bazaarResourceServerExtension);
-  server.registerExtension(siwxResourceServerExtension);
+  // `@x402/extensions@2.13.0` replaced the `siwxResourceServerExtension` value export with
+  // this factory. We only rely on its `enrichPaymentRequiredResponse` hook, which refreshes
+  // the SIWX challenge (nonce, issuedAt, domain, supportedChains) when `createPaymentRequiredResponse`
+  // is built on the paid+SIWX path. The factory also wires `onAfterSettle`/`onProtectedRequest`
+  // hooks backed by `storage`, but neither fires here: the router settles via the low-level
+  // resource server with `declaredExtensions` unset (so the settle hook short-circuits) and never
+  // uses the HTTP transport layer. Entitlement and nonce replay are owned by the router's own
+  // pipeline (entitlementStore + nonceStore), so the storage passed here is intentionally inert.
+  server.registerExtension(
+    createSIWxResourceServerExtension({ storage: new InMemorySIWxStorage() }),
+  );
 
   const initPromise = server.initialize();
 
