@@ -17,6 +17,7 @@ import {
   BASE_USDC_ADDRESS,
   BASE_USDC_DECIMALS,
   DEFAULT_SOLANA_FACILITATOR_URL,
+  DEFAULT_TEMPO_RPC_URL,
   SOLANA_MAINNET_NETWORK,
 } from '../constants.js';
 import { RouterConfigError } from './error.js';
@@ -125,7 +126,7 @@ const envShape = {
     .refine(isUrl, {
       params: { code: 'invalid_mpp_rpc_url', ...mpp },
       message:
-        'TEMPO_RPC_URL must be a valid URL — authenticated Tempo JSON-RPC endpoint. Public rpc.tempo.xyz returns 401.',
+        'TEMPO_RPC_URL must be a valid URL — the Tempo JSON-RPC endpoint used for MPP on-chain verification. Optional; defaults to the public DEFAULT_TEMPO_RPC_URL.',
     })
     .optional(),
 
@@ -186,14 +187,7 @@ const EnvInputSchema = z
           ['MPP_CURRENCY'],
         );
       }
-      if (env.TEMPO_RPC_URL === undefined) {
-        addIssue(
-          ctx,
-          { code: 'missing_mpp_rpc_url', ...mpp },
-          'TEMPO_RPC_URL is required when MPP is enabled — authenticated Tempo JSON-RPC endpoint. Public rpc.tempo.xyz returns 401.',
-          ['TEMPO_RPC_URL'],
-        );
-      }
+      // TEMPO_RPC_URL is optional — defaults to DEFAULT_TEMPO_RPC_URL (the public Tempo endpoint).
     }
 
     // op != fee_payer (only when both keys are present and validly formatted).
@@ -360,10 +354,7 @@ function validateX402Config(
   return issues;
 }
 
-function validateMppConfig(
-  config: RouterConfig,
-  env: Record<string, string | undefined>,
-): RouterConfigIssue[] {
+function validateMppConfig(config: RouterConfig): RouterConfigIssue[] {
   const m = config.mpp;
   if (!m) {
     return [
@@ -414,12 +405,7 @@ function validateMppConfig(
       `MPP recipient '${placeholder}' is a placeholder address and cannot receive payments.`,
     );
   }
-  if (!m.rpcUrl && !env.TEMPO_RPC_URL) {
-    push(
-      'missing_mpp_rpc_url',
-      'MPP requires an authenticated Tempo RPC URL. Set TEMPO_RPC_URL env var or pass rpcUrl in the mpp config object.',
-    );
-  }
+  // rpcUrl is optional — defaults to DEFAULT_TEMPO_RPC_URL when neither mpp.rpcUrl nor TEMPO_RPC_URL is set.
   if (m.feePayerKey && !isEvmPrivateKey(m.feePayerKey)) {
     push(
       'invalid_mpp_fee_payer_key',
@@ -578,7 +564,7 @@ export function routerConfigFromEnv<
     ? {
         secretKey: env.MPP_SECRET_KEY!,
         currency: canonicalizeEvm(env.MPP_CURRENCY!),
-        rpcUrl: env.TEMPO_RPC_URL!,
+        rpcUrl: env.TEMPO_RPC_URL ?? DEFAULT_TEMPO_RPC_URL,
         recipient: payeeAddress,
         ...(env.MPP_FEE_PAYER_KEY ? { feePayerKey: env.MPP_FEE_PAYER_KEY } : {}),
         ...(env.MPP_OPERATOR_KEY ? { operatorKey: env.MPP_OPERATOR_KEY, session: {} } : {}),
@@ -647,6 +633,6 @@ export function getRouterConfigIssues(
     });
   }
   if (protocols.includes('x402')) issues.push(...validateX402Config(config, env));
-  if (protocols.includes('mpp')) issues.push(...validateMppConfig(config, env));
+  if (protocols.includes('mpp')) issues.push(...validateMppConfig(config));
   return issues;
 }

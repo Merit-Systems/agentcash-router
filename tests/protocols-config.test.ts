@@ -109,7 +109,7 @@ describe('RouterConfig.protocols', () => {
       }
     });
 
-    it('throws in production when TEMPO_RPC_URL is missing', () => {
+    it('defaults the Tempo RPC URL in production when TEMPO_RPC_URL is missing', () => {
       const origEnv = process.env.NODE_ENV;
       const origRpc = process.env.TEMPO_RPC_URL;
       process.env.NODE_ENV = 'production';
@@ -123,7 +123,7 @@ describe('RouterConfig.protocols', () => {
             protocols: ['mpp'],
             mpp: { secretKey: 'test', currency: TEMPO_USDC_ADDRESS },
           });
-        }).toThrow(/Tempo RPC URL/);
+        }).not.toThrow();
       } finally {
         process.env.NODE_ENV = origEnv;
         spy.mockRestore();
@@ -231,7 +231,7 @@ describe('RouterConfig.protocols', () => {
       }
     });
 
-    it('throws in development when a Tempo RPC URL is configured nowhere', () => {
+    it('defaults the Tempo RPC URL in development when configured nowhere', () => {
       const origEnv = process.env.NODE_ENV;
       const origRpc = process.env.TEMPO_RPC_URL;
       process.env.NODE_ENV = 'development';
@@ -243,7 +243,7 @@ describe('RouterConfig.protocols', () => {
             protocols: ['mpp'],
             mpp: { secretKey: 'test', currency: TEMPO_USDC_ADDRESS },
           }),
-        ).toThrow(/Tempo RPC URL/);
+        ).not.toThrow();
       } finally {
         process.env.NODE_ENV = origEnv;
         if (origRpc !== undefined) process.env.TEMPO_RPC_URL = origRpc;

@@ -362,7 +362,7 @@ export interface RouterConfig {
     currency: string;
     /** MPP payee address (EVM). Overrides `payeeAddress` for MPP only. Required when `payeeAddress` is unset. MUST equal `operatorKey`'s derived address when `session` is enabled. */
     recipient?: string;
-    /** Tempo RPC URL for on-chain verification. Falls back to `TEMPO_RPC_URL`. */
+    /** Tempo RPC URL for on-chain verification. Falls back to `TEMPO_RPC_URL`, then to the public `DEFAULT_TEMPO_RPC_URL`. */
     rpcUrl?: string;
     /** Hex private key. Signs channel close/settle; required for `session`. Address MUST equal `recipient`/payee — mppx asserts sender===payee on settle. Validated at init. */
     operatorKey?: string;

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BASE_MAINNET_NETWORK,
   DEFAULT_SOLANA_FACILITATOR_URL,
+  DEFAULT_TEMPO_RPC_URL,
   RouterConfigError,
   SOLANA_MAINNET_NETWORK,
   TEMPO_USDC_ADDRESS,
@@ -270,7 +271,7 @@ describe('routerConfigFromEnv', () => {
     ).toThrow(RouterConfigError);
   });
 
-  it('rejects partial MPP env (secret without currency / rpc)', () => {
+  it('rejects partial MPP env (secret without currency)', () => {
     try {
       routerConfigFromEnv(validOptions({ env: validEnv({ MPP_SECRET_KEY: 'secret' }) }));
       expect.fail('routerConfigFromEnv should have thrown');
@@ -278,8 +279,26 @@ describe('routerConfigFromEnv', () => {
       expect(error).toBeInstanceOf(RouterConfigError);
       const codes = (error as RouterConfigError).issues.map((i) => i.code);
       expect(codes).toContain('missing_mpp_currency');
-      expect(codes).toContain('missing_mpp_rpc_url');
+      // TEMPO_RPC_URL is optional — its absence is no longer an error.
+      expect(codes).not.toContain('missing_mpp_rpc_url');
     }
+  });
+
+  it('defaults TEMPO_RPC_URL to the public endpoint when unset', () => {
+    const config = routerConfigFromEnv(
+      validOptions({
+        env: validEnv({
+          MPP_SECRET_KEY: 'secret',
+          MPP_CURRENCY: TEMPO_USDC_ADDRESS,
+        }),
+      }),
+    );
+    expect(config.mpp).toEqual({
+      secretKey: 'secret',
+      currency: TEMPO_USDC_ADDRESS,
+      rpcUrl: DEFAULT_TEMPO_RPC_URL,
+      recipient: PAYEE,
+    });
   });
 
   it('rejects EVM_PAYEE_ADDRESS set to the zero address', () => {
