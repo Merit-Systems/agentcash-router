@@ -39,7 +39,7 @@ export async function verifyHashMode(
 
   if (chargeResult.status === 402) {
     const reason = await readChallengeReason(chargeResult.challenge);
-    const detail = reason || 'credential may be invalid, or check TEMPO_RPC_URL configuration';
+    const detail = reason || 'credential may be invalid, or check your TEMPO_RPC_URL endpoint';
     report('warn', `MPP credential rejected: ${detail}`);
     return { ok: false, kind: 'invalid' };
   }

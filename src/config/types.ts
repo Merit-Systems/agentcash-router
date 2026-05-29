@@ -23,7 +23,6 @@ export type RouterConfigIssueCode =
   | 'invalid_mpp_currency'
   | 'missing_mpp_recipient'
   | 'invalid_mpp_recipient'
-  | 'missing_mpp_rpc_url'
   | 'invalid_mpp_rpc_url'
   | 'invalid_mpp_fee_payer_key'
   | 'invalid_mpp_operator_key'

@@ -37,8 +37,7 @@ const sessionManager = tempoClient.session;
 // `next dev` listens on 3000 by default; BASE_URL in .env.local controls the
 // router's challenge realm/discovery URL but not the actual listening port.
 const BASE_URL = process.env.TEST_BASE_URL ?? 'http://localhost:3000';
-const TEMPO_RPC_URL =
-  process.env.TEMPO_RPC_URL ?? 'https://eng:acard-melody-fashion-finish@rpc.mainnet.tempo.xyz';
+const TEMPO_RPC_URL = process.env.TEMPO_RPC_URL ?? 'https://rpc.tempo.xyz';
 
 // Use CLIENT_PRIVATE_KEY from env when available so the operator can run with
 // a funded testnet/mainnet wallet. Falls back to a random throwaway key for

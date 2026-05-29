@@ -9,10 +9,9 @@ if (process.env.MPP_OPERATOR_KEY) {
   // Tempo USDC. Matches @agentcash/router's exported TEMPO_USDC_ADDRESS constant.
   process.env.MPP_CURRENCY ??= '0x20c000000000000000000000b9537d11c60e8b50';
 
-  // Public Tempo RPC. The router's schema validator notes this can return 401
-  // depending on Tempo's current policy; if MPP traffic fails with that, paste
-  // an authenticated URL into the Vercel env vars and redeploy.
-  process.env.TEMPO_RPC_URL ??= 'https://rpc.tempo.xyz';
+  // TEMPO_RPC_URL is left unset on purpose — @agentcash/router defaults it to the
+  // public DEFAULT_TEMPO_RPC_URL (https://rpc.tempo.xyz). Set it in the Vercel env
+  // vars only if you have a dedicated Tempo endpoint.
 
   // HMAC secret for MPP voucher replay protection. Derived deterministically
   // from the operator key so it's stable across deploys without storage. For

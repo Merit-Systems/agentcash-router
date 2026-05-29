@@ -26,7 +26,7 @@ The deploy button:
 | `BASE_URL` | no | Origin URL used as the 402 realm, OpenAPI server URL, and MPP memo prefix. **On Vercel, leave unset** — `@agentcash/router` auto-derives it from `VERCEL_PROJECT_PRODUCTION_URL`, then `VERCEL_URL`. Set explicitly only if you want to pin a custom domain. |
 | `SOLANA_PAYEE_ADDRESS` | no | When set, the router also accepts Solana payments. `.upTo()` is Base-only and `.metered()` is MPP-only; Solana clients can only pay static-priced `.paid()` routes. |
 | `MPP_OPERATOR_KEY` | no | Enables MPP. Tempo-compatible EVM private key that resolves to the same address as `EVM_PAYEE_ADDRESS`. Setting this flips on the `.metered()` routes; the template auto-derives `MPP_CURRENCY`, `TEMPO_RPC_URL`, and `MPP_SECRET_KEY` from it. See [Enabling MPP](#enabling-mpp). |
-| `MPP_SECRET_KEY`, `MPP_CURRENCY`, `TEMPO_RPC_URL` | no | Override the auto-derived MPP defaults. Useful for production-grade `MPP_SECRET_KEY` (`openssl rand -hex 32`) or an authenticated Tempo RPC URL. |
+| `MPP_SECRET_KEY`, `MPP_CURRENCY`, `TEMPO_RPC_URL` | no | Override the auto-derived MPP defaults. Useful for production-grade `MPP_SECRET_KEY` (`openssl rand -hex 32`) or a dedicated Tempo RPC URL — `TEMPO_RPC_URL` defaults to the public `https://rpc.tempo.xyz`. |
 | `MPP_FEE_PAYER_KEY` | no | Sponsors client gas for MPP channel open/topUp. Must differ from the operator address. Holding native Tempo gas is your responsibility. Omit to make clients pay their own gas — the right default. |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | recommended for production | Vercel KV / Upstash credentials. Auto-injected when you attach a KV store from the Vercel Storage tab after deploy. Without these, in-memory SIWX/MPP state lives per-Lambda-instance and breaks at scale. |
 
@@ -68,7 +68,7 @@ MPP (multi-payment protocol on Tempo) adds per-request metered billing and SSE t
    | Var | Default | When you'd override |
    |---|---|---|
    | `MPP_CURRENCY` | Tempo USDC (`0x20c0...8b50`) | Charging in a non-USDC Tempo currency |
-   | `TEMPO_RPC_URL` | `https://rpc.tempo.xyz` | Public endpoint can return 401 under load — paste an authenticated URL here when that happens |
+   | `TEMPO_RPC_URL` | `https://rpc.tempo.xyz` | The public endpoint works out of the box; paste a dedicated endpoint here only if you have one |
    | `MPP_SECRET_KEY` | SHA-256 of `agentcash-template-mpp:` + operator key (stable across deploys, never written to disk) | Production hardness — generate your own with `openssl rand -hex 32` |
 
 3. **Optional: sponsor client gas with `MPP_FEE_PAYER_KEY`.** A separate Tempo key (different address from the operator) that pays for MPP channel open/topUp on behalf of clients. Must hold native Tempo gas before any traffic — otherwise paid calls fail with a generic "Payment verification failed" while the actual `insufficient funds` error only surfaces through the router's `onAlert` plugin hook (which this template forwards to the Vercel Functions log). Omit to make clients pay their own gas — the right default for most paid APIs.

@@ -4,6 +4,7 @@ import type { RouterDeps } from '../protocols/types.js';
 import type { KvStore } from '../kv-store/index.js';
 import { getMppxRequestContext, getMppxStreamingContext } from './mppx.js';
 import { createKvMppStore } from '../kv-store/index.js';
+import { DEFAULT_TEMPO_RPC_URL } from '../constants.js';
 
 type MppxField = NonNullable<RouterDeps['mppx']>;
 
@@ -28,7 +29,7 @@ export async function initMpp(
     const { tempo: tempoChain } = await import('viem/chains');
     const { privateKeyToAccount } = await import('viem/accounts');
 
-    const rpcUrl = (config.mpp.rpcUrl ?? process.env.TEMPO_RPC_URL)!;
+    const rpcUrl = config.mpp.rpcUrl ?? process.env.TEMPO_RPC_URL ?? DEFAULT_TEMPO_RPC_URL;
     const tempoClient = createClient({ chain: tempoChain, transport: http(rpcUrl) });
     const getClient = async () => tempoClient;
 
