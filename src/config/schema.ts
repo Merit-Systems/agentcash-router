@@ -18,6 +18,7 @@ import {
   BASE_USDC_DECIMALS,
   DEFAULT_SOLANA_FACILITATOR_URL,
   SOLANA_MAINNET_NETWORK,
+  TEMPO_USDC_ADDRESS,
 } from '../constants.js';
 import { RouterConfigError } from './error.js';
 import type {
@@ -147,6 +148,8 @@ const envShape = {
     })
     .optional(),
 
+  STRIPE_SECRET_KEY: z.string().optional(),
+
   KV_REST_API_URL: z.string().optional(),
   KV_REST_API_TOKEN: z.string().optional(),
   NODE_ENV: z.string().optional(),
@@ -158,6 +161,8 @@ const EnvInputSchema = z
   .object(envShape)
   .passthrough()
   .superRefine((env, ctx) => {
+    const stripeMode = !!env.STRIPE_SECRET_KEY;
+
     // Required-missing — fields whose absence is fatal.
     if (env.BASE_URL === undefined) {
       addIssue(
@@ -167,7 +172,9 @@ const EnvInputSchema = z
         ['BASE_URL'],
       );
     }
-    if (env.EVM_PAYEE_ADDRESS === undefined) {
+    // EVM_PAYEE_ADDRESS is required for x402 / Tempo MPP — but forbidden in
+    // Stripe MPP mode (Stripe owns the deposit address per request).
+    if (!stripeMode && env.EVM_PAYEE_ADDRESS === undefined) {
       addIssue(
         ctx,
         { code: 'missing_x402_payee', ...x402 },
@@ -176,8 +183,52 @@ const EnvInputSchema = z
       );
     }
 
-    // MPP required-when-enabled.
-    if (env.MPP_SECRET_KEY) {
+    if (stripeMode) {
+      if (env.MPP_SECRET_KEY === undefined) {
+        addIssue(
+          ctx,
+          { code: 'missing_mpp_secret_key', ...mpp },
+          'MPP_SECRET_KEY is required when STRIPE_SECRET_KEY is set — the HMAC key signs MPP challenges. Persist across deploys.',
+          ['MPP_SECRET_KEY'],
+        );
+      }
+
+      // x402 conflict — Stripe MPP requires x402 to be off.
+      const x402Keys = [
+        'EVM_PAYEE_ADDRESS',
+        'CDP_API_KEY_ID',
+        'CDP_API_KEY_SECRET',
+        'SOLANA_PAYEE_ADDRESS',
+        'SOLANA_FACILITATOR_URL',
+      ] as const;
+      const x402Conflicts = x402Keys.filter((k) => env[k] !== undefined);
+      if (x402Conflicts.length > 0) {
+        addIssue(
+          ctx,
+          { code: 'stripe_x402_conflict', ...mpp },
+          `Stripe MPP is enabled (STRIPE_SECRET_KEY set), which requires x402 to be disabled. Unset ${x402Conflicts.join(', ')} to use Stripe, or unset STRIPE_SECRET_KEY to keep x402.`,
+          ['STRIPE_SECRET_KEY'],
+        );
+      }
+
+      // Tempo conflict — Stripe MPP doesn't self-custody on Tempo; these vars are inert and confusing.
+      const tempoKeys = [
+        'MPP_OPERATOR_KEY',
+        'MPP_FEE_PAYER_KEY',
+        'MPP_CURRENCY',
+        'TEMPO_RPC_URL',
+      ] as const;
+      const tempoConflicts = tempoKeys.filter((k) => env[k] !== undefined);
+      if (tempoConflicts.length > 0) {
+        addIssue(
+          ctx,
+          { code: 'stripe_tempo_conflict', ...mpp },
+          `Stripe MPP delegates custody to Stripe — ${tempoConflicts.join(', ')} apply only to Tempo self-custody MPP and must be unset. The currency defaults to TEMPO_USDC_ADDRESS.`,
+          ['STRIPE_SECRET_KEY'],
+        );
+      }
+    } else if (env.MPP_SECRET_KEY) {
+      // Tempo MPP required-when-enabled.
       if (env.MPP_CURRENCY === undefined) {
         addIssue(
           ctx,
@@ -371,7 +422,7 @@ function validateMppConfig(
         code: 'missing_mpp_config',
         protocol: 'mpp',
         message:
-          'protocols includes "mpp" but mpp config is missing. Add mpp: { secretKey, currency, recipient } to your router config.',
+          'protocols includes "mpp" but mpp config is missing. Add mpp: { secretKey, currency, recipient } (or { provider: "stripe", secretKey, stripeSecretKey }) to your router config.',
       },
     ];
   }
@@ -385,6 +436,23 @@ function validateMppConfig(
       'MPP requires secretKey. Set MPP_SECRET_KEY or pass mpp.secretKey.',
     );
   }
+
+  if (m.provider === 'stripe') {
+    if (!m.stripeSecretKey) {
+      push(
+        'missing_mpp_secret_key',
+        'Stripe MPP requires stripeSecretKey. Set STRIPE_SECRET_KEY or pass mpp.stripeSecretKey.',
+      );
+    }
+    if (m.currency !== undefined && !isEvmAddress(m.currency)) {
+      push(
+        'invalid_mpp_currency',
+        'MPP currency must be a 0x-prefixed 20-byte Tempo currency address. Defaults to TEMPO_USDC_ADDRESS for Stripe MPP.',
+      );
+    }
+    return issues;
+  }
+
   if (!m.currency) {
     push('missing_mpp_currency', 'MPP requires currency. Set MPP_CURRENCY or pass mpp.currency.');
   } else if (!isEvmAddress(m.currency)) {
@@ -539,6 +607,28 @@ export function routerConfigFromEnv<
   }
 
   // Build the RouterConfig from validated env + options.
+  const stripeMode = !!env.STRIPE_SECRET_KEY;
+
+  if (stripeMode) {
+    const protocols: ProtocolType[] = options.protocols ? [...options.protocols] : ['mpp'];
+    const mppConfig: RouterConfig['mpp'] = {
+      provider: 'stripe',
+      secretKey: env.MPP_SECRET_KEY!,
+      stripeSecretKey: env.STRIPE_SECRET_KEY!,
+      currency: TEMPO_USDC_ADDRESS,
+    };
+    return {
+      baseUrl: env.BASE_URL!,
+      protocols,
+      mpp: mppConfig,
+      discovery: buildDiscovery(options),
+      ...(options.prices ? { prices: options.prices } : {}),
+      ...(options.plugin ? { plugin: options.plugin } : {}),
+      ...(options.kvStore ? { kvStore: options.kvStore } : {}),
+      strictRoutes: options.strictRoutes ?? false,
+    };
+  }
+
   const payeeAddress = canonicalizeEvm(env.EVM_PAYEE_ADDRESS!);
 
   const accepts: X402AcceptConfig[] = [
@@ -576,6 +666,7 @@ export function routerConfigFromEnv<
 
   const mppConfig: RouterConfig['mpp'] | undefined = mppEnabled
     ? {
+        provider: 'tempo',
         secretKey: env.MPP_SECRET_KEY!,
         currency: canonicalizeEvm(env.MPP_CURRENCY!),
         rpcUrl: env.TEMPO_RPC_URL!,
@@ -598,20 +689,24 @@ export function routerConfigFromEnv<
       },
     },
     ...(mppConfig ? { mpp: mppConfig } : {}),
-    discovery: {
-      title: options.title,
-      version: options.version ?? '1.0.0',
-      description: options.description,
-      guidance: options.guidance,
-      ...(options.contact ? { contact: options.contact } : {}),
-      ...(options.ownershipProofs ? { ownershipProofs: options.ownershipProofs } : {}),
-      ...(options.methodHints ? { methodHints: options.methodHints } : {}),
-      ...(options.serverUrl ? { serverUrl: options.serverUrl } : {}),
-    },
+    discovery: buildDiscovery(options),
     ...(options.prices ? { prices: options.prices } : {}),
     ...(options.plugin ? { plugin: options.plugin } : {}),
     ...(options.kvStore ? { kvStore: options.kvStore } : {}),
     strictRoutes: options.strictRoutes ?? false,
+  };
+}
+
+function buildDiscovery(options: CreateRouterFromEnvOptions): RouterConfig['discovery'] {
+  return {
+    title: options.title,
+    version: options.version ?? '1.0.0',
+    description: options.description,
+    guidance: options.guidance,
+    ...(options.contact ? { contact: options.contact } : {}),
+    ...(options.ownershipProofs ? { ownershipProofs: options.ownershipProofs } : {}),
+    ...(options.methodHints ? { methodHints: options.methodHints } : {}),
+    ...(options.serverUrl ? { serverUrl: options.serverUrl } : {}),
   };
 }
 

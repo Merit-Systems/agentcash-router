@@ -1,5 +1,5 @@
 import type { Mppx as MppxNS, Transport } from 'mppx/server';
-import type { RouterConfig } from '../types.js';
+import type { MppTempoConfig } from '../types.js';
 import type { MppxMiddleware } from '../protocols/mpp/middleware-types.js';
 
 type MppxModule = typeof import('mppx/server');
@@ -7,7 +7,7 @@ type MppxModule = typeof import('mppx/server');
 export interface MppxContextArgs {
   Mppx: MppxModule['Mppx'];
   tempo: MppxModule['tempo'];
-  mppConfig: NonNullable<RouterConfig['mpp']>;
+  mppConfig: MppTempoConfig;
   payeeAddress: string;
   getClient: () => Promise<unknown>;
   feePayerAccount: unknown;

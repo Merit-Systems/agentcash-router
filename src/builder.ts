@@ -847,6 +847,12 @@ export class RouteBuilder<
       }
     }
     if (this.#s.billing === 'metered') {
+      if (this.#s.deps.mppProvider === 'stripe') {
+        throw new Error(
+          `route '${this.#s.key}': .metered() is not supported with Stripe MPP. ` +
+            `Stripe's mppx integration is charge-only — use .paid({ price }) instead, or switch to Tempo self-custody MPP for per-tick billing.`,
+        );
+      }
       if (!this.#s.deps.mppSessionConfig) {
         throw new Error(
           `route '${this.#s.key}': .metered() requires MPP session mode. ` +

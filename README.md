@@ -51,15 +51,24 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 | `SOLANA_PAYEE_ADDRESS` | no | When set, adds a Solana `exact` accept so the router takes Solana payments. **`.upTo()` is Base-only and `.metered()` is MPP-only**. Solana clients can only pay static-priced `.paid()` routes. |
 | `SOLANA_FACILITATOR_URL` | no | Override the Solana x402 facilitator. Defaults to `DEFAULT_SOLANA_FACILITATOR_URL`. |
 
-### MPP (auto-enabled when `MPP_SECRET_KEY` is set)
+### MPP — Tempo (self-custody, auto-enabled when `MPP_SECRET_KEY` is set)
 
 | Var | Required | Purpose |
 |-----|----------|---------|
-| `MPP_SECRET_KEY` | when MPP is enabled | Server-side MPP secret. Presence toggles MPP on. |
+| `MPP_SECRET_KEY` | when MPP is enabled | Server-side MPP HMAC secret. Presence toggles MPP on. |
 | `MPP_CURRENCY` | when MPP is enabled | Tempo currency address. Use `TEMPO_USDC_ADDRESS` for Tempo USDC. |
 | `TEMPO_RPC_URL` | when MPP is enabled | Authenticated Tempo JSON-RPC endpoint. Public `rpc.tempo.xyz` returns 401. |
 | `MPP_OPERATOR_KEY` | no | Signs server-side close/settle. When set, MPP session mode is enabled automatically (required for `.metered()`: both streaming and request-mode per-tick billing). Address must equal the payee. |
 | `MPP_FEE_PAYER_KEY` | no | Sponsors client gas for channel open/topUp. Must resolve to a different address than `MPP_OPERATOR_KEY` (Tempo rejects fee-delegated txs where `sender === feePayer`). |
+
+### MPP — Stripe (delegated custody, auto-enabled when `STRIPE_SECRET_KEY` is set)
+
+When `STRIPE_SECRET_KEY` is set, the router mints a fresh Stripe crypto-deposit PaymentIntent per request and uses the returned Tempo address as the MPP recipient. Stripe captures the USDC once the on-chain transfer settles and credits your Stripe balance — no Tempo RPC, no operator/fee-payer keys, no `EVM_PAYEE_ADDRESS` required. **Stripe MPP and x402 are mutually exclusive**: setting `STRIPE_SECRET_KEY` alongside any x402 or Tempo-MPP env var fails at build with a `stripe_x402_conflict` / `stripe_tempo_conflict` issue. `.metered()` is not supported (Stripe's mppx integration is charge-only). Requires the `stripe` peer dependency.
+
+| Var | Required | Purpose |
+|-----|----------|---------|
+| `STRIPE_SECRET_KEY` | for Stripe MPP | Stripe secret API key (`sk_live_*` / `sk_test_*`). Presence selects Stripe as the MPP provider and disables x402. |
+| `MPP_SECRET_KEY` | for Stripe MPP | HMAC key for signing MPP challenges. Persist across deploys. |
 
 ### Other
 

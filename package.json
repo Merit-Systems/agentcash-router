@@ -50,7 +50,13 @@
   },
   "peerDependencies": {
     "next": ">=15.0.0",
+    "stripe": ">=18",
     "zod": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "stripe": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.8",
@@ -63,6 +69,7 @@
     "next": "^15.0.0",
     "prettier": "^3.8.1",
     "react": "^19.0.0",
+    "stripe": "22.1.1",
     "tsup": "^8.0.0",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.55.0",
