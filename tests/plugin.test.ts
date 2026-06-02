@@ -187,6 +187,78 @@ describe('plugin lifecycle', () => {
     consoleError.mockRestore();
   });
 
+  it('onError includes settlement failure cause and alert metadata', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const plugin = makeSpyPlugin();
+    const deps = makeDeps(plugin);
+    const server = deps.x402Server as unknown as FakeX402Server;
+    server.settlePayment = async (payload: unknown, requirements: unknown) => {
+      server.settledPayments.push({ payload, requirements });
+      return {
+        success: false,
+        errorReason: 'CDP facilitator has insufficient funds',
+        transaction: '',
+        network: 'eip155:8453',
+      };
+    };
+
+    const entry = makeEntry();
+    const handler = createRequestHandler(entry, async () => ({ ok: true }), deps);
+    const res = await handler(makePaymentRequest({ query: 'test' }));
+
+    expect(res.status).toBe(500);
+    const requestId = res.headers.get(HEADERS.REQUEST_ID);
+    expect(plugin.calls.onError).toHaveLength(1);
+
+    const error = plugin.calls.onError[0][1] as {
+      status: number;
+      message: string;
+      requestId?: string;
+      route?: string;
+      method?: string;
+      errorName?: string;
+      stack?: string;
+      verifiedWallet?: string | null;
+    };
+    expect(error).toMatchObject({
+      status: 500,
+      message: 'Settlement failed',
+      requestId,
+      route: 'test/route',
+      method: 'POST',
+      errorName: 'Error',
+      verifiedWallet: KNOWN_PAYER.toLowerCase(),
+    });
+    expect(error.stack).toContain('CDP facilitator has insufficient funds');
+
+    const alert = plugin.calls.onAlert[0][1] as {
+      level: string;
+      message: string;
+      meta?: Record<string, unknown>;
+    };
+    expect(alert).toMatchObject({
+      level: 'error',
+      message: 'Settlement failed',
+      meta: {
+        error: 'CDP facilitator has insufficient funds',
+        network: 'eip155:8453',
+        errorReason: 'CDP facilitator has insufficient funds',
+      },
+    });
+
+    expect(consoleError).toHaveBeenCalledWith(
+      '[router] ERROR test/route 500: Settlement failed',
+      expect.objectContaining({
+        requestId,
+        method: 'POST',
+        verifiedWallet: KNOWN_PAYER.toLowerCase(),
+        errorName: 'Error',
+        stack: expect.stringContaining('CDP facilitator has insufficient funds'),
+      }),
+    );
+    consoleError.mockRestore();
+  });
+
   it('onAlert fires when handler calls ctx.alert()', async () => {
     const plugin = makeSpyPlugin();
     const deps = makeDeps(plugin);

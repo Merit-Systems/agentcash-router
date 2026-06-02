@@ -31,7 +31,9 @@ export async function settleAndFinalizeRequest(args: {
 
   if (!settle.ok) {
     if (onSettleError) await onSettleError(settle.error, settle.failMessage);
-    return fail(ctx, settle.failStatus ?? 500, settle.failMessage, body);
+    return fail(ctx, settle.failStatus ?? 500, settle.failMessage, body, {
+      cause: settle.error,
+    });
   }
 
   return runPostSettleEpilogue({
