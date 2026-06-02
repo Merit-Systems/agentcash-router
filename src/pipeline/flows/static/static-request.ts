@@ -38,7 +38,13 @@ export async function runStaticRequestFlow(args: {
         HandlerPaymentContext & { status: 'settled' }
       >;
       await runSettledHandlerError(ctx, settledScope);
-      return finalize(ctx, result.response, result.rawResult, body);
+      return finalize(
+        ctx,
+        result.response,
+        result.rawResult,
+        body,
+        failureFromCause(result.handlerError),
+      );
     }
     return settleAndFinalizeRequest({
       ctx,
@@ -52,7 +58,13 @@ export async function runStaticRequestFlow(args: {
   }
 
   if (result.response.status >= 400) {
-    return finalize(ctx, result.response, result.rawResult, body);
+    return finalize(
+      ctx,
+      result.response,
+      result.rawResult,
+      body,
+      failureFromCause(result.handlerError),
+    );
   }
 
   const beforeErr = await runBeforeSettle(ctx, settleScope);
@@ -74,4 +86,8 @@ export async function runStaticRequestFlow(args: {
       );
     },
   });
+}
+
+function failureFromCause(cause: unknown) {
+  return cause === undefined ? undefined : { cause };
 }

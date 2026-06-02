@@ -9,6 +9,7 @@ import { withX402Payment } from './fakes/request.js';
 import { createDefaultContext } from '../src/plugin/index.js';
 import type { RouterPlugin, RequestMeta, PluginContext } from '../src/plugin/index.js';
 import type { RouteEntry } from '../src/types.js';
+import { HEADERS } from '../src/headers.js';
 
 const bodySchema = z.object({ query: z.string() });
 
@@ -72,7 +73,7 @@ describe('plugin lifecycle', () => {
   it('onRequest fires before auth check', async () => {
     const plugin = makeSpyPlugin();
     const deps = makeDeps(plugin);
-    const entry = makeEntry({ authMode: 'unprotected', protocols: [] });
+    const entry = makeEntry({ authMode: 'unprotected', protocols: [], bodySchema: undefined });
     const handler = createRequestHandler(entry, async () => ({ ok: true }), deps);
     const req = new NextRequest('http://localhost:3000/api/test');
     await handler(req);
@@ -107,17 +108,18 @@ describe('plugin lifecycle', () => {
   it('onResponse fires on every request (success)', async () => {
     const plugin = makeSpyPlugin();
     const deps = makeDeps(plugin);
-    const entry = makeEntry({ authMode: 'unprotected', protocols: [] });
+    const entry = makeEntry({ authMode: 'unprotected', protocols: [], bodySchema: undefined });
     const handler = createRequestHandler(entry, async () => ({ ok: true }), deps);
     const req = new NextRequest('http://localhost:3000/api/test');
-    await handler(req);
+    const res = await handler(req);
     expect(plugin.calls.onResponse).toHaveLength(1);
+    expect(res.headers.get(HEADERS.REQUEST_ID)).toBeTruthy();
   });
 
   it('onResponse fires on error', async () => {
     const plugin = makeSpyPlugin();
     const deps = makeDeps(plugin);
-    const entry = makeEntry({ authMode: 'unprotected', protocols: [] });
+    const entry = makeEntry({ authMode: 'unprotected', protocols: [], bodySchema: undefined });
     const handler = createRequestHandler(
       entry,
       async () => {
@@ -126,14 +128,23 @@ describe('plugin lifecycle', () => {
       deps,
     );
     const req = new NextRequest('http://localhost:3000/api/test');
-    await handler(req);
+    const res = await handler(req);
     expect(plugin.calls.onResponse).toHaveLength(1);
+    expect(res.headers.get(HEADERS.REQUEST_ID)).toBeTruthy();
+
+    const response = plugin.calls.onResponse[0][1] as {
+      statusCode: number;
+      responseBody?: unknown;
+    };
+    expect(response.statusCode).toBe(500);
+    expect(response.responseBody).toEqual({ success: false, error: 'boom' });
   });
 
   it('onError fires when handler throws', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     const plugin = makeSpyPlugin();
     const deps = makeDeps(plugin);
-    const entry = makeEntry({ authMode: 'unprotected', protocols: [] });
+    const entry = makeEntry({ authMode: 'unprotected', protocols: [], bodySchema: undefined });
     const handler = createRequestHandler(
       entry,
       async () => {
@@ -142,8 +153,38 @@ describe('plugin lifecycle', () => {
       deps,
     );
     const req = new NextRequest('http://localhost:3000/api/test');
-    await handler(req);
+    const res = await handler(req);
+
     expect(plugin.calls.onError).toHaveLength(1);
+    const error = plugin.calls.onError[0][1] as {
+      status: number;
+      message: string;
+      requestId?: string;
+      route?: string;
+      method?: string;
+      errorName?: string;
+      stack?: string;
+    };
+    const requestId = res.headers.get(HEADERS.REQUEST_ID);
+    expect(error).toMatchObject({
+      status: 500,
+      message: 'handler error',
+      requestId,
+      route: 'test/route',
+      method: 'GET',
+      errorName: 'Error',
+    });
+    expect(error.stack).toContain('handler error');
+    expect(consoleError).toHaveBeenCalledWith(
+      '[router] ERROR test/route 500: handler error',
+      expect.objectContaining({
+        requestId,
+        method: 'GET',
+        errorName: 'Error',
+        stack: expect.stringContaining('handler error'),
+      }),
+    );
+    consoleError.mockRestore();
   });
 
   it('onAlert fires when handler calls ctx.alert()', async () => {

@@ -8,7 +8,8 @@ export function fail(
   message: string,
   requestBody?: unknown,
 ): NextResponse {
-  const response = NextResponse.json({ success: false, error: message }, { status });
-  firePluginResponse(ctx, response, requestBody);
+  const responseBody = { success: false, error: message };
+  const response = NextResponse.json(responseBody, { status });
+  firePluginResponse(ctx, response, requestBody, responseBody, { message });
   return response;
 }

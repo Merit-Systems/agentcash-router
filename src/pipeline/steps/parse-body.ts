@@ -14,19 +14,18 @@ export async function parseBody(
     raw = await bufferBody(request);
   } catch (err) {
     if (!(err instanceof MalformedJsonError)) throw err;
-    const response = NextResponse.json(
-      { success: false, error: 'Invalid JSON', issues: [] },
-      { status: 400 },
-    );
-    firePluginResponse(ctx, response);
+    const responseBody = { success: false, error: 'Invalid JSON', issues: [] };
+    const response = NextResponse.json(responseBody, { status: 400 });
+    firePluginResponse(ctx, response, undefined, responseBody, {
+      message: responseBody.error,
+      cause: err,
+    });
     return { ok: false, response };
   }
   const result = validateBody(raw, ctx.routeEntry.bodySchema);
   if (result.success) return { ok: true, data: result.data };
-  const response = NextResponse.json(
-    { success: false, error: result.error, issues: result.issues },
-    { status: 400 },
-  );
-  firePluginResponse(ctx, response);
+  const responseBody = { success: false, error: result.error, issues: result.issues };
+  const response = NextResponse.json(responseBody, { status: 400 });
+  firePluginResponse(ctx, response, raw, responseBody, { message: result.error });
   return { ok: false, response };
 }

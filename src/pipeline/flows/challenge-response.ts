@@ -16,11 +16,9 @@ export async function buildChallengeResponse(
     challengePrice = pricing ? await pricing.challengeQuote(body) : '0';
   } catch (err) {
     const message = errorMessage(err, 'Price calculation failed');
-    const errorResponse = NextResponse.json(
-      { success: false, error: message },
-      { status: errorStatus(err, 500) },
-    );
-    firePluginResponse(ctx, errorResponse);
+    const responseBody = { success: false, error: message };
+    const errorResponse = NextResponse.json(responseBody, { status: errorStatus(err, 500) });
+    firePluginResponse(ctx, errorResponse, body, responseBody, { message, cause: err });
     return errorResponse;
   }
 
@@ -58,11 +56,9 @@ export async function buildChallengeResponse(
       const message = `${strategy.protocol} challenge build failed: ${errorMessage(err, String(err))}`;
       ctx.report('critical', message);
       if (strategy.protocol === 'x402') {
-        const errorResponse = NextResponse.json(
-          { success: false, error: message },
-          { status: 500 },
-        );
-        firePluginResponse(ctx, errorResponse);
+        const responseBody = { success: false, error: message };
+        const errorResponse = NextResponse.json(responseBody, { status: 500 });
+        firePluginResponse(ctx, errorResponse, body, responseBody, { message, cause: err });
         return errorResponse;
       }
     }
