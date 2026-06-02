@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.10.4
+
+### Patch Changes
+
+- f98e006: Emit request IDs on responses and pass structured router error bodies plus rich error context to plugins.
+
 ## 1.10.3
 
 ### Patch Changes
