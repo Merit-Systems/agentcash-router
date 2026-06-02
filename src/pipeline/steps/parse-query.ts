@@ -15,10 +15,8 @@ export function validateQuery(ctx: FlowCtx): QueryValidationResult {
   const result = validateBody(params, querySchema);
   if (result.success) return { ok: true, data: result.data };
 
-  const response = NextResponse.json(
-    { success: false, error: result.error, issues: result.issues },
-    { status: 400 },
-  );
-  firePluginResponse(ctx, response);
+  const responseBody = { success: false, error: result.error, issues: result.issues };
+  const response = NextResponse.json(responseBody, { status: 400 });
+  firePluginResponse(ctx, response, params, responseBody, { message: result.error });
   return { ok: false, response };
 }

@@ -36,10 +36,11 @@ export function errorResult(error: unknown): DynamicRequestResult {
         ? ((error as Record<string, unknown>).status as number)
         : 500;
   const message = error instanceof Error ? error.message : 'Internal error';
+  const responseBody = { success: false, error: message };
   return {
     kind: 'request',
-    response: NextResponse.json({ success: false, error: message }, { status }),
-    rawResult: undefined,
+    response: NextResponse.json(responseBody, { status }),
+    rawResult: responseBody,
     handlerError: error,
   };
 }

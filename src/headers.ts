@@ -11,6 +11,7 @@ export const HEADERS = {
   X402_PAYMENT_REQUIRED: 'PAYMENT-REQUIRED',
   X402_PAYMENT_RESPONSE: 'PAYMENT-RESPONSE',
   MPP_PAYMENT_RECEIPT: 'Payment-Receipt',
+  REQUEST_ID: 'X-Request-ID',
 } as const;
 
 export const AUTH_SCHEME = {

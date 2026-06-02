@@ -33,7 +33,13 @@ export async function runDynamicRequestFlow(args: {
   };
 
   if (result.response.status >= 400) {
-    return finalize(ctx, result.response, result.rawResult, body);
+    return finalize(
+      ctx,
+      result.response,
+      result.rawResult,
+      body,
+      failureFromCause(result.handlerError),
+    );
   }
 
   const beforeErr = await runBeforeSettle(ctx, settleScope);
@@ -57,6 +63,10 @@ export async function runDynamicRequestFlow(args: {
       );
     },
   });
+}
+
+function failureFromCause(cause: unknown) {
+  return cause === undefined ? undefined : { cause };
 }
 
 function computeBilledAmount(routeEntry: RouteEntry, result: DynamicRequestResult): string {

@@ -17,5 +17,11 @@ export async function runHandlerOnly(
   if (validateErr) return validateErr;
 
   const result = await invokeUnauthed(ctx, wallet, account, body.data);
-  return finalize(ctx, result.response, result.rawResult, body.data);
+  return finalize(
+    ctx,
+    result.response,
+    result.rawResult,
+    body.data,
+    result.handlerError === undefined ? undefined : { cause: result.handlerError },
+  );
 }

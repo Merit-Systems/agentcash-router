@@ -46,7 +46,7 @@ export interface ResponseMeta {
   headers: Record<string, string>;
   /** Parsed request body (when .body() was used). undefined when no body was parsed. */
   requestBody?: unknown;
-  /** Handler return value. undefined for raw Response returns (streams) or error paths. */
+  /** Handler return value or structured router-generated error body. */
   responseBody?: unknown;
 }
 
@@ -54,6 +54,17 @@ export interface ErrorEvent {
   status: number;
   message: string;
   settled: boolean;
+  requestId?: string;
+  route?: string;
+  method?: string;
+  duration?: number;
+  walletAddress?: string | null;
+  verifiedWallet?: string | null;
+  clientId?: string | null;
+  sessionId?: string | null;
+  errorName?: string;
+  stack?: string;
+  cause?: unknown;
 }
 
 export interface AuthEvent {
@@ -107,16 +118,17 @@ export function firePluginHook(
     const result = (fn as (...a: unknown[]) => unknown).apply(plugin, args);
     if (result && typeof (result as Promise<unknown>).catch === 'function') {
       (result as Promise<unknown>).catch((error) => {
-        console.error(
-          `[router] ERROR ${method}: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        console.error(`[router] ERROR ${method}: ${formatUnknownError(error)}`);
       });
     }
     return result;
   } catch (error) {
-    console.error(
-      `[router] ERROR ${method}: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    console.error(`[router] ERROR ${method}: ${formatUnknownError(error)}`);
     return undefined;
   }
+}
+
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) return error.stack ?? error.message;
+  return String(error);
 }

@@ -32,7 +32,9 @@ export async function settleAndFinalizeStream(args: {
   });
 
   if (!settle.ok) {
-    return fail(ctx, settle.failStatus ?? 500, settle.failMessage, body);
+    return fail(ctx, settle.failStatus ?? 500, settle.failMessage, body, {
+      cause: settle.error,
+    });
   }
 
   return runPostSettleEpilogue({
