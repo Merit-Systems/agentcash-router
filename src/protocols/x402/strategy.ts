@@ -18,6 +18,8 @@ import { buildX402Challenge } from './challenge.js';
 import { settleX402Payment } from './settle.js';
 import { verifyX402Payment, type VerifyPaymentFailure } from './verify.js';
 
+const SETTLE_RETRY_DELAYS_MS = [500, 1000] as const;
+
 function formatVerifyFailureMessage(failure: VerifyPaymentFailure): string {
   if (failure.reason === 'permit2_allowance_required') {
     const wallet = failure.payer ?? '<the payer wallet>';
@@ -128,7 +130,22 @@ async function settleX402(args: SettleArgs): Promise<SettleOutcome> {
   const override = routeEntry.billing === 'exact' ? undefined : { amount: billedAmount };
 
   try {
-    const settle = await settleX402Payment(deps.x402Server!, payload, requirements, override);
+    let settle = await settleX402Payment(deps.x402Server!, payload, requirements, override);
+    for (
+      let attempt = 0;
+      !settle.result?.success && attempt < SETTLE_RETRY_DELAYS_MS.length;
+      attempt++
+    ) {
+      report('warn', 'Retrying x402 settlement', {
+        attempt: attempt + 1,
+        errorReason: settle.result?.errorReason,
+      });
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, SETTLE_RETRY_DELAYS_MS[attempt]);
+      });
+      settle = await settleX402Payment(deps.x402Server!, payload, requirements, override);
+    }
+
     if (!settle.result?.success) {
       throw Object.assign(
         new Error(settle.result?.errorReason ?? 'x402 settlement returned success=false'),
