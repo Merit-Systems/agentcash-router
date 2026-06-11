@@ -999,7 +999,7 @@ describe('x402 paid route', () => {
     const res = await handler(makePaymentRequest({ query: 'test' }));
     expect(res.status).toBe(500);
     expect(res.headers.get('PAYMENT-RESPONSE')).toBeNull();
-    expect(server.settledPayments).toHaveLength(1);
+    expect(server.settledPayments).toHaveLength(3);
     const body = await res.json();
     expect(body.success).toBe(false);
     expect(body.error).toBe('Settlement failed');

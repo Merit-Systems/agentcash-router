@@ -231,7 +231,39 @@ describe('plugin lifecycle', () => {
     });
     expect(error.stack).toContain('CDP facilitator has insufficient funds');
 
-    const alert = plugin.calls.onAlert[0][1] as {
+    expect(
+      plugin.calls.onAlert
+        .map(
+          ([, alert]) =>
+            alert as { level: string; message: string; meta?: Record<string, unknown> },
+        )
+        .filter((alert) => alert.message === 'Retrying x402 settlement'),
+    ).toEqual([
+      {
+        level: 'warn',
+        message: 'Retrying x402 settlement',
+        route: 'test/route',
+        meta: {
+          attempt: 1,
+          errorReason: 'CDP facilitator has insufficient funds',
+        },
+      },
+      {
+        level: 'warn',
+        message: 'Retrying x402 settlement',
+        route: 'test/route',
+        meta: {
+          attempt: 2,
+          errorReason: 'CDP facilitator has insufficient funds',
+        },
+      },
+    ]);
+
+    const alert = plugin.calls.onAlert
+      .map(
+        ([, value]) => value as { level: string; message: string; meta?: Record<string, unknown> },
+      )
+      .find((value) => value.message === 'Settlement failed') as {
       level: string;
       message: string;
       meta?: Record<string, unknown>;
