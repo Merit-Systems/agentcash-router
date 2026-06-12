@@ -181,7 +181,7 @@ export interface HandlerPaymentContext {
   receipt?: string;
 }
 
-export interface SettlementLifecycleContext<TBody = unknown> {
+export interface SettlementLifecycleContext<TBody = unknown, TResult = unknown> {
   route: string;
   request: Request;
   body: TBody;
@@ -189,36 +189,41 @@ export interface SettlementLifecycleContext<TBody = unknown> {
   account: unknown;
   payment: HandlerPaymentContext;
   response: Response;
-  result: unknown;
+  /** Handler return value. Typed from `.output()` when declared; `unknown` otherwise. */
+  result: TResult;
 }
 
-export interface SettlementSettledContext<TBody = unknown> extends Omit<
-  SettlementLifecycleContext<TBody>,
+export interface SettlementSettledContext<TBody = unknown, TResult = unknown> extends Omit<
+  SettlementLifecycleContext<TBody, TResult>,
   'payment'
 > {
   payment: HandlerPaymentContext & { status: 'settled' };
 }
 
-export interface SettlementErrorContext<TBody = unknown> extends SettlementLifecycleContext<TBody> {
+export interface SettlementErrorContext<
+  TBody = unknown,
+  TResult = unknown,
+> extends SettlementLifecycleContext<TBody, TResult> {
   error: unknown;
   phase: 'settle' | 'afterSettle';
 }
 
 export interface SettledHandlerErrorContext<
   TBody = unknown,
-> extends SettlementSettledContext<TBody> {
+  TResult = unknown,
+> extends SettlementSettledContext<TBody, TResult> {
   error: unknown;
 }
 
-export interface SettlementLifecycle<TBody = unknown> {
+export interface SettlementLifecycle<TBody = unknown, TResult = unknown> {
   /** Runs after a successful handler response, before router-controlled settlement/broadcast. Throw with `.status` to fail the request and skip settlement (when not already settled). */
-  beforeSettle?: (ctx: SettlementLifecycleContext<TBody>) => void | Promise<void>;
+  beforeSettle?: (ctx: SettlementLifecycleContext<TBody, TResult>) => void | Promise<void>;
   /** Runs after successful settlement; for durable ledgers and audit rows. Errors are alerted but don't change the already-settled response. */
-  afterSettle?: (ctx: SettlementSettledContext<TBody>) => void | Promise<void>;
+  afterSettle?: (ctx: SettlementSettledContext<TBody, TResult>) => void | Promise<void>;
   /** Runs when payment was settled but the handler then returned an error response. Use for app-owned refund / compensation queues. */
-  onSettledHandlerError?: (ctx: SettledHandlerErrorContext<TBody>) => void | Promise<void>;
+  onSettledHandlerError?: (ctx: SettledHandlerErrorContext<TBody, TResult>) => void | Promise<void>;
   /** Runs when router-controlled settlement fails after the handler succeeded. */
-  onSettlementError?: (ctx: SettlementErrorContext<TBody>) => void | Promise<void>;
+  onSettlementError?: (ctx: SettlementErrorContext<TBody, TResult>) => void | Promise<void>;
 }
 
 export type ChargeFn = () => Promise<void>;

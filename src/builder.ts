@@ -51,6 +51,9 @@ type StreamingHandlerFn<TBody, TQuery> = (
 /** Discriminator threaded through the builder so `.handler()` / `.stream()` can pick the right handler shape. */
 export type BillingMode = 'none' | 'upto' | 'metered';
 
+/** Handler result type seen by `.settlement()` / `.nextStep()`: `.output()`'s TOutput when declared, `unknown` otherwise. */
+type ResultFor<TOutput> = [TOutput] extends [undefined] ? unknown : TOutput;
+
 type HandlerArg<
   TBody,
   TQuery,
@@ -749,12 +752,15 @@ export class RouteBuilder<
    *   afterSettle: ({ tx }) => analytics.track('settled', { tx }),
    * });
    * ```
+   *
+   * `ctx.result` is typed from `.output()` when declared (chain `.output()`
+   * before `.settlement()`); `unknown` otherwise.
    */
   settlement(
-    lifecycle: SettlementLifecycle<TBody>,
+    lifecycle: SettlementLifecycle<TBody, ResultFor<TOutput>>,
   ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill> {
     const next = this.fork();
-    next.#s.settlement = lifecycle;
+    next.#s.settlement = lifecycle as SettlementLifecycle<TBody>;
     return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill>;
   }
 
