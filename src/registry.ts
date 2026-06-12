@@ -100,6 +100,8 @@ export class RouteRegistry {
     const missingTargets: string[] = [];
     for (const entry of this.routes.values()) {
       for (const step of entry.nextSteps ?? []) {
+        // External steps have no registry target — nothing to validate.
+        if (step.route === undefined) continue;
         if (!registeredPathKeys.has(step.route)) {
           missingTargets.push(`'${step.route}' (from '${entry.key}')`);
         }

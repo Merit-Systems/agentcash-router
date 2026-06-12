@@ -4,7 +4,7 @@ import type { RouteEntry, DiscoveryConfig } from '../types.js';
 import { TEMPO_USDC_ADDRESS } from '../constants.js';
 import { HEADERS } from '../headers.js';
 import { tierPriceExtrema } from '../pipeline/next-step.js';
-import { resolveGuidance } from './utils/guidance.js';
+import { composeGuidanceWithWorkflows } from './utils/workflows.js';
 
 export function createOpenAPIHandler(
   registry: RouteRegistry,
@@ -66,7 +66,15 @@ export function createOpenAPIHandler(
       discoveryMetadata.ownershipProofs = discovery.ownershipProofs;
     }
 
-    const guidance = await resolveGuidance(discovery);
+    // Guidance + the auto-generated `## Workflows` map. MCP consumer
+    // pipelines read guidance exclusively from `info.x-guidance`, so the
+    // workflows map must ride along here (same composer as llms.txt).
+    const guidance = await composeGuidanceWithWorkflows(
+      discovery,
+      registry,
+      normalizedBase,
+      basePath,
+    );
 
     const openApiDocument: Record<string, unknown> = {
       openapi: '3.1.0',
@@ -75,6 +83,7 @@ export function createOpenAPIHandler(
         description: discovery.description,
         version: discovery.version,
         ...(guidance !== undefined && { 'x-guidance': guidance }),
+        /** @deprecated mirror of `x-guidance` — kept consistent with it. */
         guidance,
         ...(discovery.contact && { contact: discovery.contact }),
       },
@@ -122,10 +131,15 @@ function deriveTag(routeKey: string): string {
 const NEXT_ENTRY_SCHEMA = z.object({
   method: z.string(),
   url: z.string(),
-  auth: z.string(),
+  /** Absent on external entries — third-party hosts have no advertised auth mode. */
+  auth: z.string().optional(),
+  /** Marks an external entry: a third-party request resolved from the result, with no auth/price. */
+  external: z.literal(true).optional(),
   price: z.union([z.string(), z.object({ min: z.string(), max: z.string() })]).optional(),
   note: z.string().optional(),
-  body: z.record(z.string(), z.unknown()).optional(),
+  retryAfterSeconds: z.number().optional(),
+  headers: z.record(z.string(), z.string()).optional(),
+  body: z.unknown().optional(),
 });
 
 /** Advertised output schema: the declared `.output()` plus the optional injected `next` array. */
@@ -163,6 +177,9 @@ function buildOperation(
   const operation: Record<string, unknown> = {
     operationId: toOperationId(routeKey),
     summary: entry.description ?? routeKey,
+    // `.docs()` long-form documentation. The OpenAPI operation `description`
+    // is its ONLY surface — never the 402 challenge, well-known, or llms.txt.
+    ...(entry.docs !== undefined && { description: entry.docs }),
     tags: [tag],
     responses: {
       '200': {

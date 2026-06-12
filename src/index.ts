@@ -324,6 +324,10 @@ export type {
   RouterConfig,
   DiscoveryConfig,
   NextStepConfig,
+  RouteNextStepConfig,
+  ExternalNextStepConfig,
+  ExternalRequest,
+  NextStepRequestContext,
   PaidOptions,
   ProtocolType,
   SettlementLifecycleContext,
@@ -331,6 +335,7 @@ export type {
   SettlementErrorContext,
   X402FacilitatorsConfig,
 } from './types.js';
+export type { NextEntry, NextRouteEntry, NextExternalEntry } from './pipeline/next-step.js';
 export type { RouterPlugin } from './plugin/index.js';
 export type { KvStore } from './kv-store/index.js';
 export { routerConfigFromEnv } from './config/index.js';

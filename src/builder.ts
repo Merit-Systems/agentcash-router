@@ -109,6 +109,7 @@ type BuilderState<TBody> = {
   outputExample: JsonValue | undefined;
   hasOutputExample: boolean;
   description: string | undefined;
+  docs: string | undefined;
   path: string | undefined;
   method: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH';
   apiKeyResolver: ((key: string) => unknown | Promise<unknown>) | undefined;
@@ -168,6 +169,7 @@ export class RouteBuilder<
       outputExample: undefined,
       hasOutputExample: false,
       description: undefined,
+      docs: undefined,
       path: undefined,
       method: 'POST',
       apiKeyResolver: undefined,
@@ -685,8 +687,11 @@ export class RouteBuilder<
   }
 
   /**
-   * Set a human-readable summary of the route. Surfaces in OpenAPI,
-   * `well-known`, and `llms.txt` discovery output.
+   * Set a human-readable summary of the route. Surfaces in OpenAPI (operation
+   * `summary`), `well-known`, `llms.txt`, and the 402 challenge's
+   * `resource.description` — keep it to ONE short sentence (capped at 400
+   * chars on paid x402 routes; the CDP facilitator rejects longer challenge
+   * descriptions). For long-form route documentation use `.docs()`.
    *
    * @example
    * ```ts
@@ -696,6 +701,33 @@ export class RouteBuilder<
   description(text: string): this {
     const next = this.fork();
     next.#s.description = text;
+    return next;
+  }
+
+  /**
+   * Attach long-form documentation for agents who inspect this route — model
+   * quirks, how to interpret the response, when to reach for it vs. siblings.
+   * Unbounded length. Emitted ONLY as the OpenAPI operation `description`
+   * (fetched on demand via schema inspection); it never reaches the 402
+   * challenge, well-known, or llms.txt.
+   *
+   * Split: `.description()` is the one-sentence summary (402 challenge +
+   * OpenAPI `summary` + discovery one-liners, ≤400 chars on paid x402
+   * routes); `.docs()` is the unbounded operation manual.
+   *
+   * @example
+   * ```ts
+   * .description('Generate a video from a text prompt')
+   * .docs('Generation takes 30–90s. Poll the returned job until "complete". ' +
+   *   'The model ignores camera directives in prompts; pass them via the cameraFixed flag…');
+   * ```
+   */
+  docs(text: string): this {
+    if (text.trim().length === 0) {
+      throw new Error(`route '${this.#s.key}': .docs() requires non-empty text`);
+    }
+    const next = this.fork();
+    next.#s.docs = text;
     return next;
   }
 
@@ -776,19 +808,33 @@ export class RouteBuilder<
   }
 
   /**
-   * Declare a successor route, advertised to callers on success. Repeatable
-   * for multiple successors. When the handler succeeds and returns a plain
-   * JSON object, the router appends a reserved `next` array — each entry
-   * carries the target's resolved URL plus its `method`, `auth`, and `price`
-   * derived from the target's own route entry, so an agent knows what the
-   * next call costs before making it. A handler-supplied `next` key always
-   * wins. Target existence is validated by `registry.validate()` at
-   * discovery time. The response body is the single chaining channel; the
-   * only static trace is the map-level `## Workflows` summary in llms.txt.
+   * Declare a successor, advertised to callers on success. Repeatable for
+   * multiple successors. When the handler succeeds and returns a plain JSON
+   * object, the router appends a reserved `next` array. Two forms:
    *
-   * `args` / `when` receive the handler result typed from `.output()` when
-   * declared (chain `.output()` first); exceptions they throw are reported
-   * as warnings and skip the entry — they never break the response.
+   * - **Route form** (`{ route }`): the target is a registry key — each entry
+   *   carries the target's resolved URL plus its `method`, `auth`, and
+   *   `price` derived from the target's own route entry, so an agent knows
+   *   what the next call costs before making it. Target existence is
+   *   validated by `registry.validate()` at discovery time. `args()` receives
+   *   the handler result and, as a second argument, the original request
+   *   context (`{ body, query, params }`) for chains that need caller-sent
+   *   values not echoed in the result.
+   * - **External form** (`{ external }`): the successor is a third-party URL
+   *   resolved from the result (e.g. a presigned-S3 PUT). The entry renders
+   *   as `{ external: true, method, url, headers?, body? }` with no
+   *   `auth`/`price` (unknown for third-party hosts). Returning
+   *   `null`/`undefined` skips the entry.
+   *
+   * A handler-supplied `next` key always wins. The response body is the
+   * single chaining channel; the only static trace is the map-level
+   * `## Workflows` summary riding the guidance channel (llms.txt and OpenAPI
+   * `info.x-guidance`).
+   *
+   * `args` / `when` / `external` receive the handler result typed from
+   * `.output()` when declared (chain `.output()` first); exceptions they
+   * throw are reported as warnings and skip the entry — they never break the
+   * response. `retryAfterSeconds` (finite, > 0) hints at polling cadence.
    *
    * @example
    * ```ts
@@ -796,11 +842,31 @@ export class RouteBuilder<
    *   route: 'jobs/{jobId}',
    *   args: (result) => ({ jobId: result.jobId }),
    *   when: (result) => result.status === 'pending',
-   *   note: 'Poll every ~5s until status is "complete".',
+   *   note: 'Poll until status is "complete".',
+   *   retryAfterSeconds: 5,
+   * })
+   * .nextStep({
+   *   external: (result) => ({ url: result.uploadUrl, method: 'PUT' }),
+   *   note: 'Upload the file bytes to the presigned URL.',
    * })
    * ```
    */
   nextStep(step: NextStepConfig<ResultFor<TOutput>>): this {
+    const hasRoute = typeof (step as { route?: unknown }).route === 'string';
+    const hasExternal = typeof (step as { external?: unknown }).external === 'function';
+    if (hasRoute === hasExternal) {
+      throw new Error(
+        `route '${this.#s.key}': .nextStep() requires exactly one of 'route' (registry target) or 'external' (request resolver)`,
+      );
+    }
+    if (
+      step.retryAfterSeconds !== undefined &&
+      (!Number.isFinite(step.retryAfterSeconds) || step.retryAfterSeconds <= 0)
+    ) {
+      throw new Error(
+        `route '${this.#s.key}': .nextStep() retryAfterSeconds must be a finite number > 0, got ${String(step.retryAfterSeconds)}`,
+      );
+    }
     const next = this.fork();
     next.#s.nextSteps = [...this.#s.nextSteps, step as NextStepConfig];
     return next;
@@ -945,6 +1011,7 @@ export class RouteBuilder<
       inputExample: this.#s.hasInputExample ? this.#s.inputExample : undefined,
       outputExample: this.#s.hasOutputExample ? this.#s.outputExample : undefined,
       description: this.#s.description,
+      docs: this.#s.docs,
       path: this.#s.path,
       method: this.#s.method,
       maxPrice: this.#s.maxPrice,

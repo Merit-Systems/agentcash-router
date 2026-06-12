@@ -56,8 +56,9 @@ export function createWellKnownHandler(
 
     // nextStep chains deliberately do NOT appear here: the runtime response
     // body `next` array is the single chaining channel (always resolved,
-    // when()-filtered, current). The map-level summary lives in llms.txt's
-    // auto-generated "## Workflows" section, which rides the guidance channel.
+    // when()-filtered, current). The map-level summary rides the guidance
+    // channel in llms.txt and OpenAPI `info.x-guidance`; `instructions` here
+    // stays RAW guidance — nothing consumes well-known, so it must not grow.
     return Response.json(body, {
       headers: {
         'Access-Control-Allow-Origin': '*',

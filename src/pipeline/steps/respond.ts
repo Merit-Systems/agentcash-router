@@ -32,7 +32,7 @@ export function finalize(
   requestBody?: unknown,
   failure?: PluginFailure,
 ): Response {
-  const next = applyNextSteps(ctx, response, rawResult);
+  const next = applyNextSteps(ctx, response, rawResult, requestBody);
   fireProviderQuota(ctx, next.response, next.rawResult);
   firePluginResponse(ctx, next.response, requestBody, next.rawResult, failure);
   return next.response;

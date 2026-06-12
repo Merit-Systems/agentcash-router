@@ -5,16 +5,26 @@
  * response time. Chains are deliberately not mirrored into static discovery
  * (`x-next` / OpenAPI `links` / well-known `workflows` were removed) — a
  * static copy is strictly staler than the live one. The only static trace is
- * the map-level `## Workflows` summary rendered into llms.txt
- * (`buildWorkflowChains`), which rides the guidance channel.
+ * the map-level `## Workflows` summary (`buildWorkflowChains`), which rides
+ * the guidance channel into llms.txt and OpenAPI `info.x-guidance`.
  *
- * Everything advertised about a step is derived from the target's own
- * `RouteEntry` at resolution time (method, auth mode, price), so chains stay
- * deterministic and never drift from the routes they point at.
+ * For route-form steps, everything advertised is derived from the target's
+ * own `RouteEntry` at resolution time (method, auth mode, price), so chains
+ * stay deterministic and never drift from the routes they point at.
+ * External-form steps resolve a third-party request from the result and are
+ * advertised without `auth`/`price` (unknown for third-party hosts).
  */
 import { compareDecimals } from '../pricing/format.js';
 import type { RouteRegistry } from '../registry.js';
-import type { AuthMode, NextStepConfig, RouteEntry, RouteMethod } from '../types.js';
+import type {
+  AuthMode,
+  ExternalNextStepConfig,
+  ExternalRequest,
+  NextStepConfig,
+  NextStepRequestContext,
+  RouteEntry,
+  RouteMethod,
+} from '../types.js';
 import type { FlowCtx, RouteRouting } from './steps/types.js';
 
 /** Advertised cost of calling a route: a fixed amount or a min/max range. Absent for free routes. */
@@ -79,29 +89,47 @@ export function buildRouteUrl(baseUrl: string, basePath: string, pathTemplate: s
   return `${baseUrl}${prefix}/${pathTemplate}`;
 }
 
-/** A resolved `next` array entry, appended to successful JSON responses. */
-export interface NextEntry {
+/** A resolved route-form `next` array entry, appended to successful JSON responses. */
+export interface NextRouteEntry {
   method: RouteMethod;
   url: string;
   auth: AuthMode;
   price?: NextPrice;
   note?: string;
+  retryAfterSeconds?: number;
   /** Suggested request body for non-GET targets, from `args()` keys that did not fill a path param. */
   body?: Record<string, unknown>;
 }
+
+/** A resolved external-form `next` array entry: a third-party request with no `auth`/`price` (unknown for third-party hosts). */
+export interface NextExternalEntry {
+  external: true;
+  method: string;
+  url: string;
+  headers?: Record<string, string>;
+  body?: unknown;
+  note?: string;
+  retryAfterSeconds?: number;
+}
+
+/** A resolved `next` array entry, appended to successful JSON responses. */
+export type NextEntry = NextRouteEntry | NextExternalEntry;
 
 /**
  * Append the declared `next` steps to a successful JSON response. No-ops
  * (returning the inputs unchanged) when the route declares no steps, the
  * response is an error, the handler returned a raw `Response` / non-object /
  * stream, or the handler already supplied a `next` key (handler wins).
- * `args`/`when` exceptions and missing targets are reported as warnings and
- * never break the response.
+ * `args`/`when`/`external` exceptions and missing targets are reported as
+ * warnings and never break the response. `requestBody` is the parsed request
+ * body, threaded from `finalize` so route-form `args()` can derive values
+ * the caller sent (it is `undefined` when no body was parsed).
  */
 export function applyNextSteps(
   ctx: FlowCtx,
   response: Response,
   rawResult: unknown,
+  requestBody?: unknown,
 ): { response: Response; rawResult: unknown } {
   const unchanged = { response, rawResult };
   const steps = ctx.routeEntry.nextSteps;
@@ -110,7 +138,12 @@ export function applyNextSteps(
   if (!isPlainResultObject(rawResult)) return unchanged;
   if ('next' in rawResult) return unchanged;
 
-  const entries = buildNextEntries(ctx, ctx.routing, steps, rawResult);
+  const requestContext: NextStepRequestContext = {
+    body: requestBody,
+    query: ctx.query,
+    params: ctx.params,
+  };
+  const entries = buildNextEntries(ctx, ctx.routing, steps, rawResult, requestContext);
   if (entries.length === 0) return unchanged;
 
   const body = { ...rawResult, next: entries };
@@ -140,14 +173,22 @@ function buildNextEntries(
   routing: RouteRouting,
   steps: NextStepConfig[],
   result: unknown,
+  requestContext: NextStepRequestContext,
 ): NextEntry[] {
   const entries: NextEntry[] = [];
 
   for (const step of steps) {
+    const label = step.route !== undefined ? `'${step.route}'` : '(external)';
     try {
       if (step.when && !step.when(result)) continue;
     } catch (error) {
-      ctx.report('warn', `nextStep '${step.route}': when() threw — skipping: ${reason(error)}`);
+      ctx.report('warn', `nextStep ${label}: when() threw — skipping: ${reason(error)}`);
+      continue;
+    }
+
+    if (step.route === undefined) {
+      const entry = buildExternalEntry(ctx, step, result);
+      if (entry) entries.push(entry);
       continue;
     }
 
@@ -161,7 +202,7 @@ function buildNextEntries(
 
     let args: Record<string, unknown> | undefined;
     try {
-      args = step.args?.(result);
+      args = step.args?.(result, requestContext);
     } catch (error) {
       ctx.report('warn', `nextStep '${step.route}': args() threw — skipping: ${reason(error)}`);
       continue;
@@ -177,11 +218,42 @@ function buildNextEntries(
       auth: target.authMode,
       ...(price !== undefined && { price }),
       ...(step.note !== undefined && { note: step.note }),
+      ...(step.retryAfterSeconds !== undefined && { retryAfterSeconds: step.retryAfterSeconds }),
       ...(suggestedBody !== undefined && { body: suggestedBody }),
     });
   }
 
   return entries;
+}
+
+/**
+ * Resolve an external-form step into a `next` entry. Returns `null` (skip)
+ * when the resolver returns `null`/`undefined` or throws — exceptions are
+ * reported as warnings and never break the response.
+ */
+function buildExternalEntry(
+  ctx: FlowCtx,
+  step: ExternalNextStepConfig,
+  result: unknown,
+): NextExternalEntry | null {
+  let request: ExternalRequest | null | undefined;
+  try {
+    request = step.external(result);
+  } catch (error) {
+    ctx.report('warn', `nextStep (external): external() threw — skipping: ${reason(error)}`);
+    return null;
+  }
+  if (request == null) return null;
+
+  return {
+    external: true,
+    method: request.method ?? 'GET',
+    url: request.url,
+    ...(request.headers !== undefined && { headers: request.headers }),
+    ...(request.body !== undefined && { body: request.body }),
+    ...(step.note !== undefined && { note: step.note }),
+    ...(step.retryAfterSeconds !== undefined && { retryAfterSeconds: step.retryAfterSeconds }),
+  };
 }
 
 function resolveTargetUrl(
@@ -227,23 +299,41 @@ function reason(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** One step of a discovery-rendered workflow chain. */
-export interface WorkflowStep {
+/** One route-backed step of a discovery-rendered workflow chain. */
+export interface WorkflowRouteStep {
+  external?: undefined;
   method: RouteMethod;
   url: string;
   auth: AuthMode;
   price?: NextPrice;
   note?: string;
+  retryAfterSeconds?: number;
 }
+
+/**
+ * An external step of a workflow chain. The request is resolved from the
+ * previous response at runtime, so nothing about it is known statically; it
+ * terminates static traversal of its branch.
+ */
+export interface WorkflowExternalStep {
+  external: true;
+  note?: string;
+  retryAfterSeconds?: number;
+}
+
+/** One step of a discovery-rendered workflow chain. */
+export type WorkflowStep = WorkflowRouteStep | WorkflowExternalStep;
 
 const MAX_WORKFLOW_DEPTH = 10;
 
 /**
  * Walk the nextStep graph into linear chains for discovery. Roots are routes
  * that declare steps but are not targets themselves; branching produces one
- * chain per path. Cycles stop at the first revisit; depth is capped at
- * {@link MAX_WORKFLOW_DEPTH}. Ordering is deterministic: roots sort by key
- * then method, branches follow declaration order.
+ * chain per path. External steps are terminal: they render as a sentinel and
+ * end their branch (no registry target to follow). Cycles stop at the first
+ * revisit; depth is capped at {@link MAX_WORKFLOW_DEPTH}. Ordering is
+ * deterministic: roots sort by key then method, branches follow declaration
+ * order.
  */
 export function buildWorkflowChains(
   registry: RouteRegistry,
@@ -255,7 +345,9 @@ export function buildWorkflowChains(
   for (const [, entry] of registry.entries()) {
     if (!entry.nextSteps || entry.nextSteps.length === 0) continue;
     sources.push(entry);
-    for (const step of entry.nextSteps) targets.add(step.route);
+    for (const step of entry.nextSteps) {
+      if (step.route !== undefined) targets.add(step.route);
+    }
   }
 
   const roots = sources
@@ -269,13 +361,29 @@ export function buildWorkflowChains(
     let extended = false;
     if (chain.length < MAX_WORKFLOW_DEPTH) {
       for (const step of steps) {
+        if (step.route === undefined) {
+          // External step: a terminal leaf — the request only exists in the
+          // previous response's `next` array, so there is nothing to follow.
+          extended = true;
+          chains.push([...chain, workflowExternalStep(step)]);
+          continue;
+        }
         if (visited.has(step.route)) continue;
         const target = registry.get(step.route);
         if (!target) continue;
         extended = true;
         walk(
           target,
-          [...chain, workflowStep(target, step.note ?? target.description, baseUrl, basePath)],
+          [
+            ...chain,
+            workflowStep(
+              target,
+              step.note ?? target.description,
+              step.retryAfterSeconds,
+              baseUrl,
+              basePath,
+            ),
+          ],
           new Set(visited).add(step.route),
         );
       }
@@ -284,7 +392,11 @@ export function buildWorkflowChains(
   };
 
   for (const root of roots) {
-    walk(root, [workflowStep(root, root.description, baseUrl, basePath)], new Set([root.key]));
+    walk(
+      root,
+      [workflowStep(root, root.description, undefined, baseUrl, basePath)],
+      new Set([root.key]),
+    );
   }
 
   return chains;
@@ -293,9 +405,10 @@ export function buildWorkflowChains(
 function workflowStep(
   entry: RouteEntry,
   note: string | undefined,
+  retryAfterSeconds: number | undefined,
   baseUrl: string,
   basePath: string,
-): WorkflowStep {
+): WorkflowRouteStep {
   const price = routeNextPrice(entry);
   return {
     method: entry.method,
@@ -303,5 +416,14 @@ function workflowStep(
     auth: entry.authMode,
     ...(price !== undefined && { price }),
     ...(note !== undefined && { note }),
+    ...(retryAfterSeconds !== undefined && { retryAfterSeconds }),
+  };
+}
+
+function workflowExternalStep(step: ExternalNextStepConfig): WorkflowExternalStep {
+  return {
+    external: true,
+    ...(step.note !== undefined && { note: step.note }),
+    ...(step.retryAfterSeconds !== undefined && { retryAfterSeconds: step.retryAfterSeconds }),
   };
 }

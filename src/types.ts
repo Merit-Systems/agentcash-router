@@ -234,20 +234,73 @@ export interface SettlementLifecycle<TBody = unknown, TResult = unknown> {
 }
 
 /**
- * A declared successor route for `.nextStep()` chaining. Deterministic at
- * route definition time: the target is a registry key, and the advertised
- * method/auth/price are derived from the target's own `RouteEntry`.
+ * A third-party request advertised by an external `.nextStep()`. The successor
+ * lives outside the registry (e.g. a presigned-S3 PUT URL from the handler
+ * result), so everything about it is resolved from the result at response time.
  */
-export interface NextStepConfig<TResult = unknown> {
-  /** Target route's registry key (its path template, e.g. `jobs/{jobId}`). Existence is validated by `registry.validate()` at discovery time. */
-  route: string;
-  /** Derive target args from the handler result. Fills `{param}` slots in the target path; leftover keys become query params on GET targets or a `body` suggestion on other methods. Omitted: the unresolved template URL is advertised as-is. */
-  args?: (result: TResult) => Record<string, unknown>;
+export interface ExternalRequest {
+  url: string;
+  /** HTTP method for the external call. @default 'GET' */
+  method?: string;
+  headers?: Record<string, string>;
+  body?: unknown;
+}
+
+/**
+ * Request context handed to a route-form `args()` mapper as its second
+ * argument — for chains that need values the CALLER sent (e.g. a token in the
+ * request body) that are not echoed in the handler result.
+ */
+export interface NextStepRequestContext {
+  /** Parsed request body. `undefined` when no body was parsed for this request. */
+  body: unknown;
+  /** Parsed query params (`.query()` schema output), or `undefined`. */
+  query: unknown;
+  /** Path-template params matched from the route's own `{param}` segments. */
+  params: Record<string, string>;
+}
+
+interface NextStepBase<TResult = unknown> {
   /** Advertise this step only when the predicate returns true. @default always */
   when?: (result: TResult) => boolean;
-  /** Hint for callers (e.g. polling cadence). Also rendered in discovery (OpenAPI links, workflows). */
+  /** Hint for callers (e.g. polling cadence). Also rendered in the discovery workflows map. */
   note?: string;
+  /** Suggested seconds to wait before making this call (polling cadence). Must be a finite number > 0; validated at registration. Emitted verbatim on `next` entries and rendered in the workflows map. */
+  retryAfterSeconds?: number;
 }
+
+/**
+ * A declared registry-route successor for `.nextStep()` chaining.
+ * Deterministic at route definition time: the target is a registry key, and
+ * the advertised method/auth/price are derived from the target's own
+ * `RouteEntry`.
+ */
+export interface RouteNextStepConfig<TResult = unknown> extends NextStepBase<TResult> {
+  /** Target route's registry key (its path template, e.g. `jobs/{jobId}`). Existence is validated by `registry.validate()` at discovery time. */
+  route: string;
+  external?: never;
+  /** Derive target args from the handler result (and optionally the original request context). Fills `{param}` slots in the target path; leftover keys become query params on GET targets or a `body` suggestion on other methods. Omitted: the unresolved template URL is advertised as-is. */
+  args?: (result: TResult, request: NextStepRequestContext) => Record<string, unknown>;
+}
+
+/**
+ * A declared external successor for `.nextStep()` chaining — the next call is
+ * a third-party URL resolved from the handler result (e.g. a presigned-S3
+ * upload), not a registry route. Advertised without `auth`/`price` (unknown
+ * for third-party hosts). Returning `null`/`undefined` skips the entry (same
+ * semantics as a false `when()`); exceptions are reported as warnings and
+ * skip the entry — they never break the response.
+ */
+export interface ExternalNextStepConfig<TResult = unknown> extends NextStepBase<TResult> {
+  route?: never;
+  /** Resolve the external request from the handler result. Return `null`/`undefined` to skip. */
+  external: (result: TResult) => ExternalRequest | null | undefined;
+}
+
+/** A declared successor for `.nextStep()`: exactly one of `route` (registry target) or `external` (third-party request resolver). */
+export type NextStepConfig<TResult = unknown> =
+  | RouteNextStepConfig<TResult>
+  | ExternalNextStepConfig<TResult>;
 
 export type ChargeFn = () => Promise<void>;
 export type UptoChargeFn = (amount: string) => Promise<void>;
@@ -333,6 +386,8 @@ export interface RouteEntry {
   /** Optional conforming example for the response output (any JSON value). Validated against `outputSchema` at registration. Without it, the bazaar `output` block is omitted (schema alone can't be exposed). */
   outputExample?: JsonValue;
   description?: string;
+  /** Long-form operation documentation (`.docs()`). Emitted ONLY as the OpenAPI operation `description`; never reaches the 402 challenge, well-known, or llms.txt. */
+  docs?: string;
   path?: string;
   method: RouteMethod;
   maxPrice?: string;
