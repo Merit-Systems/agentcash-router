@@ -259,7 +259,8 @@ router.route({ path: 'jobs/{jobId}' })
     route: 'jobs/{jobId}',
     args: (r) => ({ jobId: r.jobId }),
     when: (r) => r.status === 'pending',
-    note: 'Still processing — poll again in ~5s.',
+    note: 'Still processing — poll again.',
+    retryAfterSeconds: 5,
   })
   .handler(async ({ params }) => getJobStatus(params.jobId));
 ```
@@ -268,11 +269,62 @@ Semantics:
 
 - `price` is a fixed string for static pricing, `{ min, max }` for dynamic/tiered, and omitted for free routes.
 - `args()` fills `{param}` slots in the target path; leftover keys become query params on GET targets or a suggested `body` object otherwise.
+- `retryAfterSeconds` (finite, > 0) hints at polling cadence; it is emitted verbatim on `next` entries.
 - A handler-returned `next` key always wins; the router never overwrites it.
-- `when()`/`args()` errors and unregistered targets are reported via `onAlert` and skipped — they never break the response.
-- `registry.validate()` asserts every declared target exists.
+- `when()`/`args()`/`external()` errors and unregistered targets are reported via `onAlert` and skipped — they never break the response.
+- `registry.validate()` asserts every declared route target exists (external steps have no registry target and are not validated).
 
-The response body is the **single chaining channel** — deliberately. A chain is dynamic three ways (the URL is resolved from the actual result, branches are `when()`-filtered, and price is current), so a static copy in discovery would always be the stale version. The one static trace is the map: `/llms.txt` is appended with an auto-generated `## Workflows` section — the prose orientation you used to hand-write, derived from the route graph instead. OpenAPI output schemas are automatically extended with the optional `next` key so advertised response shapes stay truthful.
+### External steps
+
+Some successors aren't registry routes — e.g. a purchase route whose result carries a presigned-S3 PUT URL. Declare them with `external` instead of `route` (exactly one of the two, enforced at compile time and registration):
+
+```typescript
+router.route({ path: 'uploads/purchase' })
+  .paid('0.05')
+  .output(z.object({ uploadUrl: z.string() }))
+  .nextStep({
+    external: (r) => ({ url: r.uploadUrl, method: 'PUT',
+      headers: { 'content-type': 'application/octet-stream' } }),
+    note: 'PUT the file bytes to the presigned URL.',
+  })
+  .handler(purchase);
+```
+
+External entries render as `{ external: true, method, url, headers?, body? }` — with **no `auth` and no `price`**, since neither is knowable for a third-party host (`method` defaults to `GET`). Returning `null`/`undefined` from `external()` skips the entry, same as a false `when()`.
+
+### Request-derived args
+
+`args()` receives the original request context as a second argument (`{ body, query, params }`) for chains that need values the *caller* sent which the handler result doesn't echo — e.g. a status route polling itself with the caller's token:
+
+```typescript
+.nextStep({
+  route: 'runs/{runId}/status',
+  args: (result, request) => ({
+    runId: request.params.runId,
+    token: (request.body as { token: string }).token,
+  }),
+  when: (r) => r.status === 'pending',
+  retryAfterSeconds: 5,
+})
+```
+
+The response body is the **single chaining channel** — deliberately. A chain is dynamic three ways (the URL is resolved from the actual result, branches are `when()`-filtered, and price is current), so a static copy in discovery would always be the stale version. The one static trace is the map: an auto-generated `## Workflows` section rides the guidance channel — appended to `/llms.txt` and to the OpenAPI `info.x-guidance` field (which is what agent pipelines actually read). The map dedupes isomorphic chains (one representative annotated `(and N similar routes)`) and renders at most 12 distinct groups. OpenAPI output schemas are automatically extended with the optional `next` key so advertised response shapes stay truthful.
+
+## Route docs: `.description()` vs `.docs()`
+
+Two fields, two jobs:
+
+- **`.description(text)`** — ONE short sentence. It feeds the 402 challenge's `resource.description`, the OpenAPI operation `summary`, and discovery one-liners. Capped at 400 chars on paid x402 routes (the CDP facilitator rejects longer challenge descriptions).
+- **`.docs(text)`** — unbounded long-form documentation for agents who inspect the route: model quirks, how to interpret responses, when to use it vs. siblings. Emitted **only** as the OpenAPI operation `description` (fetched on demand via schema inspection); it never reaches the 402 challenge, well-known, or llms.txt.
+
+```typescript
+router.route({ path: 'videos/generate' })
+  .paid('0.40')
+  .description('Generate a video from a text prompt')
+  .docs('Generation takes 30–90s; poll the returned job until "complete". ' +
+    'The model ignores camera directives inside prompts — use the cameraFixed flag instead. …')
+  .handler(generate);
+```
 
 ## Auth modes
 
