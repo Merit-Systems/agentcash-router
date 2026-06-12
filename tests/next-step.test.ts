@@ -1070,3 +1070,27 @@ describe('workflow map for cyclic chain graphs', () => {
     expect(text.match(/1\. POST/g)?.length).toBe(1);
   });
 });
+
+describe('next key serialization position', () => {
+  it('serializes next FIRST so body truncation cannot eat it', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('target')
+      .unprotected()
+      .handler(async () => ({ ok: true }));
+    router
+      .route('source')
+      .unprotected()
+      .nextStep({ route: 'target' })
+      .handler(async () => ({ big: 'x'.repeat(500), more: [1, 2, 3] }));
+
+    const res = await router.fetch(
+      new Request('https://api.example.com/api/source', { method: 'POST' }),
+    );
+    const text = await res.text();
+    expect(text.indexOf('"next"')).toBeLessThan(text.indexOf('"big"'));
+    const body = JSON.parse(text);
+    expect(body.next[0].url).toBe('https://api.example.com/api/target');
+    expect(body.big.length).toBe(500);
+  });
+});

@@ -146,7 +146,10 @@ export function applyNextSteps(
   const entries = buildNextEntries(ctx, ctx.routing, steps, rawResult, requestContext);
   if (entries.length === 0) return unchanged;
 
-  const body = { ...rawResult, next: entries };
+  // `next` serializes FIRST: large handler results are the ones MCP harnesses
+  // preview-truncate or persist to disk, and tail-position keys are the first
+  // thing truncation eats. The hops must survive into the agent's context.
+  const body = { next: entries, ...rawResult };
   const headers = new Headers(response.headers);
   headers.delete('content-length');
   return {
