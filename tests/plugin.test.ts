@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createRequestHandler, type RouterDeps } from '../src/pipeline/orchestrate.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
@@ -65,7 +64,7 @@ function makeEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
   };
 }
 
-function makePaymentRequest(body?: unknown): NextRequest {
+function makePaymentRequest(body?: unknown): Request {
   return withX402Payment({ body });
 }
 
@@ -75,7 +74,7 @@ describe('plugin lifecycle', () => {
     const deps = makeDeps(plugin);
     const entry = makeEntry({ authMode: 'unprotected', protocols: [], bodySchema: undefined });
     const handler = createRequestHandler(entry, async () => ({ ok: true }), deps);
-    const req = new NextRequest('http://localhost:3000/api/test');
+    const req = new Request('http://localhost:3000/api/test');
     await handler(req);
     expect(plugin.calls.onRequest).toHaveLength(1);
   });
@@ -110,7 +109,7 @@ describe('plugin lifecycle', () => {
     const deps = makeDeps(plugin);
     const entry = makeEntry({ authMode: 'unprotected', protocols: [], bodySchema: undefined });
     const handler = createRequestHandler(entry, async () => ({ ok: true }), deps);
-    const req = new NextRequest('http://localhost:3000/api/test');
+    const req = new Request('http://localhost:3000/api/test');
     const res = await handler(req);
     expect(plugin.calls.onResponse).toHaveLength(1);
     expect(res.headers.get(HEADERS.REQUEST_ID)).toBeTruthy();
@@ -127,7 +126,7 @@ describe('plugin lifecycle', () => {
       },
       deps,
     );
-    const req = new NextRequest('http://localhost:3000/api/test');
+    const req = new Request('http://localhost:3000/api/test');
     const res = await handler(req);
     expect(plugin.calls.onResponse).toHaveLength(1);
     expect(res.headers.get(HEADERS.REQUEST_ID)).toBeTruthy();
@@ -152,7 +151,7 @@ describe('plugin lifecycle', () => {
       },
       deps,
     );
-    const req = new NextRequest('http://localhost:3000/api/test');
+    const req = new Request('http://localhost:3000/api/test');
     const res = await handler(req);
 
     expect(plugin.calls.onError).toHaveLength(1);
@@ -303,7 +302,7 @@ describe('plugin lifecycle', () => {
       },
       deps,
     );
-    const req = new NextRequest('http://localhost:3000/api/test');
+    const req = new Request('http://localhost:3000/api/test');
     await handler(req);
     expect(plugin.calls.onAlert).toHaveLength(1);
     expect((plugin.calls.onAlert[0][1] as { level: string }).level).toBe('warn');
@@ -313,7 +312,7 @@ describe('plugin lifecycle', () => {
     const deps = makeDeps(undefined);
     const entry = makeEntry({ authMode: 'unprotected', protocols: [], bodySchema: undefined });
     const handler = createRequestHandler(entry, async () => ({ ok: true }), deps);
-    const req = new NextRequest('http://localhost:3000/api/test');
+    const req = new Request('http://localhost:3000/api/test');
     const res = await handler(req);
     expect(res.status).toBe(200);
   });
@@ -330,7 +329,7 @@ describe('plugin lifecycle', () => {
     const deps = makeDeps(asyncPlugin);
     const entry = makeEntry({ authMode: 'unprotected', protocols: [], bodySchema: undefined });
     const handler = createRequestHandler(entry, async () => ({ ok: true }), deps);
-    const req = new NextRequest('http://localhost:3000/api/test');
+    const req = new Request('http://localhost:3000/api/test');
     // Should not throw or cause unhandled rejection
     const res = await handler(req);
     expect(res.status).toBe(200);
@@ -350,7 +349,7 @@ describe('PluginContext', () => {
       },
       makeDeps(),
     );
-    const req = new NextRequest('http://localhost:3000/api/test');
+    const req = new Request('http://localhost:3000/api/test');
     await handler(req);
     // wallet on HandlerContext is set at construction, not mutated
     // But setVerifiedWallet updates the pluginCtx
@@ -369,7 +368,7 @@ describe('PluginContext', () => {
       },
       deps,
     );
-    const req = new NextRequest('http://localhost:3000/api/test');
+    const req = new Request('http://localhost:3000/api/test');
     await handler(req);
     expect(ctxReceived).toBe(true);
   });

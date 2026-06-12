@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import type { PaymentStrategy, VerifySuccess } from '../../../protocols/types.js';
 import { atomicToDecimal } from '../../../pricing/format.js';
 import { HttpError, type RouteEntry } from '../../../types.js';
@@ -18,7 +17,7 @@ export async function runDynamicRequestFlow(args: {
   account: unknown;
   body: unknown;
   result: DynamicRequestResult;
-}): Promise<NextResponse> {
+}): Promise<Response> {
   const { ctx, strategy, verifyOutcome, account, body, result } = args;
   const { routeEntry } = ctx;
 

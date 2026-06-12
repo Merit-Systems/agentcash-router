@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import { selectPricing } from '../../../pricing/index.js';
 import { selectIncomingStrategy } from '../../../protocols/index.js';
 import {
@@ -20,7 +19,7 @@ import { runDynamicStreamFlow } from './dynamic-stream.js';
 import type { VerifySuccess } from '../../../protocols/types.js';
 import type { DynamicInvokeResult } from '../../steps/types.js';
 
-export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
+export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<Response> {
   const { request, routeEntry, deps, report } = ctx;
 
   const apiKeyGate = await runApiKeyGate(ctx);

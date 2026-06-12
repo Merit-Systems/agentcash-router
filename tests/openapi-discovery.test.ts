@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { NextRequest } from 'next/server';
 import { RouteRegistry } from '../src/registry.js';
 import { createOpenAPIHandler } from '../src/discovery/openapi.js';
 import { TEMPO_USDC_ADDRESS } from '../src/index.js';
@@ -17,7 +16,7 @@ function makeEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
   };
 }
 
-const request = new NextRequest('http://localhost:3000/openapi.json');
+const request = new Request('http://localhost:3000/openapi.json');
 
 describe('openapi discovery document', () => {
   it('emits paid route with x-payment-info + 402 and no auth security', async () => {

@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createRequestHandler, type RouterDeps } from '../src/pipeline/orchestrate.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
@@ -44,7 +43,7 @@ function makeDeps(plugin?: RouterPlugin): RouterDeps {
   };
 }
 
-function makePaymentRequest(body?: unknown): NextRequest {
+function makePaymentRequest(body?: unknown): Request {
   return withX402Payment({ body });
 }
 
@@ -73,7 +72,7 @@ describe('provider quota extraction', () => {
       async () => ({ data: 'hello', rateLimit: { remaining: 500 } }),
       deps,
     );
-    const req = new NextRequest('http://localhost:3000/api/test');
+    const req = new Request('http://localhost:3000/api/test');
     const res = await handler(req);
 
     expect(res.status).toBe(200);
@@ -106,7 +105,7 @@ describe('provider quota extraction', () => {
     };
 
     const handler = createRequestHandler(entry, async () => ({ ok: true }), deps);
-    await handler(new NextRequest('http://localhost:3000/api/test'));
+    await handler(new Request('http://localhost:3000/api/test'));
 
     expect(plugin.quotaEvents).toHaveLength(1);
     expect(plugin.quotaEvents[0].level).toBe('healthy');
@@ -133,7 +132,7 @@ describe('provider quota extraction', () => {
     };
 
     const handler = createRequestHandler(entry, async () => ({}), deps);
-    await handler(new NextRequest('http://localhost:3000/api/test'));
+    await handler(new Request('http://localhost:3000/api/test'));
 
     expect(plugin.quotaEvents[0].level).toBe('warn');
   });
@@ -157,7 +156,7 @@ describe('provider quota extraction', () => {
     };
 
     const handler = createRequestHandler(entry, async () => ({}), deps);
-    await handler(new NextRequest('http://localhost:3000/api/test'));
+    await handler(new Request('http://localhost:3000/api/test'));
 
     expect(plugin.quotaEvents[0].level).toBe('critical');
     expect(plugin.quotaEvents[0].overage).toBe('same-rate');
@@ -182,7 +181,7 @@ describe('provider quota extraction', () => {
     };
 
     const handler = createRequestHandler(entry, async () => ({}), deps);
-    await handler(new NextRequest('http://localhost:3000/api/test'));
+    await handler(new Request('http://localhost:3000/api/test'));
 
     expect(plugin.quotaEvents[0].overage).toBe('hard-stop');
     expect(plugin.quotaEvents[0].level).toBe('critical');
@@ -210,7 +209,7 @@ describe('provider quota extraction', () => {
       },
       deps,
     );
-    await handler(new NextRequest('http://localhost:3000/api/test'));
+    await handler(new Request('http://localhost:3000/api/test'));
 
     expect(extractSpy).not.toHaveBeenCalled();
     expect(plugin.quotaEvents).toHaveLength(0);
@@ -234,7 +233,7 @@ describe('provider quota extraction', () => {
     };
 
     const handler = createRequestHandler(entry, async () => ({}), deps);
-    await handler(new NextRequest('http://localhost:3000/api/test'));
+    await handler(new Request('http://localhost:3000/api/test'));
 
     expect(plugin.quotaEvents).toHaveLength(0);
   });
@@ -258,7 +257,7 @@ describe('provider quota extraction', () => {
     };
 
     const handler = createRequestHandler(entry, async () => ({ ok: true }), deps);
-    const res = await handler(new NextRequest('http://localhost:3000/api/test'));
+    const res = await handler(new Request('http://localhost:3000/api/test'));
 
     // Request still succeeds despite extraction failure
     expect(res.status).toBe(200);
@@ -316,7 +315,7 @@ describe('provider quota extraction', () => {
     };
 
     const handler = createRequestHandler(entry, async () => ({}), deps);
-    await handler(new NextRequest('http://localhost:3000/api/test'));
+    await handler(new Request('http://localhost:3000/api/test'));
 
     expect(plugin.quotaEvents[0].level).toBe('healthy');
   });

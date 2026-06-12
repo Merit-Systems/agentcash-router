@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { firePluginResponse, type PluginFailure } from '../../plugin/events.js';
 import type { FlowCtx } from './types.js';
 
@@ -8,9 +7,9 @@ export function fail(
   message: string,
   requestBody?: unknown,
   failure?: PluginFailure,
-): NextResponse {
+): Response {
   const responseBody = { success: false, error: message };
-  const response = NextResponse.json(responseBody, { status });
+  const response = Response.json(responseBody, { status });
   firePluginResponse(ctx, response, requestBody, responseBody, {
     ...failure,
     message: failure?.message ?? message,

@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 import type { RouteRegistry } from '../registry.js';
 import type { DiscoveryConfig } from '../types.js';
 import { resolveGuidance } from './utils/guidance.js';
@@ -13,7 +11,7 @@ export function createWellKnownHandler(
   const normalizedBase = baseUrl.replace(/\/+$/, '');
   let validated = false;
 
-  return async (_request: NextRequest): Promise<NextResponse> => {
+  return async (_request: Request): Promise<Response> => {
     if (!validated && pricesKeys) {
       registry.validate(pricesKeys);
       validated = true;
@@ -54,7 +52,7 @@ export function createWellKnownHandler(
       body.instructions = instructions;
     }
 
-    return NextResponse.json(body, {
+    return Response.json(body, {
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET',

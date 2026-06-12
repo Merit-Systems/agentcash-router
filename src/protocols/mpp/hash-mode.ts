@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import type { Transport } from 'mppx/server';
 import { HEADERS } from '../../headers.js';
 import type { HandlerPaymentContext } from '../../types.js';
@@ -74,7 +73,7 @@ export function settleHashMode(args: SettleArgs): SettleOutcome {
   const { response, payment, token } = args;
   const hashToken = token as HashModeToken;
 
-  const receiptResponse = hashToken.charge.withReceipt(response) as NextResponse;
+  const receiptResponse = hashToken.charge.withReceipt(response) as Response;
   receiptResponse.headers.set('Cache-Control', 'private');
 
   return {

@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
 import { decodePaymentRequiredHeader, encodePaymentSignatureHeader } from '@x402/core/http';
 import { createRequestHandler, type RouterDeps } from '../src/pipeline/orchestrate.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
@@ -151,7 +150,7 @@ describe('upto scheme', () => {
         const deps = makeDeps(server, bothAccepts);
 
         const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), deps);
-        const response = await handler(new NextRequest(URL, { method: 'POST' }));
+        const response = await handler(new Request(URL, { method: 'POST' }));
 
         expect(response.status).toBe(402);
         const challenge = decodePaymentRequiredHeader(response.headers.get('PAYMENT-REQUIRED')!);
@@ -173,7 +172,7 @@ describe('upto scheme', () => {
           async () => ({ ok: true }),
           deps,
         );
-        const response = await handler(new NextRequest(URL, { method: 'POST' }));
+        const response = await handler(new Request(URL, { method: 'POST' }));
 
         expect(response.status).toBe(402);
         const challenge = decodePaymentRequiredHeader(response.headers.get('PAYMENT-REQUIRED')!);
@@ -206,7 +205,7 @@ describe('upto scheme', () => {
           async () => ({ ok: true }),
           deps,
         );
-        const response = await handler(new NextRequest(URL, { method: 'POST' }));
+        const response = await handler(new Request(URL, { method: 'POST' }));
 
         expect(response.status).toBe(402);
         const challenge = decodePaymentRequiredHeader(response.headers.get('PAYMENT-REQUIRED')!);
@@ -257,7 +256,7 @@ describe('upto scheme', () => {
         deps,
       );
       const response = await handler(
-        new NextRequest(URL, {
+        new Request(URL, {
           method: 'POST',
           headers: { 'X-PAYMENT': paymentHeader },
         }),
@@ -312,7 +311,7 @@ describe('upto scheme', () => {
 
       const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), deps);
       const response = await handler(
-        new NextRequest(URL, { method: 'POST', headers: { 'X-PAYMENT': uptoPayment } }),
+        new Request(URL, { method: 'POST', headers: { 'X-PAYMENT': uptoPayment } }),
       );
 
       expect(response.status).toBe(402);
@@ -382,7 +381,7 @@ describe('upto scheme', () => {
       );
 
       const res = await handler(
-        new NextRequest(URL, { method: 'POST', headers: { 'X-PAYMENT': makeUptoPayment() } }),
+        new Request(URL, { method: 'POST', headers: { 'X-PAYMENT': makeUptoPayment() } }),
       );
 
       expect(res.status).toBe(200);
@@ -407,7 +406,7 @@ describe('upto scheme', () => {
       );
 
       const res = await handler(
-        new NextRequest(URL, { method: 'POST', headers: { 'X-PAYMENT': makeUptoPayment() } }),
+        new Request(URL, { method: 'POST', headers: { 'X-PAYMENT': makeUptoPayment() } }),
       );
 
       expect(res.status).toBe(500);

@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 import { buildSIWXExtension, SIWX_ERROR_MESSAGES, verifySIWX } from '../../auth/siwx.js';
 import { SIWX_CHALLENGE_EXPIRY_MS } from '../../kv-store/index.js';
 import { normalizeWalletAddress } from '../../auth/normalize-wallet.js';
@@ -17,11 +15,11 @@ import {
   runValidate,
 } from '../steps/index.js';
 
-export async function runSiwxOnlyFlow(ctx: FlowCtx): Promise<NextResponse> {
+export async function runSiwxOnlyFlow(ctx: FlowCtx): Promise<Response> {
   const { request, routeEntry, deps } = ctx;
 
   if (routeEntry.validateFn && routeEntry.bodySchema && !request.headers.get(HEADERS.SIWX)) {
-    const earlyClone = request.clone() as NextRequest;
+    const earlyClone = request.clone();
     const earlyBody = await parseBody(ctx, earlyClone);
     if (earlyBody.ok) {
       const validateErr = await runValidate(ctx, earlyBody.data);
@@ -49,7 +47,7 @@ export async function runSiwxOnlyFlow(ctx: FlowCtx): Promise<NextResponse> {
       fireAuthVerified(ctx, { authMode: 'siwx', wallet: mppSiwxResult.wallet });
       const authResponse = await runHandlerOnly(ctx, mppSiwxResult.wallet, undefined);
       if (authResponse.status < 400) {
-        return mppSiwxResult.withReceipt(authResponse) as NextResponse;
+        return mppSiwxResult.withReceipt(authResponse) as Response;
       }
       return authResponse;
     }
@@ -61,7 +59,7 @@ export async function runSiwxOnlyFlow(ctx: FlowCtx): Promise<NextResponse> {
 
   const siwx = await verifySIWX(request, routeEntry, deps.nonceStore);
   if (!siwx.valid) {
-    const response = NextResponse.json(
+    const response = Response.json(
       { error: siwx.code, message: SIWX_ERROR_MESSAGES[siwx.code] },
       { status: 402 },
     );
@@ -75,7 +73,7 @@ export async function runSiwxOnlyFlow(ctx: FlowCtx): Promise<NextResponse> {
   return runHandlerOnly(ctx, wallet, undefined);
 }
 
-async function buildSiwxChallenge(ctx: FlowCtx): Promise<NextResponse> {
+async function buildSiwxChallenge(ctx: FlowCtx): Promise<Response> {
   const { request, routeEntry, deps } = ctx;
 
   const url = new URL(request.url);
@@ -130,7 +128,7 @@ async function buildSiwxChallenge(ctx: FlowCtx): Promise<NextResponse> {
     );
   }
 
-  const response = new NextResponse(JSON.stringify(paymentRequired), {
+  const response = new Response(JSON.stringify(paymentRequired), {
     status: 402,
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
   });

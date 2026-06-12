@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import type { Transport } from 'mppx/server';
 import type { Session } from 'mppx/tempo';
 import { AUTH_SCHEME, HEADERS } from '../../headers.js';
@@ -96,7 +95,7 @@ export const mppStrategy: PaymentStrategy = {
       }
     }
 
-    const sse = sseResult.withReceipt(forwardHandlerStreamWithChannelDebit) as NextResponse;
+    const sse = sseResult.withReceipt(forwardHandlerStreamWithChannelDebit) as Response;
     sse.headers.set('Cache-Control', 'private');
 
     const settledPayment: HandlerPaymentContext & { status: 'settled' } = {

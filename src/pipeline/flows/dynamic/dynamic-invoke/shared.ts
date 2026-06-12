@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import type { HandlerContext, HandlerPaymentContext } from '../../../../types.js';
 import { HttpError } from '../../../../types.js';
 import type { DynamicRequestResult, FlowCtx } from '../../../steps/types.js';
@@ -13,6 +12,7 @@ export function buildBaseHandlerCtx(
   return {
     body: body as never,
     query: ctx.query as never,
+    params: ctx.params,
     request: ctx.request,
     requestId: ctx.meta.requestId,
     route: ctx.routeEntry.key,
@@ -24,8 +24,8 @@ export function buildBaseHandlerCtx(
   };
 }
 
-export function toResponse(rawResult: unknown): NextResponse {
-  return rawResult instanceof Response ? (rawResult as NextResponse) : NextResponse.json(rawResult);
+export function toResponse(rawResult: unknown): Response {
+  return rawResult instanceof Response ? rawResult : Response.json(rawResult);
 }
 
 export function errorResult(error: unknown): DynamicRequestResult {
@@ -39,7 +39,7 @@ export function errorResult(error: unknown): DynamicRequestResult {
   const responseBody = { success: false, error: message };
   return {
     kind: 'request',
-    response: NextResponse.json(responseBody, { status }),
+    response: Response.json(responseBody, { status }),
     rawResult: responseBody,
     handlerError: error,
   };

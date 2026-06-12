@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
 import {
   decodePaymentRequiredHeader,
   decodePaymentResponseHeader,
@@ -81,7 +80,7 @@ function makePaymentRequest(
   scheme = 'exact',
   asset = 'mock-usdc',
   extra?: Record<string, unknown>,
-): NextRequest {
+): Request {
   const paymentHeader = encodePaymentSignatureHeader({
     x402Version: 2,
     resource: { url: URL, method: 'POST' },
@@ -99,7 +98,7 @@ function makePaymentRequest(
     },
   });
 
-  return new NextRequest(URL, {
+  return new Request(URL, {
     method: 'POST',
     headers: {
       'PAYMENT-SIGNATURE': paymentHeader,
@@ -195,7 +194,7 @@ describe('x402 multi-network integration', () => {
     const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), makeDeps(server));
 
     const response = await withPassThroughFacilitatorAccepts(() =>
-      handler(new NextRequest(URL, { method: 'POST' })),
+      handler(new Request(URL, { method: 'POST' })),
     );
 
     expect(response.status).toBe(402);
@@ -217,7 +216,7 @@ describe('x402 multi-network integration', () => {
     const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), makeDeps(server));
 
     const response = await withPassThroughFacilitatorAccepts(() =>
-      handler(new NextRequest(URL, { method: 'POST' })),
+      handler(new Request(URL, { method: 'POST' })),
     );
 
     expect(response.status).toBe(402);
@@ -280,7 +279,7 @@ describe('x402 multi-network integration', () => {
 
     const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), deps);
     const challengeResponse = await withPassThroughFacilitatorAccepts(() =>
-      handler(new NextRequest(URL, { method: 'POST' })),
+      handler(new Request(URL, { method: 'POST' })),
     );
     const challenge = decodePaymentRequiredHeader(
       challengeResponse.headers.get('PAYMENT-REQUIRED')!,
@@ -352,7 +351,7 @@ describe('x402 multi-network integration', () => {
       },
       async (fetchMock) => {
         const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), deps);
-        const response = await handler(new NextRequest(URL, { method: 'POST' }));
+        const response = await handler(new Request(URL, { method: 'POST' }));
         const challenge = decodePaymentRequiredHeader(response.headers.get('PAYMENT-REQUIRED')!);
         const settlementAccept = challenge.accepts.find(
           (accept) => accept.scheme === SOLANA_SETTLEMENT_SCHEME,
@@ -401,7 +400,7 @@ describe('x402 multi-network integration', () => {
       },
       async (fetchMock) => {
         const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), deps);
-        const response = await handler(new NextRequest(URL, { method: 'POST' }));
+        const response = await handler(new Request(URL, { method: 'POST' }));
         const challenge = decodePaymentRequiredHeader(response.headers.get('PAYMENT-REQUIRED')!);
         const solanaAccept = challenge.accepts.find(
           (accept) => accept.scheme === 'exact' && accept.network === SOLANA_NETWORK,
@@ -435,7 +434,7 @@ describe('x402 multi-network integration', () => {
 
     await withFetchMock({ accepts: [] }, async (fetchMock) => {
       const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), deps);
-      await handler(new NextRequest(URL, { method: 'POST' }));
+      await handler(new Request(URL, { method: 'POST' }));
 
       expect(fetchMock).toHaveBeenCalledWith('https://facilitator.example/accepts', {
         method: 'POST',
@@ -453,7 +452,7 @@ describe('x402 multi-network integration', () => {
     const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), makeDeps(server));
 
     const challengeResponse = await withPassThroughFacilitatorAccepts(() =>
-      handler(new NextRequest(URL, { method: 'POST' })),
+      handler(new Request(URL, { method: 'POST' })),
     );
     const challenge = decodePaymentRequiredHeader(
       challengeResponse.headers.get('PAYMENT-REQUIRED')!,

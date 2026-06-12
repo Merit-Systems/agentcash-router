@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import { Transaction as TempoTransaction } from 'viem/tempo';
 import { call as viemCall } from 'viem/actions';
 import { HEADERS } from '../../headers.js';
@@ -108,7 +107,7 @@ export async function settleTxMode(args: SettleArgs): Promise<SettleOutcome> {
     };
   }
 
-  const receiptResponse = result.withReceipt(response) as NextResponse;
+  const receiptResponse = result.withReceipt(response) as Response;
   receiptResponse.headers.set('Cache-Control', 'private');
   const receiptHeader = receiptResponse.headers.get(HEADERS.MPP_PAYMENT_RECEIPT) ?? undefined;
   const txHash = extractTxHash(receiptHeader);

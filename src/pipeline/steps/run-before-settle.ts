@@ -1,13 +1,9 @@
-import type { NextResponse } from 'next/server';
 import { errorMessage, errorStatus } from './errors.js';
 import { fail } from './fail.js';
 import { settlementContext } from './settlement-context.js';
 import type { FlowCtx, SettleScope } from './types.js';
 
-export async function runBeforeSettle(
-  ctx: FlowCtx,
-  scope: SettleScope,
-): Promise<NextResponse | null> {
+export async function runBeforeSettle(ctx: FlowCtx, scope: SettleScope): Promise<Response | null> {
   const hook = ctx.routeEntry.settlement?.beforeSettle;
   if (!hook) return null;
   try {

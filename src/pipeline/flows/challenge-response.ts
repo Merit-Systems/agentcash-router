@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import type { PricingStrategy } from '../../pricing/index.js';
 import { getAllowedStrategies } from '../../protocols/index.js';
 import type { VerifyFailure } from '../../protocols/types.js';
@@ -10,14 +9,14 @@ export async function buildChallengeResponse(
   pricing: PricingStrategy | null,
   body: unknown | undefined,
   failure?: VerifyFailure,
-): Promise<NextResponse> {
+): Promise<Response> {
   let challengePrice: string;
   try {
     challengePrice = pricing ? await pricing.challengeQuote(body) : '0';
   } catch (err) {
     const message = errorMessage(err, 'Price calculation failed');
     const responseBody = { success: false, error: message };
-    const errorResponse = NextResponse.json(responseBody, { status: errorStatus(err, 500) });
+    const errorResponse = Response.json(responseBody, { status: errorStatus(err, 500) });
     firePluginResponse(ctx, errorResponse, body, responseBody, { message, cause: err });
     return errorResponse;
   }
@@ -28,7 +27,7 @@ export async function buildChallengeResponse(
     ? JSON.stringify({ error: failure.message ?? null, reason: failure.reason })
     : null;
 
-  const response = new NextResponse(responseBody, {
+  const response = new Response(responseBody, {
     status: 402,
     headers: {
       'Content-Type': 'application/json',
@@ -57,7 +56,7 @@ export async function buildChallengeResponse(
       ctx.report('critical', message);
       if (strategy.protocol === 'x402') {
         const responseBody = { success: false, error: message };
-        const errorResponse = NextResponse.json(responseBody, { status: 500 });
+        const errorResponse = Response.json(responseBody, { status: 500 });
         firePluginResponse(ctx, errorResponse, body, responseBody, { message, cause: err });
         return errorResponse;
       }

@@ -2,6 +2,7 @@ import type { KnipConfig } from 'knip';
 
 const config: KnipConfig = {
   entry: [
+    'src/next.ts',
     'tests/**/*.test.ts',
     'tests/integration-429.ts',
     'tests/integration/test-*.ts',

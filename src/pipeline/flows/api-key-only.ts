@@ -1,8 +1,7 @@
-import type { NextResponse } from 'next/server';
 import { verifyApiKey } from '../../auth/api-key.js';
 import { fail, fireAuthVerified, type FlowCtx, runHandlerOnly } from '../steps/index.js';
 
-export async function runApiKeyOnlyFlow(ctx: FlowCtx): Promise<NextResponse> {
+export async function runApiKeyOnlyFlow(ctx: FlowCtx): Promise<Response> {
   if (!ctx.routeEntry.apiKeyResolver) {
     return fail(ctx, 401, 'API key resolver not configured');
   }

@@ -1,4 +1,3 @@
-import type { NextRequest, NextResponse } from 'next/server';
 import type { ChargeContext } from '../../pricing/metered-charge.js';
 import type { UptoChargeContext } from '../../pricing/upto-charge.js';
 import type { HandlerContext, HandlerPaymentContext, RouteEntry } from '../../types.js';
@@ -11,24 +10,26 @@ export interface FlowCtx {
   routeEntry: RouteEntry;
   handler: (ctx: HandlerContext) => Promise<unknown> | AsyncIterable<unknown>;
   deps: RouterDeps;
-  request: NextRequest;
+  request: Request;
   meta: RequestMeta;
   pluginCtx: PluginContext;
   report: ReportFn;
   query: unknown;
+  /** Path-template params matched from the route's own `{param}` template. */
+  params: Record<string, string>;
 }
 
-export type ParseBodyResult = { ok: true; data: unknown } | { ok: false; response: NextResponse };
+export type ParseBodyResult = { ok: true; data: unknown } | { ok: false; response: Response };
 
 export type StaticRequestResult = {
-  response: NextResponse;
+  response: Response;
   rawResult: unknown;
   handlerError?: unknown;
 };
 
 export type DynamicRequestResult = {
   kind: 'request';
-  response: NextResponse;
+  response: Response;
   rawResult: unknown;
   handlerError?: unknown;
   /** Present when the route is `.upTo()`; bill the accumulated total instead of tickCost. */
@@ -48,7 +49,7 @@ export interface SettleScope<TPayment extends HandlerPaymentContext = HandlerPay
   account: unknown;
   body: unknown;
   payment: TPayment;
-  response: NextResponse;
+  response: Response;
   rawResult: unknown;
   handlerError?: unknown;
 }

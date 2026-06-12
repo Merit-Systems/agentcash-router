@@ -1,6 +1,5 @@
 import http from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
-import { NextRequest } from 'next/server';
 import { decodePaymentRequiredHeader } from '@x402/core/http';
 import { createRouter } from '../src/index.js';
 
@@ -91,7 +90,7 @@ function buildSolanaRouter(facilitatorUrl: string) {
 }
 
 function newRequest() {
-  return new NextRequest('http://localhost:3000/api/test/route', { method: 'POST' });
+  return new Request('http://localhost:3000/api/test/route', { method: 'POST' });
 }
 
 describe('facilitator /supported memoization', () => {

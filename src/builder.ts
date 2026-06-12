@@ -1,4 +1,3 @@
-import type { NextRequest } from 'next/server';
 import type { ZodType } from 'zod';
 import type {
   HandlerContext,
@@ -775,7 +774,7 @@ export class RouteBuilder<
    */
   handler(
     fn: HandlerArg<TBody, TQuery, HasAuth, NeedsBody, HasBody, Bill>,
-  ): (request: NextRequest) => Promise<Response> {
+  ): (request: Request) => Promise<Response> {
     return this.register(fn as unknown as RouteHandler, false);
   }
 
@@ -800,14 +799,14 @@ export class RouteBuilder<
    */
   stream(
     fn: StreamArg<TBody, TQuery, HasAuth, NeedsBody, HasBody, Bill>,
-  ): (request: NextRequest) => Promise<Response> {
+  ): (request: Request) => Promise<Response> {
     return this.register(fn as unknown as RouteHandler, true);
   }
 
   private register(
     handlerFn: RouteHandler,
     streaming: boolean,
-  ): (request: NextRequest) => Promise<Response> {
+  ): (request: Request) => Promise<Response> {
     if (!this.#s.authMode) {
       throw new Error(
         `route '${this.#s.key}': Select an auth mode: .paid(pricing), .upTo(maxPrice), .metered(options), .siwx(), .apiKey(resolver), or .unprotected()`,
@@ -913,9 +912,10 @@ export class RouteBuilder<
       unitType: this.#s.unitType,
     };
 
-    this.#s.registry.register(entry);
+    const requestHandler = createRequestHandler(entry, handlerFn, this.#s.deps);
+    this.#s.registry.register(entry, requestHandler);
 
-    return createRequestHandler(entry, handlerFn, this.#s.deps);
+    return requestHandler;
   }
 }
 

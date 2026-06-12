@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import { selectPricing } from '../../../pricing/index.js';
 import { selectIncomingStrategy } from '../../../protocols/index.js';
 import {
@@ -15,7 +14,7 @@ import { buildChallengeResponse } from '../challenge-response.js';
 import { resolveStaticBodyAndPrice } from './static-body-and-price.js';
 import { runStaticRequestFlow } from './static-request.js';
 
-export async function runStaticPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
+export async function runStaticPaidFlow(ctx: FlowCtx): Promise<Response> {
   const { request, routeEntry, deps, report } = ctx;
 
   const apiKeyGate = await runApiKeyGate(ctx);

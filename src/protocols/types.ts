@@ -1,4 +1,3 @@
-import type { NextRequest, NextResponse } from 'next/server';
 import type { Transport } from 'mppx/server';
 import type {
   HandlerPaymentContext,
@@ -42,7 +41,7 @@ export interface RouterDeps {
 }
 
 export interface VerifyArgs {
-  request: NextRequest;
+  request: Request;
   body: unknown;
   price: string;
   routeEntry: RouteEntry;
@@ -69,8 +68,8 @@ export type VerifyOutcome =
   | { ok: false; kind: 'config'; message: string };
 
 export interface SettleArgs {
-  request: NextRequest;
-  response: NextResponse;
+  request: Request;
+  response: Response;
   payment: HandlerPaymentContext;
   token: unknown;
   routeEntry: RouteEntry;
@@ -80,7 +79,7 @@ export interface SettleArgs {
 }
 
 export interface StreamSettleArgs {
-  request: NextRequest;
+  request: Request;
   source: AsyncIterable<unknown>;
   payment: HandlerPaymentContext;
   token: unknown;
@@ -93,13 +92,13 @@ export interface StreamSettleArgs {
 export type SettleOutcome =
   | {
       ok: true;
-      response: NextResponse;
+      response: Response;
       settledPayment: HandlerPaymentContext & { status: 'settled' };
     }
   | { ok: false; error: unknown; failMessage: string; failStatus?: number };
 
 export interface ChallengeArgs {
-  request: NextRequest;
+  request: Request;
   routeEntry: RouteEntry;
   body: unknown | undefined;
   price: string;

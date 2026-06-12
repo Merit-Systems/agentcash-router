@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 import type { RouteRegistry } from '../registry.js';
 import type { RouteEntry, DiscoveryConfig } from '../types.js';
 import { TEMPO_USDC_ADDRESS } from '../constants.js';
@@ -17,8 +15,8 @@ export function createOpenAPIHandler(
   let cached: unknown = null;
   let validated = false;
 
-  return async (_request: NextRequest): Promise<NextResponse> => {
-    if (cached) return NextResponse.json(cached);
+  return async (_request: Request): Promise<Response> => {
+    if (cached) return Response.json(cached);
 
     if (!validated && pricesKeys) {
       registry.validate(pricesKeys);
@@ -98,7 +96,7 @@ export function createOpenAPIHandler(
 
     cached = createDocument(openApiDocument as never);
 
-    return NextResponse.json(cached);
+    return Response.json(cached);
   };
 }
 

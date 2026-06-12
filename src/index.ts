@@ -1,10 +1,10 @@
-import type { NextRequest } from 'next/server';
-import type { NextResponse } from 'next/server';
+import { Hono } from 'hono';
 import type { RouterConfig } from './types.js';
 import type { RouteDefinition, RouteMethod } from './types.js';
 import type { RouterDeps } from './pipeline/orchestrate.js';
 import { RouteRegistry } from './registry.js';
 import { RouteBuilder } from './builder.js';
+import { toHonoPath } from './path-params.js';
 import {
   MemoryNonceStore,
   MemoryEntitlementStore,
@@ -42,11 +42,15 @@ export interface ServiceRouter<TPriceKeys extends string = never> {
   ): [K] extends [TPriceKeys]
     ? RouteBuilder<undefined, undefined, undefined, true, false, false>
     : RouteBuilder<undefined, undefined, undefined, false, false, false>;
-  wellKnown(): (request: NextRequest) => Promise<NextResponse>;
-  openapi(): (request: NextRequest) => Promise<NextResponse>;
-  llmsTxt(): (request: NextRequest) => Promise<NextResponse>;
+  wellKnown(): (request: Request) => Promise<Response>;
+  openapi(): (request: Request) => Promise<Response>;
+  llmsTxt(): (request: Request) => Promise<Response>;
   monitors(): MonitorEntry[];
   registry: RouteRegistry;
+  /** Standard fetch handler serving all registered routes plus discovery (`/.well-known/x402`, `/openapi.json`, `/llms.txt`). Unmatched requests get a 404 JSON envelope. */
+  fetch(request: Request): Promise<Response>;
+  /** The internal Hono app, for mounting into a larger app: `app.route('/', router.hono())`. */
+  hono(): Hono;
 }
 
 export function createRouter<const P extends Record<string, string> = Record<never, string>>(
@@ -130,6 +134,45 @@ export function createRouter<const P extends Record<string, string> = Record<nev
 
   const pricesKeys = config.prices ? Object.keys(config.prices) : undefined;
 
+  // Internal Hono app: serves all registered routes under `/{basePath}/{path}`
+  // plus the discovery surfaces. Route handlers are bound via registry lookup
+  // at request time (not the handler closure) so re-registration of the same
+  // key+method (last write wins) dispatches to the newest handler.
+  const basePath = (config.basePath ?? 'api').replace(/^\/+|\/+$/g, '');
+  const prefix = basePath ? `/${basePath}` : '';
+  const app = new Hono();
+  const wellKnownHandler = createWellKnownHandler(
+    registry,
+    resolvedBaseUrl,
+    pricesKeys,
+    config.discovery,
+  );
+  const openapiHandler = createOpenAPIHandler(
+    registry,
+    resolvedBaseUrl,
+    pricesKeys,
+    config.discovery,
+  );
+  const llmsTxtHandler = createLlmsTxtHandler(config.discovery);
+  app.get('/.well-known/x402', (c) => wellKnownHandler(c.req.raw));
+  app.get('/openapi.json', (c) => openapiHandler(c.req.raw));
+  app.get('/llms.txt', (c) => llmsTxtHandler(c.req.raw));
+  if (prefix) {
+    // Also serve discovery under the basePath so a Next.js catch-all route
+    // (`app/api/[[...route]]/route.ts`) can reach it via a middleware rewrite.
+    app.get(`${prefix}/.well-known/x402`, (c) => wellKnownHandler(c.req.raw));
+    app.get(`${prefix}/openapi.json`, (c) => openapiHandler(c.req.raw));
+    app.get(`${prefix}/llms.txt`, (c) => llmsTxtHandler(c.req.raw));
+  }
+  app.notFound((c) => c.json({ success: false, error: 'Not found' }, 404));
+
+  registry.onFirstRegister = (entry) => {
+    const template = entry.path ?? entry.key;
+    app.on(entry.method, `${prefix}/${toHonoPath(template)}`, (c) =>
+      registry.dispatch(entry.key, entry.method)(c.req.raw),
+    );
+  };
+
   return {
     route(keyOrDefinition) {
       const isDefinition = typeof keyOrDefinition !== 'string';
@@ -177,6 +220,14 @@ export function createRouter<const P extends Record<string, string> = Record<nev
 
     llmsTxt() {
       return createLlmsTxtHandler(config.discovery);
+    },
+
+    fetch(request: Request): Promise<Response> {
+      return Promise.resolve(app.fetch(request));
+    },
+
+    hono(): Hono {
+      return app;
     },
 
     monitors(): MonitorEntry[] {

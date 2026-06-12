@@ -1,15 +1,14 @@
-import { NextResponse } from 'next/server';
 import { HttpError } from '../types.js';
 
 export async function safeCallHandler(
   handler: (ctx: unknown) => Promise<unknown>,
   ctx: unknown,
   options: { onError?: (error: unknown) => void } = {},
-): Promise<NextResponse> {
+): Promise<Response> {
   try {
     const result = await handler(ctx);
-    if (result instanceof Response) return result as unknown as NextResponse;
-    return NextResponse.json(result);
+    if (result instanceof Response) return result;
+    return Response.json(result);
   } catch (error) {
     options.onError?.(error);
     const status =
@@ -19,6 +18,6 @@ export async function safeCallHandler(
           ? ((error as Record<string, unknown>).status as number)
           : 500;
     const message = error instanceof Error ? error.message : 'Internal error';
-    return NextResponse.json({ success: false, error: message }, { status });
+    return Response.json({ success: false, error: message }, { status });
   }
 }

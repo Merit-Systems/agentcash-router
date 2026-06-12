@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import { invokeUnauthed } from '../flows/static/static-invoke.js';
 import { finalize } from './finalize/index.js';
 import { parseBody } from './parse-body.js';
@@ -9,7 +8,7 @@ export async function runHandlerOnly(
   ctx: FlowCtx,
   wallet: string | null,
   account: unknown,
-): Promise<NextResponse> {
+): Promise<Response> {
   const body = await parseBody(ctx);
   if (!body.ok) return body.response;
 
