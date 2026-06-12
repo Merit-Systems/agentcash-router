@@ -59,6 +59,6 @@ export const router = createRouterFromEnv({
 // Whether MPP routes should register. The `.metered()` pricing mode requires
 // MPP session mode, which the router auto-enables when MPP_OPERATOR_KEY is set
 // (see `createRouterFromEnv` behavior). Without it, `.metered()` throws at
-// route registration — so we gate the MPP route files on this flag and serve
-// a 503 from the route handler when MPP isn't configured.
+// route registration — so `lib/routes.ts` gates the MPP registrations on this
+// flag. Unregistered routes 404 and stay out of the discovery docs.
 export const mppEnabled = !!process.env.MPP_OPERATOR_KEY;

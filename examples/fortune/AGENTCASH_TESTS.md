@@ -28,6 +28,8 @@ $CLI fetch http://localhost:3000/api/fortune --method POST -p x402
 
 Expect: `"protocol": "x402"`, `"network": "base"`, a `transactionHash`. Route is `/api/fortune` with `.paid('0.001')` → exact scheme.
 
+The response body also carries a `next` array (the route declares a `.nextStep()` edge to `/api/fortune/premium`): one entry with `method: "POST"`, the premium URL, `auth: "paid"`, `price: "0.005"`, and a suggested `body` of `{"category":"love"}`. Missing `next` means response-time nextStep injection broke.
+
 ### 2. x402 `upto` — dynamic price with EIP-2612 gas-sponsoring on Base
 
 ```bash

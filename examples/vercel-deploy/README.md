@@ -2,7 +2,18 @@
 
 A standalone Next.js template that ships a pay-per-call API on **x402** and **MPP**, powered by [`@agentcash/router`](https://www.npmjs.com/package/@agentcash/router). Deploy in one click, customize the routes, and you have an agent-callable API on a custom domain.
 
-The demo API is a fortune teller. Every router pricing mode is exercised: `.paid()` fixed-price, `.upTo()` handler-driven, `.paid(fn)` body-derived, `.metered()` request and streaming (MPP), `.siwx()` identity, and `.upTo().siwx()` pay-once-then-replay. x402 routes work the moment you deploy; MPP routes 503 until you set `MPP_OPERATOR_KEY` — one extra env var flips them on. See [Enabling MPP](#enabling-mpp) below.
+The demo API is a fortune teller. Every router pricing mode is exercised: `.paid()` fixed-price, `.upTo()` handler-driven, `.paid(fn)` body-derived, `.metered()` request and streaming (MPP), `.siwx()` identity, `.upTo().siwx()` pay-once-then-replay, and a `.nextStep()` workflow edge. x402 routes work the moment you deploy; MPP routes register only once you set `MPP_OPERATOR_KEY` — one extra env var flips them on. See [Enabling MPP](#enabling-mpp) below.
+
+All routes live in one module (`lib/routes.ts`) and are served by a single Next.js catch-all:
+
+```ts
+// app/api/[[...route]]/route.ts
+import '@/lib/routes'; // side-effect import: registers all routes
+import { router } from '@/lib/router';
+import { nextHandlers } from '@agentcash/router/next';
+
+export const { GET, POST, PUT, PATCH, DELETE } = nextHandlers(router);
+```
 
 ## Deploy
 
@@ -47,17 +58,17 @@ The landing page at `/` lists every endpoint with a copy-pasteable `npx agentcas
 | File | Purpose |
 |---|---|
 | `lib/router.ts` | `createRouterFromEnv` call that reads env at boot. Edit the title, description, and `guidance` string here. |
-| `lib/routes.ts` | Barrel that imports every route module — required so the discovery handlers see them. Add new routes to this list. |
-| `app/api/fortune/*` | The demo endpoints. Each file leads with a comment explaining which payment mode it exercises. |
-| `app/openapi.json/route.ts` | AgentCash Discovery — the OpenAPI 3.x spec with pricing extensions. |
-| `app/.well-known/x402/route.ts` | x402-native discovery (separate from `/openapi.json`). |
+| `lib/routes.ts` | Every demo endpoint, registered with the router in one module. Each registration leads with a comment explaining which payment mode it exercises. Add your routes here. |
+| `app/api/[[...route]]/route.ts` | Next.js optional catch-all that delegates every `/api/*` request to the router via `nextHandlers(router)`. |
+| `app/openapi.json/route.ts` | AgentCash Discovery — the OpenAPI 3.x spec with pricing extensions (root alias; the catch-all also serves it at `/api/openapi.json`). |
+| `app/.well-known/x402/route.ts` | x402-native discovery (separate from `/openapi.json`). Outside the `/api` catch-all, so it gets its own route file. |
 | `app/llms.txt/route.ts` | LLM-readable guidance for agents that don't speak AgentCash Discovery natively. |
 | `app/page.tsx` | The landing page you saw after deploying. |
 | `next.config.ts` | Minimal Next config; router env derivation lives in `@agentcash/router`. |
 
 ## Enabling MPP
 
-MPP (multi-payment protocol on Tempo) adds per-request metered billing and SSE token-by-token streaming on top of x402. The route files are already in the template — they just refuse to register until MPP is configured. To turn them on:
+MPP (multi-payment protocol on Tempo) adds per-request metered billing and SSE token-by-token streaming on top of x402. The routes are already in the template (`lib/routes.ts`) — they just don't register until MPP is configured, so they 404 and stay out of the discovery docs. To turn them on:
 
 1. **Pick an MPP operator key.** It must be a Tempo-compatible EVM private key that resolves to the same address as `EVM_PAYEE_ADDRESS`. This key signs MPP session close transactions, so treat it like a hot wallet (small balance, narrow scope).
 
@@ -77,18 +88,17 @@ MPP (multi-payment protocol on Tempo) adds per-request metered billing and SSE t
 
 ## Customizing for your own API
 
-1. Replace the routes in `app/api/fortune/*` with your real endpoints. The minimum viable route is:
+1. Replace the routes in `lib/routes.ts` with your real endpoints. The minimum viable route is:
    ```ts
-   import { router } from '@/lib/router';
-   export const POST = router
+   router
      .route('my-endpoint')
      .paid('0.01')
      .handler(async () => ({ hello: 'world' }));
    ```
-2. Add each new route file to `lib/routes.ts`.
-3. Add Upstash Redis / Vercel KV from the Vercel Storage tab before production traffic if you use `.siwx()` replay or MPP replay protection across serverless instances.
-4. Update the title, description, and `guidance` in `lib/router.ts` so the discovery doc reflects what you ship.
-5. Push to GitHub. Vercel rebuilds and your `openapi.json` updates automatically.
+   The catch-all serves it at `/api/my-endpoint` — no new files needed.
+2. Add Upstash Redis / Vercel KV from the Vercel Storage tab before production traffic if you use `.siwx()` replay or MPP replay protection across serverless instances.
+3. Update the title, description, and `guidance` in `lib/router.ts` so the discovery doc reflects what you ship.
+4. Push to GitHub. Vercel rebuilds and your `openapi.json` updates automatically.
 
 ## How agents discover your API
 

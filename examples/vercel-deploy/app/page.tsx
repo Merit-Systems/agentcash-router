@@ -29,7 +29,7 @@ const ROUTES: Array<{
     method: 'POST',
     mode: '.metered({ unitType: "request" })',
     description:
-      'MPP session, request-mode metered billing. Returns 503 until MPP_OPERATOR_KEY is set.',
+      'MPP session, request-mode metered billing. Registered only when MPP_OPERATOR_KEY is set.',
     body: { prompt: 'Will I find love?' },
     agentcashFlag: '-p mpp',
   },
@@ -38,7 +38,7 @@ const ROUTES: Array<{
     method: 'POST',
     mode: '.metered({ unitType: "token" }).stream()',
     description:
-      'MPP session, SSE streaming with per-token billing. Returns 503 until MPP_OPERATOR_KEY is set.',
+      'MPP session, SSE streaming with per-token billing. Registered only when MPP_OPERATOR_KEY is set.',
     body: { prompt: 'What awaits me?' },
     agentcashFlag: '--stream',
   },
@@ -135,7 +135,7 @@ export default async function Page() {
         <h2 style={h2}>Endpoints</h2>
         <p style={p}>
           Every route demonstrates a different @agentcash/router pricing or auth mode. Source:{' '}
-          <code style={codeInline}>app/api/fortune/</code>.
+          <code style={codeInline}>lib/routes.ts</code>.
         </p>
         <div style={{ display: 'grid', gap: 12 }}>
           {ROUTES.map((r) => (
@@ -179,7 +179,7 @@ export default async function Page() {
         <h2 style={h2}>Customize</h2>
         <ol style={{ ...p, paddingLeft: 24 }}>
           <li style={{ marginBottom: 8 }}>
-            Edit <code style={codeInline}>app/api/fortune/*</code> to replace the demo handlers with
+            Edit <code style={codeInline}>lib/routes.ts</code> to replace the demo handlers with
             your real endpoints.
           </li>
           <li style={{ marginBottom: 8 }}>
