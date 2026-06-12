@@ -146,10 +146,10 @@ export function applyNextSteps(
   const entries = buildNextEntries(ctx, ctx.routing, steps, rawResult, requestContext);
   if (entries.length === 0) return unchanged;
 
-  // `next` serializes FIRST: large handler results are the ones MCP harnesses
-  // preview-truncate or persist to disk, and tail-position keys are the first
-  // thing truncation eats. The hops must survive into the agent's context.
-  const body = { next: entries, ...rawResult };
+  // `next` trails the handler's own fields: the result is the payload, the
+  // hops are router metadata. Clients that need guaranteed visibility surface
+  // `next` separately (agentcash fetch duplicates it as its own result block).
+  const body = { ...rawResult, next: entries };
   const headers = new Headers(response.headers);
   headers.delete('content-length');
   return {

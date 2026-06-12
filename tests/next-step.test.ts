@@ -1072,7 +1072,7 @@ describe('workflow map for cyclic chain graphs', () => {
 });
 
 describe('next key serialization position', () => {
-  it('serializes next FIRST so body truncation cannot eat it', async () => {
+  it('serializes next LAST — handler payload first, router metadata trailing', async () => {
     const router = createRouter(baseConfig);
     router
       .route('target')
@@ -1088,7 +1088,7 @@ describe('next key serialization position', () => {
       new Request('https://api.example.com/api/source', { method: 'POST' }),
     );
     const text = await res.text();
-    expect(text.indexOf('"next"')).toBeLessThan(text.indexOf('"big"'));
+    expect(text.indexOf('"next"')).toBeGreaterThan(text.indexOf('"big"'));
     const body = JSON.parse(text);
     expect(body.next[0].url).toBe('https://api.example.com/api/target');
     expect(body.big.length).toBe(500);
