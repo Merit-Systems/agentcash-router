@@ -4,7 +4,7 @@ Guidance for AI agents working on `@agentcash/router`.
 
 ## What this is
 
-A protocol-agnostic route framework for Next.js App Router APIs. Provides x402 payments, MPP payments, SIWX identity auth, and API key auth behind a single fluent builder. A route definition is 3 to 6 lines; everything else (pricing, discovery, OpenAPI, settlement) is derived.
+A protocol-agnostic route framework for Web-standard APIs. Provides x402 payments, MPP payments, SIWX identity auth, and API key auth behind a single fluent builder. The core speaks plain `Request`/`Response` and dispatches through an embedded Hono app; Next.js (catch-all via `@agentcash/router/next`, or per-file route exports) and Hono are supported out of the box. A route definition is 3 to 6 lines; everything else (pricing, discovery, OpenAPI, settlement, chaining) is derived.
 
 ## Guiding principles
 
@@ -19,19 +19,23 @@ A protocol-agnostic route framework for Next.js App Router APIs. Provides x402 p
 
 ```
 src/
-  index.ts              public surface — createRouter / createRouterFromEnv
-  builder.ts            fluent RouteBuilder (.paid / .upTo / .metered / .siwx / .apiKey / .unprotected)
-  registry.ts           Map-backed route registry
+  index.ts              public surface — createRouter / createRouterFromEnv; embedded Hono app, router.fetch / router.hono
+  next.ts               @agentcash/router/next — nextHandlers(router) for the Next.js catch-all
+  builder.ts            fluent RouteBuilder (.paid / .upTo / .metered / .siwx / .apiKey / .unprotected / .nextStep)
+  registry.ts           Map-backed route registry + request-time dispatch (last-write-wins)
+  path-params.ts        {param} template ↔ Hono :param conversion + the one shared param matcher
   constants.ts          network ids, USDC asset/decimals, default facilitator
-  types.ts              core types (RouteEntry, HandlerContext, HttpError, PaidOptions, UpToOptions, MeteredOptions)
+  types.ts              core types (RouteEntry, HandlerContext, HttpError, PaidOptions, NextStepConfig, …)
   plugin/               RouterPlugin types + lifecycle dispatch
   init/                 protocol init (x402.ts, x402-server.ts, mpp.ts, mppx.ts)
   protocols/            x402/ and mpp/ strategies, detect.ts, accepts
   auth/                 siwx.ts, api-key.ts, normalize-wallet.ts
-  kv-store/             one KvStore backs siwx nonce, siwx entitlement, mpp replay
+  kv-store/             one KvStore backs siwx nonce, siwx entitlement, mpp replay; update() is atomic CAS
   pricing/              fixed, tiered, dynamic (args-derived), upto-charge, metered-charge, format (atomic conversion)
-  pipeline/             orchestrate.ts + steps/ + flows/ (paid → static-paid | dynamic-paid; siwx-only, api-key-only, unprotected)
-  discovery/            well-known, openapi, llms-txt
+  pipeline/             orchestrate.ts + steps/ (context, body, auth, settle, respond) + flows/
+                        (paid → static-paid | dynamic-paid over shared resolve-paid-request; siwx-only,
+                        api-key-only, unprotected) + next-step.ts (.nextStep() resolution + workflow chains)
+  discovery/            well-known, openapi, llms-txt (all render nextStep workflows)
   config/               RouterConfig + env schema (single source of truth), RouterConfigError, issue codes
 ```
 
@@ -56,6 +60,11 @@ Constructor-style functions use `build<Noun>` — one verb, one domain noun. Nam
 - **MPP operator vs fee-payer.** `mpp.operatorKey` and `mpp.feePayerKey` MUST resolve to different addresses. Tempo rejects fee-delegated txs where `sender === feePayer`. `createRouter` validates this at construction and throws `mpp_operator_equals_fee_payer`.
 - **MPP operator address.** Must equal `recipient` / payee. mppx's close handler asserts `sender === payee` on settle.
 - **Streaming requires `.metered()`.** `.stream()` on a `.paid()` / `.upTo()` / `.unprotected()` route throws at registration. x402 has no streaming primitive, so `.stream()` is MPP-only by construction.
+- **Hono dispatch goes through the registry at request time.** The embedded app binds `key:method` → `registry.dispatch(...)`, never a handler closure, so re-registration keeps last-write-wins. Mount each key+method once (`onFirstRegister`).
+- **`.nextStep()` injection rules.** The `next` array is appended only to 2xx plain-object JSON results; a handler-supplied `next` key always wins; `when()`/`args()` exceptions and unregistered targets report `warn` and skip — they must never break the response. Everything advertised (method, auth, price) derives from the target's `RouteEntry` at resolution time. `registry.validate()` asserts targets exist.
+- **`KvStore.update()` must be atomic.** It backs mppx channel deductions. The built-in Upstash REST store does compare-and-set via Lua `EVAL` (TTL-preserving) and may re-run `fn` on conflict; custom stores must honor the same contract (documented on the interface).
+- **x402 settle retry is classified.** `x402/strategy.ts` retries thrown transients and `success:false` responses but fails fast on a conservative non-retryable `errorReason` set; post-throw nonce-reuse is reported as possible double-settle ambiguity, never invented as success.
+- **Function-form `payTo` receives `(request, body, network)`.** The network argument lets one callback route payouts per chain; don't collapse it.
 
 ## Two entry points
 

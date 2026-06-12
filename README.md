@@ -15,7 +15,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@agentcash/router"><img alt="npm" src="https://img.shields.io/npm/v/@agentcash/router.svg?color=111&label=npm"></a>
   <a href="https://agentcash.dev/docs"><img alt="docs" src="https://img.shields.io/badge/docs-agentcash.dev-111"></a>
-  <a href="#install"><img alt="next.js" src="https://img.shields.io/badge/Next.js-App%20Router-111"></a>
+  <a href="#hosting"><img alt="runtimes" src="https://img.shields.io/badge/Next.js%20%C2%B7%20Hono%20%C2%B7%20Bun%20%C2%B7%20Node-111"></a>
 </p>
 
 <p align="center">
@@ -30,8 +30,10 @@
 
 ```bash
 pnpm add @agentcash/router
-pnpm add next zod  # peer dependencies
+pnpm add zod  # peer dependency
 ```
+
+The core is framework-agnostic — it speaks Web-standard `Request`/`Response` and routes through an embedded [Hono](https://hono.dev) app. Next.js and Hono are supported out of the box ([Hosting](#hosting)); anything with a fetch handler (Bun, Deno, Node, Cloudflare Workers) works the same way.
 
 ## Environment
 
@@ -78,7 +80,7 @@ There are two ways to initialize. Pick one.
 **Option A: `createRouterFromEnv` (recommended).** Reads `process.env`, validates every value up front, and throws a single `RouterConfigError` with every problem at once. Auto-enables MPP when `MPP_SECRET_KEY` is set, auto-adds a Solana accept when `SOLANA_PAYEE_ADDRESS` is set, auto-enables MPP session mode when `MPP_OPERATOR_KEY` is set.
 
 ```typescript
-// lib/router.ts
+// server/router.ts
 import { createRouterFromEnv } from '@agentcash/router';
 
 export const router = createRouterFromEnv({
@@ -91,7 +93,7 @@ export const router = createRouterFromEnv({
 **Option B: build a `RouterConfig` and pass it to `createRouter`.** Use this when you need custom networks, multiple payees, non-standard assets, or any setting `createRouterFromEnv` doesn't expose. `createRouter` runs the same validation against the `RouterConfig` shape.
 
 ```typescript
-// lib/router.ts
+// server/router.ts
 import { createRouter, BASE_MAINNET_NETWORK } from '@agentcash/router';
 
 export const router = createRouter({
@@ -111,10 +113,67 @@ export const router = createRouter({
 
 ### 2. Define routes
 
+Routes are plain registrations — no framework imports, definable in any module:
+
+```typescript
+// server/routes.ts
+import { router } from './router';
+import { searchSchema } from './schemas';
+
+router.route({ path: 'search' })
+  .paid('0.01')
+  .body(searchSchema)
+  .handler(async ({ body }) => search(body));
+
+router.route({ path: 'inbox/status' })
+  .siwx()
+  .method('GET')
+  .handler(async ({ wallet }) => getStatus(wallet));
+
+router.route({ path: 'health' })
+  .unprotected()
+  .handler(async () => ({ status: 'ok' }));
+```
+
+### 3. Host it
+
+See [Hosting](#hosting) — one catch-all file on Next.js, one `app.route()` on Hono.
+
+## Hosting
+
+The router is one fetch handler. Every registered route, plus the discovery surfaces (`/.well-known/x402`, `/openapi.json`, `/llms.txt`), is served through it.
+
+### Next.js — catch-all (recommended)
+
+```typescript
+// app/api/[[...route]]/route.ts
+import '@/server/routes'; // side-effect import: registers all routes
+import { router } from '@/server/router';
+import { nextHandlers } from '@agentcash/router/next';
+
+export const { GET, POST, PUT, PATCH, DELETE } = nextHandlers(router);
+```
+
+One file serves the whole API. Because the routes module is imported before any request is handled, the registry is always fully populated — no barrel files, no discovery stubs, no module-load-order surprises.
+
+The catch-all covers `/api/*`, which includes `/api/openapi.json`, `/api/.well-known/x402`, and `/api/llms.txt`. To serve the root-level aliases (`/.well-known/x402`, `/llms.txt`, `/openapi.json`), add either dedicated route files:
+
+```typescript
+// app/.well-known/x402/route.ts
+import '@/server/routes';
+import { router } from '@/server/router';
+export const GET = router.wellKnown();
+```
+
+or a one-line middleware rewrite into the catch-all (the router serves discovery under the basePath for exactly this purpose).
+
+### Next.js — per-file (1.x style, still supported)
+
+`.handler()` returns a standard fetch handler, which Next.js route files accept directly:
+
 ```typescript
 // app/api/search/route.ts
-import { router } from '@/lib/router';
-import { searchSchema } from '@/lib/schemas';
+import { router } from '@/server/router';
 
 export const POST = router.route({ path: 'search' })
   .paid('0.01')
@@ -122,33 +181,98 @@ export const POST = router.route({ path: 'search' })
   .handler(async ({ body }) => search(body));
 ```
 
+With per-file routing, Next.js lazy-loads route modules — keep a barrel import in your discovery route files so all routes appear in the spec (as in 1.x).
+
+### Hono / Bun / Node / any fetch runtime
+
 ```typescript
-// app/api/inbox/status/route.ts
-export const GET = router.route({ path: 'inbox/status' })
+import { Hono } from 'hono';
+import { serve } from '@hono/node-server';
+import { router } from './router';
+import './routes';
+
+const app = new Hono();
+app.route('/', router.hono()); // or use router.fetch directly as the server handler
+
+serve({ fetch: app.fetch, port: 3000 });
+```
+
+`router.fetch(request)` is the raw entry point if you don't want a wrapping app.
+
+### Path parameters
+
+Route paths can declare `{param}` segments. Parameters are extracted into `ctx.params` in every hosting mode:
+
+```typescript
+router.route({ path: 'jobs/{jobId}' })
   .siwx()
   .method('GET')
-  .handler(async ({ wallet }) => getStatus(wallet));
+  .handler(async ({ params, wallet }) => getJob(params.jobId, wallet));
 ```
+
+The route mount prefix defaults to `api`; override it with `RouterConfig.basePath`.
+
+## Chaining: `.nextStep()`
+
+Multi-step APIs — submit a job, poll its status, download the result — usually rely on prose to tell agents what to call next. `.nextStep()` makes the chain a **deterministic, structured property of the route**, declared where the route is defined:
 
 ```typescript
-// app/api/health/route.ts
-export const GET = router.route({ path: 'health' })
-  .unprotected()
-  .handler(async () => ({ status: 'ok' }));
+router.route({ path: 'videos/generate' })
+  .paid('0.40')
+  .body(generateSchema)
+  .output(jobSchema)
+  .nextStep({
+    route: 'jobs/{jobId}',
+    args: (result) => ({ jobId: result.jobId }),   // typed from .output()
+    note: 'Poll every ~5s until status is "complete".',
+  })
+  .handler(async ({ body, wallet }) => startJob(body, wallet));
 ```
 
-### 3. Auto-discovery
+On success, the response body gains a reserved `next` array — fully resolved URL, method, auth mode, and **price**, all derived from the target route's own definition, so an agent knows what the next call is and what it costs before making it:
+
+```json
+{
+  "jobId": "abc123",
+  "status": "pending",
+  "next": [{
+    "method": "GET",
+    "url": "https://api.example.com/api/jobs/abc123",
+    "auth": "siwx",
+    "note": "Poll every ~5s until status is \"complete\"."
+  }]
+}
+```
+
+The primitive composes into full workflows. A status route can branch on its own result:
 
 ```typescript
-// app/openapi.json/route.ts
-import { router } from '@/lib/router';
-import '@/lib/routes-barrel';  // imports every route module so the registry is populated
-export const GET = router.openapi();
+router.route({ path: 'jobs/{jobId}' })
+  .siwx().method('GET')
+  .output(jobStatusSchema)
+  .nextStep({
+    route: 'jobs/{jobId}/download',
+    args: (r) => ({ jobId: r.jobId }),
+    when: (r) => r.status === 'complete',
+  })
+  .nextStep({
+    route: 'jobs/{jobId}',
+    args: (r) => ({ jobId: r.jobId }),
+    when: (r) => r.status === 'pending',
+    note: 'Still processing — poll again in ~5s.',
+  })
+  .handler(async ({ params }) => getJobStatus(params.jobId));
 ```
 
-The barrel forces every route module to load before the discovery handler walks the registry. Next.js otherwise lazy-loads route files on first hit, and unloaded routes don't appear in the spec.
+Semantics:
 
-The `openapi.json` should be hosted at `GET <origin>/openapi.json`. 
+- `price` is a fixed string for static pricing, `{ min, max }` for dynamic/tiered, and omitted for free routes.
+- `args()` fills `{param}` slots in the target path; leftover keys become query params on GET targets or a suggested `body` object otherwise.
+- A handler-returned `next` key always wins; the router never overwrites it.
+- `when()`/`args()` errors and unregistered targets are reported via `onAlert` and skipped — they never break the response.
+- `registry.validate()` asserts every declared target exists.
+
+Chains are also advertised in every discovery surface: OpenAPI gets native [`links`](https://spec.openapis.org/oas/v3.1.0#link-object) plus an `x-next` extension, `/.well-known/x402` gains a `workflows` array, and `/llms.txt` is appended with an auto-generated `## Workflows` section — the prose guidance you used to hand-write, derived from the route graph instead.
 
 ## Auth modes
 
@@ -254,6 +378,15 @@ Per-tick billing over an MPP payment channel. Requires `MPP_OPERATOR_KEY` (`crea
 
 Streaming is MPP-only. `.stream()` on a `.paid()` / `.upTo()` / `.unprotected()` route throws at registration.
 
+### Per-network payees
+
+`payTo` accepts a static address or a resolver. Function-form resolvers receive the accept's network, so one callback can route payouts per chain:
+
+```typescript
+.paid('0.01', { payTo: (request, body, network) =>
+  network?.startsWith('solana:') ? SOLANA_TREASURY : EVM_TREASURY })
+```
+
 ## Pre-payment validation
 
 For checks that need a DB lookup before quoting a price:
@@ -271,6 +404,23 @@ router.route({ path: 'domain/register' })
 ```
 
 Pipeline order: `body parse -> validate -> 402 challenge -> payment -> handler`.
+
+## Settlement hooks
+
+`.settlement()` runs app logic around on-chain settlement. With `.output()` declared, `ctx.result` is fully typed:
+
+```typescript
+router.route({ path: 'drafts/{draftId}/commit' })
+  .paid(quotePrice, { maxPrice: '50.00' })
+  .body(CommitBody)
+  .output(DraftResponse)
+  .settlement({
+    beforeSettle: async (ctx) => reserveInventory(ctx.result.draftId), // typed!
+    afterSettle: async (ctx) => recordLedgerRow(ctx),
+    onSettlementError: async (ctx) => queueRefundReview(ctx),
+  })
+  .handler(commitDraft);
+```
 
 ## Plugin Hooks
 
