@@ -1,5 +1,11 @@
-import type { PaymentStrategy, VerifySuccess } from '../../../protocols/types.js';
-import type { HandlerPaymentContext } from '../../../types.js';
+/**
+ * Exact-billing paid flow: the price is known before the handler runs.
+ * Prologue (gate → challenge → verify) is shared via `resolvePaidRequest`;
+ * this module owns the invoke + settle tail, including the already-settled
+ * (SIWX replay / MPP tx-mode) branch.
+ */
+import type { PaymentStrategy, VerifySuccess } from '../../protocols/types.js';
+import type { HandlerPaymentContext } from '../../types.js';
 import {
   errorMessage,
   finalize,
@@ -7,10 +13,37 @@ import {
   runSettledHandlerError,
   runSettlementError,
   settleAndFinalizeRequest,
-} from '../../steps/index.js';
-import type { FlowCtx, SettleScope, StaticRequestResult } from '../../steps/types.js';
+  type FlowCtx,
+  type SettleScope,
+} from '../steps/index.js';
+import type { StaticRequestResult } from '../steps/types.js';
+import { invokePaidStatic } from './invoke.js';
+import { resolvePaidRequest } from './resolve-paid-request.js';
 
-export async function runStaticRequestFlow(args: {
+export async function runStaticPaidFlow(ctx: FlowCtx): Promise<Response> {
+  const resolution = await resolvePaidRequest(ctx);
+  if (resolution.kind === 'response') return resolution.response;
+  const { account, strategy, parsedBody, price, verifyOutcome } = resolution;
+
+  const result = await invokePaidStatic(
+    ctx,
+    verifyOutcome.wallet,
+    account,
+    parsedBody,
+    verifyOutcome.payment,
+  );
+  return runStaticRequestFlow({
+    ctx,
+    strategy,
+    verifyOutcome,
+    account,
+    body: parsedBody,
+    price,
+    result,
+  });
+}
+
+async function runStaticRequestFlow(args: {
   ctx: FlowCtx;
   strategy: PaymentStrategy;
   verifyOutcome: VerifySuccess;

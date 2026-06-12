@@ -1,3 +1,10 @@
+/**
+ * Request-context construction and error introspection helpers — the first
+ * step of every flow. `preflight` builds the per-request `FlowCtx` (plugin
+ * context, reporter, path params); the `error*` helpers read `.status` /
+ * `.message` off arbitrary thrown values (AGENTS.md: respect `.status` on any
+ * thrown error, not just `HttpError`).
+ */
 import type { HandlerContext, RouteEntry } from '../../types.js';
 import type { RouteHandler } from '../orchestrate.js';
 import { HEADERS } from '../../headers.js';
@@ -45,4 +52,18 @@ function buildMeta(request: Request, routeEntry: RouteEntry): RequestMeta {
     headers: Object.fromEntries(request.headers.entries()),
     startTime: Date.now(),
   };
+}
+
+export function errorStatus(error: unknown, fallback: number): number {
+  const status = (error as { status?: unknown } | null)?.status;
+  return typeof status === 'number' ? status : fallback;
+}
+
+export function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+export function handlerFailureError(response: Response): Error & { status: number } {
+  const message = response.statusText || `Handler returned HTTP ${response.status}`;
+  return Object.assign(new Error(message), { status: response.status });
 }

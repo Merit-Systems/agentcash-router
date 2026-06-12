@@ -872,16 +872,16 @@ export class RouteBuilder<
       );
     }
 
-    validateExamples(
-      this.#s.key,
-      this.#s.bodySchema,
-      this.#s.querySchema,
-      this.#s.outputSchema,
-      this.#s.inputExample,
-      this.#s.hasInputExample,
-      this.#s.outputExample,
-      this.#s.hasOutputExample,
-    );
+    validateExamples({
+      key: this.#s.key,
+      bodySchema: this.#s.bodySchema,
+      querySchema: this.#s.querySchema,
+      outputSchema: this.#s.outputSchema,
+      inputExample: this.#s.inputExample,
+      hasInputExample: this.#s.hasInputExample,
+      outputExample: this.#s.outputExample,
+      hasOutputExample: this.#s.hasOutputExample,
+    });
 
     const entry: RouteEntry = {
       key: this.#s.key,

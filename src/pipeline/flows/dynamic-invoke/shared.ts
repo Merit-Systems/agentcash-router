@@ -1,6 +1,6 @@
-import type { HandlerContext, HandlerPaymentContext } from '../../../../types.js';
-import { HttpError } from '../../../../types.js';
-import type { DynamicRequestResult, FlowCtx } from '../../../steps/types.js';
+import type { HandlerContext, HandlerPaymentContext } from '../../../types.js';
+import { HttpError } from '../../../types.js';
+import type { DynamicRequestResult, FlowCtx } from '../../steps/types.js';
 
 export function buildBaseHandlerCtx(
   ctx: FlowCtx,
