@@ -2,6 +2,14 @@ import type { RouteEntry } from './types.js';
 
 export type RegisteredHandler = (request: Request) => Promise<Response>;
 
+/** Tie-break order for key-only lookups of multi-method keys. */
+const METHOD_LOOKUP_ORDER = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
+
+function methodRank(method: string): number {
+  const rank = METHOD_LOOKUP_ORDER.indexOf(method as (typeof METHOD_LOOKUP_ORDER)[number]);
+  return rank === -1 ? METHOD_LOOKUP_ORDER.length : rank;
+}
+
 export class RouteRegistry {
   private routes = new Map<string, RouteEntry>();
   private handlers = new Map<string, RegisteredHandler>();
@@ -45,21 +53,31 @@ export class RouteRegistry {
     };
   }
 
-  get(key: string): RouteEntry | undefined {
+  /**
+   * Look up a route by key (and optionally method). Exact `key:method`
+   * lookups win; a key-only lookup of a key registered under multiple
+   * methods returns the entry with the lowest method in
+   * {@link METHOD_LOOKUP_ORDER} (GET → POST → PUT → PATCH → DELETE), so the
+   * result is deterministic regardless of registration order.
+   */
+  get(key: string, method?: string): RouteEntry | undefined {
+    if (method) return this.routes.get(`${key}:${method}`);
     const direct = this.routes.get(key);
     if (direct) return direct;
+    let best: RouteEntry | undefined;
     for (const entry of this.routes.values()) {
-      if (entry.key === key) return entry;
+      if (entry.key !== key) continue;
+      if (!best || methodRank(entry.method) < methodRank(best.method)) best = entry;
     }
-    return undefined;
+    return best;
   }
 
   entries(): IterableIterator<[string, RouteEntry]> {
     return this.routes.entries();
   }
 
-  has(key: string): boolean {
-    return this.get(key) !== undefined;
+  has(key: string, method?: string): boolean {
+    return this.get(key, method) !== undefined;
   }
 
   get size(): number {
@@ -67,13 +85,30 @@ export class RouteRegistry {
   }
 
   validate(expectedKeys?: string[]): void {
-    if (!expectedKeys) return;
     const registeredPathKeys = new Set([...this.routes.values()].map((e) => e.key));
-    const missing = expectedKeys.filter((k) => !registeredPathKeys.has(k));
-    if (missing.length > 0) {
+
+    if (expectedKeys) {
+      const missing = expectedKeys.filter((k) => !registeredPathKeys.has(k));
+      if (missing.length > 0) {
+        throw new Error(
+          `route${missing.length > 1 ? 's' : ''} ${missing.map((k) => `'${k}'`).join(', ')} ` +
+            `in prices map but not registered — add to barrel imports`,
+        );
+      }
+    }
+
+    const missingTargets: string[] = [];
+    for (const entry of this.routes.values()) {
+      for (const step of entry.nextSteps ?? []) {
+        if (!registeredPathKeys.has(step.route)) {
+          missingTargets.push(`'${step.route}' (from '${entry.key}')`);
+        }
+      }
+    }
+    if (missingTargets.length > 0) {
       throw new Error(
-        `route${missing.length > 1 ? 's' : ''} ${missing.map((k) => `'${k}'`).join(', ')} ` +
-          `in prices map but not registered — add to barrel imports`,
+        `nextStep target${missingTargets.length > 1 ? 's' : ''} ${missingTargets.join(', ')} ` +
+          `not registered — add to barrel imports`,
       );
     }
   }

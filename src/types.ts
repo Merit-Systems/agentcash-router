@@ -181,7 +181,7 @@ export interface HandlerPaymentContext {
   receipt?: string;
 }
 
-export interface SettlementLifecycleContext<TBody = unknown> {
+export interface SettlementLifecycleContext<TBody = unknown, TResult = unknown> {
   route: string;
   request: Request;
   body: TBody;
@@ -189,36 +189,57 @@ export interface SettlementLifecycleContext<TBody = unknown> {
   account: unknown;
   payment: HandlerPaymentContext;
   response: Response;
-  result: unknown;
+  /** Handler return value. Typed from `.output()` when declared; `unknown` otherwise. */
+  result: TResult;
 }
 
-export interface SettlementSettledContext<TBody = unknown> extends Omit<
-  SettlementLifecycleContext<TBody>,
+export interface SettlementSettledContext<TBody = unknown, TResult = unknown> extends Omit<
+  SettlementLifecycleContext<TBody, TResult>,
   'payment'
 > {
   payment: HandlerPaymentContext & { status: 'settled' };
 }
 
-export interface SettlementErrorContext<TBody = unknown> extends SettlementLifecycleContext<TBody> {
+export interface SettlementErrorContext<
+  TBody = unknown,
+  TResult = unknown,
+> extends SettlementLifecycleContext<TBody, TResult> {
   error: unknown;
   phase: 'settle' | 'afterSettle';
 }
 
 export interface SettledHandlerErrorContext<
   TBody = unknown,
-> extends SettlementSettledContext<TBody> {
+  TResult = unknown,
+> extends SettlementSettledContext<TBody, TResult> {
   error: unknown;
 }
 
-export interface SettlementLifecycle<TBody = unknown> {
+export interface SettlementLifecycle<TBody = unknown, TResult = unknown> {
   /** Runs after a successful handler response, before router-controlled settlement/broadcast. Throw with `.status` to fail the request and skip settlement (when not already settled). */
-  beforeSettle?: (ctx: SettlementLifecycleContext<TBody>) => void | Promise<void>;
+  beforeSettle?: (ctx: SettlementLifecycleContext<TBody, TResult>) => void | Promise<void>;
   /** Runs after successful settlement; for durable ledgers and audit rows. Errors are alerted but don't change the already-settled response. */
-  afterSettle?: (ctx: SettlementSettledContext<TBody>) => void | Promise<void>;
+  afterSettle?: (ctx: SettlementSettledContext<TBody, TResult>) => void | Promise<void>;
   /** Runs when payment was settled but the handler then returned an error response. Use for app-owned refund / compensation queues. */
-  onSettledHandlerError?: (ctx: SettledHandlerErrorContext<TBody>) => void | Promise<void>;
+  onSettledHandlerError?: (ctx: SettledHandlerErrorContext<TBody, TResult>) => void | Promise<void>;
   /** Runs when router-controlled settlement fails after the handler succeeded. */
-  onSettlementError?: (ctx: SettlementErrorContext<TBody>) => void | Promise<void>;
+  onSettlementError?: (ctx: SettlementErrorContext<TBody, TResult>) => void | Promise<void>;
+}
+
+/**
+ * A declared successor route for `.nextStep()` chaining. Deterministic at
+ * route definition time: the target is a registry key, and the advertised
+ * method/auth/price are derived from the target's own `RouteEntry`.
+ */
+export interface NextStepConfig<TResult = unknown> {
+  /** Target route's registry key (its path template, e.g. `jobs/{jobId}`). Existence is validated by `registry.validate()` at discovery time. */
+  route: string;
+  /** Derive target args from the handler result. Fills `{param}` slots in the target path; leftover keys become query params on GET targets or a `body` suggestion on other methods. Omitted: the unresolved template URL is advertised as-is. */
+  args?: (result: TResult) => Record<string, unknown>;
+  /** Advertise this step only when the predicate returns true. @default always */
+  when?: (result: TResult) => boolean;
+  /** Hint for callers (e.g. polling cadence). Also rendered in discovery (OpenAPI links, workflows). */
+  note?: string;
 }
 
 export type ChargeFn = () => Promise<void>;
@@ -315,6 +336,8 @@ export interface RouteEntry {
   providerConfig?: ProviderConfig;
   validateFn?: (body: unknown) => void | Promise<void>;
   settlement?: SettlementLifecycle;
+  /** Declared successor routes (`.nextStep()`). Drives the response `next` array and the discovery workflow surfaces. */
+  nextSteps?: NextStepConfig[];
   mppInfo?: MppProtocolInfo;
   /** Per-tick cost (decimal-dollar). Required when `metered` is true. */
   tickCost?: string;

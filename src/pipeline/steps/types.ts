@@ -5,6 +5,16 @@ import type { RouterDeps } from '../../protocols/types.js';
 export type { RouterDeps } from '../../protocols/types.js';
 import type { PluginContext, RequestMeta } from '../../plugin/index.js';
 import type { ReportFn } from '../../plugin/reporter.js';
+import type { RouteRegistry } from '../../registry.js';
+
+/** Router-level routing context used to resolve `.nextStep()` targets to URLs at response time. */
+export interface RouteRouting {
+  registry: RouteRegistry;
+  /** Origin URL, no trailing slash. */
+  baseUrl: string;
+  /** Route mount prefix, no slashes (`''` when mounted at root). */
+  basePath: string;
+}
 
 export interface FlowCtx {
   routeEntry: RouteEntry;
@@ -17,6 +27,8 @@ export interface FlowCtx {
   query: unknown;
   /** Path-template params matched from the route's own `{param}` template. */
   params: Record<string, string>;
+  /** Present when the route was registered through a router; `null`/absent for bare `createRequestHandler` use (nextStep injection is skipped). */
+  routing?: RouteRouting | null;
 }
 
 export type ParseBodyResult = { ok: true; data: unknown } | { ok: false; response: Response };

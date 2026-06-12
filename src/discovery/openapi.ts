@@ -2,7 +2,11 @@ import type { RouteRegistry } from '../registry.js';
 import type { RouteEntry, DiscoveryConfig } from '../types.js';
 import { TEMPO_USDC_ADDRESS } from '../constants.js';
 import { HEADERS } from '../headers.js';
-import { compareDecimals } from '../pricing/format.js';
+import {
+  buildNextStepDescriptor,
+  tierPriceExtrema,
+  type NextStepDescriptor,
+} from '../pipeline/next-step.js';
 import { resolveGuidance } from './utils/guidance.js';
 
 export function createOpenAPIHandler(
@@ -10,15 +14,17 @@ export function createOpenAPIHandler(
   baseUrl: string,
   pricesKeys: string[] | undefined,
   discovery: DiscoveryConfig,
+  basePath: string = 'api',
 ) {
   const normalizedBase = baseUrl.replace(/\/+$/, '');
+  const prefix = basePath ? `/${basePath}` : '';
   let cached: unknown = null;
   let validated = false;
 
   return async (_request: Request): Promise<Response> => {
     if (cached) return Response.json(cached);
 
-    if (!validated && pricesKeys) {
+    if (!validated) {
       registry.validate(pricesKeys);
       validated = true;
     }
@@ -31,11 +37,12 @@ export function createOpenAPIHandler(
     let requiresApiKeyScheme = false;
 
     for (const [, entry] of registry.entries()) {
-      const apiPath = `/api/${entry.path ?? entry.key}`;
+      const apiPath = `${prefix}/${entry.path ?? entry.key}`;
       const method = entry.method.toLowerCase();
       const tag = deriveTag(entry.key);
       tagSet.add(tag);
-      const built = buildOperation(entry.key, entry, tag);
+      const nextSteps = describeNextSteps(entry, registry, normalizedBase, basePath);
+      const built = buildOperation(entry.key, entry, tag, nextSteps);
       if (built.requiresSiwxScheme) requiresSiwxScheme = true;
       if (built.requiresApiKeyScheme) requiresApiKeyScheme = true;
 
@@ -108,10 +115,34 @@ function deriveTag(routeKey: string): string {
     .join(' ');
 }
 
+interface NamedNextStep {
+  descriptor: NextStepDescriptor;
+  note?: string;
+}
+
+function describeNextSteps(
+  entry: RouteEntry,
+  registry: RouteRegistry,
+  baseUrl: string,
+  basePath: string,
+): NamedNextStep[] {
+  return (entry.nextSteps ?? []).flatMap((step) => {
+    const target = registry.get(step.route);
+    if (!target) return []; // registry.validate() throws before generation; defensive only
+    return [
+      {
+        descriptor: buildNextStepDescriptor(step, target, baseUrl, basePath),
+        note: step.note,
+      },
+    ];
+  });
+}
+
 function buildOperation(
   routeKey: string,
   entry: RouteEntry,
   tag: string,
+  nextSteps: NamedNextStep[],
 ): {
   operation: Record<string, unknown>;
   requiresSiwxScheme: boolean;
@@ -127,7 +158,7 @@ function buildOperation(
   const pricingInfo = buildPricingInfo(entry);
 
   const operation: Record<string, unknown> = {
-    operationId: routeKey.replace(/\//g, '_'),
+    operationId: toOperationId(routeKey),
     summary: entry.description ?? routeKey,
     tags: [tag],
     responses: {
@@ -138,6 +169,7 @@ function buildOperation(
             'application/json': { schema: entry.outputSchema },
           },
         }),
+        ...(nextSteps.length > 0 && { links: buildResponseLinks(nextSteps) }),
       },
       ...((paymentRequired || requiresSiwxScheme) && {
         '402': {
@@ -151,6 +183,10 @@ function buildOperation(
       }),
     },
   };
+
+  if (nextSteps.length > 0) {
+    operation['x-next'] = nextSteps.map(({ descriptor }) => descriptor);
+  }
 
   if (paymentRequired && (pricingInfo || protocols)) {
     operation['x-payment-info'] = {
@@ -187,6 +223,22 @@ function buildOperation(
     requiresSiwxScheme,
     requiresApiKeyScheme,
   };
+}
+
+function toOperationId(routeKey: string): string {
+  return routeKey.replace(/\//g, '_');
+}
+
+function buildResponseLinks(nextSteps: NamedNextStep[]): Record<string, unknown> {
+  const links: Record<string, unknown> = {};
+  for (const { descriptor, note } of nextSteps) {
+    const operationId = toOperationId(descriptor.route);
+    links[operationId] = {
+      operationId,
+      ...(note !== undefined && { description: note }),
+    };
+  }
+  return links;
 }
 
 function toProtocolObject(
@@ -226,8 +278,7 @@ function buildPricingInfo(entry: RouteEntry): Record<string, unknown> | undefine
   }
 
   if ('tiers' in entry.pricing) {
-    const tierPrices = Object.values(entry.pricing.tiers).map((tier) => tier.price);
-    const extrema = tierExtrema(tierPrices);
+    const extrema = tierPriceExtrema(Object.values(entry.pricing.tiers).map((tier) => tier.price));
 
     if (extrema) {
       if (extrema.min === extrema.max) {
@@ -251,19 +302,4 @@ function buildPricingInfo(entry: RouteEntry): Record<string, unknown> | undefine
   }
 
   return undefined;
-}
-
-function tierExtrema(prices: string[]): { min: string; max: string } | null {
-  if (prices.length === 0) return null;
-  let min = prices[0];
-  let max = prices[0];
-  try {
-    for (const price of prices.slice(1)) {
-      if (compareDecimals(price, min) < 0) min = price;
-      if (compareDecimals(price, max) > 0) max = price;
-    }
-  } catch {
-    return null;
-  }
-  return { min, max };
 }

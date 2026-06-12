@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, expectTypeOf } from 'vitest';
 import { z } from 'zod';
 import { RouteRegistry } from '../src/registry.js';
 import { RouteBuilder } from '../src/builder.js';
@@ -93,6 +93,35 @@ describe('fluent chain', () => {
     const entry = registry.get('settlement/test');
     expect(entry?.settlement?.beforeSettle).toBe(beforeSettle);
     expect(entry?.settlement?.afterSettle).toBe(afterSettle);
+  });
+
+  it('.settlement() types ctx.result from .output(), unknown without it', () => {
+    const { builder } = makeBuilder('settlement/typed');
+    const handler = builder
+      .paid('0.05')
+      .body(bodySchema)
+      .output(outputSchema)
+      .settlement({
+        afterSettle: (ctx) => {
+          expectTypeOf(ctx.result).toEqualTypeOf<{ result: string }>();
+        },
+        onSettledHandlerError: (ctx) => {
+          expectTypeOf(ctx.result).toEqualTypeOf<{ result: string }>();
+          expectTypeOf(ctx.error).toEqualTypeOf<unknown>();
+        },
+      })
+      .handler(async ({ body }) => ({ result: body.query }));
+    expect(typeof handler).toBe('function');
+
+    const { builder: untyped } = makeBuilder('settlement/untyped');
+    untyped
+      .paid('0.05')
+      .settlement({
+        beforeSettle: (ctx) => {
+          expectTypeOf(ctx.result).toEqualTypeOf<unknown>();
+        },
+      })
+      .handler(async () => ({ ok: true }));
   });
 
   it('route key is stored in registry on construction', () => {

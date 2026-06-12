@@ -146,14 +146,21 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     resolvedBaseUrl,
     pricesKeys,
     config.discovery,
+    basePath,
   );
   const openapiHandler = createOpenAPIHandler(
     registry,
     resolvedBaseUrl,
     pricesKeys,
     config.discovery,
+    basePath,
   );
-  const llmsTxtHandler = createLlmsTxtHandler(config.discovery);
+  const llmsTxtHandler = createLlmsTxtHandler(
+    config.discovery,
+    registry,
+    resolvedBaseUrl,
+    basePath,
+  );
   app.get('/.well-known/x402', (c) => wellKnownHandler(c.req.raw));
   app.get('/openapi.json', (c) => openapiHandler(c.req.raw));
   app.get('/llms.txt', (c) => llmsTxtHandler(c.req.raw));
@@ -197,6 +204,8 @@ export function createRouter<const P extends Record<string, string> = Record<nev
       }
       let builder = new RouteBuilder(key, registry, deps, {
         protocols: config.protocols,
+        baseUrl: resolvedBaseUrl,
+        basePath,
       });
       builder = builder.path(normalizedPath);
       if (definition.method) {
@@ -211,15 +220,27 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     },
 
     wellKnown() {
-      return createWellKnownHandler(registry, resolvedBaseUrl, pricesKeys, config.discovery);
+      return createWellKnownHandler(
+        registry,
+        resolvedBaseUrl,
+        pricesKeys,
+        config.discovery,
+        basePath,
+      );
     },
 
     openapi() {
-      return createOpenAPIHandler(registry, resolvedBaseUrl, pricesKeys, config.discovery);
+      return createOpenAPIHandler(
+        registry,
+        resolvedBaseUrl,
+        pricesKeys,
+        config.discovery,
+        basePath,
+      );
     },
 
     llmsTxt() {
-      return createLlmsTxtHandler(config.discovery);
+      return createLlmsTxtHandler(config.discovery, registry, resolvedBaseUrl, basePath);
     },
 
     fetch(request: Request): Promise<Response> {
@@ -300,6 +321,7 @@ export type {
   HandlerContext,
   RouterConfig,
   DiscoveryConfig,
+  NextStepConfig,
   PaidOptions,
   ProtocolType,
   SettlementLifecycleContext,

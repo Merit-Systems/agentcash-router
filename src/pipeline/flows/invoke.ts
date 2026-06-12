@@ -1,6 +1,12 @@
-import type { HandlerContext, HandlerPaymentContext, UptoHandlerContext } from '../../../types.js';
-import { HttpError } from '../../../types.js';
-import type { FlowCtx, StaticRequestResult } from '../../steps/types.js';
+/**
+ * Single-shot handler invocation for exact-billed and unauthenticated paths.
+ * Builds the `HandlerContext`, awaits the handler, and converts thrown
+ * errors into the `{ success: false, error }` envelope (respecting `.status`
+ * on any thrown value). Per-yield billing lives in `dynamic-invoke/`.
+ */
+import type { HandlerContext, HandlerPaymentContext, UptoHandlerContext } from '../../types.js';
+import { HttpError } from '../../types.js';
+import type { FlowCtx, StaticRequestResult } from '../steps/types.js';
 
 export function invokePaidStatic(
   ctx: FlowCtx,
