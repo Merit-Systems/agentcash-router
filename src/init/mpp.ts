@@ -18,9 +18,7 @@ export async function initMpp(
   config: RouterConfig,
   resolvedBaseUrl: string,
   kvStore: KvStore | undefined,
-  configError?: string,
 ): Promise<MppInitResult> {
-  if (configError) return { initError: configError };
   if (!config.mpp) return {};
 
   try {

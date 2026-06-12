@@ -10,6 +10,6 @@ export class RouterConfigError extends Error {
   }
 }
 
-export function formatRouterConfigIssues(issues: readonly RouterConfigIssue[]): string {
+function formatRouterConfigIssues(issues: readonly RouterConfigIssue[]): string {
   return issues.map((issue) => issue.message).join('\n');
 }

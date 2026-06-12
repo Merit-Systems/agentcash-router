@@ -18,8 +18,9 @@ import { createLlmsTxtHandler } from './discovery/llms-txt.js';
 import { getConfiguredX402Accepts } from './protocols/x402/accepts.js';
 import { BASE_MAINNET_NETWORK } from './constants.js';
 import {
+  ENV_DERIVED_CONFIG,
+  MISSING_KV_IN_PRODUCTION_WARNING,
   RouterConfigError,
-  formatRouterConfigIssues,
   getRouterConfigIssues,
   routerConfigFromEnv,
   type CreateRouterFromEnvOptions,
@@ -57,32 +58,30 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   config: RouterConfig & { prices?: P },
 ): ServiceRouter<Extract<keyof P, string>> {
   const registry = new RouteRegistry();
-  const kvStore = resolveKvStore(config.kvStore);
+  // Env-derived configs (built by routerConfigFromEnv) already resolved their
+  // KV store and validated CDP keys against the injected env — don't re-read
+  // process.env for them. Plain createRouter(config) has no env parameter, so
+  // process.env stays the documented fallback for KV bootstrap and the CDP
+  // key check (the Coinbase SDK itself reads CDP keys from process.env).
+  const envDerived = (config as { [ENV_DERIVED_CONFIG]?: boolean })[ENV_DERIVED_CONFIG] === true;
+  const kvStore = resolveKvStore(config.kvStore, envDerived ? {} : undefined);
   const nonceStore = kvStore ? createKvNonceStore(kvStore) : new MemoryNonceStore();
   const entitlementStore = kvStore
     ? createKvEntitlementStore(kvStore)
     : new MemoryEntitlementStore();
   const network = config.network ?? BASE_MAINNET_NETWORK;
   const x402Accepts = getConfiguredX402Accepts(config);
-  const configIssues = getRouterConfigIssues(config, { env: process.env });
-  const baseUrlIssue = configIssues.find((issue) => issue.code === 'missing_base_url');
-  if (baseUrlIssue) throw new RouterConfigError([baseUrlIssue]);
+  const configIssues = getRouterConfigIssues(config, {
+    env: process.env,
+    assumeCdpKeys: envDerived,
+  });
+  if (configIssues.length > 0) throw new RouterConfigError(configIssues);
 
-  const emptyProtocolsIssue = configIssues.find((issue) => issue.code === 'empty_protocols');
-  if (emptyProtocolsIssue) throw new RouterConfigError([emptyProtocolsIssue]);
-
-  const protocolConfigIssues = configIssues.filter(
-    (issue) => issue.code !== 'missing_base_url' && issue.code !== 'empty_protocols',
-  );
-  const x402ConfigIssues = protocolConfigIssues.filter((issue) => issue.protocol === 'x402');
-  const mppConfigIssues = protocolConfigIssues.filter((issue) => issue.protocol === 'mpp');
-  const x402ConfigError =
-    x402ConfigIssues.length > 0 ? formatRouterConfigIssues(x402ConfigIssues) : undefined;
-  const mppConfigError =
-    mppConfigIssues.length > 0 ? formatRouterConfigIssues(mppConfigIssues) : undefined;
-
-  if (protocolConfigIssues.length > 0) {
-    throw new RouterConfigError(protocolConfigIssues);
+  if (!kvStore && !envDerived && process.env.NODE_ENV === 'production') {
+    // The env path warns about this in routerConfigFromEnv; mirror it here so
+    // a programmatic config falling back to the in-memory store (cross-instance
+    // SIWX replay risk) is never silent.
+    console.warn(`[router] ${MISSING_KV_IN_PRODUCTION_WARNING}`);
   }
 
   const resolvedBaseUrl = config.baseUrl.replace(/\/+$/, '');
@@ -118,12 +117,15 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   };
 
   deps.initPromise = (async () => {
-    const x402Result = await initX402(config, kvStore, x402ConfigError);
+    // Independent protocol inits — run them concurrently.
+    const [x402Result, mppResult] = await Promise.all([
+      initX402(config, kvStore),
+      initMpp(config, resolvedBaseUrl, kvStore),
+    ]);
     deps.x402Server = x402Result.server ?? null;
     deps.x402FacilitatorsByNetwork = x402Result.facilitatorsByNetwork;
     if (x402Result.initError) deps.x402InitError = x402Result.initError;
 
-    const mppResult = await initMpp(config, resolvedBaseUrl, kvStore, mppConfigError);
     deps.mppx = mppResult.mppx ?? null;
     deps.tempoClient = mppResult.tempoClient ?? null;
     if (mppResult.initError) {
@@ -267,7 +269,7 @@ function normalizePath(path: string): string {
  * construct a {@link RouterConfig} programmatically.
  *
  * The env vars this function reads are the canonical schema in
- * `src/config/schema.ts` (`ENV_SPEC`).
+ * `src/config/schema.ts` (`ENV_KEYS`).
  *
  * @example
  * ```ts
@@ -312,8 +314,4 @@ export type { KvStore } from './kv-store/index.js';
 export { routerConfigFromEnv } from './config/index.js';
 export type { CreateRouterFromEnvOptions } from './config/index.js';
 export { RouterConfigError } from './config/error.js';
-export type {
-  RouterConfigIssue,
-  RouterConfigIssueCode,
-  RouterConfigIssueSeverity,
-} from './config/types.js';
+export type { RouterConfigIssue, RouterConfigIssueCode } from './config/types.js';

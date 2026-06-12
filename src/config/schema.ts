@@ -20,13 +20,16 @@ import {
   DEFAULT_TEMPO_RPC_URL,
   SOLANA_MAINNET_NETWORK,
 } from '../constants.js';
+import { getConfiguredX402Accepts } from '../protocols/x402/accepts.js';
+import { resolveKvStore } from '../kv-store/index.js';
 import { RouterConfigError } from './error.js';
-import type {
-  CreateRouterFromEnvOptions,
-  IssueParams,
-  RouterConfigIssue,
-  RouterConfigIssueCode,
-  ValidateOptions,
+import {
+  ENV_DERIVED_CONFIG,
+  type CreateRouterFromEnvOptions,
+  type IssueParams,
+  type RouterConfigIssue,
+  type RouterConfigIssueCode,
+  type ValidateOptions,
 } from './types.js';
 import {
   canonicalizeEvm,
@@ -112,14 +115,10 @@ const envShape = {
 
   MPP_SECRET_KEY: z.string().optional(),
 
-  MPP_CURRENCY: z
-    .string()
-    .refine(isEvmAddress, {
-      params: { code: 'invalid_mpp_currency', ...mpp },
-      message:
-        'MPP_CURRENCY must be a 0x-prefixed 20-byte Tempo currency address — the token contract MPP charges in. Use TEMPO_USDC_ADDRESS for Tempo USDC.',
-    })
-    .optional(),
+  // MPP_CURRENCY — the Tempo currency address MPP charges in (use
+  // TEMPO_USDC_ADDRESS for Tempo USDC). Shape is owned by `validateMppConfig`
+  // on the produced config; the env path flows through it via `createRouter`.
+  MPP_CURRENCY: z.string().optional(),
 
   TEMPO_RPC_URL: z
     .string()
@@ -130,23 +129,15 @@ const envShape = {
     })
     .optional(),
 
-  MPP_OPERATOR_KEY: z
-    .string()
-    .refine(isEvmPrivateKey, {
-      params: { code: 'invalid_mpp_operator_key', ...mpp },
-      message:
-        'MPP_OPERATOR_KEY must be a 0x-prefixed 32-byte EVM private key — signs server-side close/settle; presence enables MPP session mode.',
-    })
-    .optional(),
+  // MPP_OPERATOR_KEY — signs server-side close/settle; presence enables MPP
+  // session mode. Shape + operator/fee-payer collision rules are owned by
+  // `validateMppConfig`.
+  MPP_OPERATOR_KEY: z.string().optional(),
 
-  MPP_FEE_PAYER_KEY: z
-    .string()
-    .refine(isEvmPrivateKey, {
-      params: { code: 'invalid_mpp_fee_payer_key', ...mpp },
-      message:
-        'MPP_FEE_PAYER_KEY must be a 0x-prefixed 32-byte EVM private key — sponsors client gas for channel open/topUp. Must resolve to a different address than MPP_OPERATOR_KEY.',
-    })
-    .optional(),
+  // MPP_FEE_PAYER_KEY — sponsors client gas for channel open/topUp. Must
+  // resolve to a different address than MPP_OPERATOR_KEY (checked by
+  // `validateMppConfig`).
+  MPP_FEE_PAYER_KEY: z.string().optional(),
 
   KV_REST_API_URL: z.string().optional(),
   KV_REST_API_TOKEN: z.string().optional(),
@@ -155,56 +146,62 @@ const envShape = {
 
 export const ENV_KEYS = Object.keys(envShape) as ReadonlyArray<keyof typeof envShape>;
 
-const EnvInputSchema = z
-  .object(envShape)
-  .passthrough()
-  .superRefine((env, ctx) => {
-    // Required-missing — fields whose absence is fatal.
-    if (env.BASE_URL === undefined) {
-      addIssue(
-        ctx,
-        { code: 'missing_base_url' },
-        'BASE_URL is required — the public origin used as the 402 realm, OpenAPI server URL, and MPP memo prefix. Set it to your production domain. On Vercel, the router auto-derives it from VERCEL_PROJECT_PRODUCTION_URL or VERCEL_URL.',
-        ['BASE_URL'],
-      );
-    }
-    if (env.EVM_PAYEE_ADDRESS === undefined) {
-      addIssue(
-        ctx,
-        { code: 'missing_x402_payee', ...x402 },
-        'EVM_PAYEE_ADDRESS is required — the EVM address that receives x402 and MPP payments.',
-        ['EVM_PAYEE_ADDRESS'],
-      );
-    }
-
-    // MPP required-when-enabled.
-    if (env.MPP_SECRET_KEY) {
-      if (env.MPP_CURRENCY === undefined) {
+// `mppEnabled` reflects the final protocol decision (explicit `protocols`
+// option, else MPP_SECRET_KEY presence) so `protocols: ['mpp']` without MPP
+// env fails here with structured issues instead of a TypeError later.
+function buildEnvInputSchema(opts: { mppEnabled: boolean }) {
+  return z
+    .object(envShape)
+    .passthrough()
+    .superRefine((env, ctx) => {
+      // Required-missing — fields whose absence is fatal.
+      if (env.BASE_URL === undefined) {
         addIssue(
           ctx,
-          { code: 'missing_mpp_currency', ...mpp },
-          'MPP_CURRENCY is required when MPP is enabled — the Tempo currency address MPP charges in. Use TEMPO_USDC_ADDRESS for Tempo USDC.',
-          ['MPP_CURRENCY'],
+          { code: 'missing_base_url' },
+          'BASE_URL is required — the public origin used as the 402 realm, OpenAPI server URL, and MPP memo prefix. Set it to your production domain. On Vercel, the router auto-derives it from VERCEL_PROJECT_PRODUCTION_URL or VERCEL_URL.',
+          ['BASE_URL'],
         );
       }
-      // TEMPO_RPC_URL is optional — defaults to DEFAULT_TEMPO_RPC_URL (the public Tempo endpoint).
-    }
+      if (env.EVM_PAYEE_ADDRESS === undefined) {
+        addIssue(
+          ctx,
+          { code: 'missing_x402_payee', ...x402 },
+          'EVM_PAYEE_ADDRESS is required — the EVM address that receives x402 and MPP payments.',
+          ['EVM_PAYEE_ADDRESS'],
+        );
+      }
 
-    // op != fee_payer (only when both keys are present and validly formatted).
-    const collision = operatorAddressesCollide(env.MPP_OPERATOR_KEY, env.MPP_FEE_PAYER_KEY);
-    if (collision) {
-      addIssue(
-        ctx,
-        { code: 'mpp_operator_equals_fee_payer', ...mpp },
-        `MPP_OPERATOR_KEY and MPP_FEE_PAYER_KEY resolve to the same address (${collision}). Tempo rejects fee-delegated txs with sender === feePayer. Use two distinct wallets, or unset MPP_FEE_PAYER_KEY to let clients pay their own gas.`,
-        ['MPP_FEE_PAYER_KEY'],
-      );
-    }
-  });
+      // MPP required-when-enabled.
+      if (opts.mppEnabled) {
+        if (env.MPP_SECRET_KEY === undefined) {
+          addIssue(
+            ctx,
+            { code: 'missing_mpp_secret_key', ...mpp },
+            "MPP_SECRET_KEY is required when protocols include 'mpp' — the HMAC key for signing/verifying MPP challenge nonces.",
+            ['MPP_SECRET_KEY'],
+          );
+        }
+        if (env.MPP_CURRENCY === undefined) {
+          addIssue(
+            ctx,
+            { code: 'missing_mpp_currency', ...mpp },
+            'MPP_CURRENCY is required when MPP is enabled — the Tempo currency address MPP charges in. Use TEMPO_USDC_ADDRESS for Tempo USDC.',
+            ['MPP_CURRENCY'],
+          );
+        }
+        // TEMPO_RPC_URL is optional — defaults to DEFAULT_TEMPO_RPC_URL (the public Tempo endpoint).
+      }
+    });
+}
 
 // -----------------------------------------------------------------------------
 // KV warnings — soft, non-throwing. Zod has no warning channel.
 // -----------------------------------------------------------------------------
+
+/** Shared by the env path and `createRouter`'s in-memory fallback. */
+export const MISSING_KV_IN_PRODUCTION_WARNING =
+  'No KV_REST_API_URL/KV_REST_API_TOKEN set in production — using the in-memory KV store. SIWX nonce, SIWX entitlement, and MPP replay state will be lost across instances. Configure Upstash/Vercel KV or pass a custom kvStore.';
 
 function collectKvWarnings(
   env: Record<string, string | undefined>,
@@ -213,7 +210,6 @@ function collectKvWarnings(
   if (kvStoreOptionProvided) return [];
   const warn = (code: RouterConfigIssueCode, message: string): RouterConfigIssue => ({
     code,
-    severity: 'warning',
     message,
   });
 
@@ -242,12 +238,7 @@ function collectKvWarnings(
     ];
   }
   if (!env.KV_REST_API_URL && !env.KV_REST_API_TOKEN && env.NODE_ENV === 'production') {
-    return [
-      warn(
-        'missing_kv_in_production',
-        'No KV_REST_API_URL/KV_REST_API_TOKEN set in production — using the in-memory KV store. SIWX nonce, SIWX entitlement, and MPP replay state will be lost across instances. Configure Upstash/Vercel KV or pass a custom kvStore.',
-      ),
-    ];
+    return [warn('missing_kv_in_production', MISSING_KV_IN_PRODUCTION_WARNING)];
   }
   return [];
 }
@@ -278,20 +269,22 @@ function deriveBaseUrlEnv(
 // object with opaque slots (plugin, kvStore, payTo functions) that zod can't
 // usefully model. Mirrors the env-side cross-field logic.
 
-function getConfiguredX402Accepts(config: RouterConfig): X402AcceptConfig[] {
-  if (config.x402?.accepts?.length) return [...config.x402.accepts];
-  return [
-    {
-      scheme: 'exact',
-      network: config.network ?? BASE_MAINNET_NETWORK,
-      payTo: config.payeeAddress,
-    },
-  ];
+function missingCdpKeysIssue(env: Record<string, string | undefined>): RouterConfigIssue | null {
+  const missing = ['CDP_API_KEY_ID', 'CDP_API_KEY_SECRET'].filter((k) => !env[k]);
+  if (missing.length === 0) return null;
+  return {
+    code: 'missing_cdp_keys',
+    protocol: 'x402',
+    message:
+      `x402 EVM facilitator (Coinbase) requires ${missing.join(' and ')}. ` +
+      'Create an API key at https://portal.cdp.coinbase.com and set it via env.',
+  };
 }
 
 function validateX402Config(
   config: RouterConfig,
   env: Record<string, string | undefined>,
+  assumeCdpKeys: boolean,
 ): RouterConfigIssue[] {
   const accepts = getConfiguredX402Accepts(config);
   const issues: RouterConfigIssue[] = [];
@@ -341,15 +334,9 @@ function validateX402Config(
   const hasEvm = accepts.some(
     (a) => typeof a.network === 'string' && a.network.startsWith('eip155:'),
   );
-  if (hasEvm) {
-    const missing = ['CDP_API_KEY_ID', 'CDP_API_KEY_SECRET'].filter((k) => !env[k]);
-    if (missing.length > 0) {
-      push(
-        'missing_cdp_keys',
-        `x402 EVM facilitator (Coinbase) requires ${missing.join(' and ')}. ` +
-          'Create an API key at https://portal.cdp.coinbase.com and set it via env.',
-      );
-    }
+  if (hasEvm && !assumeCdpKeys) {
+    const cdpIssue = missingCdpKeysIssue(env);
+    if (cdpIssue) issues.push(cdpIssue);
   }
   return issues;
 }
@@ -474,7 +461,6 @@ function translateZodIssues(error: z.ZodError): RouterConfigIssue[] {
       code: params.code,
       message: issue.message,
       ...(params.protocol ? { protocol: params.protocol } : {}),
-      ...(params.severity ? { severity: params.severity } : {}),
     };
   });
 }
@@ -491,12 +477,25 @@ function translateZodIssues(error: z.ZodError): RouterConfigIssue[] {
  * required value up front and throws a single {@link RouterConfigError}
  * containing all issues at once. Soft warnings (e.g. half-configured KV) are
  * emitted via `console.warn`.
+ *
+ * This function is the single env reader: the KV store is resolved from the
+ * same env object and placed on `config.kvStore`, and CDP keys are validated
+ * here — `createRouter` does not consult `process.env` for configs built by
+ * this function, so an injected `options.env` is honored end to end.
  */
 export function routerConfigFromEnv<
   const TPrices extends Record<string, string> = Record<never, string>,
 >(options: CreateRouterFromEnvOptions<TPrices>): RouterConfig & { prices?: TPrices } {
   const rawEnv = options.env ?? (process.env as Record<string, string | undefined>);
   const env = deriveBaseUrlEnv(trimAll(rawEnv));
+
+  const mppEnabled = options.protocols?.includes('mpp') ?? Boolean(env.MPP_SECRET_KEY);
+  const x402Enabled = options.protocols?.includes('x402') ?? true;
+  const protocols: ProtocolType[] = options.protocols
+    ? [...options.protocols]
+    : mppEnabled
+      ? ['x402', 'mpp']
+      : ['x402'];
 
   const optionIssues: RouterConfigIssue[] = [];
   if (!options.title?.trim()) {
@@ -525,9 +524,14 @@ export function routerConfigFromEnv<
     });
   }
 
-  const parsed = EnvInputSchema.safeParse(env);
+  const parsed = buildEnvInputSchema({ mppEnabled }).safeParse(env);
   const envIssues = parsed.success ? [] : translateZodIssues(parsed.error);
-  const issues = [...envIssues, ...optionIssues];
+
+  // CDP keys are validated against this env object (not process.env) — the
+  // env path always emits EVM accepts on Base, so x402 implies Coinbase.
+  const cdpIssue = x402Enabled ? missingCdpKeysIssue(env) : null;
+
+  const issues = [...envIssues, ...(cdpIssue ? [cdpIssue] : []), ...optionIssues];
   if (issues.length > 0) throw new RouterConfigError(issues);
 
   // Warnings (soft) — surfaced after errors clear.
@@ -564,13 +568,6 @@ export function routerConfigFromEnv<
         env.SOLANA_FACILITATOR_URL ??
         DEFAULT_SOLANA_FACILITATOR_URL);
 
-  const mppEnabled = options.protocols?.includes('mpp') ?? Boolean(env.MPP_SECRET_KEY);
-  const protocols: ProtocolType[] = options.protocols
-    ? [...options.protocols]
-    : mppEnabled
-      ? ['x402', 'mpp']
-      : ['x402'];
-
   const mppConfig: RouterConfig['mpp'] | undefined = mppEnabled
     ? {
         secretKey: env.MPP_SECRET_KEY!,
@@ -582,7 +579,13 @@ export function routerConfigFromEnv<
       }
     : undefined;
 
-  return {
+  // KV is resolved from this env object too — explicit option wins, then
+  // KV_REST_API_URL/KV_REST_API_TOKEN from the same env the rest of the
+  // config came from. `createRouter` does not re-read process.env for
+  // env-derived configs.
+  const kvStore = options.kvStore ?? resolveKvStore(undefined, env);
+
+  const config: RouterConfig & { prices?: TPrices } = {
     payeeAddress,
     baseUrl: env.BASE_URL!,
     network: BASE_MAINNET_NETWORK,
@@ -607,9 +610,12 @@ export function routerConfigFromEnv<
     },
     ...(options.prices ? { prices: options.prices } : {}),
     ...(options.plugin ? { plugin: options.plugin } : {}),
-    ...(options.kvStore ? { kvStore: options.kvStore } : {}),
+    ...(kvStore ? { kvStore } : {}),
     strictRoutes: options.strictRoutes ?? false,
   };
+  // Enumerable so the spread-and-override pattern keeps the marker.
+  Object.defineProperty(config, ENV_DERIVED_CONFIG, { value: true, enumerable: true });
+  return config;
 }
 
 // -----------------------------------------------------------------------------
@@ -643,7 +649,9 @@ export function getRouterConfigIssues(
         "RouterConfig.protocols cannot be empty. Omit the field to use default ['x402'] or specify protocols explicitly.",
     });
   }
-  if (protocols.includes('x402')) issues.push(...validateX402Config(config, env));
+  if (protocols.includes('x402')) {
+    issues.push(...validateX402Config(config, env, options.assumeCdpKeys ?? false));
+  }
   if (protocols.includes('mpp')) issues.push(...validateMppConfig(config));
   return issues;
 }

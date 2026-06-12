@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   BASE_MAINNET_NETWORK,
   SOLANA_MAINNET_NETWORK,
@@ -9,6 +9,8 @@ import {
   getRouterConfigIssues,
   validateRouterConfig,
 } from '../src/config/index.js';
+import { createRouter } from '../src/index.js';
+import type { KvStore } from '../src/kv-store/index.js';
 import type { RouterConfig } from '../src/types.js';
 
 const PAYEE = '0x1234567890123456789012345678901234567890';
@@ -258,5 +260,59 @@ describe('validateRouterConfig', () => {
     );
 
     expect(issues.map((issue) => issue.code)).toEqual(['placeholder_payee', 'placeholder_payee']);
+  });
+});
+
+describe('createRouter in-memory KV fallback', () => {
+  function withProductionNoKvEnv(fn: () => void): void {
+    const saved = {
+      NODE_ENV: process.env.NODE_ENV,
+      KV_REST_API_URL: process.env.KV_REST_API_URL,
+      KV_REST_API_TOKEN: process.env.KV_REST_API_TOKEN,
+    };
+    process.env.NODE_ENV = 'production';
+    delete process.env.KV_REST_API_URL;
+    delete process.env.KV_REST_API_TOKEN;
+    try {
+      fn();
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value !== undefined) process.env[key] = value;
+        else delete process.env[key];
+      }
+    }
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('warns in production when no KV store resolves (cross-instance SIWX replay risk)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    withProductionNoKvEnv(() => {
+      createRouter(makeConfig());
+    });
+    expect(warn.mock.calls.some((call) => String(call[0]).includes('in-memory KV store'))).toBe(
+      true,
+    );
+  });
+
+  it('does not warn when a KV store is configured', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const kvStore: KvStore = {
+      get: async () => null,
+      set: async () => {},
+      del: async () => {},
+      setNxEx: async () => true,
+      sadd: async () => {},
+      sismember: async () => false,
+      update: async (_k, fn) => fn(null).result,
+    };
+    withProductionNoKvEnv(() => {
+      createRouter(makeConfig({ kvStore }));
+    });
+    expect(warn.mock.calls.some((call) => String(call[0]).includes('in-memory KV store'))).toBe(
+      false,
+    );
   });
 });
