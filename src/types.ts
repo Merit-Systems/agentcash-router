@@ -93,7 +93,14 @@ export type PricingConfig<TBody = unknown> =
   | ((body: TBody) => string | Promise<string>)
   | { field: string; tiers: Record<string, TierConfig>; default?: string };
 
-export type PayToConfig = string | ((request: Request, body?: unknown) => string | Promise<string>);
+/**
+ * Payment recipient: a static address, or a resolver receiving the request,
+ * parsed body (when available), and the accept's network (so multi-chain
+ * routes can return a chain-appropriate address).
+ */
+export type PayToConfig =
+  | string
+  | ((request: Request, body?: unknown, network?: string) => string | Promise<string>);
 
 interface X402AcceptBase {
   /** Chain identifier (e.g. `base`, `base-sepolia`, `solana-mainnet`). */

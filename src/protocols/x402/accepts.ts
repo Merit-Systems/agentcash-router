@@ -7,22 +7,6 @@ import type {
 } from '../../types.js';
 import { BASE_MAINNET_NETWORK } from '../../constants.js';
 
-/**
- * Function-form `PayToConfig` is invoked with the accept's `network` as a
- * third argument so a single callback can route payouts per network (e.g. an
- * EVM address for Base and a different recipient on Solana). The declared
- * `PayToConfig` type predates this argument, so we widen it locally.
- *
- * TODO(types): widen `PayToConfig` in src/types.ts to
- * `string | ((request: Request, body?: unknown, network?: string) => string | Promise<string>)`
- * (additive, non-breaking) and delete this local alias.
- */
-type PayToResolver = (
-  request: Request,
-  body?: unknown,
-  network?: string,
-) => string | Promise<string>;
-
 async function resolvePayToValue(
   payTo: PayToConfig | undefined,
   request: Request,
@@ -32,7 +16,7 @@ async function resolvePayToValue(
 ): Promise<string> {
   if (!payTo) return fallback;
   if (typeof payTo === 'string') return payTo;
-  return (payTo as PayToResolver)(request, body, network);
+  return payTo(request, body, network);
 }
 
 export function getConfiguredX402Accepts(config: RouterConfig): X402AcceptConfig[] {
