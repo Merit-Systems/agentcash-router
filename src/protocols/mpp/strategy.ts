@@ -1,6 +1,5 @@
 import type { Transport } from 'mppx/server';
 import type { Session } from 'mppx/tempo';
-import { AUTH_SCHEME, HEADERS } from '../../headers.js';
 import { multiplyDecimal } from '../../pricing/format.js';
 import type { HandlerPaymentContext } from '../../types.js';
 import type { MppxMiddlewareResponse } from './middleware-types.js';
@@ -16,7 +15,9 @@ import type {
   VerifyOutcome,
 } from '../types.js';
 import type { RouteEntry } from '../../types.js';
-import { readMppCredential } from './credential.js';
+import { readMppAuthHeader } from '../detect.js';
+import { buildMppChallengeContribution } from './challenge.js';
+import { readMppCredential, sniffMppSessionAction } from './credential.js';
 import {
   buildSessionChallenge,
   isChannelOnlyAction,
@@ -33,19 +34,20 @@ export const mppStrategy: PaymentStrategy = {
   protocol: 'mpp',
 
   detects(request: Request): boolean {
-    const auth = request.headers.get(HEADERS.AUTHORIZATION);
-    return Boolean(auth && auth.startsWith(AUTH_SCHEME.MPP_PAYMENT));
+    return Boolean(readMppAuthHeader(request));
   },
 
   preflight(request: Request, _routeEntry: RouteEntry): PreflightOutcome | null {
-    const info = readMppCredential(request);
-    if (!info?.sessionAction) return null;
-    if (!isChannelOnlyAction(info, request)) return null;
+    // Sync hook → uses the non-authoritative header sniff (the full mppx
+    // credential parse is async); see sniffMppSessionAction for the rationale.
+    const action = sniffMppSessionAction(request);
+    if (!action) return null;
+    if (!isChannelOnlyAction(action, request)) return null;
     return { skipBody: true, skipHandler: true };
   },
 
   async verify(args: VerifyArgs): Promise<VerifyOutcome> {
-    const info = readMppCredential(args.request);
+    const info = await readMppCredential(args.request);
     if (!info) return { ok: false, kind: 'invalid' };
 
     if (args.routeEntry.billing === 'metered') {
@@ -98,6 +100,10 @@ export const mppStrategy: PaymentStrategy = {
     const sse = sseResult.withReceipt(forwardHandlerStreamWithChannelDebit) as Response;
     sse.headers.set('Cache-Control', 'private');
 
+    // NOTE for plugin authors: for streaming sessions `amount` is the verified
+    // session cap (suggested deposit), NOT the metered total. Per-tick charges
+    // happen live on the channel while the stream runs, and the true total is
+    // only known channel-side after the stream ends — it is not visible here.
     const settledPayment: HandlerPaymentContext & { status: 'settled' } = {
       ...args.payment,
       status: 'settled',
@@ -130,20 +136,8 @@ export const mppStrategy: PaymentStrategy = {
 };
 
 async function buildChargeChallenge(args: ChallengeArgs): Promise<ChallengeContribution> {
-  if (!args.deps.mppx) return {};
+  const { deps, price, request } = args;
+  if (!deps.mppx) return {};
 
-  try {
-    const result = await args.deps.mppx.charge({ amount: args.price })(args.request);
-    if (result.status === 402) {
-      const wwwAuth = result.challenge.headers.get(HEADERS.WWW_AUTHENTICATE);
-      if (wwwAuth) return { headers: { [HEADERS.WWW_AUTHENTICATE]: wwwAuth } };
-    }
-  } catch (err) {
-    args.report(
-      'warn',
-      `MPP challenge build failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    throw err;
-  }
-  return {};
+  return buildMppChallengeContribution(() => deps.mppx!.charge({ amount: price })(request));
 }

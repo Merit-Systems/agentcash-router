@@ -162,6 +162,13 @@ vi.mock('mppx', () => ({
       }
     },
   },
+  // The fake receipt headers in these tests aren't real serialized receipts;
+  // throwing matches the real Receipt.deserialize, so extractTxHash yields ''.
+  Receipt: {
+    deserialize: () => {
+      throw new Error('fake receipt header');
+    },
+  },
 }));
 
 vi.mock('viem/actions', () => ({

@@ -2,8 +2,9 @@ import type { PaymentPayload, PaymentRequirements } from '@x402/core/types';
 import { VerifyError } from '@x402/core/types';
 import type { X402ResolvedAccept, X402Server } from '../../types.js';
 import type { ReportFn } from '../../plugin/reporter.js';
-import { HEADERS } from '../../headers.js';
+import { readX402PaymentHeader } from '../detect.js';
 import { buildExpectedRequirements } from './requirements.js';
+import { isSolanaRequirement } from './solana.js';
 
 interface VerifyPaymentOptions {
   server: X402Server;
@@ -76,24 +77,53 @@ export async function verifyX402Payment(opts: VerifyPaymentOptions) {
   };
 }
 
+/**
+ * Picks the requirement that verification and settlement run against.
+ *
+ * Trust rationale: the v2 payload's `accepted` field is a CLIENT-CONTROLLED
+ * copy of the requirement it claims the server offered. Settling against it
+ * verbatim would let a client tamper with any field the match doesn't pin
+ * down. We therefore always prefer the SERVER-BUILT requirement, and merge in
+ * only the fields that legitimately exist solely in `accepted`: facilitator
+ * enrichment (see `mergeFacilitatorEnrichedFields`).
+ */
 function findVerifiableRequirements(
   server: X402Server,
   requirements: PaymentRequirements[],
   payload: PaymentPayload,
 ): PaymentRequirements | null {
   const strictMatch = server.findMatchingRequirements(requirements, payload);
-  if (strictMatch) {
-    return payload.x402Version === 2 ? payload.accepted : strictMatch;
-  }
-
   if (payload.x402Version !== 2) {
-    return null;
+    return strictMatch ?? null;
   }
 
-  const stableMatch = requirements.find((requirement) =>
-    matchesStableFields(requirement, payload.accepted),
-  );
-  return stableMatch ? payload.accepted : null;
+  const serverMatch =
+    strictMatch ??
+    requirements.find((requirement) => matchesStableFields(requirement, payload.accepted));
+  return serverMatch ? mergeFacilitatorEnrichedFields(serverMatch, payload.accepted) : null;
+}
+
+/**
+ * Solana-network requirements are enriched at challenge time through the
+ * facilitator's `/accepts` endpoint (see `challenge.ts`), which stamps fields
+ * like `extra.feePayer` and `extra.recentBlockhash` onto the requirement. The
+ * server-side rebuild at verify time does NOT repeat that enrichment, so the
+ * client's `accepted.extra` is the only place those fields survive — carry
+ * them over. This is safe because the facilitator independently validates
+ * `extra.feePayer` against its own signer set during verification; every
+ * settlement-critical field (scheme, network, payTo, asset, amount,
+ * maxTimeoutSeconds) still comes from the server-built requirement.
+ */
+function mergeFacilitatorEnrichedFields(
+  serverRequirement: PaymentRequirements,
+  accepted: PaymentRequirements,
+): PaymentRequirements {
+  if (!isSolanaRequirement(serverRequirement)) return serverRequirement;
+  if (!accepted.extra || typeof accepted.extra !== 'object') return serverRequirement;
+  return {
+    ...serverRequirement,
+    extra: { ...(serverRequirement.extra ?? {}), ...accepted.extra },
+  };
 }
 
 function matchesStableFields(
@@ -116,9 +146,7 @@ type ReadPaymentResult =
   | { kind: 'ok'; payload: PaymentPayload };
 
 async function readPaymentPayload(request: Request): Promise<ReadPaymentResult> {
-  const paymentHeader =
-    request.headers.get(HEADERS.X402_PAYMENT_SIGNATURE) ??
-    request.headers.get(HEADERS.X402_PAYMENT_LEGACY);
+  const paymentHeader = readX402PaymentHeader(request);
   if (!paymentHeader) return { kind: 'none' };
 
   const { decodePaymentSignatureHeader } = await import('@x402/core/http');

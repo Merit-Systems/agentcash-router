@@ -9,18 +9,13 @@ export async function settleX402Payment(
 ) {
   const { encodePaymentResponseHeader } = await import('@x402/core/http');
 
-  if (amountOverride?.amount !== undefined) {
-    const upstreamTaggedAmount = tagBareDecimalAsDollars(amountOverride.amount);
-    const result = await server.settlePayment(payload, requirements, undefined, undefined, {
-      amount: upstreamTaggedAmount,
-    });
-    return {
-      encoded: encodePaymentResponseHeader(result),
-      result: result as SettleResponse & { transaction?: string },
-    };
-  }
+  const result =
+    amountOverride?.amount !== undefined
+      ? await server.settlePayment(payload, requirements, undefined, undefined, {
+          amount: tagBareDecimalAsDollars(amountOverride.amount),
+        })
+      : await server.settlePayment(payload, requirements);
 
-  const result = await server.settlePayment(payload, requirements);
   return {
     encoded: encodePaymentResponseHeader(result),
     result: result as SettleResponse & { transaction?: string },

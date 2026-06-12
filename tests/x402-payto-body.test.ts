@@ -47,3 +47,29 @@ describe('resolveX402Accepts body forwarding', () => {
     expect(accepts[0].payTo).toBe('0xStaticAddress');
   });
 });
+
+describe('resolveX402Accepts network forwarding', () => {
+  const fakeRequest = new Request('https://example.com');
+
+  it('passes each accept network as the third payTo callback argument', async () => {
+    const seenNetworks: Array<string | undefined> = [];
+
+    const accepts = await resolveX402Accepts(
+      fakeRequest,
+      {
+        payTo: (_req: Request, _body?: unknown, network?: string) => {
+          seenNetworks.push(network);
+          return network?.startsWith('solana:') ? 'SolanaPayee111' : '0xEvmPayee';
+        },
+      },
+      [
+        { network: 'eip155:8453', scheme: 'exact' },
+        { network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', scheme: 'exact' },
+      ],
+      '0xfallback',
+    );
+
+    expect(seenNetworks).toEqual(['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp']);
+    expect(accepts.map((accept) => accept.payTo)).toEqual(['0xEvmPayee', 'SolanaPayee111']);
+  });
+});

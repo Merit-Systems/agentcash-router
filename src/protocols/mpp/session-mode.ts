@@ -8,10 +8,11 @@ import type {
   SettleOutcome,
   VerifyArgs,
   VerifyFailure,
-  VerifySuccess,
+  VerifyOutcome,
 } from '../types.js';
 import type { MppxMiddlewareResponse } from './middleware-types.js';
-import type { MppCredentialInfo } from './credential.js';
+import { buildMppChallengeContribution } from './challenge.js';
+import type { MppCredentialInfo, MppSessionAction } from './credential.js';
 
 export interface MppSessionToken {
   mode: 'session';
@@ -26,11 +27,7 @@ export interface MppSessionToken {
 export async function verifySessionMode(
   args: VerifyArgs,
   info: MppCredentialInfo,
-): Promise<
-  | VerifySuccess
-  | { ok: false; kind: 'invalid'; failure?: VerifyFailure }
-  | { ok: false; kind: 'config'; message: string }
-> {
+): Promise<VerifyOutcome> {
   const { request, deps, price, routeEntry } = args;
 
   if (!deps.mppx?.sessionRequest || !deps.mppx?.sessionStream || !deps.mppSessionConfig) {
@@ -46,7 +43,7 @@ export async function verifySessionMode(
   const streaming = routeEntry.streaming === true;
   const middleware = streaming ? deps.mppx.sessionStream : deps.mppx.sessionRequest;
 
-  const middlewareRequest = isChannelOnlyAction(info, request)
+  const middlewareRequest = isChannelOnlyAction(info.sessionAction, request)
     ? new Request(request.url, { method: request.method, headers: request.headers })
     : request;
 
@@ -103,7 +100,7 @@ export async function settleSessionMode(args: SettleArgs): Promise<SettleOutcome
   const { request, response, payment, token, billedAmount } = args;
   const sessionToken = token as MppSessionToken;
 
-  if (isChannelOnlyAction(sessionToken.info, request)) {
+  if (isChannelOnlyAction(sessionToken.info.sessionAction, request)) {
     const wrapped = (sessionToken.sessionResult.withReceipt as (r: Response) => Response)(
       new Response(null, { status: 200 }),
     ) as Response;
@@ -142,7 +139,7 @@ export async function settleSessionMode(args: SettleArgs): Promise<SettleOutcome
 export async function buildSessionChallenge(
   args: ChallengeArgs & { suggestedDeposit: string },
 ): Promise<ChallengeContribution> {
-  const { request, deps, suggestedDeposit, routeEntry, report } = args;
+  const { request, deps, suggestedDeposit, routeEntry } = args;
   if (!deps.mppSessionConfig) return {};
   const streaming = routeEntry.streaming === true;
   const middleware = streaming ? deps.mppx?.sessionStream : deps.mppx?.sessionRequest;
@@ -151,29 +148,20 @@ export async function buildSessionChallenge(
   const tickCost = routeEntry.tickCost!;
   const unitType = routeEntry.unitType;
 
-  try {
-    const result = await middleware({
+  return buildMppChallengeContribution(() =>
+    middleware({
       amount: tickCost,
       unitType,
       suggestedDeposit,
       ...(streaming ? { meta: { streaming: 'true' } } : {}),
-    })(request);
-    if (result.status === 402) {
-      const wwwAuth = result.challenge.headers.get(HEADERS.WWW_AUTHENTICATE);
-      if (wwwAuth) return { headers: { [HEADERS.WWW_AUTHENTICATE]: wwwAuth } };
-    }
-  } catch (err) {
-    report(
-      'warn',
-      `MPP session challenge build failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    throw err;
-  }
-  return {};
+    })(request),
+  );
 }
 
-export function isChannelOnlyAction(info: MppCredentialInfo, request: Request): boolean {
-  const action = info.sessionAction;
+export function isChannelOnlyAction(
+  action: MppSessionAction | undefined,
+  request: Request,
+): boolean {
   if (!action) return false;
   if (action === 'close' || action === 'topUp') return true;
   if ((action === 'open' || action === 'voucher') && !hasRequestBody(request)) return true;

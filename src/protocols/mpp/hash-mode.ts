@@ -1,7 +1,7 @@
 import type { Transport } from 'mppx/server';
 import { HEADERS } from '../../headers.js';
 import type { HandlerPaymentContext } from '../../types.js';
-import type { SettleArgs, SettleOutcome, VerifyArgs, VerifySuccess } from '../types.js';
+import type { SettleArgs, SettleOutcome, VerifyArgs, VerifyOutcome } from '../types.js';
 import type { MppxMiddlewareResponse } from './middleware-types.js';
 import type { MppCredentialInfo } from './credential.js';
 import { extractTxHash, readChallengeReason } from './receipt.js';
@@ -14,15 +14,13 @@ export interface HashModeToken {
 export async function verifyHashMode(
   args: VerifyArgs,
   info: MppCredentialInfo,
-): Promise<
-  VerifySuccess | { ok: false; kind: 'invalid' } | { ok: false; kind: 'config'; message: string }
-> {
+): Promise<VerifyOutcome> {
   const { deps, price, request, report } = args;
 
   if (!deps.mppx) {
     const reason = deps.mppInitError
       ? `MPP initialization failed: ${deps.mppInitError}`
-      : 'MPP not initialized — ensure mppx is installed and mpp config (secretKey, currency, recipient) is correct';
+      : 'MPP not initialized';
     report('error', reason);
     return { ok: false, kind: 'config', message: reason };
   }
@@ -43,10 +41,15 @@ export async function verifyHashMode(
     return { ok: false, kind: 'invalid' };
   }
 
+  // Header-extraction trick: the payment already settled inside charge()
+  // above, but mppx only exposes the receipt by stamping a Payment-Receipt
+  // header onto a response via withReceipt(). Wrap a throwaway Response here
+  // purely to read that header — the real handler response gets its own
+  // withReceipt() wrap later in settleHashMode.
   const receiptHeader = (chargeResult.withReceipt(new Response()) as Response).headers.get(
     HEADERS.MPP_PAYMENT_RECEIPT,
   );
-  const txHash = extractTxHash(receiptHeader);
+  const txHash = await extractTxHash(receiptHeader);
 
   const mppRecipient = deps.mppRecipient ?? deps.payeeAddress;
   const payment: HandlerPaymentContext & { status: 'settled' } = {
@@ -70,8 +73,24 @@ export async function verifyHashMode(
 }
 
 export function settleHashMode(args: SettleArgs): SettleOutcome {
-  const { response, payment, token } = args;
+  const { response, payment, token, billedAmount } = args;
   const hashToken = token as HashModeToken;
+
+  // Hash mode settles eagerly at verify time for exactly `payment.amount`
+  // (the referenced on-chain payment) — there is nothing left to charge here,
+  // so a different `billedAmount` can never be honored. Only exact-billing
+  // routes reach this mode, so the two always match today; assert defensively
+  // so a future flow passing a partial/over amount fails loudly instead of
+  // silently mischarging.
+  if (billedAmount !== payment.amount) {
+    const message = `MPP hash mode already settled ${payment.amount} at verify time; cannot settle ${billedAmount}`;
+    return {
+      ok: false,
+      error: new Error(message),
+      failMessage: message,
+      failStatus: 500,
+    };
+  }
 
   const receiptResponse = hashToken.charge.withReceipt(response) as Response;
   receiptResponse.headers.set('Cache-Control', 'private');

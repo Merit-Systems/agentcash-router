@@ -421,6 +421,61 @@ describe('x402 multi-network integration', () => {
     );
   });
 
+  it('maps /accepts enrichment by (scheme, network) when the facilitator reorders its response', async () => {
+    const server = new FakeX402Server();
+    const deps = makeDeps(server);
+    deps.x402FacilitatorsByNetwork = {
+      [SOLANA_NETWORK]: makeFacilitator(SOLANA_NETWORK, 'https://facilitator.example'),
+    };
+    deps.x402Accepts = [
+      { scheme: 'exact', network: SOLANA_NETWORK, payTo: SOLANA_PAYEE },
+      {
+        scheme: SOLANA_SETTLEMENT_SCHEME,
+        network: SOLANA_NETWORK,
+        payTo: SOLANA_PAYEE,
+        asset: 'solana-usdc',
+        decimals: 6,
+        maxTimeoutSeconds: 60,
+      },
+    ];
+
+    // Reordering fake facilitator: echoes the requested requirements back in
+    // REVERSE order, each tagged with scheme-specific enrichment.
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? '{}')) as {
+        accepts?: Array<Record<string, unknown>>;
+      };
+      const reversed = [...(body.accepts ?? [])].reverse().map((requirement) => ({
+        ...requirement,
+        extra: { enrichedFor: requirement.scheme },
+      }));
+      return new Response(JSON.stringify({ accepts: reversed }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    try {
+      const handler = createRequestHandler(makeEntry(), async () => ({ ok: true }), deps);
+      const response = await handler(new Request(URL, { method: 'POST' }));
+      const challenge = decodePaymentRequiredHeader(response.headers.get('PAYMENT-REQUIRED')!);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(challenge.accepts).toHaveLength(2);
+      // Each requirement must receive ITS OWN enrichment despite the reorder.
+      const exactAccept = challenge.accepts.find((accept) => accept.scheme === 'exact');
+      const settlementAccept = challenge.accepts.find(
+        (accept) => accept.scheme === SOLANA_SETTLEMENT_SCHEME,
+      );
+      expect(exactAccept?.extra).toMatchObject({ enrichedFor: 'exact' });
+      expect(settlementAccept?.extra).toMatchObject({ enrichedFor: SOLANA_SETTLEMENT_SCHEME });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('uses facilitator auth headers for /accepts enrichment', async () => {
     const server = new FakeX402Server();
     const deps = makeDeps(server);
