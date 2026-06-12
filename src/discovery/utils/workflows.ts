@@ -128,5 +128,16 @@ function renderAccessLabel(step: WorkflowRouteStep): string {
 }
 
 function renderPrice(price: NextPrice): string {
-  return typeof price === 'string' ? `$${price}` : `$${price.min}–$${price.max}`;
+  return typeof price === 'string'
+    ? `$${trimZeros(price)}`
+    : `$${trimZeros(price.min)}–$${trimZeros(price.max)}`;
+}
+
+/**
+ * Human-readable map rendering only — `next` entries keep the exact price
+ * strings (billing-semantic). `0.054000` → `0.054`, `1.00` → `1`.
+ */
+function trimZeros(price: string): string {
+  if (!price.includes('.')) return price;
+  return price.replace(/\.?0+$/, '') || '0';
 }

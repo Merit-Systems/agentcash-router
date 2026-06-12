@@ -981,3 +981,31 @@ describe('nextStep discovery surfaces', () => {
     expect(llms).toContain('1. POST /v2/actors/call ($0.01)');
   });
 });
+
+describe('workflow map price rendering', () => {
+  it('trims trailing zeros in rendered prices (next entries keep exact strings)', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('quote')
+      .paid('0.054000')
+      .description('Quote')
+      .handler(async () => ({ ok: true }));
+    router
+      .route('start')
+      .unprotected()
+      .nextStep({ route: 'quote' })
+      .handler(async () => ({ ok: true }));
+
+    const text = await (
+      await router.llmsTxt()(new Request('https://api.example.com/llms.txt'))
+    ).text();
+    expect(text).toContain('($0.054)');
+    expect(text).not.toContain('0.054000');
+
+    const res = await router.fetch(
+      new Request('https://api.example.com/api/start', { method: 'POST' }),
+    );
+    const body = await res.json();
+    expect(body.next[0].price).toBe('0.054000'); // exact string preserved on the edge
+  });
+});
