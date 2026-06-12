@@ -809,6 +809,55 @@ describe('nextStep discovery surfaces', () => {
     expect(download.responses['200']).not.toHaveProperty('links');
   });
 
+  it('advertises next on non-object output schemas (union poll route) as an allOf', async () => {
+    const router = createRouter(baseConfig);
+    const pollOutput = z.union([
+      z.object({ status: z.literal('pending'), jobId: z.string() }),
+      z.object({ status: z.literal('complete'), resultUrl: z.string() }),
+    ]);
+    router
+      .route('jobs/poll')
+      .siwx()
+      .description('Poll job status')
+      .output(pollOutput)
+      .nextStep({ route: 'jobs/download', note: 'Download once complete' })
+      .handler(async () => ({ status: 'pending' as const, jobId: 'j1' }));
+    router
+      .route('jobs/download')
+      .method('GET')
+      .paid('0.02')
+      .description('Download results')
+      .output(pollOutput) // non-object output WITHOUT chains must stay untouched
+      .handler(async () => ({ status: 'complete' as const, resultUrl: 'https://r' }));
+
+    // createDocument must not throw on the intersection-extended schema.
+    const res = await router.openapi()(new Request('https://api.example.com/openapi.json'));
+    const doc = await res.json();
+
+    const pollSchema =
+      doc.paths['/api/jobs/poll'].post.responses['200'].content['application/json'].schema;
+    // Rendered as allOf: [declared union, { next }].
+    expect(pollSchema.allOf).toHaveLength(2);
+    const [declared, extension] = pollSchema.allOf;
+    // Both union branches survive.
+    const branches = JSON.stringify(declared);
+    expect(branches).toContain('pending');
+    expect(branches).toContain('complete');
+    expect(branches).toContain('jobId');
+    expect(branches).toContain('resultUrl');
+    // And the injected next key is advertised, optional, with the entry shape.
+    expect(extension.properties).toHaveProperty('next');
+    expect(extension.required ?? []).not.toContain('next');
+    expect(extension.properties.next.items.properties).toHaveProperty('url');
+    expect(extension.properties.next.items.properties).toHaveProperty('price');
+
+    // A non-object output with no chains is advertised as-is (no allOf wrapper).
+    const downloadSchema =
+      doc.paths['/api/jobs/download'].get.responses['200'].content['application/json'].schema;
+    expect(downloadSchema).not.toHaveProperty('allOf');
+    expect(downloadSchema).toHaveProperty('anyOf');
+  });
+
   it('well-known carries no workflows array — the map summary lives in llms.txt', async () => {
     const chained = await (
       await chainedRouter().wellKnown()(new Request('https://api.example.com/.well-known/x402'))

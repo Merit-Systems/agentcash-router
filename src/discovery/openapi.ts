@@ -142,17 +142,28 @@ const NEXT_ENTRY_SCHEMA = z.object({
   body: z.unknown().optional(),
 });
 
-/** Advertised output schema: the declared `.output()` plus the optional injected `next` array. */
+const NEXT_KEY_SHAPE = {
+  next: z
+    .array(NEXT_ENTRY_SCHEMA)
+    .optional()
+    .describe('Appended by the router: the next call(s) to make, fully resolved, with price.'),
+};
+
+/**
+ * Advertised output schema: the declared `.output()` plus the optional
+ * injected `next` array. Plain objects are `.extend()`ed; any other shape
+ * (unions — e.g. a poll route's pending|complete — etc.) is wrapped in an
+ * intersection, which zod-openapi renders as `allOf: [declared, { next }]`.
+ * Advertisement only: runtime `next` injection and `.outputExample()`
+ * validation keep using the declared schema untouched.
+ */
 function advertisedOutputSchema(entry: RouteEntry): ZodType | undefined {
   if (!entry.outputSchema) return undefined;
   if (!entry.nextSteps || entry.nextSteps.length === 0) return entry.outputSchema;
-  if (!(entry.outputSchema instanceof z.ZodObject)) return entry.outputSchema;
-  return entry.outputSchema.extend({
-    next: z
-      .array(NEXT_ENTRY_SCHEMA)
-      .optional()
-      .describe('Appended by the router: the next call(s) to make, fully resolved, with price.'),
-  });
+  if (entry.outputSchema instanceof z.ZodObject) {
+    return entry.outputSchema.extend(NEXT_KEY_SHAPE);
+  }
+  return z.intersection(entry.outputSchema, z.object(NEXT_KEY_SHAPE));
 }
 
 function buildOperation(

@@ -26,6 +26,8 @@ Router 2.0: framework-agnostic core, Hono + Next.js out of the box, and `.nextSt
 
 **Fixes & hardening**
 
+- Once-per-process `console.warn` when the composed discovery guidance (authored guidance + the auto-generated `## Workflows` section) exceeds ~1000 tokens (4000 chars) — agentcash withholds oversized guidance from the first discover call by default, and the budget applies to the composed output, not the authored text alone.
+- The OpenAPI `next` advertisement now covers non-object output schemas too: when a chained route declares a non-`ZodObject` `.output()` (e.g. a poll route returning a union of pending/complete), the advertised 200 schema is the intersection of the declared schema and the optional `next` key, rendered as `allOf: [declared, { next }]`. Plain-object outputs keep the existing `.extend()` shape.
 - x402 settle retry now retries thrown transient errors (timeouts/network) and fails fast on deterministic failures; possible double-settle ambiguity is reported for reconciliation.
 - Settlement uses server-built payment requirements; only Solana facilitator-enriched `extra` is taken from the client payload.
 - Facilitator `/accepts` enrichment matched by `(scheme, network)` instead of array position.

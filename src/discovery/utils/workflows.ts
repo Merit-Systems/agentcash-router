@@ -25,12 +25,46 @@ import { resolveGuidance } from './guidance.js';
 const MAX_WORKFLOW_GROUPS = 12;
 
 /**
+ * agentcash auto-includes an origin's guidance in the first discover call
+ * only when `info['x-guidance']` is ≤ 1000 tokens (tokens = ceil(chars / 4));
+ * anything bigger is withheld behind an extra round-trip. The budget applies
+ * to the COMPOSED output (authored guidance + the auto-generated `## Workflows`
+ * section), not the authored text alone.
+ */
+const GUIDANCE_BUDGET_CHARS = 4000;
+
+/** Once per process — the composed guidance is identical on every request. */
+let warnedGuidanceOverBudget = false;
+
+function warnOnceWhenOverBudget(composed: string): void {
+  if (warnedGuidanceOverBudget || composed.length <= GUIDANCE_BUDGET_CHARS) return;
+  warnedGuidanceOverBudget = true;
+  console.warn(
+    `[router] composed guidance is ~${Math.ceil(composed.length / 4)} tokens; ` +
+      `>1000 tokens means agentcash withholds it from discover by default — ` +
+      `trim authored guidance or reduce chain notes`,
+  );
+}
+
+/**
  * Resolve the discovery guidance and append the auto-generated `## Workflows`
  * section derived from the `.nextStep()` graph. The section is omitted when
  * the registry is absent or declares no chains; returns `undefined` when
- * there is neither guidance nor chains.
+ * there is neither guidance nor chains. Warns (once per process) when the
+ * composed result exceeds the agentcash discover inclusion budget.
  */
 export async function composeGuidanceWithWorkflows(
+  discovery: DiscoveryConfig,
+  registry: RouteRegistry | undefined,
+  baseUrl: string,
+  basePath: string,
+): Promise<string | undefined> {
+  const composed = await compose(discovery, registry, baseUrl, basePath);
+  if (composed !== undefined) warnOnceWhenOverBudget(composed);
+  return composed;
+}
+
+async function compose(
   discovery: DiscoveryConfig,
   registry: RouteRegistry | undefined,
   baseUrl: string,

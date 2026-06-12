@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { z } from 'zod';
 import { RouteRegistry } from '../src/registry.js';
 import { createWellKnownHandler } from '../src/discovery/well-known.js';
@@ -244,5 +244,89 @@ describe('.docs() containment', () => {
 
     expect(text).toContain('## Workflows');
     expect(text).not.toContain(DOCS_TEXT);
+  });
+});
+
+describe('composed guidance budget warning', () => {
+  // agentcash auto-includes guidance in discover only when the COMPOSED
+  // output (authored guidance + the `## Workflows` section) is ≤ 1000 tokens
+  // (= 4000 chars). The warning lives behind a module-level once-per-process
+  // flag, so each test reloads the module to get a fresh flag.
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.resetModules();
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  async function freshCompose() {
+    const mod = await import('../src/discovery/utils/workflows.js');
+    return mod.composeGuidanceWithWorkflows;
+  }
+
+  function chainedRegistry(): RouteRegistry {
+    const reg = new RouteRegistry();
+    reg.register(
+      makeEntry({
+        key: 'start',
+        description: 'Start the run',
+        nextSteps: [{ route: 'target', note: 'Poll until done' }],
+      }),
+    );
+    reg.register(makeEntry({ key: 'target', description: 'Run status' }));
+    return reg;
+  }
+
+  it('does not warn when the composed guidance is within budget', async () => {
+    const compose = await freshCompose();
+    // Exactly at the 4000-char boundary (≤ budget) — no warning.
+    const composed = await compose(
+      { ...defaultDiscovery, guidance: 'g'.repeat(4000) },
+      undefined,
+      'https://example.com',
+      'api',
+    );
+    expect(composed).toHaveLength(4000);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('warns when authored guidance + the Workflows section cross the budget together', async () => {
+    const compose = await freshCompose();
+    // Authored guidance alone is under budget; the auto-generated
+    // `## Workflows` section pushes the COMPOSED output over 4000 chars.
+    const authored = 'g'.repeat(3980);
+    const composed = await compose(
+      { ...defaultDiscovery, guidance: authored },
+      chainedRegistry(),
+      'https://example.com',
+      'api',
+    );
+
+    expect(authored.length).toBeLessThanOrEqual(4000);
+    expect(composed).toContain('## Workflows');
+    expect(composed!.length).toBeGreaterThan(4000);
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const message = warnSpy.mock.calls[0][0] as string;
+    expect(message).toBe(
+      `[router] composed guidance is ~${Math.ceil(composed!.length / 4)} tokens; ` +
+        `>1000 tokens means agentcash withholds it from discover by default — ` +
+        `trim authored guidance or reduce chain notes`,
+    );
+  });
+
+  it('fires once per process, not per request', async () => {
+    const compose = await freshCompose();
+    const discovery = { ...defaultDiscovery, guidance: 'g'.repeat(5000) };
+
+    await compose(discovery, chainedRegistry(), 'https://example.com', 'api');
+    await compose(discovery, chainedRegistry(), 'https://example.com', 'api');
+    await compose(discovery, undefined, 'https://example.com', 'api');
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
   });
 });
