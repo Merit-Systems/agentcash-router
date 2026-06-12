@@ -1,7 +1,10 @@
-import { Receipt } from 'mppx';
-
-export function extractTxHash(receiptHeader: string | null | undefined): string {
+/**
+ * Async because mppx is loaded lazily — deployments that never receive MPP
+ * traffic must not pay its module-load cost.
+ */
+export async function extractTxHash(receiptHeader: string | null | undefined): Promise<string> {
   if (!receiptHeader) return '';
+  const { Receipt } = await import('mppx');
   try {
     return Receipt.deserialize(receiptHeader).reference;
   } catch {

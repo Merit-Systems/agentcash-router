@@ -2,7 +2,7 @@ import { Transaction as TempoTransaction } from 'viem/tempo';
 import { call as viemCall } from 'viem/actions';
 import { HEADERS } from '../../headers.js';
 import type { HandlerPaymentContext } from '../../types.js';
-import type { SettleArgs, SettleOutcome, VerifyArgs, VerifySuccess } from '../types.js';
+import type { SettleArgs, SettleOutcome, VerifyArgs, VerifyOutcome } from '../types.js';
 import type { MppCredentialInfo } from './credential.js';
 import { extractTxHash, readChallengeReason } from './receipt.js';
 
@@ -14,9 +14,7 @@ export interface TxModeToken {
 export async function verifyTxMode(
   args: VerifyArgs,
   info: MppCredentialInfo,
-): Promise<
-  VerifySuccess | { ok: false; kind: 'invalid' } | { ok: false; kind: 'config'; message: string }
-> {
+): Promise<VerifyOutcome> {
   const { deps, price, report } = args;
   if (!deps.tempoClient) {
     return {
@@ -64,7 +62,22 @@ export async function verifyTxMode(
 }
 
 export async function settleTxMode(args: SettleArgs): Promise<SettleOutcome> {
-  const { request, response, payment, deps, report } = args;
+  const { request, response, payment, deps, billedAmount, report } = args;
+
+  // MPP tx mode broadcasts the client's pre-signed transaction, whose amount
+  // was fixed at signing time — it CANNOT settle a different amount. Only
+  // exact-billing routes reach this mode, so `billedAmount` always equals
+  // `payment.amount` today; assert that defensively so a future flow passing
+  // a partial/over amount fails loudly instead of silently mischarging.
+  if (billedAmount !== payment.amount) {
+    const message = `MPP transaction mode cannot settle ${billedAmount}; the signed transaction amount is ${payment.amount}`;
+    return {
+      ok: false,
+      error: new Error(message),
+      failMessage: message,
+      failStatus: 500,
+    };
+  }
 
   if (!deps.mppx) {
     return {
@@ -110,7 +123,7 @@ export async function settleTxMode(args: SettleArgs): Promise<SettleOutcome> {
   const receiptResponse = result.withReceipt(response) as Response;
   receiptResponse.headers.set('Cache-Control', 'private');
   const receiptHeader = receiptResponse.headers.get(HEADERS.MPP_PAYMENT_RECEIPT) ?? undefined;
-  const txHash = extractTxHash(receiptHeader);
+  const txHash = await extractTxHash(receiptHeader);
 
   const settledPayment: HandlerPaymentContext & { status: 'settled' } = {
     ...payment,
