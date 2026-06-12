@@ -146,9 +146,6 @@ export function applyNextSteps(
   const entries = buildNextEntries(ctx, ctx.routing, steps, rawResult, requestContext);
   if (entries.length === 0) return unchanged;
 
-  // `next` trails the handler's own fields: the result is the payload, the
-  // hops are router metadata. Clients that need guaranteed visibility surface
-  // `next` separately (agentcash fetch duplicates it as its own result block).
   const body = { ...rawResult, next: entries };
   const headers = new Headers(response.headers);
   headers.delete('content-length');
