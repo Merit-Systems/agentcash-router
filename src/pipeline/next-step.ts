@@ -350,9 +350,35 @@ export function buildWorkflowChains(
     }
   }
 
-  const roots = sources
-    .filter((entry) => !targets.has(entry.key))
-    .sort((a, b) => a.key.localeCompare(b.key) || a.method.localeCompare(b.method));
+  const byPosition = (a: RouteEntry, b: RouteEntry) =>
+    a.key.localeCompare(b.key) || a.method.localeCompare(b.method);
+
+  // Pure roots: sources that are not themselves targets. Cyclic graphs
+  // (self-paginating routes, mutual detail links) can have NO pure roots —
+  // every source is also a target — which previously rendered no map at all
+  // while routes still advertised `next`. Cover them: after walking pure
+  // roots, any source not reached yet seeds its own chain (cycles terminate
+  // via the visited set, so this stays finite and deterministic).
+  const roots = sources.filter((entry) => !targets.has(entry.key)).sort(byPosition);
+
+  const reached = new Set<string>(roots.map((r) => r.key));
+  const markReachable = (entry: RouteEntry, seen: Set<string>): void => {
+    for (const step of entry.nextSteps ?? []) {
+      if (step.route === undefined || seen.has(step.route)) continue;
+      seen.add(step.route);
+      reached.add(step.route);
+      const target = registry.get(step.route);
+      if (target) markReachable(target, seen);
+    }
+  };
+  for (const root of roots) markReachable(root, new Set([root.key]));
+  const cycleSeeds = sources.filter((entry) => !reached.has(entry.key)).sort(byPosition);
+  for (const seed of cycleSeeds) {
+    if (reached.has(seed.key)) continue; // an earlier seed's walk covered it
+    reached.add(seed.key);
+    markReachable(seed, new Set([seed.key]));
+    roots.push(seed);
+  }
 
   const chains: WorkflowStep[][] = [];
 

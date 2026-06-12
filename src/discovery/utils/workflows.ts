@@ -135,9 +135,12 @@ function renderPrice(price: NextPrice): string {
 
 /**
  * Human-readable map rendering only — `next` entries keep the exact price
- * strings (billing-semantic). `0.054000` → `0.054`, `1.00` → `1`.
+ * strings (billing-semantic). Strips trailing zeros but keeps conventional
+ * money formatting: `0.054000` → `0.054`, `1.00` → `1`, `0.10` → `0.10`.
  */
 function trimZeros(price: string): string {
   if (!price.includes('.')) return price;
-  return price.replace(/\.?0+$/, '') || '0';
+  const trimmed = price.replace(/\.?0+$/, '') || '0';
+  const fraction = trimmed.split('.')[1];
+  return fraction && fraction.length === 1 ? `${trimmed}0` : trimmed;
 }

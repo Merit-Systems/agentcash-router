@@ -1009,3 +1009,64 @@ describe('workflow map price rendering', () => {
     expect(body.next[0].price).toBe('0.054000'); // exact string preserved on the edge
   });
 });
+
+describe('workflow map for cyclic chain graphs', () => {
+  it('self-referential pagination still renders a workflow', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('person/search')
+      .paid('0.01')
+      .description('Search people; paginate via scroll_token')
+      .nextStep({ route: 'person/search', note: 'Pass scroll_token for the next page.' })
+      .handler(async () => ({ ok: true }));
+
+    const text = await (
+      await router.llmsTxt()(new Request('https://api.example.com/llms.txt'))
+    ).text();
+    expect(text).toContain('## Workflows');
+    expect(text).toContain('1. POST /api/person/search');
+  });
+
+  it('mutual cycles with no pure root render one deterministic chain each', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('a/search')
+      .unprotected()
+      .nextStep({ route: 'b/details' })
+      .handler(async () => ({ ok: true }));
+    router
+      .route('b/details')
+      .unprotected()
+      .nextStep({ route: 'a/search' })
+      .handler(async () => ({ ok: true }));
+
+    const text = await (
+      await router.llmsTxt()(new Request('https://api.example.com/llms.txt'))
+    ).text();
+    expect(text).toContain('## Workflows');
+    // a/search seeds (alphabetical); b/details is covered by its walk, no second block for it.
+    expect(text).toContain('1. POST /api/a/search');
+    expect(text).toContain('2. POST /api/b/details');
+  });
+
+  it('pure roots still take precedence and cycles reachable from them do not double-render', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('entry')
+      .unprotected()
+      .nextStep({ route: 'loop' })
+      .handler(async () => ({ ok: true }));
+    router
+      .route('loop')
+      .unprotected()
+      .nextStep({ route: 'loop', note: 'poll again' })
+      .handler(async () => ({ ok: true }));
+
+    const text = await (
+      await router.llmsTxt()(new Request('https://api.example.com/llms.txt'))
+    ).text();
+    expect(text).toContain('1. POST /api/entry');
+    // 'loop' is reachable from 'entry' — it must not also seed its own chain block.
+    expect(text.match(/1\. POST/g)?.length).toBe(1);
+  });
+});
