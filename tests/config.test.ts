@@ -202,6 +202,42 @@ describe('validateRouterConfig', () => {
     expect(issues.filter((i) => i.protocol === 'mpp')).toEqual([]);
   });
 
+  it('rejects fractional, zero, and negative mpp.session.depositMultiplier values', () => {
+    for (const depositMultiplier of [2.5, 0, -1, Number.NaN]) {
+      const issues = getRouterConfigIssues(
+        makeConfig({
+          protocols: ['mpp'],
+          mpp: {
+            secretKey: 'secret',
+            currency: TEMPO_USDC_ADDRESS,
+            rpcUrl: 'https://tempo.example.com',
+            session: { depositMultiplier },
+          },
+        }),
+        { env: {} },
+      );
+      expect(issues.map((i) => i.code)).toContain('invalid_mpp_deposit_multiplier');
+    }
+  });
+
+  it('accepts a positive integer depositMultiplier and an omitted one', () => {
+    for (const session of [{ depositMultiplier: 10 }, {}]) {
+      const issues = getRouterConfigIssues(
+        makeConfig({
+          protocols: ['mpp'],
+          mpp: {
+            secretKey: 'secret',
+            currency: TEMPO_USDC_ADDRESS,
+            rpcUrl: 'https://tempo.example.com',
+            session,
+          },
+        }),
+        { env: {} },
+      );
+      expect(issues.map((i) => i.code)).not.toContain('invalid_mpp_deposit_multiplier');
+    }
+  });
+
   it('rejects placeholder payment recipients', () => {
     const issues = getRouterConfigIssues(
       makeConfig({

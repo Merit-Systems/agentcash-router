@@ -19,8 +19,10 @@ export class TieredPricing implements PricingStrategy {
     const { field, tiers, default: defaultTier } = this.opts;
     const tierKey = body != null ? String((body as Record<string, unknown>)[field] ?? '') : '';
 
-    if (tierKey && tiers[tierKey]) return tiers[tierKey].price;
-    if (defaultTier && tiers[defaultTier]) return tiers[defaultTier].price;
+    // Own-property lookup only: the key is attacker-controlled, and a plain
+    // index would walk the prototype chain (`tier: "constructor"`).
+    if (tierKey && Object.hasOwn(tiers, tierKey)) return tiers[tierKey].price;
+    if (defaultTier && Object.hasOwn(tiers, defaultTier)) return tiers[defaultTier].price;
     if (!tierKey) {
       throw httpError(400, `Missing required field '${field}' for tier pricing`);
     }

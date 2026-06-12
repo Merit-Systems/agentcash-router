@@ -17,25 +17,27 @@ export interface FacilitatorSupportedCacheOptions {
 // getSupported() carries facilitator-provided extras the upto scheme needs
 // (e.g. facilitatorAddress, which the client signs into the Permit2 witness).
 // On serverless, every cold start would otherwise re-fetch /supported. The kv
-// layer shares the response across instances; the in-memory promise dedups
-// concurrent challenges in the same process.
+// layer shares the response across instances; the in-memory memo dedups
+// concurrent challenges in the same process and expires after the TTL so
+// long-running servers (Hono) refresh it like everyone else.
 export function withCachedSupported(
   inner: FacilitatorClient,
   options: FacilitatorSupportedCacheOptions = {},
 ): FacilitatorClient {
   const { kv, cacheKey, ttlSeconds = FACILITATOR_SUPPORTED_TTL_SECONDS, fallback } = options;
   const kvKey = kv && cacheKey ? `${FACILITATOR_SUPPORTED_KV_PREFIX}${cacheKey}` : undefined;
-  let inflight: Promise<SupportedResponse> | undefined;
+  let memo: { promise: Promise<SupportedResponse>; expiresAt: number } | undefined;
 
   return {
     verify: inner.verify.bind(inner),
     settle: inner.settle.bind(inner),
     getSupported: () => {
-      if (inflight) return inflight;
+      if (memo && Date.now() < memo.expiresAt) return memo.promise;
       const attempt = fetchSupported(inner, kv, kvKey, ttlSeconds, fallback);
-      inflight = attempt;
+      const entry = { promise: attempt, expiresAt: Date.now() + ttlSeconds * 1000 };
+      memo = entry;
       attempt.catch(() => {
-        if (inflight === attempt) inflight = undefined;
+        if (memo === entry) memo = undefined;
       });
       return attempt;
     },

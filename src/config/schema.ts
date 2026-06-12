@@ -428,6 +428,17 @@ function validateMppConfig(config: RouterConfig): RouterConfigIssue[] {
         'or omit feePayerKey to disable gas sponsorship (clients then pay their own gas).',
     );
   }
+  const depositMultiplier = m.session?.depositMultiplier;
+  if (
+    depositMultiplier !== undefined &&
+    (!Number.isInteger(depositMultiplier) || depositMultiplier <= 0)
+  ) {
+    push(
+      'invalid_mpp_deposit_multiplier',
+      `mpp.session.depositMultiplier must be a positive integer, got ${depositMultiplier}. ` +
+        'It scales tickCost into the suggested channel deposit on the 402 challenge.',
+    );
+  }
   if (m.session && recipient && isEvmAddress(recipient)) {
     const operatorAddress = evmAddressFromKey(m.operatorKey);
     if (operatorAddress && operatorAddress !== recipient.toLowerCase()) {

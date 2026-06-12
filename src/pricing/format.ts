@@ -48,7 +48,12 @@ export function isPositiveDecimal(value: string): boolean {
 }
 
 export function multiplyDecimal(decimal: string, factor: number): string {
-  if (!Number.isFinite(factor) || factor <= 0) return decimal;
+  // A silent pass-through here would mask a misconfigured multiplier;
+  // `mpp.session.depositMultiplier` is validated at config time, so reaching
+  // this throw means a programming error, not user input.
+  if (!Number.isInteger(factor) || factor <= 0) {
+    throw new Error(`[pricing] multiplyDecimal factor must be a positive integer, got ${factor}`);
+  }
   const [whole, fraction = ''] = decimal.split('.');
   const scaled = (BigInt(whole + fraction) * BigInt(factor)).toString();
   const decimals = fraction.length;
