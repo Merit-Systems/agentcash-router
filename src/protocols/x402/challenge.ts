@@ -21,14 +21,9 @@ type ChallengeResource = {
   mimeType: string;
 };
 
-type IndexedRequirement = {
-  index: number;
-  requirement: PaymentRequirements;
-};
-
 type EnrichmentGroup = {
   facilitator: ResolvedX402Facilitator;
-  items: IndexedRequirement[];
+  items: PaymentRequirements[];
 };
 
 interface BuildChallengeOptions {
@@ -85,21 +80,42 @@ function needsFacilitatorEnrichment(accepts: X402ResolvedAccept[]): boolean {
   return hasSolanaAccepts(accepts);
 }
 
+/**
+ * Calls the facilitator's /accepts and maps each input requirement to its
+ * enriched counterpart by `(scheme, network)` key — never by array offset, so
+ * a facilitator that reorders its response cannot swap requirements.
+ * Duplicate keys consume response entries in order.
+ */
 async function enrichGroup(
   group: EnrichmentGroup,
   resource: ChallengeResource,
-): Promise<PaymentRequirements[]> {
+): Promise<Map<PaymentRequirements, PaymentRequirements>> {
   const accepted = await enrichRequirementsWithFacilitatorAccepts(
     group.facilitator,
     resource,
-    group.items.map(({ requirement }) => requirement),
+    group.items,
   );
+  const label = group.facilitator.url ?? group.facilitator.network;
   if (accepted.length !== group.items.length) {
     throw new Error(
-      `Facilitator /accepts returned ${accepted.length} requirements for ${group.items.length} inputs on ${group.facilitator.url ?? group.facilitator.network}`,
+      `Facilitator /accepts returned ${accepted.length} requirements for ${group.items.length} inputs on ${label}`,
     );
   }
-  return accepted;
+
+  const pool = [...accepted];
+  const replacements = new Map<PaymentRequirements, PaymentRequirements>();
+  for (const item of group.items) {
+    const matchIndex = pool.findIndex(
+      (candidate) => candidate.scheme === item.scheme && candidate.network === item.network,
+    );
+    if (matchIndex === -1) {
+      throw new Error(
+        `Facilitator /accepts response is missing a '${item.scheme}' requirement on ${item.network} (${label})`,
+      );
+    }
+    replacements.set(item, pool.splice(matchIndex, 1)[0]!);
+  }
+  return replacements;
 }
 
 async function enrichChallengeRequirements(
@@ -111,14 +127,15 @@ async function enrichChallengeRequirements(
   const groups = collectEnrichmentGroups(requirements, facilitatorsByNetwork);
   if (groups.length === 0) return requirements;
 
-  type EnrichmentResult =
-    | { success: true; group: EnrichmentGroup; accepted: PaymentRequirements[] }
-    | { success: false; group: EnrichmentGroup };
+  const replacements = new Map<PaymentRequirements, PaymentRequirements>();
+  const dropped = new Set<PaymentRequirements>();
 
-  const results = await Promise.all(
-    groups.map(async (group): Promise<EnrichmentResult> => {
+  await Promise.all(
+    groups.map(async (group) => {
       try {
-        return { success: true, group, accepted: await enrichGroup(group, resource) };
+        for (const [item, enriched] of await enrichGroup(group, resource)) {
+          replacements.set(item, enriched);
+        }
       } catch (err) {
         const label = group.facilitator.url ?? group.facilitator.network;
         const reason = err instanceof Error ? err.message : String(err);
@@ -126,28 +143,14 @@ async function enrichChallengeRequirements(
           'warn',
           `${label} /accepts failed, dropping ${group.items.length} requirement(s): ${reason}`,
         );
-        return { success: false, group };
+        for (const item of group.items) dropped.add(item);
       }
     }),
   );
 
-  const enriched = [...requirements];
-  results
-    .filter((r): r is Extract<EnrichmentResult, { success: true }> => r.success)
-    .forEach(({ group, accepted }) => {
-      accepted.forEach((req, offset) => {
-        const index = group.items[offset]?.index;
-        if (index !== undefined) enriched[index] = req;
-      });
-    });
-
-  const failedIndices = new Set(
-    results
-      .filter((r): r is Extract<EnrichmentResult, { success: false }> => !r.success)
-      .flatMap(({ group }) => group.items.map(({ index }) => index)),
-  );
-
-  const remaining = enriched.filter((_, i) => !failedIndices.has(i));
+  const remaining = requirements
+    .filter((requirement) => !dropped.has(requirement))
+    .map((requirement) => replacements.get(requirement) ?? requirement);
   if (remaining.length === 0) {
     throw new Error(
       'All facilitator enrichments failed; no payment requirements remain for challenge',
@@ -163,23 +166,19 @@ function collectEnrichmentGroups(
 ): EnrichmentGroup[] {
   const groups: EnrichmentGroup[] = [];
 
-  requirements.forEach((requirement, index) => {
-    if (!requiresFacilitatorEnrichment(requirement)) return;
+  for (const requirement of requirements) {
+    if (!requiresFacilitatorEnrichment(requirement)) continue;
 
     const facilitator = getRequiredFacilitator(requirement, facilitatorsByNetwork);
     const existing = groups.find((group) =>
       sameResolvedX402Facilitator(group.facilitator, facilitator),
     );
     if (existing) {
-      existing.items.push({ index, requirement });
-      return;
+      existing.items.push(requirement);
+    } else {
+      groups.push({ facilitator, items: [requirement] });
     }
-
-    groups.push({
-      facilitator,
-      items: [{ index, requirement }],
-    });
-  });
+  }
 
   return groups;
 }
