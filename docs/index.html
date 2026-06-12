@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>@agentcash/router — docs</title>
+<style>
+/* ── Reset ─────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+
+/* ── Tokens ─────────────────────────────────────────────────────────────────── */
+:root {
+  --bg:          #f8f7f4;
+  --bg-code:     #efede8;
+  --bg-nav:      #f2f0eb;
+  --bg-section:  #f5f3ef;
+  --ink:         #1a1916;
+  --ink-muted:   #6b6760;
+  --ink-faint:   #b0ada5;
+  --accent:      #1a1916;
+  --accent-link: #2e5c3a;
+  --border:      #dedad3;
+  --nav-w:       220px;
+  --col-w:       720px;
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
+  --font-body: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-ui:   "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:          #141210;
+    --bg-code:     #1c1a17;
+    --bg-nav:      #181614;
+    --bg-section:  #161411;
+    --ink:         #e8e5de;
+    --ink-muted:   #8c8880;
+    --ink-faint:   #4a4842;
+    --accent:      #e8e5de;
+    --accent-link: #6aad82;
+    --border:      #2a2824;
+  }
+}
+
+/* ── Type ───────────────────────────────────────────────────────────────────── */
+body {
+  font-family: var(--font-ui);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-body);
+  font-weight: normal;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+h1 { font-size: 2.25rem; }
+h2 { font-size: 1.5rem; margin-bottom: 1.25rem; }
+h3 { font-size: 1.1rem; margin-bottom: 0.75rem; }
+
+p { margin-bottom: 1rem; color: var(--ink); }
+p:last-child { margin-bottom: 0; }
+
+a { color: var(--accent-link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+li { margin-bottom: 0.3rem; }
+
+strong { font-weight: 600; }
+em { font-style: italic; }
+
+/* ── Layout ─────────────────────────────────────────────────────────────────── */
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── Sidebar ────────────────────────────────────────────────────────────────── */
+.sidebar {
+  width: var(--nav-w);
+  flex-shrink: 0;
+  background: var(--bg-nav);
+  border-right: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 2rem 0 3rem;
+}
+
+.sidebar-logo {
+  padding: 0 1.25rem 1.75rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+
+.sidebar-logo .pkg {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+  letter-spacing: 0;
+}
+
+.sidebar-logo .wordmark {
+  font-family: var(--font-body);
+  font-size: 1.1rem;
+  color: var(--ink);
+  display: block;
+  margin-top: 0.15rem;
+}
+
+nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+nav ul li { margin-bottom: 0; }
+
+nav > ul > li > a {
+  display: block;
+  padding: 0.35rem 1.25rem;
+  font-size: 0.825rem;
+  font-weight: 500;
+  font-family: var(--font-ui);
+  color: var(--ink-muted);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: color 0.1s;
+}
+
+nav > ul > li > a:hover,
+nav > ul > li > a.active {
+  color: var(--ink);
+}
+
+nav .sub {
+  padding-left: 0;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+nav .sub li a {
+  display: block;
+  padding: 0.2rem 1.25rem 0.2rem 1.75rem;
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+  text-decoration: none;
+}
+
+nav .sub li a:hover { color: var(--ink); }
+
+nav .section-gap { height: 0.75rem; }
+
+/* ── Main ───────────────────────────────────────────────────────────────────── */
+.main {
+  flex: 1;
+  min-width: 0;
+  padding: 3rem 3rem 6rem;
+}
+
+.content {
+  max-width: var(--col-w);
+  margin: 0 auto;
+}
+
+/* ── Sections ───────────────────────────────────────────────────────────────── */
+.section {
+  margin-bottom: 5rem;
+}
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 1.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-num {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+  letter-spacing: 0.05em;
+}
+
+.subsection {
+  margin-bottom: 3rem;
+}
+
+.subsection + .subsection {
+  padding-top: 2rem;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Hero ───────────────────────────────────────────────────────────────────── */
+.hero {
+  margin-bottom: 5rem;
+}
+
+.hero-name {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+  margin-bottom: 0.5rem;
+}
+
+.hero h1 {
+  margin-bottom: 0.75rem;
+}
+
+.hero-tagline {
+  font-size: 1.05rem;
+  color: var(--ink-muted);
+  margin-bottom: 2rem;
+  max-width: 560px;
+}
+
+.install-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.55rem 1rem;
+  margin-bottom: 2.5rem;
+}
+
+.install-line code {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+/* ── Code blocks ────────────────────────────────────────────────────────────── */
+pre {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1.25rem 1.5rem;
+  overflow-x: auto;
+  margin-bottom: 1.25rem;
+  font-size: 0.82rem;
+  line-height: 1.7;
+}
+
+pre code {
+  font-family: var(--font-mono);
+  color: var(--ink);
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 0.1em 0.35em;
+  color: var(--ink);
+}
+
+/* Two muted token colors — comments and strings only */
+.t-comment { color: var(--ink-muted); font-style: italic; }
+.t-string  { color: var(--accent-link); }
+.t-key     { color: var(--ink); }
+
+/* ── Tabs ───────────────────────────────────────────────────────────────────── */
+.tab-group { margin-bottom: 1.25rem; }
+
+.tab-labels {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+}
+
+.tab-label {
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--ink-muted);
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  transition: color 0.1s;
+}
+
+.tab-label:hover { color: var(--ink); }
+.tab-label.active {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.tab-panel pre { border-top: none; border-radius: 0 0 4px 4px; margin-bottom: 0; }
+
+/* ── Tables ─────────────────────────────────────────────────────────────────── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+th {
+  text-align: left;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+tr:last-child td { border-bottom: none; }
+
+td:first-child code { font-size: 0.8rem; }
+
+/* ── Callout ────────────────────────────────────────────────────────────────── */
+.note {
+  background: var(--bg-section);
+  border-left: 2px solid var(--border);
+  padding: 0.85rem 1.1rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+  border-radius: 0 4px 4px 0;
+}
+
+.note strong { color: var(--ink); }
+
+/* ── Auth mode grid ─────────────────────────────────────────────────────────── */
+.method-grid {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 0;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+}
+
+.method-row {
+  display: contents;
+}
+
+.method-row > * {
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.45;
+}
+
+.method-row:last-child > * { border-bottom: none; }
+
+.method-name {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--ink);
+  background: var(--bg-code);
+  white-space: nowrap;
+}
+
+.method-desc { color: var(--ink-muted); }
+.method-desc strong { color: var(--ink); }
+
+/* ── Footer ─────────────────────────────────────────────────────────────────── */
+footer {
+  max-width: var(--col-w);
+  margin: 0 auto;
+  padding-top: 2.5rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 2rem;
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+}
+
+footer a { color: var(--ink-muted); }
+footer a:hover { color: var(--ink); }
+
+/* ── Responsive ─────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .sidebar {
+    display: none;
+  }
+
+  .main {
+    padding: 2rem 1.25rem 4rem;
+  }
+
+  h1 { font-size: 1.75rem; }
+  h2 { font-size: 1.3rem; }
+
+  pre { font-size: 0.78rem; padding: 1rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<!-- ── Sidebar ──────────────────────────────────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="pkg">@agentcash/</div>
+    <span class="wordmark">router</span>
+  </div>
+  <nav>
+    <ul>
+      <li><a href="#hero">Overview</a></li>
+      <li class="section-gap"></li>
+      <li><a href="#host">Host it</a></li>
+      <li class="section-gap"></li>
+      <li><a href="#primitives">Primitives</a></li>
+      <ul class="sub">
+        <li><a href="#prim-paid">.paid()</a></li>
+        <li><a href="#prim-upto">.upTo()</a></li>
+        <li><a href="#prim-metered">.metered()</a></li>
+        <li><a href="#prim-siwx">.siwx()</a></li>
+        <li><a href="#prim-apikey">.apiKey()</a></li>
+        <li><a href="#prim-unprotected">.unprotected()</a></li>
+        <li><a href="#prim-schema">Schemas &amp; types</a></li>
+        <li><a href="#prim-errors">HttpError</a></li>
+      </ul>
+      <li class="section-gap"></li>
+      <li><a href="#compose">Compose</a></li>
+      <ul class="sub">
+        <li><a href="#compose-nextstep">.nextStep()</a></li>
+        <li><a href="#compose-when">when() branching</a></li>
+      </ul>
+      <li class="section-gap"></li>
+      <li><a href="#discovery">Discovery</a></li>
+      <li class="section-gap"></li>
+      <li><a href="#configure">Configure</a></li>
+      <li class="section-gap"></li>
+      <li><a href="#observe">Observe</a></li>
+    </ul>
+  </nav>
+</aside>
+
+<!-- ── Main ─────────────────────────────────────────────────────────────────── -->
+<main class="main">
+<div class="content">
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- HERO                                                                      -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<section class="hero" id="hero">
+  <div class="hero-name">@agentcash/router</div>
+  <h1>Payments, identity, and discovery<br>for agent-facing APIs.</h1>
+  <p class="hero-tagline">One fluent builder. x402 and MPP payments, SIWX wallet identity, OpenAPI, and <code>/llms.txt</code> — all derived from your route definitions.</p>
+
+  <div class="install-line">
+    <code>pnpm add @agentcash/router zod</code>
+  </div>
+
+  <pre><code><span class="t-comment">// server/router.ts</span>
+import { createRouterFromEnv } from <span class="t-string">'@agentcash/router'</span>;
+
+export const router = createRouterFromEnv({
+  title: <span class="t-string">'My API'</span>,
+  description: <span class="t-string">'Pay-per-call API.'</span>,
+  guidance: <span class="t-string">'POST /search with { q: string }.'</span>,
+});
+
+<span class="t-comment">// server/routes.ts</span>
+import { router } from <span class="t-string">'./router'</span>;
+
+router.route(<span class="t-string">'search'</span>)
+  .paid(<span class="t-string">'0.01'</span>)
+  .handler(async ({ body }) => search(body));
+
+router.route(<span class="t-string">'health'</span>)
+  .unprotected()
+  .handler(async () => ({ status: <span class="t-string">'ok'</span> }));</code></pre>
+
+  <p style="color: var(--ink-muted); font-size: 0.875rem;">That's a working paid API. Everything below is additive.</p>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- HOST IT                                                                   -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="host">
+  <div class="section-header">
+    <span class="section-num">01</span>
+    <h2>Host it</h2>
+  </div>
+
+  <p>The router is one fetch handler. Every registered route plus the discovery surfaces (<code>/.well-known/x402</code>, <code>/openapi.json</code>, <code>/llms.txt</code>) is served through it.</p>
+
+  <div class="tab-group" id="host-tabs">
+    <div class="tab-labels">
+      <button class="tab-label active" onclick="switchTab('host-tabs', 'host-nextjs-catchall', this)">Next.js catch-all</button>
+      <button class="tab-label" onclick="switchTab('host-tabs', 'host-nextjs-perfile', this)">Next.js per-file</button>
+      <button class="tab-label" onclick="switchTab('host-tabs', 'host-hono', this)">Hono / Bun / Node</button>
+    </div>
+
+    <div class="tab-panel active" id="host-nextjs-catchall">
+      <pre><code><span class="t-comment">// app/api/[[...route]]/route.ts</span>
+import <span class="t-string">'@/server/routes'</span>; <span class="t-comment">// side-effect: registers all routes</span>
+import { router } from <span class="t-string">'@/server/router'</span>;
+import { nextHandlers } from <span class="t-string">'@agentcash/router/next'</span>;
+
+export const { GET, POST, PUT, PATCH, DELETE } = nextHandlers(router);</code></pre>
+      <p style="font-size:0.875rem; color: var(--ink-muted); margin-top: 0.75rem;">One file serves the whole API. Routes are registered before any request is handled — no barrel files, no module-load-order surprises.</p>
+      <p style="font-size:0.875rem; color: var(--ink-muted);">The catch-all covers <code>/api/*</code>. To serve root-level aliases (<code>/.well-known/x402</code>, <code>/llms.txt</code>), add dedicated route files or a middleware rewrite:</p>
+      <pre><code><span class="t-comment">// app/.well-known/x402/route.ts</span>
+import <span class="t-string">'@/server/routes'</span>;
+import { router } from <span class="t-string">'@/server/router'</span>;
+export const GET = router.wellKnown();
+
+<span class="t-comment">// — or — middleware.ts (rewrite into the catch-all)</span>
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  if (pathname === <span class="t-string">'/.well-known/x402'</span> || pathname === <span class="t-string">'/llms.txt'</span>) {
+    return NextResponse.rewrite(new URL(<span class="t-string">`/api${pathname}`</span>, request.url));
+  }
+}</code></pre>
+    </div>
+
+    <div class="tab-panel" id="host-nextjs-perfile">
+      <pre><code><span class="t-comment">// app/api/search/route.ts</span>
+import { router } from <span class="t-string">'@/server/router'</span>;
+import { searchSchema } from <span class="t-string">'./schemas'</span>;
+
+export const POST = router.route(<span class="t-string">'search'</span>)
+  .paid(<span class="t-string">'0.01'</span>)
+  .body(searchSchema)
+  .handler(async ({ body }) => search(body));</code></pre>
+      <p style="font-size:0.875rem; color: var(--ink-muted); margin-top: 0.75rem;"><code>.handler()</code> returns a standard <code>(request: Request) =&gt; Promise&lt;Response&gt;</code> — Next.js accepts it directly. Because Next.js lazy-loads route modules, keep a barrel import in your discovery route files so all routes appear in the spec.</p>
+    </div>
+
+    <div class="tab-panel" id="host-hono">
+      <pre><code>import { Hono } from <span class="t-string">'hono'</span>;
+import { serve } from <span class="t-string">'@hono/node-server'</span>;
+import { createRouterFromEnv } from <span class="t-string">'@agentcash/router'</span>;
+import { z } from <span class="t-string">'zod'</span>;
+import <span class="t-string">'./routes'</span>; <span class="t-comment">// registers all routes</span>
+import { router } from <span class="t-string">'./router'</span>;
+
+const app = new Hono();
+app.route(<span class="t-string">'/'</span>, router.hono()); <span class="t-comment">// or: serve({ fetch: router.fetch, port: 3000 })</span>
+
+serve({ fetch: app.fetch, port: 3000 });</code></pre>
+      <p style="font-size:0.875rem; color: var(--ink-muted); margin-top: 0.75rem;"><code>router.fetch(request)</code> is the raw entry point for any fetch runtime — Bun, Deno, Cloudflare Workers.</p>
+    </div>
+  </div>
+
+  <h3 id="path-params" style="margin-top: 1.75rem;">Path parameters</h3>
+  <pre><code>router.route(<span class="t-string">'jobs/{jobId}'</span>)
+  .siwx()
+  .method(<span class="t-string">'GET'</span>)
+  .handler(async ({ params, wallet }) => getJob(params.jobId, wallet));</code></pre>
+  <p>Use <code>{param}</code> segments — they're extracted into <code>ctx.params</code> in every hosting mode. The route mount prefix defaults to <code>api</code>; override with <code>RouterConfig.basePath</code>.</p>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- PRIMITIVES                                                                -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="primitives">
+  <div class="section-header">
+    <span class="section-num">02</span>
+    <h2>Primitives</h2>
+  </div>
+
+  <p>Each route chains exactly one auth/pricing mode. The builder throws at registration if you combine incompatible modes — that constraint is the documentation.</p>
+
+  <!-- .paid() -->
+  <div class="subsection" id="prim-paid">
+    <h3>.paid() — fixed, args-derived, or tiered</h3>
+
+    <p><strong>Static.</strong> Fixed price per request, settled via x402 or MPP.</p>
+    <pre><code>router.route(<span class="t-string">'search'</span>)
+  .paid(<span class="t-string">'0.01'</span>)
+  .handler(async ({ body }) => search(body));</code></pre>
+
+    <p><strong>Args-derived.</strong> Compute the price from the parsed body before issuing the 402 challenge. <code>maxPrice</code> is required — it caps the computed amount and acts as a fallback on non-<code>HttpError</code> exceptions.</p>
+    <pre><code>router.route(<span class="t-string">'generate'</span>)
+  .paid((body) => <span class="t-string">`${body.frames * 0.01}`</span>, { maxPrice: <span class="t-string">'1.00'</span> })
+  .body(z.object({ frames: z.number() }))
+  .handler(async ({ body }) => render(body));</code></pre>
+
+    <p><strong>Tiered.</strong> Pick a tier from a field in the parsed body.</p>
+    <pre><code>router.route(<span class="t-string">'upload'</span>)
+  .paid({
+    field: <span class="t-string">'tier'</span>,
+    tiers: {
+      <span class="t-string">'10mb'</span>: { price: <span class="t-string">'0.02'</span>, label: <span class="t-string">'10 MB'</span> },
+      <span class="t-string">'100mb'</span>: { price: <span class="t-string">'0.20'</span>, label: <span class="t-string">'100 MB'</span> },
+    },
+  })
+  .body(uploadSchema)
+  .handler(async ({ body }) => store(body));</code></pre>
+
+    <p><strong>Per-network payee.</strong> Route payouts to different addresses per chain:</p>
+    <pre><code>.paid(<span class="t-string">'0.01'</span>, {
+  payTo: (request, body, network) =>
+    network?.startsWith(<span class="t-string">'solana:'</span>) ? SOLANA_TREASURY : EVM_TREASURY,
+})</code></pre>
+  </div>
+
+  <!-- .upTo() -->
+  <div class="subsection" id="prim-upto">
+    <h3>.upTo() — handler-computed, x402 only</h3>
+    <p>The handler calls <code>charge(amount)</code> one or more times; the request settles once for the accumulated total, capped at <code>maxPrice</code>. Requires <code>createRouterFromEnv</code> (auto-adds the upto accept on Base) or a manual <code>{ scheme: 'upto', network, asset }</code> entry in <code>x402.accepts</code>.</p>
+    <pre><code>router.route(<span class="t-string">'fortune/premium'</span>)
+  .upTo(<span class="t-string">'0.005'</span>)
+  .body(PremiumSchema)
+  .handler(async ({ body, charge }) => {
+    const amount = computeCost(body);
+    await charge(amount);
+    return { result: await process(body) };
+  });</code></pre>
+  </div>
+
+  <!-- .metered() -->
+  <div class="subsection" id="prim-metered">
+    <h3>.metered() — per-tick, MPP only</h3>
+    <p>Per-tick billing over an MPP payment channel. Requires <code>MPP_OPERATOR_KEY</code> (enables session mode automatically via <code>createRouterFromEnv</code>).</p>
+
+    <p><strong>Request-mode.</strong> Bills exactly <code>tickCost</code> per request:</p>
+    <pre><code>router.route(<span class="t-string">'fortune/llm'</span>)
+  .metered({ tickCost: <span class="t-string">'0.001'</span>, maxPrice: <span class="t-string">'0.01'</span>, unitType: <span class="t-string">'request'</span> })
+  .body(LlmSchema)
+  .handler(async ({ body }) => generate(body));</code></pre>
+
+    <p><strong>Streaming.</strong> Each <code>charge()</code> call bills one tick. Streaming is MPP-only — <code>.stream()</code> on any other pricing mode throws at registration.</p>
+    <pre><code>router.route(<span class="t-string">'fortune/stream'</span>)
+  .metered({ tickCost: <span class="t-string">'0.0001'</span>, maxPrice: <span class="t-string">'0.05'</span>, unitType: <span class="t-string">'token'</span> })
+  .body(StreamSchema)
+  .stream(async function* ({ body, charge }) {
+    for await (const token of streamLLM(body.prompt)) {
+      await charge();
+      yield token;
+    }
+  });</code></pre>
+  </div>
+
+  <!-- .siwx() -->
+  <div class="subsection" id="prim-siwx">
+    <h3>.siwx() — wallet identity, no payment</h3>
+    <p>Clients prove control of a wallet via a signed challenge. The verified wallet address is available as <code>ctx.wallet</code> in the handler.</p>
+    <pre><code>router.route(<span class="t-string">'fortune/profile'</span>)
+  .siwx()
+  .method(<span class="t-string">'GET'</span>)
+  .handler(async ({ wallet }) => getProfile(wallet));</code></pre>
+  </div>
+
+  <!-- .apiKey() -->
+  <div class="subsection" id="prim-apikey">
+    <h3>.apiKey() — API key auth</h3>
+    <p>Reads <code>X-API-Key</code> or <code>Authorization: Bearer &lt;key&gt;</code>. The resolver returns the account record, or <code>null</code> for 401. Composes with <code>.paid()</code> — key is checked first, payment second.</p>
+    <pre><code><span class="t-comment">// Key only</span>
+router.route(<span class="t-string">'admin/users'</span>)
+  .apiKey(async (key) => db.admin.findByKey(key))
+  .handler(async ({ account }) => db.user.list(account.orgId));
+
+<span class="t-comment">// Key AND payment</span>
+router.route(<span class="t-string">'gated'</span>)
+  .apiKey(resolver).paid(<span class="t-string">'0.01'</span>)
+  .handler(fn);</code></pre>
+  </div>
+
+  <!-- .unprotected() -->
+  <div class="subsection" id="prim-unprotected">
+    <h3>.unprotected() — public routes</h3>
+    <p>No auth, no payment. <code>ctx.wallet</code>, <code>ctx.payment</code>, and <code>ctx.account</code> are <code>null</code>.</p>
+    <pre><code>router.route(<span class="t-string">'health'</span>)
+  .unprotected()
+  .handler(async () => ({ status: <span class="t-string">'ok'</span> }));</code></pre>
+  </div>
+
+  <!-- Schemas & typed context -->
+  <div class="subsection" id="prim-schema">
+    <h3>Schemas &amp; typed context</h3>
+    <p>Chain <code>.body()</code>, <code>.query()</code>, and <code>.output()</code> with Zod schemas. The builder propagates the types so <code>ctx.body</code>, <code>ctx.query</code>, and the result in <code>.settlement()</code> / <code>.nextStep()</code> are all fully typed. <code>.query()</code> also switches the route to GET automatically.</p>
+    <pre><code>const SearchSchema = z.object({ q: z.string(), limit: z.number().default(10) });
+const ResultSchema = z.object({ hits: z.array(z.string()) });
+
+router.route(<span class="t-string">'search'</span>)
+  .paid(<span class="t-string">'0.01'</span>)
+  .body(SearchSchema)
+  .output(ResultSchema)
+  .handler(async ({ body }) => {
+    <span class="t-comment">// body: { q: string, limit: number }</span>
+    return { hits: await db.search(body.q, body.limit) };
+  });</code></pre>
+
+    <p>Attach discovery examples with <code>.inputExample()</code> and <code>.outputExample()</code> — validated against the schema at registration:</p>
+    <pre><code>.body(SearchSchema)
+  .inputExample({ q: <span class="t-string">'cats'</span>, limit: 5 })
+  .outputExample({ hits: [<span class="t-string">'cats are great'</span>] })</code></pre>
+
+    <p><strong>Pre-payment validation.</strong> <code>.validate(fn)</code> runs after body parse but before the 402 challenge. Throw <code>Object.assign(new Error('msg'), { status: 409 })</code> to reject with a custom status:</p>
+    <pre><code>router.route(<span class="t-string">'domain/register'</span>)
+  .paid(calculatePrice, { maxPrice: <span class="t-string">'10.00'</span> })
+  .body(RegisterSchema)
+  .validate(async (body) => {
+    if (await isDomainTaken(body.domain)) {
+      throw Object.assign(new Error(<span class="t-string">'Domain taken'</span>), { status: 409 });
+    }
+  })
+  .handler(async ({ body, wallet }) => registerDomain(body.domain, wallet));</code></pre>
+
+    <p style="font-size:0.8rem; color: var(--ink-muted);">Pipeline order: <code>body parse → validate → 402 challenge → payment verify → handler → settle</code></p>
+  </div>
+
+  <!-- HttpError -->
+  <div class="subsection" id="prim-errors">
+    <h3>HttpError</h3>
+    <p>Throw from handlers, pricing functions, or validators to return a specific HTTP status. Two forms — both work identically:</p>
+    <pre><code>import { HttpError } from <span class="t-string">'@agentcash/router'</span>;
+
+<span class="t-comment">// Named class</span>
+throw new HttpError(<span class="t-string">'Fortune too long (max 100 chars)'</span>, 400);
+
+<span class="t-comment">// Plain error with .status — works anywhere in the pipeline</span>
+throw Object.assign(new Error(<span class="t-string">'Domain taken'</span>), { status: 409 });</code></pre>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- COMPOSE                                                                   -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="compose">
+  <div class="section-header">
+    <span class="section-num">03</span>
+    <h2>Compose</h2>
+  </div>
+
+  <!-- Pay-once, identity-gated replay -->
+  <div class="subsection" id="compose-siwx-paid">
+    <h3>.paid().siwx() — pay once, replay free</h3>
+    <p>The first request settles normally; the wallet is recorded in the entitlement store. Subsequent requests with a valid SIWX signature skip payment entirely. On <code>.upTo()</code> routes, <code>charge()</code> becomes a no-op on replay.</p>
+    <pre><code>router.route(<span class="t-string">'inbox'</span>)
+  .paid(<span class="t-string">'0.01'</span>).siwx()
+  .handler(async ({ wallet }) => getInbox(wallet));
+
+router.route(<span class="t-string">'fortune/membership'</span>)
+  .upTo(<span class="t-string">'0.005'</span>).siwx()
+  .handler(async ({ wallet, charge }) => {
+    await charge(<span class="t-string">'0.002'</span>); <span class="t-comment">// no-op on SIWX replay</span>
+    return { reading: getRandom(readings), wallet };
+  });</code></pre>
+    <div class="note"><strong>Gotcha:</strong> serverless / multi-instance deployments must provide a real <code>kvStore</code> (Upstash / Vercel KV). Without one, the entitlement is kept in a per-process <code>Map</code> — a wallet that paid on instance A is treated as unpaid on instance B.</div>
+  </div>
+
+  <!-- .nextStep() -->
+  <div class="subsection" id="compose-nextstep">
+    <h3>.nextStep() — structured chaining</h3>
+    <p>Multi-step APIs usually rely on prose to tell agents what to call next. <code>.nextStep()</code> makes the chain a <strong>deterministic, structured property of the route</strong>, declared where the route is defined. On a 2xx plain-JSON response, the router appends a <code>next</code> array — fully resolved URL, method, auth mode, and price, all derived from the target route's own definition.</p>
+
+    <pre><code>router.route(<span class="t-string">'videos/generate'</span>)
+  .paid(<span class="t-string">'0.40'</span>)
+  .body(generateSchema)
+  .output(z.object({ jobId: z.string() }))
+  .nextStep({
+    route: <span class="t-string">'jobs/{jobId}'</span>,
+    args: (result) => ({ jobId: result.jobId }), <span class="t-comment">// typed from .output()</span>
+    note: <span class="t-string">'Poll every ~5s until status is "complete".'</span>,
+  })
+  .handler(async ({ body }) => startJob(body));</code></pre>
+
+    <p>The response body gains a reserved <code>next</code> array:</p>
+    <pre><code>{
+  <span class="t-key">"jobId"</span>: <span class="t-string">"abc123"</span>,
+  <span class="t-key">"next"</span>: [{
+    <span class="t-key">"method"</span>: <span class="t-string">"GET"</span>,
+    <span class="t-key">"url"</span>: <span class="t-string">"https://api.example.com/api/jobs/abc123"</span>,
+    <span class="t-key">"auth"</span>: <span class="t-string">"siwx"</span>,
+    <span class="t-key">"note"</span>: <span class="t-string">"Poll every ~5s until status is \"complete\"."</span>
+  }]
+}</code></pre>
+
+    <p>For a paid target, <code>price</code> is included so the agent knows the cost before committing:</p>
+    <pre><code>{
+  <span class="t-key">"next"</span>: [{
+    <span class="t-key">"method"</span>: <span class="t-string">"POST"</span>,
+    <span class="t-key">"url"</span>: <span class="t-string">"https://api.example.com/api/download"</span>,
+    <span class="t-key">"auth"</span>: <span class="t-string">"paid"</span>,
+    <span class="t-key">"price"</span>: <span class="t-string">"0.05"</span>
+  }]
+}
+
+<span class="t-comment">// dynamic/tiered pricing expresses as a range</span>
+{ <span class="t-key">"price"</span>: { <span class="t-key">"min"</span>: <span class="t-string">"0.01"</span>, <span class="t-key">"max"</span>: <span class="t-string">"0.25"</span> } }</code></pre>
+
+    <p><code>args()</code> fills <code>{param}</code> slots in the target path. Leftover keys become query params on GET targets, or a suggested <code>body</code> object on POST targets. A handler-supplied <code>next</code> key always wins — the router never overwrites it. Errors in <code>when()</code>/<code>args()</code> are reported via <code>onAlert</code> and skipped; they never break the response.</p>
+  </div>
+
+  <!-- when() branching -->
+  <div class="subsection" id="compose-when">
+    <h3>when() — conditional branching</h3>
+    <p>A status route can chain to different successors depending on its own result. Call <code>.nextStep()</code> multiple times; each entry is independently filtered by its <code>when()</code> predicate.</p>
+
+    <pre><code>router.route(<span class="t-string">'jobs/{jobId}'</span>)
+  .siwx().method(<span class="t-string">'GET'</span>)
+  .output(z.object({ jobId: z.string(), status: z.string() }))
+  .nextStep({
+    route: <span class="t-string">'jobs/{jobId}/download'</span>,
+    args: (r) => ({ jobId: r.jobId }),
+    when: (r) => r.status === <span class="t-string">'complete'</span>,
+    note: <span class="t-string">'Download is ready.'</span>,
+  })
+  .nextStep({
+    route: <span class="t-string">'jobs/{jobId}'</span>,
+    args: (r) => ({ jobId: r.jobId }),
+    when: (r) => r.status === <span class="t-string">'pending'</span>,
+    note: <span class="t-string">'Still processing — poll again in ~5s.'</span>,
+  })
+  .handler(async ({ params }) => getJobStatus(params.jobId));</code></pre>
+
+    <p>When all <code>when()</code> predicates return false, the <code>next</code> key is omitted entirely from the response.</p>
+
+    <p>Validate that all declared targets are registered (catches missing barrel imports at startup):</p>
+    <pre><code>router.registry.validate(); <span class="t-comment">// throws if any nextStep target is not registered</span></code></pre>
+  </div>
+
+  <!-- Settlement hooks -->
+  <div class="subsection" id="compose-settlement">
+    <h3>.settlement() — around on-chain settlement</h3>
+    <p>Run app logic at precise points in the settlement lifecycle. With <code>.output()</code> declared, <code>ctx.result</code> is fully typed.</p>
+    <pre><code>router.route(<span class="t-string">'drafts/{draftId}/commit'</span>)
+  .paid(quotePrice, { maxPrice: <span class="t-string">'50.00'</span> })
+  .body(CommitBody)
+  .output(DraftResponse)
+  .settlement({
+    beforeSettle: async (ctx) => reserveInventory(ctx.result.draftId), <span class="t-comment">// typed!</span>
+    afterSettle:  async (ctx) => recordLedgerRow(ctx),
+    onSettlementError: async (ctx) => queueRefundReview(ctx),
+  })
+  .handler(commitDraft);</code></pre>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- DISCOVERY                                                                 -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="discovery">
+  <div class="section-header">
+    <span class="section-num">04</span>
+    <h2>Discovery</h2>
+  </div>
+
+  <p>Three discovery surfaces are generated automatically from the route registry. You write zero discovery code.</p>
+
+  <table>
+    <thead><tr><th>Surface</th><th>Path</th><th>What's in it</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>/.well-known/x402</code></td>
+        <td>Auto-served via catch-all or <code>router.wellKnown()</code></td>
+        <td>Resource list, accepted protocols, and a <code>workflows</code> array when chains are declared</td>
+      </tr>
+      <tr>
+        <td><code>/openapi.json</code></td>
+        <td>Auto-served via catch-all or <code>router.openapi()</code></td>
+        <td>OpenAPI 3.1 spec — paths, schemas, native <code>links</code>, and <code>x-next</code> extensions on chained operations</td>
+      </tr>
+      <tr>
+        <td><code>/llms.txt</code></td>
+        <td>Auto-served via catch-all or <code>router.llmsTxt()</code></td>
+        <td>Plain-text guidance + auto-generated <code>## Workflows</code> section</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top: 1.75rem;">llms.txt sample output</h3>
+  <p>When chains are declared, the router appends a <code>## Workflows</code> section — the prose you used to hand-write, derived from the route graph:</p>
+  <pre><code>POST /api/search with { q: string }. Returns top 10 results.
+
+## Workflows
+
+Workflow 1:
+1. POST /api/videos/generate ($0.40) — Start the run
+2. POST /api/jobs/{jobId} (siwx, free) — Poll until status is "complete"
+3. GET /api/jobs/{jobId}/download ($0.05) — Download once complete</code></pre>
+
+  <h3 style="margin-top: 1.75rem;">Workflows in well-known</h3>
+  <p>The same chain renders as a structured array in <code>/.well-known/x402</code>:</p>
+  <pre><code>{
+  <span class="t-key">"workflows"</span>: [[
+    { <span class="t-key">"method"</span>: <span class="t-string">"POST"</span>, <span class="t-key">"url"</span>: <span class="t-string">"https://api.example.com/api/videos/generate"</span>, <span class="t-key">"auth"</span>: <span class="t-string">"paid"</span>, <span class="t-key">"price"</span>: <span class="t-string">"0.40"</span> },
+    { <span class="t-key">"method"</span>: <span class="t-string">"POST"</span>, <span class="t-key">"url"</span>: <span class="t-string">"https://api.example.com/api/jobs/{jobId}"</span>, <span class="t-key">"auth"</span>: <span class="t-string">"siwx"</span> },
+    { <span class="t-key">"method"</span>: <span class="t-string">"GET"</span>,  <span class="t-key">"url"</span>: <span class="t-string">"https://api.example.com/api/jobs/{jobId}/download"</span>, <span class="t-key">"auth"</span>: <span class="t-string">"paid"</span>, <span class="t-key">"price"</span>: <span class="t-string">"0.05"</span> }
+  ]]
+}</code></pre>
+
+  <p style="font-size:0.875rem; color: var(--ink-muted);">Chains are detected at discovery time by following <code>.nextStep()</code> edges. Cycles are capped gracefully — the router never hangs on circular references.</p>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- CONFIGURE                                                                 -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="configure">
+  <div class="section-header">
+    <span class="section-num">05</span>
+    <h2>Configure</h2>
+  </div>
+
+  <p><code>createRouterFromEnv</code> reads <code>process.env</code>, validates everything at startup, and throws a single <code>RouterConfigError</code> listing every problem. Use <code>createRouter</code> when you need custom networks, multiple payees, or any setting env doesn't expose.</p>
+
+  <div class="tab-group" id="cfg-tabs">
+    <div class="tab-labels">
+      <button class="tab-label active" onclick="switchTab('cfg-tabs', 'cfg-env', this)">createRouterFromEnv</button>
+      <button class="tab-label" onclick="switchTab('cfg-tabs', 'cfg-manual', this)">createRouter</button>
+    </div>
+    <div class="tab-panel active" id="cfg-env">
+      <pre><code>import { createRouterFromEnv } from <span class="t-string">'@agentcash/router'</span>;
+
+export const router = createRouterFromEnv({
+  title: <span class="t-string">'My API'</span>,
+  description: <span class="t-string">'Pay-per-call search.'</span>,
+  guidance: <span class="t-string">'POST /search with { q: string }. Returns top 10 results.'</span>,
+});</code></pre>
+    </div>
+    <div class="tab-panel" id="cfg-manual">
+      <pre><code>import { createRouter, BASE_MAINNET_NETWORK } from <span class="t-string">'@agentcash/router'</span>;
+
+export const router = createRouter({
+  baseUrl: <span class="t-string">'https://api.example.com'</span>,
+  payeeAddress: <span class="t-string">'0x…'</span>,
+  network: BASE_MAINNET_NETWORK,
+  protocols: [<span class="t-string">'x402'</span>],
+  x402: { accepts: [<span class="t-comment">/* … */</span>] },
+  discovery: {
+    title: <span class="t-string">'My API'</span>,
+    version: <span class="t-string">'1.0.0'</span>,
+    description: <span class="t-string">'Pay-per-call search.'</span>,
+    guidance: <span class="t-string">'POST /search with { q: string }.'</span>,
+  },
+});</code></pre>
+    </div>
+  </div>
+
+  <h3 style="margin-top: 1.75rem;">Environment variables</h3>
+
+  <table>
+    <thead><tr><th>Variable</th><th>Required</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>EVM_PAYEE_ADDRESS</code></td>
+        <td>yes</td>
+        <td>EVM address that receives x402 and MPP payments (<code>0x…</code>).</td>
+      </tr>
+      <tr>
+        <td><code>CDP_API_KEY_ID</code><br><code>CDP_API_KEY_SECRET</code></td>
+        <td>yes (EVM)</td>
+        <td>Coinbase Developer Platform credentials for the default EVM facilitator. Free tier: <a href="https://portal.cdp.coinbase.com/projects/api-keys">cdp.coinbase.com</a>.</td>
+      </tr>
+      <tr>
+        <td><code>BASE_URL</code></td>
+        <td>yes outside Vercel</td>
+        <td>Origin URL (<code>https://api.example.com</code>). Load-bearing: used as the 402 realm and OpenAPI server URL. On Vercel, auto-derived from <code>VERCEL_PROJECT_PRODUCTION_URL</code>.</td>
+      </tr>
+      <tr>
+        <td><code>SOLANA_PAYEE_ADDRESS</code></td>
+        <td>no</td>
+        <td>When set, adds a Solana <code>exact</code> accept. Only static <code>.paid()</code> routes are accessible to Solana clients.</td>
+      </tr>
+      <tr>
+        <td><code>MPP_SECRET_KEY</code></td>
+        <td>when MPP needed</td>
+        <td>Presence toggles MPP on.</td>
+      </tr>
+      <tr>
+        <td><code>MPP_CURRENCY</code></td>
+        <td>when MPP needed</td>
+        <td>Tempo currency address. Use <code>TEMPO_USDC_ADDRESS</code> for Tempo USDC.</td>
+      </tr>
+      <tr>
+        <td><code>MPP_OPERATOR_KEY</code></td>
+        <td>for <code>.metered()</code></td>
+        <td>Signs server-side close/settle. Enables MPP session mode automatically. Address must equal the payee.</td>
+      </tr>
+      <tr>
+        <td><code>MPP_FEE_PAYER_KEY</code></td>
+        <td>no</td>
+        <td>Sponsors client gas for channel open/topUp. Must resolve to a <em>different</em> address than <code>MPP_OPERATOR_KEY</code>.</td>
+      </tr>
+      <tr>
+        <td><code>KV_REST_API_URL</code><br><code>KV_REST_API_TOKEN</code></td>
+        <td>strongly recommended</td>
+        <td>Upstash / Vercel KV. Backs SIWX nonce, SIWX entitlement, and MPP replay. In-memory fallback is unsafe in serverless production.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note"><strong>KV store note:</strong> the in-memory fallback stores entitlements per-process. In a serverless deployment where requests hit different instances, a wallet that paid on instance A is treated as unpaid on instance B. Providing Upstash or Vercel KV eliminates this.</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- OBSERVE                                                                   -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="observe">
+  <div class="section-header">
+    <span class="section-num">06</span>
+    <h2>Observe</h2>
+  </div>
+
+  <p>All observability is pluggable via <code>RouterPlugin</code>. Hooks are optional and fire-and-forget — they never delay the response.</p>
+
+  <pre><code>import { createRouterFromEnv, type RouterPlugin } from <span class="t-string">'@agentcash/router'</span>;
+
+const myPlugin: RouterPlugin = {
+  onRequest(meta) {},
+  onPaymentVerified(ctx, payment) {},
+  onPaymentSettled(ctx, settlement) {},
+  onResponse(ctx, response) {},
+  onError(ctx, error) {},
+  onAlert(ctx, alert) {},
+};
+
+export const router = createRouterFromEnv({
+  title: <span class="t-string">'My API'</span>,
+  description: <span class="t-string">'…'</span>,
+  guidance: <span class="t-string">'…'</span>,
+  plugin: myPlugin,
+});</code></pre>
+
+  <h3 style="margin-top: 1.75rem;">Debugging with onAlert</h3>
+  <p>Internal warnings — failed payment verification, simulation failures, misconfiguration — are routed through <code>onAlert</code>. With no plugin registered, they're silently dropped. Wire it up to see why a request failed:</p>
+  <pre><code>const loggingPlugin: RouterPlugin = {
+  onAlert(_ctx, alert) {
+    (alert.level === <span class="t-string">'error'</span> ? console.error : console.warn)(
+      <span class="t-string">`[router:${alert.route}] ${alert.message}`</span>,
+      alert.meta ?? <span class="t-string">''</span>,
+    );
+  },
+  onError(_ctx, error) {
+    console.error(
+      <span class="t-string">`[router] ${error.status} ${error.message} (settled=${error.settled})`</span>,
+    );
+  },
+};</code></pre>
+</section>
+
+<!-- ── Footer ──────────────────────────────────────────────────────────────── -->
+<footer>
+  <a href="https://github.com/Merit-Systems/agentcash-router">GitHub</a>
+  <a href="https://www.npmjs.com/package/@agentcash/router">npm</a>
+  <span>MIT License</span>
+</footer>
+
+</div>
+</main>
+</div>
+
+<script>
+function switchTab(groupId, panelId, btn) {
+  var group = document.getElementById(groupId);
+  var panels = group.querySelectorAll('.tab-panel');
+  var labels = group.querySelectorAll('.tab-label');
+  panels.forEach(function(p) { p.classList.remove('active'); });
+  labels.forEach(function(l) { l.classList.remove('active'); });
+  document.getElementById(panelId).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+
+</body>
+</html>
