@@ -272,7 +272,7 @@ Semantics:
 - `when()`/`args()` errors and unregistered targets are reported via `onAlert` and skipped — they never break the response.
 - `registry.validate()` asserts every declared target exists.
 
-Chains are also advertised in every discovery surface: OpenAPI gets native [`links`](https://spec.openapis.org/oas/v3.1.0#link-object) plus an `x-next` extension, `/.well-known/x402` gains a `workflows` array, and `/llms.txt` is appended with an auto-generated `## Workflows` section — the prose guidance you used to hand-write, derived from the route graph instead.
+The response body is the **single chaining channel** — deliberately. A chain is dynamic three ways (the URL is resolved from the actual result, branches are `when()`-filtered, and price is current), so a static copy in discovery would always be the stale version. The one static trace is the map: `/llms.txt` is appended with an auto-generated `## Workflows` section — the prose orientation you used to hand-write, derived from the route graph instead. OpenAPI output schemas are automatically extended with the optional `next` key so advertised response shapes stay truthful.
 
 ## Auth modes
 

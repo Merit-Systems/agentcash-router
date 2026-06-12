@@ -1,7 +1,12 @@
 /**
- * `.nextStep()` resolution — shared by the response-time `next` injection
- * (`applyNextSteps`, called from `finalize`) and the discovery surfaces
- * (OpenAPI `links` / `x-next`, well-known + llms.txt workflows).
+ * `.nextStep()` resolution. The runtime response-body `next` array
+ * (`applyNextSteps`, called from `finalize`) is the SINGLE chaining channel:
+ * always resolved against the actual result, `when()`-filtered, and priced at
+ * response time. Chains are deliberately not mirrored into static discovery
+ * (`x-next` / OpenAPI `links` / well-known `workflows` were removed) — a
+ * static copy is strictly staler than the live one. The only static trace is
+ * the map-level `## Workflows` summary rendered into llms.txt
+ * (`buildWorkflowChains`), which rides the guidance channel.
  *
  * Everything advertised about a step is derived from the target's own
  * `RouteEntry` at resolution time (method, auth mode, price), so chains stay
@@ -72,33 +77,6 @@ function routeNextPrice(entry: RouteEntry): NextPrice | undefined {
 export function buildRouteUrl(baseUrl: string, basePath: string, pathTemplate: string): string {
   const prefix = basePath ? `/${basePath}` : '';
   return `${baseUrl}${prefix}/${pathTemplate}`;
-}
-
-/** Static description of a nextStep edge, for discovery surfaces. */
-export interface NextStepDescriptor {
-  route: string;
-  method: RouteMethod;
-  urlTemplate: string;
-  auth: AuthMode;
-  price?: NextPrice;
-  note?: string;
-}
-
-export function buildNextStepDescriptor(
-  config: NextStepConfig,
-  target: RouteEntry,
-  baseUrl: string,
-  basePath: string,
-): NextStepDescriptor {
-  const price = routeNextPrice(target);
-  return {
-    route: config.route,
-    method: target.method,
-    urlTemplate: buildRouteUrl(baseUrl, basePath, target.path ?? target.key),
-    auth: target.authMode,
-    ...(price !== undefined && { price }),
-    ...(config.note !== undefined && { note: config.note }),
-  };
 }
 
 /** A resolved `next` array entry, appended to successful JSON responses. */

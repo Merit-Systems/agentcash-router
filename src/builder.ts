@@ -783,8 +783,8 @@ export class RouteBuilder<
    * derived from the target's own route entry, so an agent knows what the
    * next call costs before making it. A handler-supplied `next` key always
    * wins. Target existence is validated by `registry.validate()` at
-   * discovery time; chains also render in OpenAPI (`links` / `x-next`),
-   * well-known (`workflows`), and llms.txt.
+   * discovery time. The response body is the single chaining channel; the
+   * only static trace is the map-level `## Workflows` summary in llms.txt.
    *
    * `args` / `when` receive the handler result typed from `.output()` when
    * declared (chain `.output()` first); exceptions they throw are reported

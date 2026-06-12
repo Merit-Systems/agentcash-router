@@ -35,7 +35,7 @@ src/
   pipeline/             orchestrate.ts + steps/ (context, body, auth, settle, respond) + flows/
                         (paid → static-paid | dynamic-paid over shared resolve-paid-request; siwx-only,
                         api-key-only, unprotected) + next-step.ts (.nextStep() resolution + workflow chains)
-  discovery/            well-known, openapi, llms-txt (all render nextStep workflows)
+  discovery/            well-known, openapi, llms-txt (only llms-txt renders the nextStep workflow summary)
   config/               RouterConfig + env schema (single source of truth), RouterConfigError, issue codes
 ```
 
@@ -62,6 +62,7 @@ Constructor-style functions use `build<Noun>` — one verb, one domain noun. Nam
 - **Streaming requires `.metered()`.** `.stream()` on a `.paid()` / `.upTo()` / `.unprotected()` route throws at registration. x402 has no streaming primitive, so `.stream()` is MPP-only by construction.
 - **Hono dispatch goes through the registry at request time.** The embedded app binds `key:method` → `registry.dispatch(...)`, never a handler closure, so re-registration keeps last-write-wins. Mount each key+method once (`onFirstRegister`).
 - **`.nextStep()` injection rules.** The `next` array is appended only to 2xx plain-object JSON results; a handler-supplied `next` key always wins; `when()`/`args()` exceptions and unregistered targets report `warn` and skip — they must never break the response. Everything advertised (method, auth, price) derives from the target's `RouteEntry` at resolution time. `registry.validate()` asserts targets exist.
+- **The response body is the single chaining channel.** Do not reintroduce static chain copies (`x-next`, OpenAPI `links`, well-known `workflows` — all deliberately removed): chains are dynamic (result-resolved URLs, `when()` filtering, current prices) and a static copy is strictly staler. The map-level summary belongs only in llms.txt's auto-generated `## Workflows` section; OpenAPI's only trace is the optional `next` key auto-added to advertised output schemas.
 - **`KvStore.update()` must be atomic.** It backs mppx channel deductions. The built-in Upstash REST store does compare-and-set via Lua `EVAL` (TTL-preserving) and may re-run `fn` on conflict; custom stores must honor the same contract (documented on the interface).
 - **x402 settle retry is classified.** `x402/strategy.ts` retries thrown transients and `success:false` responses but fails fast on a conservative non-retryable `errorReason` set; post-throw nonce-reuse is reported as possible double-settle ambiguity, never invented as success.
 - **Function-form `payTo` receives `(request, body, network)`.** The network argument lets one callback route payouts per chain; don't collapse it.

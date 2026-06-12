@@ -482,85 +482,39 @@ describe('nextStep discovery surfaces', () => {
     return router;
   }
 
-  it('OpenAPI emits native links and x-next on chaining operations', async () => {
+  it('OpenAPI carries no static chain copies — only the advertised next key on output schemas', async () => {
     const router = chainedRouter();
     const res = await router.openapi()(new Request('https://api.example.com/openapi.json'));
     const doc = await res.json();
 
+    // Chains live ONLY in runtime response bodies: no x-next, no links.
     const call = doc.paths['/api/actors/call'].post;
-    expect(call.responses['200'].links).toEqual({
-      actors_status: {
-        operationId: 'actors_status',
-        description: 'Poll until terminal status',
-      },
-    });
-    expect(call['x-next']).toEqual([
-      {
-        route: 'actors/status',
-        method: 'POST',
-        urlTemplate: 'https://api.example.com/api/actors/status',
-        auth: 'siwx',
-        note: 'Poll until terminal status',
-      },
-    ]);
+    expect(call).not.toHaveProperty('x-next');
+    expect(call.responses['200']).not.toHaveProperty('links');
 
-    const status = doc.paths['/api/actors/status'].post;
-    expect(status['x-next'][0]).toMatchObject({
-      route: 'actors/download',
-      method: 'GET',
-      auth: 'paid',
-      price: '0.02',
-    });
+    // But the declared output schema is extended with the injected optional `next`.
+    const callSchema = call.responses['200'].content['application/json'].schema;
+    expect(callSchema.properties).toHaveProperty('runId');
+    expect(callSchema.properties).toHaveProperty('next');
+    expect(callSchema.required).not.toContain('next');
+    expect(callSchema.properties.next.items.properties).toHaveProperty('url');
+    expect(callSchema.properties.next.items.properties).toHaveProperty('price');
 
+    // Routes without .output() or without chains are untouched.
     const download = doc.paths['/api/actors/download'].get;
-    expect(download.responses['200']).not.toHaveProperty('links');
     expect(download).not.toHaveProperty('x-next');
+    expect(download.responses['200']).not.toHaveProperty('links');
   });
 
-  it('well-known renders the chain as a workflows array of ordered steps', async () => {
-    const router = chainedRouter();
-    const res = await router.wellKnown()(new Request('https://api.example.com/.well-known/x402'));
-    const body = await res.json();
-
-    expect(body.workflows).toEqual([
-      [
-        {
-          method: 'POST',
-          url: 'https://api.example.com/api/actors/call',
-          auth: 'paid',
-          price: '0.01',
-          note: 'Start the run',
-        },
-        {
-          method: 'POST',
-          url: 'https://api.example.com/api/actors/status',
-          auth: 'siwx',
-          note: 'Poll until terminal status',
-        },
-        {
-          method: 'GET',
-          url: 'https://api.example.com/api/actors/download',
-          auth: 'paid',
-          price: '0.02',
-          note: 'Download once complete',
-        },
-      ],
-    ]);
-  });
-
-  it('well-known omits workflows when no nextStep edges exist', async () => {
-    const router = createRouter(baseConfig);
-    router
-      .route('plain')
-      .unprotected()
-      .handler(async () => ({ ok: true }));
-    const body = await (
-      await router.wellKnown()(new Request('https://api.example.com/.well-known/x402'))
+  it('well-known carries no workflows array — the map summary lives in llms.txt', async () => {
+    const chained = await (
+      await chainedRouter().wellKnown()(new Request('https://api.example.com/.well-known/x402'))
     ).json();
-    expect(body).not.toHaveProperty('workflows');
+    expect(chained).not.toHaveProperty('workflows');
+    expect(chained.resources).toContain('https://api.example.com/api/actors/call');
   });
 
-  it('handles nextStep cycles without hanging and caps chains', async () => {
+  it('llms.txt workflow chains handle cycles without hanging and cap depth', async () => {
     const router = createRouter(baseConfig);
     router
       .route('a')
@@ -578,16 +532,14 @@ describe('nextStep discovery surfaces', () => {
       .nextStep({ route: 'a' })
       .handler(async () => ({ ok: true }));
 
-    const body = await (
-      await router.wellKnown()(new Request('https://api.example.com/.well-known/x402'))
-    ).json();
+    const text = await (
+      await router.llmsTxt()(new Request('https://api.example.com/llms.txt'))
+    ).text();
     // entry → a → b, then b→a stops (a already visited).
-    expect(body.workflows).toHaveLength(1);
-    expect(body.workflows[0].map((s: { url: string }) => s.url)).toEqual([
-      'https://api.example.com/api/entry',
-      'https://api.example.com/api/a',
-      'https://api.example.com/api/b',
-    ]);
+    expect(text).toContain('1. POST /api/entry');
+    expect(text).toContain('2. POST /api/a');
+    expect(text).toContain('3. POST /api/b');
+    expect(text).not.toContain('4. ');
   });
 
   it('llms.txt appends a deterministic Workflows section after the guidance', async () => {
@@ -623,15 +575,11 @@ describe('nextStep discovery surfaces', () => {
       await router.wellKnown()(new Request('https://api.example.com/.well-known/x402'))
     ).json();
     expect(wellKnown.resources).toContain('https://api.example.com/v2/actors/call');
-    expect(wellKnown.workflows[0][0].url).toBe('https://api.example.com/v2/actors/call');
 
     const openapi = await (
       await router.openapi()(new Request('https://api.example.com/openapi.json'))
     ).json();
     expect(openapi.paths).toHaveProperty('/v2/actors/call');
-    expect(openapi.paths['/v2/actors/call'].post['x-next'][0].urlTemplate).toBe(
-      'https://api.example.com/v2/actors/status',
-    );
 
     const llms = await (
       await router.llmsTxt()(new Request('https://api.example.com/llms.txt'))

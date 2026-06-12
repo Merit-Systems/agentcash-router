@@ -880,12 +880,12 @@ router.route(<span class="t-string">'fortune/membership'</span>)
       <tr>
         <td><code>/.well-known/x402</code></td>
         <td>Auto-served via catch-all or <code>router.wellKnown()</code></td>
-        <td>Resource list, accepted protocols, and a <code>workflows</code> array when chains are declared</td>
+        <td>Resource list, accepted protocols, instructions</td>
       </tr>
       <tr>
         <td><code>/openapi.json</code></td>
         <td>Auto-served via catch-all or <code>router.openapi()</code></td>
-        <td>OpenAPI 3.1 spec — paths, schemas, native <code>links</code>, and <code>x-next</code> extensions on chained operations</td>
+        <td>OpenAPI 3.1 spec — paths, schemas, payment info; output schemas of chained routes gain the optional <code>next</code> key</td>
       </tr>
       <tr>
         <td><code>/llms.txt</code></td>
@@ -906,17 +906,7 @@ Workflow 1:
 2. POST /api/jobs/{jobId} (siwx, free) — Poll until status is "complete"
 3. GET /api/jobs/{jobId}/download ($0.05) — Download once complete</code></pre>
 
-  <h3 style="margin-top: 1.75rem;">Workflows in well-known</h3>
-  <p>The same chain renders as a structured array in <code>/.well-known/x402</code>:</p>
-  <pre><code>{
-  <span class="t-key">"workflows"</span>: [[
-    { <span class="t-key">"method"</span>: <span class="t-string">"POST"</span>, <span class="t-key">"url"</span>: <span class="t-string">"https://api.example.com/api/videos/generate"</span>, <span class="t-key">"auth"</span>: <span class="t-string">"paid"</span>, <span class="t-key">"price"</span>: <span class="t-string">"0.40"</span> },
-    { <span class="t-key">"method"</span>: <span class="t-string">"POST"</span>, <span class="t-key">"url"</span>: <span class="t-string">"https://api.example.com/api/jobs/{jobId}"</span>, <span class="t-key">"auth"</span>: <span class="t-string">"siwx"</span> },
-    { <span class="t-key">"method"</span>: <span class="t-string">"GET"</span>,  <span class="t-key">"url"</span>: <span class="t-string">"https://api.example.com/api/jobs/{jobId}/download"</span>, <span class="t-key">"auth"</span>: <span class="t-string">"paid"</span>, <span class="t-key">"price"</span>: <span class="t-string">"0.05"</span> }
-  ]]
-}</code></pre>
-
-  <p style="font-size:0.875rem; color: var(--ink-muted);">Chains are detected at discovery time by following <code>.nextStep()</code> edges. Cycles are capped gracefully — the router never hangs on circular references.</p>
+  <p style="font-size:0.875rem; color: var(--ink-muted);">This summary is the chain's only static trace — by design. A chain is dynamic three ways (URLs resolve from actual results, branches are <code>when()</code>-filtered, prices are current), so resolved edges live exclusively in the runtime <code>next</code> array where they can't go stale. Cycles are capped gracefully — the router never hangs on circular references.</p>
 </section>
 
 <!-- ══════════════════════════════════════════════════════════════════════════ -->

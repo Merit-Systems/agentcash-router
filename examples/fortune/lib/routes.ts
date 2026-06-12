@@ -14,9 +14,8 @@ import { router } from './router';
 //   agentcash fetch http://localhost:3000/api/fortune --method POST -p mpp
 //
 // Also demonstrates `.nextStep()`: successful JSON responses gain a `next`
-// array pointing at the premium reading, and the chain shows up in
-// `/.well-known/x402` (workflows), `/openapi.json` (links + x-next), and
-// `/llms.txt` (## Workflows).
+// array pointing at the premium reading (the single chaining channel), and
+// `/llms.txt` gains an auto-generated `## Workflows` map summary.
 // ---------------------------------------------------------------------------
 
 const fortunes = [

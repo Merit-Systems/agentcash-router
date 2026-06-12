@@ -1,12 +1,9 @@
+import { z, type ZodType } from 'zod';
 import type { RouteRegistry } from '../registry.js';
 import type { RouteEntry, DiscoveryConfig } from '../types.js';
 import { TEMPO_USDC_ADDRESS } from '../constants.js';
 import { HEADERS } from '../headers.js';
-import {
-  buildNextStepDescriptor,
-  tierPriceExtrema,
-  type NextStepDescriptor,
-} from '../pipeline/next-step.js';
+import { tierPriceExtrema } from '../pipeline/next-step.js';
 import { resolveGuidance } from './utils/guidance.js';
 
 export function createOpenAPIHandler(
@@ -41,8 +38,7 @@ export function createOpenAPIHandler(
       const method = entry.method.toLowerCase();
       const tag = deriveTag(entry.key);
       tagSet.add(tag);
-      const nextSteps = describeNextSteps(entry, registry, normalizedBase, basePath);
-      const built = buildOperation(entry.key, entry, tag, nextSteps);
+      const built = buildOperation(entry.key, entry, tag);
       if (built.requiresSiwxScheme) requiresSiwxScheme = true;
       if (built.requiresApiKeyScheme) requiresApiKeyScheme = true;
 
@@ -115,26 +111,33 @@ function deriveTag(routeKey: string): string {
     .join(' ');
 }
 
-interface NamedNextStep {
-  descriptor: NextStepDescriptor;
-  note?: string;
-}
+/**
+ * Shape of the `next` array the router appends to successful JSON responses
+ * on routes that declare `.nextStep()`. Chains live ONLY in the runtime
+ * response body (always resolved, `when()`-filtered, current prices) — they
+ * are deliberately NOT mirrored as static `x-next`/`links` here, since a
+ * static copy is strictly stale. This schema exists so advertised output
+ * schemas stay truthful about the injected key.
+ */
+const NEXT_ENTRY_SCHEMA = z.object({
+  method: z.string(),
+  url: z.string(),
+  auth: z.string(),
+  price: z.union([z.string(), z.object({ min: z.string(), max: z.string() })]).optional(),
+  note: z.string().optional(),
+  body: z.record(z.string(), z.unknown()).optional(),
+});
 
-function describeNextSteps(
-  entry: RouteEntry,
-  registry: RouteRegistry,
-  baseUrl: string,
-  basePath: string,
-): NamedNextStep[] {
-  return (entry.nextSteps ?? []).flatMap((step) => {
-    const target = registry.get(step.route);
-    if (!target) return []; // registry.validate() throws before generation; defensive only
-    return [
-      {
-        descriptor: buildNextStepDescriptor(step, target, baseUrl, basePath),
-        note: step.note,
-      },
-    ];
+/** Advertised output schema: the declared `.output()` plus the optional injected `next` array. */
+function advertisedOutputSchema(entry: RouteEntry): ZodType | undefined {
+  if (!entry.outputSchema) return undefined;
+  if (!entry.nextSteps || entry.nextSteps.length === 0) return entry.outputSchema;
+  if (!(entry.outputSchema instanceof z.ZodObject)) return entry.outputSchema;
+  return entry.outputSchema.extend({
+    next: z
+      .array(NEXT_ENTRY_SCHEMA)
+      .optional()
+      .describe('Appended by the router: the next call(s) to make, fully resolved, with price.'),
   });
 }
 
@@ -142,7 +145,6 @@ function buildOperation(
   routeKey: string,
   entry: RouteEntry,
   tag: string,
-  nextSteps: NamedNextStep[],
 ): {
   operation: Record<string, unknown>;
   requiresSiwxScheme: boolean;
@@ -156,6 +158,7 @@ function buildOperation(
   const requiresSiwxScheme = entry.authMode === 'siwx' || Boolean(entry.siwxEnabled);
   const requiresApiKeyScheme = Boolean(entry.apiKeyResolver) && entry.authMode !== 'siwx';
   const pricingInfo = buildPricingInfo(entry);
+  const outputSchema = advertisedOutputSchema(entry);
 
   const operation: Record<string, unknown> = {
     operationId: toOperationId(routeKey),
@@ -164,12 +167,11 @@ function buildOperation(
     responses: {
       '200': {
         description: 'Successful response',
-        ...(entry.outputSchema && {
+        ...(outputSchema && {
           content: {
-            'application/json': { schema: entry.outputSchema },
+            'application/json': { schema: outputSchema },
           },
         }),
-        ...(nextSteps.length > 0 && { links: buildResponseLinks(nextSteps) }),
       },
       ...((paymentRequired || requiresSiwxScheme) && {
         '402': {
@@ -183,10 +185,6 @@ function buildOperation(
       }),
     },
   };
-
-  if (nextSteps.length > 0) {
-    operation['x-next'] = nextSteps.map(({ descriptor }) => descriptor);
-  }
 
   if (paymentRequired && (pricingInfo || protocols)) {
     operation['x-payment-info'] = {
@@ -227,18 +225,6 @@ function buildOperation(
 
 function toOperationId(routeKey: string): string {
   return routeKey.replace(/\//g, '_');
-}
-
-function buildResponseLinks(nextSteps: NamedNextStep[]): Record<string, unknown> {
-  const links: Record<string, unknown> = {};
-  for (const { descriptor, note } of nextSteps) {
-    const operationId = toOperationId(descriptor.route);
-    links[operationId] = {
-      operationId,
-      ...(note !== undefined && { description: note }),
-    };
-  }
-  return links;
 }
 
 function toProtocolObject(

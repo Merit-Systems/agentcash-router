@@ -39,7 +39,7 @@ The catch-all covers `/api/*` only. The root discovery surfaces — `/.well-know
 | `/api/fortune/dynamic`    | POST       | `.paid(fn, { maxPrice })`                               | Args-derived pricing (x402 / MPP)                  | auto                 |
 | `/api/fortune/favorites`  | POST / GET | `.siwx()`                                               | SIWX (Sign-In-with-X, no payment)                  | auto                 |
 | `/api/fortune/profile`    | GET        | `.siwx()`                                               | SIWX (Sign-In-with-X, no payment)                  | auto                 |
-| `/.well-known/x402`       | GET        | —                                                       | Discovery (+ `workflows` from `.nextStep()`)       | auto                 |
+| `/.well-known/x402`       | GET        | —                                                       | Discovery                                          | auto                 |
 | `/openapi.json`           | GET        | —                                                       | OpenAPI spec (also at `/api/openapi.json`)         | n/a                  |
 | `/llms.txt`               | GET        | —                                                       | Agent guidance (+ `## Workflows` section)          | n/a                  |
 
@@ -63,7 +63,7 @@ The catch-all covers `/api/*` only. The root discovery surfaces — `/.well-know
 }
 ```
 
-The same edge surfaces statically as `workflows` in `/.well-known/x402`, OpenAPI `links` + `x-next` in `/openapi.json`, and a `## Workflows` section in `/llms.txt`.
+The response body is the only place resolved chain edges appear; `/llms.txt` additionally carries an auto-generated `## Workflows` map summary.
 
 ## SIWX dual-chain
 

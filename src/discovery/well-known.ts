@@ -1,6 +1,6 @@
 import type { RouteRegistry } from '../registry.js';
 import type { DiscoveryConfig } from '../types.js';
-import { buildRouteUrl, buildWorkflowChains } from '../pipeline/next-step.js';
+import { buildRouteUrl } from '../pipeline/next-step.js';
 import { resolveGuidance } from './utils/guidance.js';
 
 export function createWellKnownHandler(
@@ -54,11 +54,10 @@ export function createWellKnownHandler(
       body.instructions = instructions;
     }
 
-    const workflows = buildWorkflowChains(registry, normalizedBase, basePath);
-    if (workflows.length > 0) {
-      body.workflows = workflows;
-    }
-
+    // nextStep chains deliberately do NOT appear here: the runtime response
+    // body `next` array is the single chaining channel (always resolved,
+    // when()-filtered, current). The map-level summary lives in llms.txt's
+    // auto-generated "## Workflows" section, which rides the guidance channel.
     return Response.json(body, {
       headers: {
         'Access-Control-Allow-Origin': '*',

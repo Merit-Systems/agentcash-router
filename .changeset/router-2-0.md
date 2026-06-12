@@ -15,7 +15,7 @@ Router 2.0: framework-agnostic core, Hono + Next.js out of the box, and `.nextSt
 
 - Hosting: internal Hono dispatch. `router.fetch(request)` and `router.hono()` for Hono/Bun/Node/Deno; new `@agentcash/router/next` subpath with `nextHandlers(router)` for a single Next.js catch-all route (`app/api/[[...route]]/route.ts`) — eliminates the discovery-stub/barrel workaround. `RouterConfig.basePath` (default `'api'`).
 - Path templates: `{param}` segments in route paths are extracted into `ctx.params` in both hosting modes.
-- `.nextStep({ route, args?, when?, note? })`: declare a route's successor(s) at definition time. Successful JSON responses gain a structured `next` array (resolved URL, method, auth mode, price, note) so agents deterministically know what to call next and what it costs. Chains also surface in OpenAPI (`links` + `x-next`), well-known (`workflows`), and an auto-generated llms.txt `## Workflows` section. `registry.validate()` asserts targets exist.
+- `.nextStep({ route, args?, when?, note? })`: declare a route's successor(s) at definition time. Successful JSON responses gain a structured `next` array (resolved URL, method, auth mode, price, note) so agents deterministically know what to call next and what it costs. The response body is the single chaining channel (no static `x-next`/`links`/`workflows` copies — they'd always be staler than the live one); llms.txt gains an auto-generated `## Workflows` map summary, and OpenAPI output schemas are extended with the optional `next` key. `registry.validate()` asserts targets exist.
 - `.settlement()` contexts: `ctx.result` is typed from `.output()`.
 - Function-form `payTo` receives the accept's `network` as a third argument.
 
