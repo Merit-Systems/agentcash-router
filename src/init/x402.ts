@@ -11,10 +11,7 @@ export interface X402InitResult {
 export async function initX402(
   config: RouterConfig,
   kvStore: KvStore | undefined,
-  configError?: string,
 ): Promise<X402InitResult> {
-  if (configError) return { initError: configError };
-
   try {
     const { createX402Server } = await import('./x402-server.js');
     const result = await createX402Server(config, kvStore);

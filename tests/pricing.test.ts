@@ -5,7 +5,12 @@ import {
   DynamicPricing,
   TieredPricing,
 } from '../src/pricing/index.js';
-import { compareDecimals, decimalToAtomic, isPositiveDecimal } from '../src/pricing/format.js';
+import {
+  compareDecimals,
+  decimalToAtomic,
+  isPositiveDecimal,
+  multiplyDecimal,
+} from '../src/pricing/format.js';
 import { HttpError } from '../src/types.js';
 
 describe('FixedPricing', () => {
@@ -152,6 +157,35 @@ describe('TieredPricing', () => {
   it('rejects when no tier and no default', async () => {
     const p = new TieredPricing({ field: 'tier', tiers });
     await expect(p.quote({})).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('rejects prototype-chain keys like "constructor" with status 400', async () => {
+    const p = new TieredPricing({ field: 'tier', tiers });
+    await expect(p.quote({ tier: 'constructor' })).rejects.toMatchObject({
+      status: 400,
+      message: expect.stringContaining("Unknown tier 'constructor'"),
+    });
+    await expect(p.quote({ tier: '__proto__' })).rejects.toMatchObject({ status: 400 });
+    await expect(p.quote({ tier: 'hasOwnProperty' })).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('falls back to the default tier when the requested tier walks the prototype chain', async () => {
+    const p = new TieredPricing({ field: 'tier', tiers, default: '10mb' });
+    expect(await p.quote({ tier: 'constructor' })).toBe('0.02');
+  });
+});
+
+describe('multiplyDecimal', () => {
+  it('multiplies decimal-dollar strings by integer factors', () => {
+    expect(multiplyDecimal('0.0001', 10)).toBe('0.001');
+    expect(multiplyDecimal('2', 3)).toBe('6');
+  });
+
+  it('throws on non-positive or non-integer factors instead of passing through', () => {
+    expect(() => multiplyDecimal('0.0001', 0)).toThrow(/positive integer/);
+    expect(() => multiplyDecimal('0.0001', -2)).toThrow(/positive integer/);
+    expect(() => multiplyDecimal('0.0001', 2.5)).toThrow(/positive integer/);
+    expect(() => multiplyDecimal('0.0001', Number.NaN)).toThrow(/positive integer/);
   });
 });
 

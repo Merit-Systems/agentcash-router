@@ -396,7 +396,7 @@ export interface RouterConfig {
     feePayerKey?: string;
     /** Enables MPP payment-channel sessions for `.metered()` routes (registers both request and SSE session middleware). Also requires `mpp.operatorKey`. */
     session?: {
-      /** Suggested deposit on the 402 challenge = `tickCost × depositMultiplier` USDC. Route `maxPrice` overrides. @default 10 */
+      /** Suggested deposit on the 402 challenge = `tickCost × depositMultiplier` USDC. Must be a positive integer (validated at construction). Route `maxPrice` overrides. @default 10 */
       depositMultiplier?: number;
     };
   };

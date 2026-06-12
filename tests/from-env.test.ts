@@ -6,7 +6,9 @@ import {
   RouterConfigError,
   SOLANA_MAINNET_NETWORK,
   TEMPO_USDC_ADDRESS,
+  createRouterFromEnv,
   routerConfigFromEnv,
+  type KvStore,
   type CreateRouterFromEnvOptions,
 } from '../src/index.js';
 import { BASE_USDC_ADDRESS, BASE_USDC_DECIMALS } from '../src/constants.js';
@@ -30,6 +32,9 @@ function validEnv(overrides: Record<string, string | undefined> = {}) {
   return {
     BASE_URL: 'https://api.example.com',
     EVM_PAYEE_ADDRESS: PAYEE,
+    // CDP keys are validated against the injected env (not process.env).
+    CDP_API_KEY_ID: 'env-cdp-id',
+    CDP_API_KEY_SECRET: 'env-cdp-secret',
     ...overrides,
   };
 }
@@ -63,6 +68,8 @@ describe('routerConfigFromEnv', () => {
       validOptions({
         env: {
           EVM_PAYEE_ADDRESS: PAYEE,
+          CDP_API_KEY_ID: 'env-cdp-id',
+          CDP_API_KEY_SECRET: 'env-cdp-secret',
           VERCEL_PROJECT_PRODUCTION_URL: 'demo.example.vercel.app',
         },
       }),
@@ -76,6 +83,8 @@ describe('routerConfigFromEnv', () => {
       validOptions({
         env: {
           EVM_PAYEE_ADDRESS: PAYEE,
+          CDP_API_KEY_ID: 'env-cdp-id',
+          CDP_API_KEY_SECRET: 'env-cdp-secret',
           VERCEL_URL: 'demo-git-main.example.vercel.app',
         },
       }),
@@ -187,9 +196,12 @@ describe('routerConfigFromEnv', () => {
     expect(config.mpp?.session).toEqual({});
   });
 
-  it('rejects malformed MPP_OPERATOR_KEY with a structured issue', () => {
+  // MPP value-shape rules (currency/key format, operator≠feePayer) are owned
+  // by the config-side validator; the env path flows through it when the
+  // config reaches createRouter. These tests assert the full env entry point.
+  it('rejects malformed MPP_OPERATOR_KEY with a structured issue at createRouterFromEnv', () => {
     try {
-      routerConfigFromEnv(
+      createRouterFromEnv(
         validOptions({
           env: validEnv({
             MPP_SECRET_KEY: 'secret',
@@ -199,7 +211,7 @@ describe('routerConfigFromEnv', () => {
           }),
         }),
       );
-      expect.fail('routerConfigFromEnv should have thrown');
+      expect.fail('createRouterFromEnv should have thrown');
     } catch (error) {
       expect(error).toBeInstanceOf(RouterConfigError);
       expect((error as RouterConfigError).issues.map((i) => i.code)).toContain(
@@ -253,8 +265,28 @@ describe('routerConfigFromEnv', () => {
       expect(codes).toContain('invalid_base_url');
       expect(codes).toContain('invalid_x402_payee');
       expect(codes).toContain('invalid_solana_payee');
-      expect(codes).toContain('invalid_mpp_currency');
       expect(codes).toContain('invalid_mpp_rpc_url');
+      expect(codes).toContain('missing_cdp_keys');
+    }
+  });
+
+  it('collects MPP value-shape issues into a single RouterConfigError at createRouterFromEnv', () => {
+    try {
+      createRouterFromEnv(
+        validOptions({
+          env: validEnv({
+            MPP_SECRET_KEY: 'secret',
+            MPP_CURRENCY: 'not-an-address',
+            TEMPO_RPC_URL: 'https://tempo.example.com',
+            MPP_FEE_PAYER_KEY: 'not-a-private-key',
+          }),
+        }),
+      );
+      expect.fail('createRouterFromEnv should have thrown');
+    } catch (error) {
+      expect(error).toBeInstanceOf(RouterConfigError);
+      const codes = (error as RouterConfigError).issues.map((i) => i.code);
+      expect(codes).toContain('invalid_mpp_currency');
       expect(codes).toContain('invalid_mpp_fee_payer_key');
     }
   });
@@ -320,7 +352,7 @@ describe('routerConfigFromEnv', () => {
   it('rejects MPP_OPERATOR_KEY and MPP_FEE_PAYER_KEY resolving to the same address', () => {
     const sameKey = `0x${'a'.repeat(64)}`;
     try {
-      routerConfigFromEnv(
+      createRouterFromEnv(
         validOptions({
           env: validEnv({
             MPP_SECRET_KEY: 'secret',
@@ -331,7 +363,7 @@ describe('routerConfigFromEnv', () => {
           }),
         }),
       );
-      expect.fail('routerConfigFromEnv should have thrown');
+      expect.fail('createRouterFromEnv should have thrown');
     } catch (error) {
       expect(error).toBeInstanceOf(RouterConfigError);
       expect((error as RouterConfigError).issues.map((i) => i.code)).toContain(
@@ -350,6 +382,133 @@ describe('routerConfigFromEnv', () => {
         'invalid_server_url',
       );
     }
+  });
+
+  describe('explicit protocols option', () => {
+    it("rejects protocols including 'mpp' when the MPP env is missing, with structured issues", () => {
+      for (const protocols of [['x402', 'mpp'], ['mpp']] as const) {
+        try {
+          routerConfigFromEnv(validOptions({ protocols }));
+          expect.fail(`routerConfigFromEnv should have thrown for protocols ${String(protocols)}`);
+        } catch (error) {
+          expect(error).toBeInstanceOf(RouterConfigError);
+          const codes = (error as RouterConfigError).issues.map((i) => i.code);
+          expect(codes).toContain('missing_mpp_secret_key');
+          expect(codes).toContain('missing_mpp_currency');
+        }
+      }
+    });
+
+    it("builds an MPP config when protocols include 'mpp' and the MPP env is present", () => {
+      const config = routerConfigFromEnv(
+        validOptions({
+          protocols: ['x402', 'mpp'],
+          env: validEnv({
+            MPP_SECRET_KEY: 'secret',
+            MPP_CURRENCY: TEMPO_USDC_ADDRESS,
+            TEMPO_RPC_URL: 'https://tempo.example.com',
+          }),
+        }),
+      );
+      expect(config.protocols).toEqual(['x402', 'mpp']);
+      expect(config.mpp).toEqual({
+        secretKey: 'secret',
+        currency: TEMPO_USDC_ADDRESS,
+        rpcUrl: 'https://tempo.example.com',
+        recipient: PAYEE,
+      });
+    });
+
+    it("does not require MPP env when protocols exclude 'mpp' even if MPP_SECRET_KEY is set", () => {
+      const config = routerConfigFromEnv(
+        validOptions({ protocols: ['x402'], env: validEnv({ MPP_SECRET_KEY: 'secret' }) }),
+      );
+      expect(config.protocols).toEqual(['x402']);
+      expect(config.mpp).toBeUndefined();
+    });
+  });
+
+  describe('env coherence — options.env is the single env source', () => {
+    it('resolves the KV store from the injected env onto config.kvStore', () => {
+      const config = routerConfigFromEnv(
+        validOptions({
+          env: validEnv({
+            KV_REST_API_URL: 'https://kv.example.com',
+            KV_REST_API_TOKEN: 'injected-token',
+          }),
+        }),
+      );
+      expect(config.kvStore).toBeDefined();
+      expect(typeof (config.kvStore as KvStore).get).toBe('function');
+    });
+
+    it('prefers an explicit kvStore option over env-resolved KV creds', () => {
+      const custom = { get: async () => null } as unknown as KvStore;
+      const config = routerConfigFromEnv(
+        validOptions({
+          env: validEnv({
+            KV_REST_API_URL: 'https://kv.example.com',
+            KV_REST_API_TOKEN: 'injected-token',
+          }),
+          kvStore: custom,
+        }),
+      );
+      expect(config.kvStore).toBe(custom);
+    });
+
+    it('leaves config.kvStore unset when the injected env has no KV creds', () => {
+      // process.env KV creds (if any) must not leak into an injected env.
+      const config = routerConfigFromEnv(validOptions());
+      expect(config.kvStore).toBeUndefined();
+    });
+
+    it('rejects missing CDP keys in the injected env even when process.env has them', () => {
+      // tests/setup.ts populates process.env CDP keys; the injected env wins.
+      expect(process.env.CDP_API_KEY_ID).toBeTruthy();
+      try {
+        routerConfigFromEnv(
+          validOptions({
+            env: validEnv({ CDP_API_KEY_ID: undefined, CDP_API_KEY_SECRET: undefined }),
+          }),
+        );
+        expect.fail('routerConfigFromEnv should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(RouterConfigError);
+        expect((error as RouterConfigError).issues.map((i) => i.code)).toContain(
+          'missing_cdp_keys',
+        );
+      }
+    });
+
+    it('accepts CDP keys from the injected env even when process.env lacks them', () => {
+      const origId = process.env.CDP_API_KEY_ID;
+      const origSecret = process.env.CDP_API_KEY_SECRET;
+      delete process.env.CDP_API_KEY_ID;
+      delete process.env.CDP_API_KEY_SECRET;
+      try {
+        // Full entry point: createRouter must not re-check process.env for
+        // env-derived configs.
+        expect(() => createRouterFromEnv(validOptions())).not.toThrow();
+      } finally {
+        if (origId !== undefined) process.env.CDP_API_KEY_ID = origId;
+        if (origSecret !== undefined) process.env.CDP_API_KEY_SECRET = origSecret;
+      }
+    });
+
+    it('does not require CDP keys when protocols are MPP-only', () => {
+      const config = routerConfigFromEnv(
+        validOptions({
+          protocols: ['mpp'],
+          env: validEnv({
+            CDP_API_KEY_ID: undefined,
+            CDP_API_KEY_SECRET: undefined,
+            MPP_SECRET_KEY: 'secret',
+            MPP_CURRENCY: TEMPO_USDC_ADDRESS,
+          }),
+        }),
+      );
+      expect(config.protocols).toEqual(['mpp']);
+    });
   });
 
   describe('KV warnings', () => {

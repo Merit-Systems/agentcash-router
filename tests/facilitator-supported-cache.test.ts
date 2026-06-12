@@ -94,6 +94,32 @@ describe('withCachedSupported', () => {
     expect(inner.getSupported).toHaveBeenCalledTimes(1);
   });
 
+  it('serves the in-process memo within the TTL and refetches after it expires', async () => {
+    vi.useFakeTimers();
+    try {
+      const inner = {
+        getSupported: vi.fn<() => Promise<SupportedResponse>>().mockResolvedValue(realResponse),
+        verify: vi.fn() as unknown as FacilitatorClient['verify'],
+        settle: vi.fn() as unknown as FacilitatorClient['settle'],
+      };
+      const client = withCachedSupported(inner, { ttlSeconds: 3600 });
+
+      await client.getSupported();
+      await client.getSupported();
+      expect(inner.getSupported).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(3599 * 1000);
+      await client.getSupported();
+      expect(inner.getSupported).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(2 * 1000); // past the 1h mark
+      await client.getSupported();
+      expect(inner.getSupported).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('caches the live response in KV when cacheKey is provided', async () => {
     const kvStore = {
       get: vi.fn().mockResolvedValue(null),

@@ -28,6 +28,7 @@ export type RouterConfigIssueCode =
   | 'invalid_mpp_operator_key'
   | 'mpp_operator_equals_fee_payer'
   | 'mpp_operator_recipient_mismatch'
+  | 'invalid_mpp_deposit_multiplier'
   | 'missing_discovery_title'
   | 'missing_discovery_description'
   | 'missing_discovery_guidance'
@@ -37,27 +38,38 @@ export type RouterConfigIssueCode =
   | 'invalid_kv_url'
   | 'missing_kv_in_production';
 
-export type RouterConfigIssueSeverity = 'error' | 'warning';
-
 export interface RouterConfigIssue {
   code: RouterConfigIssueCode;
   message: string;
   protocol?: ProtocolType;
-  /** @default 'error' — warnings are surfaced via `console.warn` and do not throw. */
-  severity?: RouterConfigIssueSeverity;
 }
 
 /** Internal — every zod issue our schema emits carries these params. */
 export interface IssueParams {
   code: RouterConfigIssueCode;
   protocol?: ProtocolType;
-  severity?: RouterConfigIssueSeverity;
 }
 
 /** Internal — options for `validateRouterConfig` / `getRouterConfigIssues`. */
 export interface ValidateOptions {
   env?: Record<string, string | undefined>;
+  /**
+   * Skip the CDP_API_KEY_ID/CDP_API_KEY_SECRET presence check. Set for
+   * env-derived configs: `routerConfigFromEnv` already validated the keys
+   * against its own env, which may not be `process.env`.
+   */
+  assumeCdpKeys?: boolean;
 }
+
+/**
+ * @internal Marker property `routerConfigFromEnv` sets on the configs it
+ * returns. `createRouter` treats marked configs as fully env-resolved: it
+ * skips its own `process.env` fallbacks (CDP key check, KV bootstrap, missing-
+ * KV production warning), so an injected `options.env` stays the single env
+ * source. Enumerable, so it survives the documented spread-and-override
+ * pattern.
+ */
+export const ENV_DERIVED_CONFIG: unique symbol = Symbol.for('@agentcash/router.env-derived-config');
 
 /** Options for {@link createRouterFromEnv} / {@link routerConfigFromEnv}. */
 export interface CreateRouterFromEnvOptions<
