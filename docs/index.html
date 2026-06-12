@@ -448,6 +448,7 @@ footer a:hover { color: var(--ink); }
         <li><a href="#prim-apikey">.apiKey()</a></li>
         <li><a href="#prim-unprotected">.unprotected()</a></li>
         <li><a href="#prim-schema">Schemas &amp; types</a></li>
+        <li><a href="#prim-docs">.docs()</a></li>
         <li><a href="#prim-errors">HttpError</a></li>
       </ul>
       <li class="section-gap"></li>
@@ -733,6 +734,20 @@ router.route(<span class="t-string">'search'</span>)
     <p style="font-size:0.8rem; color: var(--ink-muted);">Pipeline order: <code>body parse → validate → 402 challenge → payment verify → handler → settle</code></p>
   </div>
 
+  <!-- Docs -->
+  <div class="subsection" id="prim-docs">
+    <h3>.description() vs .docs()</h3>
+    <p>Two channels, two jobs. <code>.description()</code> is the one-sentence summary — it feeds the 402 payment challenge (capped at 400 chars on paid x402 routes by the facilitator) and the discovery one-liners. <code>.docs()</code> is unbounded long-form documentation for agents who inspect this specific route: model quirks, response interpretation, usage judgment. It's emitted only as the OpenAPI operation <code>description</code>, fetched on demand — never bloating the challenge or the global guidance.</p>
+    <pre><code>router.route(<span class="t-string">'image-to-3d'</span>)
+  .paid(<span class="t-string">'0.50'</span>)
+  .description(<span class="t-string">'Convert a 2D image into a textured 3D model.'</span>)
+  .docs(<span class="t-string">'image_style_url performs color/texture style transfer only — it does NOT '</span> +
+        <span class="t-string">'transfer facial features or likeness. For character likeness, invest in '</span> +
+        <span class="t-string">'the quality of the input image instead.'</span>)
+  .body(schema)
+  .handler(convert);</code></pre>
+  </div>
+
   <!-- HttpError -->
   <div class="subsection" id="prim-errors">
     <h3>HttpError</h3>
@@ -814,7 +829,22 @@ router.route(<span class="t-string">'fortune/membership'</span>)
 <span class="t-comment">// dynamic/tiered pricing expresses as a range</span>
 { <span class="t-key">"price"</span>: { <span class="t-key">"min"</span>: <span class="t-string">"0.01"</span>, <span class="t-key">"max"</span>: <span class="t-string">"0.25"</span> } }</code></pre>
 
-    <p><code>args()</code> fills <code>{param}</code> slots in the target path. Leftover keys become query params on GET targets, or a suggested <code>body</code> object on POST targets. A handler-supplied <code>next</code> key always wins — the router never overwrites it. Errors in <code>when()</code>/<code>args()</code> are reported via <code>onAlert</code> and skipped; they never break the response.</p>
+    <p><code>args()</code> fills <code>{param}</code> slots in the target path. Leftover keys become query params on GET targets, or a suggested <code>body</code> object on POST targets. It also receives the original request as a second argument — <code>args: (result, { body, query, params }) =&gt; ...</code> — so a chain can reuse caller-sent values the result doesn't echo (a status route polling itself with the caller's token). A handler-supplied <code>next</code> key always wins — the router never overwrites it. Errors in <code>when()</code>/<code>args()</code> are reported via <code>onAlert</code> and skipped; they never break the response.</p>
+
+    <p>Set a machine-readable polling cadence with <code>retryAfterSeconds</code> — it's emitted verbatim on the entry, so clients can sleep deterministically instead of parsing prose:</p>
+    <pre><code>.nextStep({ route: <span class="t-string">'jobs/{jobId}'</span>, args: (r) => ({ jobId: r.jobId }), retryAfterSeconds: <span class="t-string">5</span> })</code></pre>
+
+    <h3 style="margin-top: 1.75rem;">External steps — when the next call isn't your route</h3>
+    <p>Some flows hop through a third-party request: buy an upload slot, then PUT the bytes to a presigned S3 URL from the result. Declare it with <code>external</code> — the resolver derives the request from the actual result:</p>
+    <pre><code>router.route(<span class="t-string">'upload'</span>)
+  .paid(<span class="t-string">'0.01'</span>)
+  .output(uploadSlotSchema)
+  .nextStep({
+    external: (r) => ({ method: <span class="t-string">'PUT'</span>, url: r.uploadUrl, headers: { <span class="t-string">'content-type'</span>: r.contentType } }),
+    note: <span class="t-string">'Upload the raw file bytes, then use publicUrl.'</span>,
+  })
+  .handler(buySlot);</code></pre>
+    <p>External entries are marked <code>"external": true</code> and carry no <code>auth</code>/<code>price</code> (unknowable for third-party hosts). Returning <code>null</code> skips the entry. Exactly one of <code>route</code>/<code>external</code> per step.</p>
   </div>
 
   <!-- when() branching -->
@@ -896,7 +926,7 @@ router.route(<span class="t-string">'fortune/membership'</span>)
   </table>
 
   <h3 style="margin-top: 1.75rem;">llms.txt sample output</h3>
-  <p>When chains are declared, the router appends a <code>## Workflows</code> section — the prose you used to hand-write, derived from the route graph:</p>
+  <p>When chains are declared, the router appends a <code>## Workflows</code> section — the prose you used to hand-write, derived from the route graph. The same composed text rides into OpenAPI's <code>info.x-guidance</code>, so discovery clients that read guidance from the spec get the map too. Isomorphic chains (same steps, different root — think 100 generated routes that all poll the same status endpoint) dedupe into one representative line annotated <code>(and N similar routes)</code>:</p>
   <pre><code>POST /api/search with { q: string }. Returns top 10 results.
 
 ## Workflows
