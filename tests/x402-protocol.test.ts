@@ -140,3 +140,36 @@ describe('verifyX402Payment — settle requirements trust boundary', () => {
     expect(result?.requirements?.extra).toMatchObject(enrichedExtra);
   });
 });
+
+describe('buildX402Challenge — challenge resource', () => {
+  it('carries .description() but never .docs() in the 402 challenge', async () => {
+    const { buildX402Challenge } = await import('../src/protocols/x402/challenge.js');
+    const { decodePaymentRequiredHeader } = await import('@x402/core/http');
+
+    const DOCS_TEXT = 'LONG-FORM OPERATION DOCS that must never reach the 402 challenge.';
+    const routeEntry = {
+      key: 'video/generate',
+      authMode: 'paid',
+      billing: 'exact',
+      protocols: ['x402'],
+      method: 'POST',
+      pricing: '0.02',
+      description: 'Generate a video',
+      docs: DOCS_TEXT,
+    } as const;
+
+    const { encoded } = await buildX402Challenge({
+      server: new FakeX402Server() as never,
+      routeEntry: routeEntry as never,
+      request: new Request('https://api.example.com/api/video/generate', { method: 'POST' }),
+      price: '0.02',
+      accepts: [{ scheme: 'exact', network: 'eip155:8453', payTo: KNOWN_PAYEE }],
+    });
+
+    const challenge = decodePaymentRequiredHeader(encoded) as {
+      resource?: { description?: string };
+    };
+    expect(challenge.resource?.description).toBe('Generate a video');
+    expect(JSON.stringify(challenge)).not.toContain(DOCS_TEXT);
+  });
+});

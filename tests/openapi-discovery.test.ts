@@ -162,6 +162,38 @@ describe('openapi discovery document', () => {
     expect(operation.responses['401']).toBeUndefined();
   });
 
+  it('emits .docs() as the operation description, with summary from .description()', async () => {
+    const registry = new RouteRegistry();
+    const docs =
+      'Generation takes 30-90s. Poll the returned job until "complete". ' +
+      'The model ignores camera directives in prompts; pass them via the cameraFixed flag.';
+    registry.register(
+      makeEntry({
+        key: 'video/generate',
+        path: 'video/generate',
+        description: 'Generate a video from a text prompt',
+        docs,
+      }),
+    );
+    registry.register(makeEntry({ key: 'plain', path: 'plain' }));
+
+    const handler = createOpenAPIHandler(registry, 'https://example.com', undefined, {
+      title: 'Example API',
+      version: '1.0.0',
+    });
+
+    const doc = (await (await handler(request)).json()) as Record<string, any>;
+
+    const documented = doc.paths['/api/video/generate'].post;
+    expect(documented.summary).toBe('Generate a video from a text prompt');
+    expect(documented.description).toBe(docs);
+
+    // Without .docs(), no operation description is emitted (summary falls back to the key).
+    const plain = doc.paths['/api/plain'].post;
+    expect(plain.summary).toBe('plain');
+    expect(plain.description).toBeUndefined();
+  });
+
   it('emits x-discovery metadata and quote pricing for dynamic routes', async () => {
     const registry = new RouteRegistry();
     registry.register(

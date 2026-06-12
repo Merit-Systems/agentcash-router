@@ -537,3 +537,38 @@ describe('registration-time safety', () => {
     ).toThrow('.outputExample() does not satisfy .output() schema');
   });
 });
+
+describe('.docs()', () => {
+  it('stores long-form docs on the route entry, independent of .description()', () => {
+    const { builder, registry } = makeBuilder('docs/test');
+    const docs = 'Long-form operation docs for agents. '.repeat(30); // no length cap
+    builder
+      .unprotected()
+      .description('Short summary')
+      .docs(docs)
+      .handler(async () => ({ ok: true }));
+
+    const entry = registry.get('docs/test');
+    expect(entry?.description).toBe('Short summary');
+    expect(entry?.docs).toBe(docs);
+  });
+
+  it('throws on empty or whitespace-only text', () => {
+    const { builder } = makeBuilder('docs/empty');
+    expect(() => builder.docs('')).toThrow("route 'docs/empty': .docs() requires non-empty text");
+    expect(() => builder.docs('   \n\t ')).toThrow(
+      "route 'docs/empty': .docs() requires non-empty text",
+    );
+  });
+
+  it('is not subject to the 400-char x402 description cap', () => {
+    const { builder } = makeBuilder('docs/long');
+    const long = 'x'.repeat(5000);
+    expect(() =>
+      builder
+        .paid('0.01')
+        .docs(long)
+        .handler(async () => ({ ok: true })),
+    ).not.toThrow();
+  });
+});

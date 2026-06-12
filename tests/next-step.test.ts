@@ -383,6 +383,309 @@ describe('nextStep runtime injection', () => {
   });
 });
 
+describe('external nextStep', () => {
+  it('injects an external entry with method, url, headers, and body — no auth, no price', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('purchase')
+      .unprotected()
+      .output(z.object({ uploadUrl: z.string(), fileId: z.string() }))
+      .nextStep({
+        external: (result) => ({
+          url: result.uploadUrl,
+          method: 'PUT',
+          headers: { 'content-type': 'application/octet-stream' },
+          body: { fileId: result.fileId },
+        }),
+        note: 'Upload the file bytes to the presigned URL.',
+      })
+      .handler(async () => ({
+        uploadUrl: 'https://s3.example.com/presigned?sig=abc',
+        fileId: 'f1',
+      }));
+
+    const body = await (
+      await router.fetch(new Request('https://api.example.com/api/purchase', { method: 'POST' }))
+    ).json();
+    expect(body.next).toEqual([
+      {
+        external: true,
+        method: 'PUT',
+        url: 'https://s3.example.com/presigned?sig=abc',
+        headers: { 'content-type': 'application/octet-stream' },
+        body: { fileId: 'f1' },
+        note: 'Upload the file bytes to the presigned URL.',
+      },
+    ]);
+    expect(body.next[0]).not.toHaveProperty('auth');
+    expect(body.next[0]).not.toHaveProperty('price');
+  });
+
+  it('defaults the external method to GET', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('locate')
+      .unprotected()
+      .nextStep({ external: () => ({ url: 'https://cdn.example.com/file' }) })
+      .handler(async () => ({ ok: true }));
+
+    const body = await (
+      await router.fetch(new Request('https://api.example.com/api/locate', { method: 'POST' }))
+    ).json();
+    expect(body.next[0]).toEqual({
+      external: true,
+      method: 'GET',
+      url: 'https://cdn.example.com/file',
+    });
+  });
+
+  it('skips the entry when external() returns null or undefined', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('maybe-null')
+      .unprotected()
+      .nextStep({ external: () => null })
+      .handler(async () => ({ ok: true }));
+    router
+      .route('maybe-undefined')
+      .unprotected()
+      .nextStep({ external: () => undefined })
+      .handler(async () => ({ ok: true }));
+
+    const nullBody = await (
+      await router.fetch(new Request('https://api.example.com/api/maybe-null', { method: 'POST' }))
+    ).json();
+    expect(nullBody).not.toHaveProperty('next');
+
+    const undefinedBody = await (
+      await router.fetch(
+        new Request('https://api.example.com/api/maybe-undefined', { method: 'POST' }),
+      )
+    ).json();
+    expect(undefinedBody).not.toHaveProperty('next');
+  });
+
+  it('reports and skips when external() throws, without breaking the response', async () => {
+    const { router, alerts } = withAlerts();
+    router
+      .route('poll')
+      .unprotected()
+      .handler(async () => ({ ok: true }));
+    router
+      .route('fragile-external')
+      .unprotected()
+      .nextStep({
+        external: () => {
+          throw new Error('external exploded');
+        },
+      })
+      .nextStep({ route: 'poll', note: 'survivor' })
+      .handler(async () => ({ ok: true }));
+
+    const res = await router.fetch(
+      new Request('https://api.example.com/api/fragile-external', { method: 'POST' }),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.next).toHaveLength(1);
+    expect(body.next[0].note).toBe('survivor');
+    expect(alerts).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        message: expect.stringContaining('nextStep (external): external() threw'),
+      }),
+    );
+  });
+
+  it('honors when() on external steps', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('gated')
+      .unprotected()
+      .body(z.object({ ready: z.boolean() }))
+      .output(z.object({ ready: z.boolean() }))
+      .nextStep({
+        external: () => ({ url: 'https://cdn.example.com/file' }),
+        when: (result) => result.ready,
+      })
+      .handler(async ({ body }) => ({ ready: body.ready }));
+
+    const ready = await (
+      await router.fetch(jsonRequest('https://api.example.com/api/gated', { ready: true }))
+    ).json();
+    expect(ready.next).toHaveLength(1);
+
+    const notReady = await (
+      await router.fetch(jsonRequest('https://api.example.com/api/gated', { ready: false }))
+    ).json();
+    expect(notReady).not.toHaveProperty('next');
+  });
+
+  it('registry.validate() ignores external steps', () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('only-external')
+      .unprotected()
+      .nextStep({ external: () => ({ url: 'https://cdn.example.com/x' }) })
+      .handler(async () => ({ ok: true }));
+
+    expect(() => router.registry.validate()).not.toThrow();
+  });
+
+  it('throws at registration unless exactly one of route/external is provided', () => {
+    const router = createRouter(baseConfig);
+    expect(() =>
+      router
+        .route('both')
+        .unprotected()
+        .nextStep({
+          route: 'poll',
+          external: () => ({ url: 'https://x.example.com' }),
+        } as never),
+    ).toThrow("route 'both': .nextStep() requires exactly one of 'route'");
+    expect(() =>
+      router
+        .route('neither')
+        .unprotected()
+        .nextStep({ note: 'no target' } as never),
+    ).toThrow("route 'neither': .nextStep() requires exactly one of 'route'");
+  });
+
+  it('renders external steps as terminal lines in the workflows map', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('purchase')
+      .paid('0.10')
+      .description('Buy an upload slot')
+      .nextStep({
+        external: () => ({ url: 'https://s3.example.com/presigned', method: 'PUT' }),
+        note: 'Upload the file bytes.',
+        retryAfterSeconds: 3,
+      })
+      .handler(async () => ({ ok: true }));
+
+    const text = await (
+      await router.llmsTxt()(new Request('https://api.example.com/llms.txt'))
+    ).text();
+    expect(text).toContain('1. POST /api/purchase ($0.10) — Buy an upload slot');
+    expect(text).toContain(
+      "2. (external request — resolved in the previous response's next array, retry ~3s) — Upload the file bytes.",
+    );
+    // External steps terminate static traversal: nothing follows.
+    expect(text).not.toContain('3. ');
+  });
+});
+
+describe('retryAfterSeconds', () => {
+  it('throws at registration for non-finite or non-positive values', () => {
+    const router = createRouter(baseConfig);
+    for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() =>
+        router.route('bad-retry').unprotected().nextStep({ route: 'poll', retryAfterSeconds: bad }),
+      ).toThrow("route 'bad-retry': .nextStep() retryAfterSeconds must be a finite number > 0");
+    }
+  });
+
+  it('emits retryAfterSeconds verbatim on route and external entries', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('poll')
+      .unprotected()
+      .handler(async () => ({ ok: true }));
+    router
+      .route('kick')
+      .unprotected()
+      .nextStep({ route: 'poll', retryAfterSeconds: 5 })
+      .nextStep({
+        external: () => ({ url: 'https://cdn.example.com/file' }),
+        retryAfterSeconds: 2.5,
+      })
+      .handler(async () => ({ ok: true }));
+
+    const body = await (
+      await router.fetch(new Request('https://api.example.com/api/kick', { method: 'POST' }))
+    ).json();
+    expect(body.next[0].retryAfterSeconds).toBe(5);
+    expect(body.next[1].retryAfterSeconds).toBe(2.5);
+  });
+
+  it('renders retry hints in the workflows map access label', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('jobs/{jobId}')
+      .method('GET')
+      .siwx()
+      .description('Job status')
+      .handler(async () => ({ ok: true }));
+    router
+      .route('submit')
+      .paid('0.01')
+      .nextStep({ route: 'jobs/{jobId}', retryAfterSeconds: 5, note: 'Poll until complete' })
+      .handler(async () => ({ ok: true }));
+
+    const text = await (
+      await router.llmsTxt()(new Request('https://api.example.com/llms.txt'))
+    ).text();
+    expect(text).toContain(
+      '2. GET /api/jobs/{jobId} (siwx, free, retry ~5s) — Poll until complete',
+    );
+  });
+});
+
+describe('request-context args', () => {
+  it('threads caller-sent body values into route-form args', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('results')
+      .unprotected()
+      .handler(async () => ({ data: [] }));
+    router
+      .route('status')
+      .unprotected()
+      .body(z.object({ token: z.string() }))
+      .output(z.object({ status: z.string() }))
+      .nextStep({
+        route: 'results',
+        args: (_result, request) => ({
+          token: (request.body as { token: string }).token,
+        }),
+      })
+      .handler(async () => ({ status: 'complete' }));
+
+    const body = await (
+      await router.fetch(jsonRequest('https://api.example.com/api/status', { token: 'tok-1' }))
+    ).json();
+    expect(body.next[0].url).toBe('https://api.example.com/api/results');
+    expect(body.next[0].body).toEqual({ token: 'tok-1' });
+  });
+
+  it('exposes path params and query so a route can chain back to itself', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('jobs/{jobId}/status')
+      .unprotected()
+      .body(z.object({ token: z.string() }))
+      .output(z.object({ status: z.string() }))
+      .nextStep({
+        route: 'jobs/{jobId}/status',
+        args: (_result, request) => ({
+          jobId: request.params.jobId,
+          token: (request.body as { token: string }).token,
+        }),
+        when: (result) => (result as { status: string }).status === 'pending',
+      })
+      .handler(async () => ({ status: 'pending' }));
+
+    const body = await (
+      await router.fetch(
+        jsonRequest('https://api.example.com/api/jobs/j7/status', { token: 'tok-2' }),
+      )
+    ).json();
+    expect(body.next[0].url).toBe('https://api.example.com/api/jobs/j7/status');
+    expect(body.next[0].body).toEqual({ token: 'tok-2' });
+  });
+});
+
 describe('nextStep registry validation', () => {
   it('registry.validate() throws for unregistered nextStep targets', () => {
     const router = createRouter(baseConfig);
@@ -566,6 +869,92 @@ describe('nextStep discovery surfaces', () => {
     ).text();
     expect(text).toBe('Use the API.');
     expect(text).not.toContain('## Workflows');
+  });
+
+  it('mirrors guidance + the Workflows map into OpenAPI info.x-guidance and info.guidance', async () => {
+    const router = chainedRouter();
+    const doc = await (
+      await router.openapi()(new Request('https://api.example.com/openapi.json'))
+    ).json();
+
+    expect(doc.info['x-guidance']).toContain('Use the API.');
+    expect(doc.info['x-guidance']).toContain('## Workflows');
+    expect(doc.info['x-guidance']).toContain('1. POST /api/actors/call ($0.01) — Start the run');
+    // Deprecated mirror stays consistent with x-guidance.
+    expect(doc.info.guidance).toBe(doc.info['x-guidance']);
+
+    // llms.txt serves the same composed text.
+    const llms = await (
+      await router.llmsTxt()(new Request('https://api.example.com/llms.txt'))
+    ).text();
+    expect(llms).toBe(doc.info['x-guidance']);
+  });
+
+  it('keeps well-known instructions as RAW guidance — no Workflows map', async () => {
+    const wellKnown = await (
+      await chainedRouter().wellKnown()(new Request('https://api.example.com/.well-known/x402'))
+    ).json();
+    expect(wellKnown.instructions).toBe('Use the API.');
+    expect(wellKnown.instructions).not.toContain('## Workflows');
+  });
+
+  it('dedupes isomorphic chains into one representative annotated with the count', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('runs/status')
+      .method('GET')
+      .siwx()
+      .description('Run status')
+      .handler(async () => ({ status: 'complete' }));
+    for (let i = 0; i < 20; i++) {
+      router
+        .route(`actors/actor-${String(i).padStart(2, '0')}/call`)
+        .paid('0.01')
+        .nextStep({ route: 'runs/status', note: 'Poll until done', retryAfterSeconds: 5 })
+        .handler(async () => ({ ok: true }));
+    }
+
+    const text = await (
+      await router.llmsTxt()(new Request('https://api.example.com/llms.txt'))
+    ).text();
+    // One representative chain (first root in deterministic order), annotated.
+    expect(text).toContain('1. POST /api/actors/actor-00/call ($0.01) (and 19 similar routes)');
+    expect(text).toContain('2. GET /api/runs/status (siwx, free, retry ~5s) — Poll until done');
+    // The other 19 isomorphic roots are not rendered.
+    expect(text).not.toContain('actor-01');
+    expect(text).not.toContain('actor-19');
+
+    // The same deduped map flows into OpenAPI x-guidance.
+    const doc = await (
+      await router.openapi()(new Request('https://api.example.com/openapi.json'))
+    ).json();
+    expect(doc.info['x-guidance']).toContain('(and 19 similar routes)');
+  });
+
+  it('bounds the map at 12 distinct chain groups and summarizes the rest', async () => {
+    const router = createRouter(baseConfig);
+    for (let i = 0; i < 14; i++) {
+      const n = String(i).padStart(2, '0');
+      router
+        .route(`ends/end-${n}`)
+        .unprotected()
+        .handler(async () => ({ ok: true }));
+      router
+        .route(`flows/flow-${n}`)
+        .unprotected()
+        // Distinct notes make every chain its own group.
+        .nextStep({ route: `ends/end-${n}`, note: `finish flow ${n}` })
+        .handler(async () => ({ ok: true }));
+    }
+
+    const text = await (
+      await router.llmsTxt()(new Request('https://api.example.com/llms.txt'))
+    ).text();
+    expect(text).toContain('1. POST /api/flows/flow-00');
+    expect(text).toContain('1. POST /api/flows/flow-11');
+    expect(text).not.toContain('flows/flow-12');
+    expect(text).not.toContain('flows/flow-13');
+    expect(text).toContain('…and 2 more workflows');
   });
 
   it('threads a custom basePath through every discovery surface', async () => {

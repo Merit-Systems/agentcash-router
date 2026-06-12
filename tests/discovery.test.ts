@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { RouteRegistry } from '../src/registry.js';
 import { createWellKnownHandler } from '../src/discovery/well-known.js';
+import { createLlmsTxtHandler } from '../src/discovery/llms-txt.js';
 import type { RouteEntry } from '../src/types.js';
 
 function makeEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
@@ -201,5 +202,47 @@ describe('barrel validation', () => {
     );
 
     await expect(handler(dummyRequest)).rejects.toThrow('missing-route');
+  });
+});
+
+describe('.docs() containment', () => {
+  const DOCS_TEXT = 'LONG-FORM OPERATION DOCS: model quirks, retry advice, judgment calls.';
+
+  it('never reaches well-known output', async () => {
+    const reg = new RouteRegistry();
+    reg.register(makeEntry({ key: 'documented', description: 'Short summary', docs: DOCS_TEXT }));
+
+    const handler = createWellKnownHandler(reg, 'https://example.com', undefined, {
+      ...defaultDiscovery,
+      guidance: 'Raw guidance',
+    });
+    const res = await handler(dummyRequest);
+    const text = JSON.stringify(await res.json());
+
+    expect(text).not.toContain(DOCS_TEXT);
+    expect(text).toContain('Raw guidance');
+  });
+
+  it('never reaches llms.txt output', async () => {
+    const reg = new RouteRegistry();
+    reg.register(
+      makeEntry({
+        key: 'documented',
+        description: 'Short summary',
+        docs: DOCS_TEXT,
+        nextSteps: [{ route: 'target' }],
+      }),
+    );
+    reg.register(makeEntry({ key: 'target', docs: DOCS_TEXT }));
+
+    const handler = createLlmsTxtHandler(
+      { ...defaultDiscovery, guidance: 'Raw guidance' },
+      reg,
+      'https://example.com',
+    );
+    const text = await (await handler(dummyRequest)).text();
+
+    expect(text).toContain('## Workflows');
+    expect(text).not.toContain(DOCS_TEXT);
   });
 });
