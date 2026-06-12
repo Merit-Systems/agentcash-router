@@ -2,7 +2,7 @@
 
 Minimal Next.js app exercising every transaction kind `@agentcash/router` supports — `.paid()` fixed (x402 exact / MPP one-shot), `.upTo()` (x402 handler-driven), `.upTo().siwx()` (pay once, replay free), `.metered()` request-mode (MPP session), `.metered().stream()` (MPP session SSE), `.paid(fn)` (args-derived pricing), `.siwx()` (identity), and a `.nextStep()` workflow edge.
 
-All routes are registered in one module, [`lib/routes.ts`](./lib/routes.ts), and served by a single Next.js optional catch-all, [`app/api/[[...route]]/route.ts`](<./app/api/[[...route]]/route.ts>). Each registration leads with a comment naming the payment method it tests and the exact `agentcash` CLI command. To smoke-test every kind in order, see [`AGENTCASH_TESTS.md`](./AGENTCASH_TESTS.md).
+All routes are registered in one module, [`lib/routes.ts`](./lib/routes.ts), and served by a single Next.js optional catch-all, [`app/api/[[...route]]/route.ts`](./app/api/[[...route]]/route.ts). Each registration leads with a comment naming the payment method it tests and the exact `agentcash` CLI command. To smoke-test every kind in order, see [`AGENTCASH_TESTS.md`](./AGENTCASH_TESTS.md).
 
 ## Quick start
 
