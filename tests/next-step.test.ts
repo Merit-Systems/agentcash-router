@@ -910,6 +910,9 @@ describe('nextStep discovery surfaces', () => {
       router
         .route(`actors/actor-${String(i).padStart(2, '0')}/call`)
         .paid('0.01')
+        // Distinct per-route descriptions become the root step's note; they
+        // must NOT defeat dedup (only the root varies within a group).
+        .description(`Start actor ${i}`)
         .nextStep({ route: 'runs/status', note: 'Poll until done', retryAfterSeconds: 5 })
         .handler(async () => ({ ok: true }));
     }
@@ -918,7 +921,9 @@ describe('nextStep discovery surfaces', () => {
       await router.llmsTxt()(new Request('https://api.example.com/llms.txt'))
     ).text();
     // One representative chain (first root in deterministic order), annotated.
-    expect(text).toContain('1. POST /api/actors/actor-00/call ($0.01) (and 19 similar routes)');
+    expect(text).toContain(
+      '1. POST /api/actors/actor-00/call ($0.01) — Start actor 0 (and 19 similar routes)',
+    );
     expect(text).toContain('2. GET /api/runs/status (siwx, free, retry ~5s) — Poll until done');
     // The other 19 isomorphic roots are not rendered.
     expect(text).not.toContain('actor-01');

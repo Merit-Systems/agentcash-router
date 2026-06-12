@@ -76,11 +76,13 @@ function chainSignature(chain: WorkflowStep[]): string {
         ? ['external', step.note ?? null, step.retryAfterSeconds ?? null]
         : [
             step.method,
-            // Root URLs may differ within a group; every later URL must match.
+            // Root URLs (and root notes — the root note is the route's own
+            // description, distinct per route by construction) may differ
+            // within a group; every later URL/note must match.
             index === 0 ? null : step.url,
             step.auth,
             step.price ?? null,
-            step.note ?? null,
+            index === 0 ? null : (step.note ?? null),
             step.retryAfterSeconds ?? null,
           ],
     ),
