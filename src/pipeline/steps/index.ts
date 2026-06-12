@@ -1,6 +1,6 @@
 export type { FlowCtx, RouterDeps, SettleScope } from './types.js';
 
-export { preflight, errorStatus, errorMessage, handlerFailureError } from './context.js';
+export { preflight, errorStatus, errorMessage } from './context.js';
 export {
   parseBody,
   validateQuery,
@@ -10,13 +10,9 @@ export {
 } from './body.js';
 export { runApiKeyGate, trySiwxFastPath, runHandlerOnly } from './auth.js';
 export {
-  settlementContext,
   runBeforeSettle,
-  runAfterSettle,
   runSettlementError,
   runSettledHandlerError,
-  grantEntitlementIfSiwx,
-  runPostSettleEpilogue,
   settleAndFinalizeRequest,
   settleAndFinalizeStream,
 } from './settle.js';

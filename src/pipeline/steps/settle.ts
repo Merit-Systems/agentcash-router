@@ -11,7 +11,7 @@ import { errorMessage, errorStatus, handlerFailureError } from './context.js';
 import { fail, finalize } from './respond.js';
 import type { FlowCtx, SettleScope } from './types.js';
 
-export function settlementContext<TPayment extends HandlerPaymentContext>(
+function settlementContext<TPayment extends HandlerPaymentContext>(
   ctx: FlowCtx,
   scope: SettleScope<TPayment>,
 ) {
@@ -43,7 +43,7 @@ export async function runBeforeSettle(ctx: FlowCtx, scope: SettleScope): Promise
   }
 }
 
-export async function runAfterSettle(
+async function runAfterSettle(
   ctx: FlowCtx,
   scope: SettleScope<HandlerPaymentContext & { status: 'settled' }>,
 ): Promise<void> {
@@ -89,7 +89,7 @@ export async function runSettledHandlerError(
   }
 }
 
-export async function grantEntitlementIfSiwx(ctx: FlowCtx, wallet: string): Promise<void> {
+async function grantEntitlementIfSiwx(ctx: FlowCtx, wallet: string): Promise<void> {
   if (!ctx.routeEntry.siwxEnabled) return;
   try {
     await ctx.deps.entitlementStore.grant(ctx.routeEntry.key, wallet);
@@ -101,10 +101,10 @@ export async function grantEntitlementIfSiwx(ctx: FlowCtx, wallet: string): Prom
   }
 }
 
-export type SettleSuccess = Extract<SettleOutcome, { ok: true }>;
-export type SettledScope = SettleScope<HandlerPaymentContext & { status: 'settled' }>;
+type SettleSuccess = Extract<SettleOutcome, { ok: true }>;
+type SettledScope = SettleScope<HandlerPaymentContext & { status: 'settled' }>;
 
-export async function runPostSettleEpilogue(args: {
+async function runPostSettleEpilogue(args: {
   ctx: FlowCtx;
   strategy: PaymentStrategy;
   wallet: string;

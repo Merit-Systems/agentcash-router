@@ -6,6 +6,7 @@
  */
 import { firePluginResponse, fireProviderQuota, type PluginFailure } from '../../plugin/events.js';
 import type { RouteEntry } from '../../types.js';
+import { applyNextSteps } from '../next-step.js';
 import type { FlowCtx, RouterDeps } from './types.js';
 
 export function fail(
@@ -31,9 +32,10 @@ export function finalize(
   requestBody?: unknown,
   failure?: PluginFailure,
 ): Response {
-  fireProviderQuota(ctx, response, rawResult);
-  firePluginResponse(ctx, response, requestBody, rawResult, failure);
-  return response;
+  const next = applyNextSteps(ctx, response, rawResult);
+  fireProviderQuota(ctx, next.response, next.rawResult);
+  firePluginResponse(ctx, next.response, requestBody, next.rawResult, failure);
+  return next.response;
 }
 
 export function protocolInitError(routeEntry: RouteEntry, deps: RouterDeps): string | null {

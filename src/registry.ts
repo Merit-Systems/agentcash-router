@@ -85,13 +85,30 @@ export class RouteRegistry {
   }
 
   validate(expectedKeys?: string[]): void {
-    if (!expectedKeys) return;
     const registeredPathKeys = new Set([...this.routes.values()].map((e) => e.key));
-    const missing = expectedKeys.filter((k) => !registeredPathKeys.has(k));
-    if (missing.length > 0) {
+
+    if (expectedKeys) {
+      const missing = expectedKeys.filter((k) => !registeredPathKeys.has(k));
+      if (missing.length > 0) {
+        throw new Error(
+          `route${missing.length > 1 ? 's' : ''} ${missing.map((k) => `'${k}'`).join(', ')} ` +
+            `in prices map but not registered — add to barrel imports`,
+        );
+      }
+    }
+
+    const missingTargets: string[] = [];
+    for (const entry of this.routes.values()) {
+      for (const step of entry.nextSteps ?? []) {
+        if (!registeredPathKeys.has(step.route)) {
+          missingTargets.push(`'${step.route}' (from '${entry.key}')`);
+        }
+      }
+    }
+    if (missingTargets.length > 0) {
       throw new Error(
-        `route${missing.length > 1 ? 's' : ''} ${missing.map((k) => `'${k}'`).join(', ')} ` +
-          `in prices map but not registered — add to barrel imports`,
+        `nextStep target${missingTargets.length > 1 ? 's' : ''} ${missingTargets.join(', ')} ` +
+          `not registered — add to barrel imports`,
       );
     }
   }

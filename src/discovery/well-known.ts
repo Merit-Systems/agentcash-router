@@ -1,5 +1,6 @@
 import type { RouteRegistry } from '../registry.js';
 import type { DiscoveryConfig } from '../types.js';
+import { buildRouteUrl, buildWorkflowChains } from '../pipeline/next-step.js';
 import { resolveGuidance } from './utils/guidance.js';
 
 export function createWellKnownHandler(
@@ -7,12 +8,13 @@ export function createWellKnownHandler(
   baseUrl: string,
   pricesKeys: string[] | undefined,
   discovery: DiscoveryConfig,
+  basePath: string = 'api',
 ) {
   const normalizedBase = baseUrl.replace(/\/+$/, '');
   let validated = false;
 
   return async (_request: Request): Promise<Response> => {
-    if (!validated && pricesKeys) {
+    if (!validated) {
       registry.validate(pricesKeys);
       validated = true;
     }
@@ -22,7 +24,7 @@ export function createWellKnownHandler(
     const methodHints = discovery.methodHints ?? 'non-default';
 
     for (const [, entry] of registry.entries()) {
-      const url = `${normalizedBase}/api/${entry.path ?? entry.key}`;
+      const url = buildRouteUrl(normalizedBase, basePath, entry.path ?? entry.key);
       const resource = toDiscoveryResource(entry.method, url, methodHints);
       if (entry.authMode !== 'unprotected') x402Set.add(resource);
       if (entry.protocols.includes('mpp')) mppSet.add(resource);
@@ -50,6 +52,11 @@ export function createWellKnownHandler(
 
     if (instructions) {
       body.instructions = instructions;
+    }
+
+    const workflows = buildWorkflowChains(registry, normalizedBase, basePath);
+    if (workflows.length > 0) {
+      body.workflows = workflows;
     }
 
     return Response.json(body, {

@@ -226,6 +226,22 @@ export interface SettlementLifecycle<TBody = unknown, TResult = unknown> {
   onSettlementError?: (ctx: SettlementErrorContext<TBody, TResult>) => void | Promise<void>;
 }
 
+/**
+ * A declared successor route for `.nextStep()` chaining. Deterministic at
+ * route definition time: the target is a registry key, and the advertised
+ * method/auth/price are derived from the target's own `RouteEntry`.
+ */
+export interface NextStepConfig<TResult = unknown> {
+  /** Target route's registry key (its path template, e.g. `jobs/{jobId}`). Existence is validated by `registry.validate()` at discovery time. */
+  route: string;
+  /** Derive target args from the handler result. Fills `{param}` slots in the target path; leftover keys become query params on GET targets or a `body` suggestion on other methods. Omitted: the unresolved template URL is advertised as-is. */
+  args?: (result: TResult) => Record<string, unknown>;
+  /** Advertise this step only when the predicate returns true. @default always */
+  when?: (result: TResult) => boolean;
+  /** Hint for callers (e.g. polling cadence). Also rendered in discovery (OpenAPI links, workflows). */
+  note?: string;
+}
+
 export type ChargeFn = () => Promise<void>;
 export type UptoChargeFn = (amount: string) => Promise<void>;
 
@@ -320,6 +336,8 @@ export interface RouteEntry {
   providerConfig?: ProviderConfig;
   validateFn?: (body: unknown) => void | Promise<void>;
   settlement?: SettlementLifecycle;
+  /** Declared successor routes (`.nextStep()`). Drives the response `next` array and the discovery workflow surfaces. */
+  nextSteps?: NextStepConfig[];
   mppInfo?: MppProtocolInfo;
   /** Per-tick cost (decimal-dollar). Required when `metered` is true. */
   tickCost?: string;

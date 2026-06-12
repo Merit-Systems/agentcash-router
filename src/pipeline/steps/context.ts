@@ -12,13 +12,14 @@ import type { PluginContext, RequestMeta } from '../../plugin/index.js';
 import { createDefaultContext, firePluginHook } from '../../plugin/index.js';
 import { createReporter } from '../../plugin/reporter.js';
 import { matchPathParams } from '../../path-params.js';
-import type { FlowCtx, RouterDeps } from './types.js';
+import type { FlowCtx, RouteRouting, RouterDeps } from './types.js';
 
 export function preflight(
   routeEntry: RouteEntry,
   handler: RouteHandler,
   deps: RouterDeps,
   request: Request,
+  routing: RouteRouting | null = null,
 ): FlowCtx {
   const meta = buildMeta(request, routeEntry);
   const pluginCtx =
@@ -35,6 +36,7 @@ export function preflight(
     report: createReporter(deps.plugin, pluginCtx, routeEntry.key),
     query: undefined,
     params: matchPathParams(routeEntry.path ?? routeEntry.key, new URL(request.url).pathname),
+    routing,
   };
 }
 

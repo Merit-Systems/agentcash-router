@@ -96,7 +96,7 @@ export async function resolvePaidRequest(ctx: FlowCtx): Promise<PaidResolution> 
   };
 }
 
-export type PaidVerification =
+type PaidVerification =
   | { ok: false; response: Response }
   | { ok: true; parsedBody: unknown; price: string; verifyOutcome: VerifySuccess };
 
@@ -104,7 +104,7 @@ export type PaidVerification =
  * Body+price resolution → strategy verification → verified-wallet plumbing.
  * Shared by the main paid prologue and the channel-management settle path.
  */
-export async function verifyPaidRequest(
+async function verifyPaidRequest(
   ctx: FlowCtx,
   args: { strategy: PaymentStrategy; pricing: PricingStrategy | null; skipBody?: boolean },
 ): Promise<PaidVerification> {

@@ -16,11 +16,12 @@ import type {
   TierConfig,
   JsonObject,
   JsonValue,
+  NextStepConfig,
   SettlementLifecycle,
   PayToConfig,
 } from './types.js';
 import type { RouteRegistry } from './registry.js';
-import type { RouterDeps, RouteHandler } from './pipeline/orchestrate.js';
+import type { RouterDeps, RouteHandler, RouteRouting } from './pipeline/orchestrate.js';
 import { createRequestHandler } from './pipeline/orchestrate.js';
 import { isPositiveDecimal } from './pricing/format.js';
 import { validateExamples } from './validate-examples.js';
@@ -115,11 +116,17 @@ type BuilderState<TBody> = {
   providerConfig: ProviderConfig | undefined;
   validateFn: ((body: TBody) => void | Promise<void>) | undefined;
   settlement: SettlementLifecycle<TBody> | undefined;
+  nextSteps: NextStepConfig[];
+  routing: RouteRouting | null;
   mppInfo: MppProtocolInfo | undefined;
 };
 
 export interface RouteBuilderDefaults {
   protocols?: ProtocolType[];
+  /** Origin URL (no trailing slash) for resolving `.nextStep()` target URLs. */
+  baseUrl?: string;
+  /** Route mount prefix (no slashes). Used with `baseUrl` for `.nextStep()` URLs. @default 'api' */
+  basePath?: string;
 }
 
 export class RouteBuilder<
@@ -168,6 +175,10 @@ export class RouteBuilder<
       providerConfig: undefined,
       validateFn: undefined,
       settlement: undefined,
+      nextSteps: [],
+      routing: defaults?.baseUrl
+        ? { registry, baseUrl: defaults.baseUrl, basePath: defaults.basePath ?? 'api' }
+        : null,
       mppInfo: undefined,
     };
   }
@@ -765,6 +776,37 @@ export class RouteBuilder<
   }
 
   /**
+   * Declare a successor route, advertised to callers on success. Repeatable
+   * for multiple successors. When the handler succeeds and returns a plain
+   * JSON object, the router appends a reserved `next` array — each entry
+   * carries the target's resolved URL plus its `method`, `auth`, and `price`
+   * derived from the target's own route entry, so an agent knows what the
+   * next call costs before making it. A handler-supplied `next` key always
+   * wins. Target existence is validated by `registry.validate()` at
+   * discovery time; chains also render in OpenAPI (`links` / `x-next`),
+   * well-known (`workflows`), and llms.txt.
+   *
+   * `args` / `when` receive the handler result typed from `.output()` when
+   * declared (chain `.output()` first); exceptions they throw are reported
+   * as warnings and skip the entry — they never break the response.
+   *
+   * @example
+   * ```ts
+   * .nextStep({
+   *   route: 'jobs/{jobId}',
+   *   args: (result) => ({ jobId: result.jobId }),
+   *   when: (result) => result.status === 'pending',
+   *   note: 'Poll every ~5s until status is "complete".',
+   * })
+   * ```
+   */
+  nextStep(step: NextStepConfig<ResultFor<TOutput>>): this {
+    const next = this.fork();
+    next.#s.nextSteps = [...this.#s.nextSteps, step as NextStepConfig];
+    return next;
+  }
+
+  /**
    * Register the request handler and return the Next.js route function. The
    * handler receives a typed context and may return a value (serialized to
    * JSON), a raw `Response`, or throw an `HttpError` for a non-2xx status.
@@ -913,12 +955,18 @@ export class RouteBuilder<
       providerConfig: this.#s.providerConfig,
       validateFn: this.#s.validateFn as ((body: unknown) => void | Promise<void>) | undefined,
       settlement: this.#s.settlement as SettlementLifecycle | undefined,
+      nextSteps: this.#s.nextSteps.length > 0 ? this.#s.nextSteps : undefined,
       mppInfo: this.#s.mppInfo,
       tickCost: this.#s.tickCost,
       unitType: this.#s.unitType,
     };
 
-    const requestHandler = createRequestHandler(entry, handlerFn, this.#s.deps);
+    const requestHandler = createRequestHandler(
+      entry,
+      handlerFn,
+      this.#s.deps,
+      this.#s.routing ?? undefined,
+    );
     this.#s.registry.register(entry, requestHandler);
 
     return requestHandler;

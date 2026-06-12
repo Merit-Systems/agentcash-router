@@ -7,8 +7,10 @@ import { runApiKeyOnlyFlow } from './flows/api-key-only.js';
 import { runPaidFlow } from './flows/paid.js';
 import { runSiwxOnlyFlow } from './flows/siwx-only.js';
 import { runUnprotectedFlow } from './flows/unprotected.js';
+import type { RouteRouting } from './steps/types.js';
 
 export type { RouterDeps } from './steps/index.js';
+export type { RouteRouting } from './steps/types.js';
 
 export type RouteHandler =
   | ((ctx: HandlerContext) => Promise<unknown>)
@@ -31,10 +33,11 @@ export function createRequestHandler(
   routeEntry: RouteEntry,
   handler: RouteHandler,
   deps: RouterDeps,
+  routing?: RouteRouting,
 ): (request: Request) => Promise<Response> {
   return async (request: Request): Promise<Response> => {
     await deps.initPromise;
-    const ctx = preflight(routeEntry, handler, deps, request);
+    const ctx = preflight(routeEntry, handler, deps, request, routing ?? null);
 
     if (!shouldSkipQueryValidation(routeEntry, request)) {
       const query = validateQuery(ctx);
