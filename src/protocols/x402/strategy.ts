@@ -160,7 +160,7 @@ async function verifyX402(args: VerifyArgs): Promise<VerifyOutcome> {
 }
 
 async function settleX402(args: SettleArgs): Promise<SettleOutcome> {
-  const { response, payment, token, deps, routeEntry, billedAmount, report } = args;
+  const { response, payment, token, routeEntry, billedAmount, report } = args;
   const { payload, requirements } = token as X402Token;
 
   const override = routeEntry.billing === 'exact' ? undefined : { amount: billedAmount };

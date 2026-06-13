@@ -21,6 +21,7 @@ import type {
   PayToConfig,
 } from './types.js';
 import type { RouteRegistry } from './registry.js';
+import { normalizePath } from './path-params.js';
 import type { RouterDeps, RouteHandler, RouteRouting } from './pipeline/orchestrate.js';
 import { createRequestHandler } from './pipeline/orchestrate.js';
 import { isPositiveDecimal } from './pricing/format.js';
@@ -504,7 +505,11 @@ export class RouteBuilder<
       HasBody,
       Bill
     >;
-    next.#s.authMode = 'apiKey';
+    // Compound apiKey+paid runs the paid flow (key checked, then payment), so
+    // the route stays `authMode: 'paid'` regardless of call order — otherwise
+    // `.paid().apiKey()` would advertise `auth: 'apiKey'` and hide that it also
+    // charges. Pure `.apiKey()` (no pricing) is `authMode: 'apiKey'`.
+    next.#s.authMode = this.#s.pricing !== undefined ? 'paid' : 'apiKey';
     next.#s.apiKeyResolver = resolver;
     return next;
   }
@@ -733,16 +738,19 @@ export class RouteBuilder<
 
   /**
    * Override the URL path advertised in discovery output. Defaults to the
-   * registry key passed to `.route()`.
+   * registry key passed to `.route()`. Normalized like `route({ path })`:
+   * leading/trailing slashes and a leading `api/` are stripped, so
+   * `.path('/v2/search')` and `.path('v2/search')` both mount at
+   * `/api/v2/search`.
    *
    * @example
    * ```ts
-   * router.route('search').path('/v2/search').handler(handler);
+   * router.route('search').path('v2/search').handler(handler);
    * ```
    */
   path(p: string): this {
     const next = this.fork();
-    next.#s.path = p;
+    next.#s.path = normalizePath(p);
     return next;
   }
 

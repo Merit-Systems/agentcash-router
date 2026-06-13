@@ -4,7 +4,7 @@ import type { RouteDefinition, RouteMethod } from './types.js';
 import type { RouterDeps } from './pipeline/orchestrate.js';
 import { RouteRegistry } from './registry.js';
 import { RouteBuilder } from './builder.js';
-import { toHonoPath } from './path-params.js';
+import { normalizePath, toHonoPath } from './path-params.js';
 import {
   MemoryNonceStore,
   MemoryEntitlementStore,
@@ -175,11 +175,14 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   }
   app.notFound((c) => c.json({ success: false, error: 'Not found' }, 404));
 
-  registry.onFirstRegister = (entry) => {
+  const mountedPaths = new Set<string>();
+  registry.onRegister = (entry) => {
     const template = entry.path ?? entry.key;
-    app.on(entry.method, `${prefix}/${toHonoPath(template)}`, (c) =>
-      registry.dispatch(entry.key, entry.method)(c.req.raw),
-    );
+    const honoPath = `${prefix}/${toHonoPath(template)}`;
+    const mountKey = `${entry.method} ${honoPath}`;
+    if (mountedPaths.has(mountKey)) return; // path already mounted; dispatch is by key+method
+    mountedPaths.add(mountKey);
+    app.on(entry.method, honoPath, (c) => registry.dispatch(entry.key, entry.method)(c.req.raw));
   };
 
   return {
@@ -272,13 +275,6 @@ export function createRouter<const P extends Record<string, string> = Record<nev
 
     registry,
   };
-}
-
-function normalizePath(path: string): string {
-  let normalized = path.trim();
-  normalized = normalized.replace(/^\/+/, '');
-  normalized = normalized.replace(/^api\/+/, '');
-  return normalized.replace(/\/+$/, '');
 }
 
 /**

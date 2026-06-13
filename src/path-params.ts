@@ -8,6 +8,20 @@
 
 const PARAM_SEGMENT = /^\{([^/}]+)\}$/;
 
+/**
+ * Canonicalize a route path: trim, strip leading slashes and a leading `api/`
+ * prefix, strip trailing slashes. Shared by `route({ path })` and `.path()` so
+ * both produce the same mounted/advertised URL — a leading slash on `.path()`
+ * otherwise yields a `//` double-slash mount that 404s the clean URL.
+ */
+export function normalizePath(path: string): string {
+  return path
+    .trim()
+    .replace(/^\/+/, '')
+    .replace(/^api\/+/, '')
+    .replace(/\/+$/, '');
+}
+
 /** Convert a `{param}` path template to Hono's `:param` syntax for mounting. */
 export function toHonoPath(template: string): string {
   return template

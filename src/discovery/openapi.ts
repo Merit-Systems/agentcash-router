@@ -33,12 +33,26 @@ export function createOpenAPIHandler(
     let requiresSiwxScheme = false;
     let requiresApiKeyScheme = false;
 
+    // operationId must be unique per the OpenAPI spec; a route key shared by
+    // multiple methods (e.g. GET + POST on one path) would otherwise collide.
+    // Suffix the method only for the colliding keys, keeping single-method ids
+    // clean.
+    const opIdCounts = new Map<string, number>();
+    for (const [, entry] of registry.entries()) {
+      const base = toOperationId(entry.key);
+      opIdCounts.set(base, (opIdCounts.get(base) ?? 0) + 1);
+    }
+
     for (const [, entry] of registry.entries()) {
       const apiPath = `${prefix}/${entry.path ?? entry.key}`;
       const method = entry.method.toLowerCase();
       const tag = deriveTag(entry.key);
       tagSet.add(tag);
       const built = buildOperation(entry.key, entry, tag);
+      const base = toOperationId(entry.key);
+      if ((opIdCounts.get(base) ?? 0) > 1) {
+        built.operation.operationId = `${base}_${method}`;
+      }
       if (built.requiresSiwxScheme) requiresSiwxScheme = true;
       if (built.requiresApiKeyScheme) requiresApiKeyScheme = true;
 

@@ -2,7 +2,7 @@ import type { KnipConfig } from 'knip';
 
 const config: KnipConfig = {
   entry: [
-    'src/next.ts',
+    // src/next.ts is covered by the package.json `exports` map ("./next").
     'tests/**/*.test.ts',
     'tests/integration-429.ts',
     'tests/integration/test-*.ts',

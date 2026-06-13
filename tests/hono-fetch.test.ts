@@ -230,3 +230,119 @@ describe('nextHandlers', () => {
     expect(await miss.json()).toEqual({ success: false, error: 'Not found' });
   });
 });
+
+describe('path normalization and registration edge cases', () => {
+  it('.path() with a leading slash mounts the clean URL (no double slash)', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('search')
+      .unprotected()
+      .path('/v2/search')
+      .handler(async () => ({ ok: true }));
+
+    const clean = await router.fetch(
+      new Request('https://api.example.com/api/v2/search', { method: 'POST' }),
+    );
+    expect(clean.status).toBe(200);
+    const doubled = await router.fetch(
+      new Request('https://api.example.com/api//v2/search', { method: 'POST' }),
+    );
+    expect(doubled.status).toBe(404);
+
+    const doc = await (
+      await router.openapi()(new Request('https://api.example.com/openapi.json'))
+    ).json();
+    expect(Object.keys(doc.paths)).toContain('/api/v2/search');
+    expect(Object.keys(doc.paths)).not.toContain('/api//v2/search');
+  });
+
+  it('.nextStep() resolves a clean URL for a leading-slash target path', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route('poll')
+      .unprotected()
+      .path('/v2/poll')
+      .handler(async () => ({ ok: true }));
+    router
+      .route('start')
+      .unprotected()
+      .nextStep({ route: 'poll' })
+      .handler(async () => ({ ok: true }));
+
+    const res = await router.fetch(
+      new Request('https://api.example.com/api/start', { method: 'POST' }),
+    );
+    const body = await res.json();
+    expect(body.next[0].url).toBe('https://api.example.com/api/v2/poll');
+  });
+
+  it('re-registering a key+method with a new path mounts the new URL too', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route({ path: 'old', key: 'x' })
+      .unprotected()
+      .handler(async () => ({ which: 'first' }));
+    router
+      .route({ path: 'new', key: 'x' })
+      .unprotected()
+      .handler(async () => ({ which: 'second' }));
+
+    // Last write wins on the handler; both URLs reach it (new URL must not 404).
+    for (const path of ['/api/old', '/api/new']) {
+      const res = await router.fetch(
+        new Request(`https://api.example.com${path}`, { method: 'POST' }),
+      );
+      expect(res.status).toBe(200);
+      expect((await res.json()).which).toBe('second');
+    }
+  });
+
+  it('OpenAPI emits unique operationIds for GET + POST on one path', async () => {
+    const router = createRouter(baseConfig);
+    router
+      .route({ path: 'fav', method: 'GET' })
+      .unprotected()
+      .handler(async () => ({}));
+    router
+      .route({ path: 'fav', method: 'POST' })
+      .unprotected()
+      .handler(async () => ({}));
+
+    const doc = await (
+      await router.openapi()(new Request('https://api.example.com/openapi.json'))
+    ).json();
+    const ops = doc.paths['/api/fav'];
+    expect(ops.get.operationId).toBe('fav_get');
+    expect(ops.post.operationId).toBe('fav_post');
+    expect(ops.get.operationId).not.toBe(ops.post.operationId);
+  });
+
+  it('compound apiKey+paid records authMode "paid" regardless of call order', async () => {
+    const router = createRouter(baseConfig);
+    const resolver = async () => ({});
+    router
+      .route('a')
+      .paid('0.01')
+      .apiKey(resolver)
+      .handler(async () => ({}));
+    router
+      .route('b')
+      .apiKey(resolver)
+      .paid('0.01')
+      .handler(async () => ({}));
+
+    const entries = Object.fromEntries(
+      [...router.registry.entries()].map(([, e]) => [e.key, e.authMode]),
+    );
+    expect(entries.a).toBe('paid');
+    expect(entries.b).toBe('paid');
+
+    // Pure apiKey (no pricing) stays 'apiKey'.
+    router
+      .route('c')
+      .apiKey(resolver)
+      .handler(async () => ({}));
+    const c = [...router.registry.entries()].find(([, e]) => e.key === 'c');
+    expect(c?.[1].authMode).toBe('apiKey');
+  });
+});

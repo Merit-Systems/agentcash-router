@@ -15,11 +15,14 @@ export class RouteRegistry {
   private handlers = new Map<string, RegisteredHandler>();
 
   /**
-   * Invoked the first time a key+method pair is registered. `createRouter`
-   * uses this to mount the route on the internal Hono app exactly once —
-   * re-registrations (last write wins) only swap the handler in the map.
+   * Invoked on every registration. `createRouter` uses this to mount the route
+   * on the internal Hono app, deduping by path so each distinct path is mounted
+   * once. Firing on every register (not just the first key+method) means a
+   * re-registration that changes the path also mounts the new path — both URLs
+   * then dispatch to the latest handler (last write wins), instead of the new
+   * URL 404ing.
    */
-  onFirstRegister?: (entry: RouteEntry) => void;
+  onRegister?: (entry: RouteEntry) => void;
 
   private mapKey(entry: RouteEntry): string {
     return `${entry.key}:${entry.method}`;
@@ -35,7 +38,7 @@ export class RouteRegistry {
     }
     this.routes.set(k, entry);
     if (handler) this.handlers.set(k, handler);
-    if (isFirst) this.onFirstRegister?.(entry);
+    this.onRegister?.(entry);
   }
 
   /**

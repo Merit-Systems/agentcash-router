@@ -26,6 +26,10 @@ Router 2.0: framework-agnostic core, Hono + Next.js out of the box, and `.nextSt
 
 **Fixes & hardening**
 
+- `.path()` now normalizes its argument the same way `route({ path })` does (strips leading/trailing slashes and a leading `api/`), so `.path('/v2/search')` mounts at `/api/v2/search` instead of the broken `/api//v2/search`.
+- OpenAPI emits unique `operationId`s for multi-method endpoints (GET + POST on one path no longer collide — the method is suffixed only on the colliding keys).
+- Re-registering a key+method with a changed path now also mounts the new URL (both old and new dispatch to the latest handler), instead of the new URL 404ing.
+- Compound `apiKey` + `paid` records `authMode: 'paid'` regardless of call order, so `.nextStep()` and discovery don't advertise a paid route as `auth: 'apiKey'`.
 - Once-per-process `console.warn` when the composed discovery guidance (authored guidance + the auto-generated `## Workflows` section) exceeds ~1000 tokens (4000 chars) — agentcash withholds oversized guidance from the first discover call by default, and the budget applies to the composed output, not the authored text alone.
 - The OpenAPI `next` advertisement now covers non-object output schemas too: when a chained route declares a non-`ZodObject` `.output()` (e.g. a poll route returning a union of pending/complete), the advertised 200 schema is the intersection of the declared schema and the optional `next` key, rendered as `allOf: [declared, { next }]`. Plain-object outputs keep the existing `.extend()` shape.
 - x402 settle retry now retries thrown transient errors (timeouts/network) and fails fast on deterministic failures; possible double-settle ambiguity is reported for reconciliation.
