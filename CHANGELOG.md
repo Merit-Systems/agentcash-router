@@ -1,5 +1,12 @@
 # @agentcash/router
 
+## 1.10.5
+
+### Patch Changes
+
+- 4a9586b: Add a route-level checkout flag to OpenAPI `x-payment-info` discovery.
+- 9a4b8a6: Retry failed x402 CDP settlement responses with backoff.
+
 ## 1.10.4
 
 ### Patch Changes
