@@ -19,6 +19,7 @@ import type {
   JsonValue,
   SettlementLifecycle,
   PayToConfig,
+  CheckoutSessionFn,
 } from './types.js';
 import type { RouteRegistry } from './registry.js';
 import type { RouterDeps, RouteHandler } from './pipeline/orchestrate.js';
@@ -115,6 +116,7 @@ type BuilderState<TBody> = {
   settlement: SettlementLifecycle<TBody> | undefined;
   mppInfo: MppProtocolInfo | undefined;
   hasCheckout: boolean;
+  checkoutSession: CheckoutSessionFn | undefined;
 };
 
 export interface RouteBuilderDefaults {
@@ -169,6 +171,7 @@ export class RouteBuilder<
       settlement: undefined,
       mppInfo: undefined,
       hasCheckout: false,
+      checkoutSession: undefined,
     };
   }
 
@@ -217,8 +220,8 @@ export class RouteBuilder<
    * - `{ price }` — fixed price (object form of the string sugar).
    * - `{ field, tiers, default? }` — pick a tier from `body[field]`.
    *
-   * Common knobs (`protocols`, `maxPrice`, `minPrice`, `payTo`, `mpp`, `checkout`) live
-   * alongside the pricing shape. For handler-computed billing use `.upTo()`;
+   * Common knobs (`protocols`, `maxPrice`, `minPrice`, `payTo`, `mpp`, `checkout`,
+   * `checkoutSession`) live alongside the pricing shape. For handler-computed billing use `.upTo()`;
    * for per-tick billing use `.metered()`.
    *
    * @example
@@ -368,7 +371,8 @@ export class RouteBuilder<
     if (resolvedOptions.minPrice) next.#s.minPrice = resolvedOptions.minPrice;
     if (resolvedOptions.payTo) next.#s.payTo = resolvedOptions.payTo;
     if (resolvedOptions.mpp) next.#s.mppInfo = resolvedOptions.mpp;
-    if (resolvedOptions.checkout) next.#s.hasCheckout = true;
+    if (resolvedOptions.checkout || resolvedOptions.checkoutSession) next.#s.hasCheckout = true;
+    if (resolvedOptions.checkoutSession) next.#s.checkoutSession = resolvedOptions.checkoutSession;
     next.#s.billing = billing;
     if (tickCost) next.#s.tickCost = tickCost;
     if (unitType) next.#s.unitType = unitType;
@@ -913,6 +917,7 @@ export class RouteBuilder<
       settlement: this.#s.settlement as SettlementLifecycle | undefined,
       mppInfo: this.#s.mppInfo,
       hasCheckout: this.#s.hasCheckout ? true : undefined,
+      checkoutSession: this.#s.checkoutSession,
       tickCost: this.#s.tickCost,
       unitType: this.#s.unitType,
     };
