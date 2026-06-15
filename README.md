@@ -150,6 +150,21 @@ The barrel forces every route module to load before the discovery handler walks 
 
 The `openapi.json` should be hosted at `GET <origin>/openapi.json`. 
 
+### 4. Unmatched route fallback
+
+```typescript
+// app/api/[[...path]]/route.ts
+import { router } from '@/lib/router';
+
+export const GET = router.notFound();
+export const POST = router.notFound();
+export const DELETE = router.notFound();
+export const PUT = router.notFound();
+export const PATCH = router.notFound();
+```
+
+This catches stale agent calls to API paths that no longer exist and returns a JSON 404 telling the client to rediscover the origin.
+
 ## Auth modes
 
 | Method | Purpose |

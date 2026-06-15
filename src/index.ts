@@ -15,6 +15,7 @@ import {
 import { createWellKnownHandler } from './discovery/well-known.js';
 import { createOpenAPIHandler } from './discovery/openapi.js';
 import { createLlmsTxtHandler } from './discovery/llms-txt.js';
+import { createNotFoundHandler } from './discovery/not-found.js';
 import { getConfiguredX402Accepts } from './protocols/x402/accepts.js';
 import { BASE_MAINNET_NETWORK } from './constants.js';
 import {
@@ -45,6 +46,7 @@ export interface ServiceRouter<TPriceKeys extends string = never> {
   wellKnown(): (request: NextRequest) => Promise<NextResponse>;
   openapi(): (request: NextRequest) => Promise<NextResponse>;
   llmsTxt(): (request: NextRequest) => Promise<NextResponse>;
+  notFound(): (request: NextRequest) => Promise<NextResponse>;
   monitors(): MonitorEntry[];
   registry: RouteRegistry;
 }
@@ -177,6 +179,10 @@ export function createRouter<const P extends Record<string, string> = Record<nev
 
     llmsTxt() {
       return createLlmsTxtHandler(config.discovery);
+    },
+
+    notFound() {
+      return createNotFoundHandler(resolvedBaseUrl);
     },
 
     monitors(): MonitorEntry[] {
