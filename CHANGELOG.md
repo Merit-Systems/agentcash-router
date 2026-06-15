@@ -1,5 +1,12 @@
 # @agentcash/router
 
+## 1.10.6
+
+### Patch Changes
+
+- 87e1167: Add a router-provided unmatched-route fallback that returns a rediscovery hint.
+- 4a32619: Add an optional paid-route checkout session builder that emits router-owned checkout metadata in 402 challenge response bodies.
+
 ## 1.10.5
 
 ### Patch Changes
