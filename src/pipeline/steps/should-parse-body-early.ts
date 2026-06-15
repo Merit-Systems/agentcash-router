@@ -9,5 +9,5 @@ export function shouldParseBodyEarly(
 ): boolean {
   if (incomingStrategy) return false;
   if (!routeEntry.bodySchema) return false;
-  return (pricing?.needsBody ?? false) || !!routeEntry.validateFn;
+  return (pricing?.needsBody ?? false) || !!routeEntry.validateFn || !!routeEntry.checkoutSession;
 }

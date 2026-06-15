@@ -414,6 +414,21 @@ describe('registration-time safety', () => {
     expect(registry.get('checkout/high-intent')!.hasCheckout).toBe(true);
   });
 
+  it('.paid() preserves the runtime checkout session builder in the route registry', () => {
+    const { builder, registry } = makeBuilder('checkout/runtime-session');
+    const checkoutSession = async () => ({ id: 'checkout_123' });
+
+    builder
+      .paid('20.00', {
+        checkoutSession,
+      })
+      .handler(async () => ({}));
+
+    const entry = registry.get('checkout/runtime-session')!;
+    expect(entry.hasCheckout).toBe(true);
+    expect(entry.checkoutSession).toBe(checkoutSession);
+  });
+
   it('.body() and .query() allow omitted examples', () => {
     const { builder: bodyBuilder, registry: bodyRegistry } = makeBuilder('no/input-example');
     expect(() =>

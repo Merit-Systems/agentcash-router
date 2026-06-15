@@ -140,6 +140,24 @@ export interface MppProtocolInfo {
   currency?: string;
 }
 
+export type CheckoutSessionResponse = Record<string, unknown>;
+
+export interface CheckoutSessionContext<TBody = unknown> {
+  request: NextRequest;
+  route: string;
+  body: TBody | undefined;
+  /** Decimal-dollar price quoted for this 402 challenge. */
+  price: string;
+}
+
+export type CheckoutSessionFn<TBody = unknown> = (
+  ctx: CheckoutSessionContext<TBody>,
+) =>
+  | CheckoutSessionResponse
+  | null
+  | undefined
+  | Promise<CheckoutSessionResponse | null | undefined>;
+
 export interface PaidOptions {
   protocols?: ProtocolType[];
   maxPrice?: string;
@@ -150,6 +168,14 @@ export interface PaidOptions {
   mpp?: MppProtocolInfo;
   /** Signal in discovery that clients should use an explicit checkout flow before payment. */
   checkout?: boolean;
+  /**
+   * Build dynamic checkout review metadata for the router-owned 402 response body.
+   *
+   * The returned object is emitted as `{ "checkout_session": ... }` on the unpaid
+   * payment challenge response. Payment terms remain authoritative in the x402/MPP
+   * challenge headers.
+   */
+  checkoutSession?: CheckoutSessionFn;
 }
 export type PaidArg =
   | (PaidOptions & { price: string }) // fixed price (any protocol)
@@ -318,6 +344,7 @@ export interface RouteEntry {
   settlement?: SettlementLifecycle;
   mppInfo?: MppProtocolInfo;
   hasCheckout?: boolean;
+  checkoutSession?: CheckoutSessionFn;
   /** Per-tick cost (decimal-dollar). Required when `metered` is true. */
   tickCost?: string;
   /** Cosmetic unit label for 402 challenges and client UIs. */

@@ -391,6 +391,47 @@ describe('probe request (no auth header)', () => {
     expect(challenge.accepts[0].amount ?? challenge.accepts[0].maxAmountRequired).toBe('20000');
   });
 
+  it('emits runtime checkout_session metadata in the 402 body', async () => {
+    const checkoutSession = vi.fn(({ body, price }) => ({
+      id: 'checkout_123',
+      status: 'ready_for_complete',
+      body_query: (body as { query: string }).query,
+      quoted_price: price,
+    }));
+    const entry = makeEntry({
+      bodySchema,
+      pricing: (body: unknown) =>
+        (body as { query: string }).query === 'expensive' ? '2.50' : '0.02',
+      maxPrice: '5.00',
+      checkoutSession,
+    });
+    const handler = createRequestHandler(entry, async () => ({ ok: true }), makeDeps());
+    const req = new NextRequest('http://localhost:3000/api/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: 'expensive' }),
+    });
+
+    const res = await handler(req);
+    expect(res.status).toBe(402);
+    expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
+    await expect(res.json()).resolves.toEqual({
+      checkout_session: {
+        id: 'checkout_123',
+        status: 'ready_for_complete',
+        body_query: 'expensive',
+        quoted_price: '2.50',
+      },
+    });
+    expect(checkoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: { query: 'expensive' },
+        price: '2.50',
+        route: 'test/route',
+      }),
+    );
+  });
+
   it('emits a bazaar discovery extension for routes with no input schema', async () => {
     const entry = makeEntry();
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
