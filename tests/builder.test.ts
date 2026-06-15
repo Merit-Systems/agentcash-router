@@ -402,6 +402,44 @@ describe('registration-time safety', () => {
     expect(registry.get('protocols/copy')!.protocols).toEqual(['x402']);
   });
 
+  it('.paid() preserves checkout metadata in the route registry', () => {
+    const { builder, registry } = makeBuilder('checkout/high-intent');
+
+    builder
+      .paid('20.00', {
+        checkout: {
+          reason: 'high_intent',
+          display: {
+            title: 'Review order',
+            description: 'This request creates a paid fulfillment order.',
+            submitLabel: 'Place order',
+          },
+          consent: {
+            termsOfService: {
+              required: true,
+              url: 'https://example.com/terms',
+            },
+          },
+        },
+      })
+      .handler(async () => ({}));
+
+    expect(registry.get('checkout/high-intent')!.checkoutInfo).toEqual({
+      reason: 'high_intent',
+      display: {
+        title: 'Review order',
+        description: 'This request creates a paid fulfillment order.',
+        submitLabel: 'Place order',
+      },
+      consent: {
+        termsOfService: {
+          required: true,
+          url: 'https://example.com/terms',
+        },
+      },
+    });
+  });
+
   it('.body() and .query() allow omitted examples', () => {
     const { builder: bodyBuilder, registry: bodyRegistry } = makeBuilder('no/input-example');
     expect(() =>

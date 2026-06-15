@@ -140,6 +140,44 @@ export interface MppProtocolInfo {
   currency?: string;
 }
 
+export type PaymentInfoVersion = 1;
+
+export interface CheckoutInfo {
+  /** Signals that clients should show an explicit review/confirm step before payment. */
+  reason: 'high_intent';
+  /** Optional UI copy hints. Clients may ignore or localize these values. */
+  display?: {
+    title?: string;
+    description?: string;
+    submitLabel?: string;
+  };
+  /** Optional policy links/requirements for checkout UI. */
+  consent?: {
+    termsOfService?: {
+      required?: boolean;
+      url?: string;
+    };
+    privacyPolicyUrl?: string;
+    refundPolicyUrl?: string;
+  };
+}
+
+export type PaymentInfoPrice =
+  | { mode: 'fixed'; currency: 'USD'; amount: string }
+  | { mode: 'dynamic'; currency: 'USD'; min: string; max: string };
+
+export type PaymentInfoProtocol =
+  | { x402: Record<string, never> }
+  | { mpp: { method: string; intent: string; currency: string } };
+
+export interface PaymentInfo {
+  /** Optional for legacy `x-payment-info` objects emitted before versioning. */
+  version?: PaymentInfoVersion;
+  price?: PaymentInfoPrice;
+  protocols?: PaymentInfoProtocol[];
+  checkout?: CheckoutInfo;
+}
+
 export interface PaidOptions {
   protocols?: ProtocolType[];
   maxPrice?: string;
@@ -148,6 +186,8 @@ export interface PaidOptions {
   payTo?: PayToConfig;
   /** Override MPP protocol metadata in x-payment-info discovery. */
   mpp?: MppProtocolInfo;
+  /** Optional checkout UX metadata emitted in x-payment-info discovery. */
+  checkout?: CheckoutInfo;
 }
 export type PaidArg =
   | (PaidOptions & { price: string }) // fixed price (any protocol)
@@ -315,6 +355,7 @@ export interface RouteEntry {
   validateFn?: (body: unknown) => void | Promise<void>;
   settlement?: SettlementLifecycle;
   mppInfo?: MppProtocolInfo;
+  checkoutInfo?: CheckoutInfo;
   /** Per-tick cost (decimal-dollar). Required when `metered` is true. */
   tickCost?: string;
   /** Cosmetic unit label for 402 challenges and client UIs. */
