@@ -14,7 +14,6 @@ import type {
   ProtocolType,
   ProviderConfig,
   MppProtocolInfo,
-  CheckoutInfo,
   TierConfig,
   JsonObject,
   JsonValue,
@@ -115,7 +114,7 @@ type BuilderState<TBody> = {
   validateFn: ((body: TBody) => void | Promise<void>) | undefined;
   settlement: SettlementLifecycle<TBody> | undefined;
   mppInfo: MppProtocolInfo | undefined;
-  checkoutInfo: CheckoutInfo | undefined;
+  hasCheckout: boolean;
 };
 
 export interface RouteBuilderDefaults {
@@ -169,7 +168,7 @@ export class RouteBuilder<
       validateFn: undefined,
       settlement: undefined,
       mppInfo: undefined,
-      checkoutInfo: undefined,
+      hasCheckout: false,
     };
   }
 
@@ -369,7 +368,7 @@ export class RouteBuilder<
     if (resolvedOptions.minPrice) next.#s.minPrice = resolvedOptions.minPrice;
     if (resolvedOptions.payTo) next.#s.payTo = resolvedOptions.payTo;
     if (resolvedOptions.mpp) next.#s.mppInfo = resolvedOptions.mpp;
-    if (resolvedOptions.checkout) next.#s.checkoutInfo = resolvedOptions.checkout;
+    if (resolvedOptions.checkout) next.#s.hasCheckout = true;
     next.#s.billing = billing;
     if (tickCost) next.#s.tickCost = tickCost;
     if (unitType) next.#s.unitType = unitType;
@@ -913,7 +912,7 @@ export class RouteBuilder<
       validateFn: this.#s.validateFn as ((body: unknown) => void | Promise<void>) | undefined,
       settlement: this.#s.settlement as SettlementLifecycle | undefined,
       mppInfo: this.#s.mppInfo,
-      checkoutInfo: this.#s.checkoutInfo,
+      hasCheckout: this.#s.hasCheckout ? true : undefined,
       tickCost: this.#s.tickCost,
       unitType: this.#s.unitType,
     };

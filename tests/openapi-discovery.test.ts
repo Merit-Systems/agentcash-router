@@ -42,7 +42,6 @@ describe('openapi discovery document', () => {
 
     const operation = doc.paths['/api/search'].post;
     expect(operation['x-payment-info']).toEqual({
-      version: 1,
       price: { mode: 'fixed', currency: 'USD', amount: '0.02' },
       protocols: [
         { x402: {} },
@@ -59,7 +58,7 @@ describe('openapi discovery document', () => {
     expect(operation.security).toBeUndefined();
   });
 
-  it('emits high-intent checkout metadata in x-payment-info', async () => {
+  it('emits the checkout flag in x-payment-info', async () => {
     const registry = new RouteRegistry();
     registry.register(
       makeEntry({
@@ -67,22 +66,7 @@ describe('openapi discovery document', () => {
         path: 'orders/create',
         method: 'POST',
         pricing: '20.00',
-        checkoutInfo: {
-          reason: 'high_intent',
-          display: {
-            title: 'Review order',
-            description: 'This request creates a paid fulfillment order.',
-            submitLabel: 'Place order',
-          },
-          consent: {
-            termsOfService: {
-              required: true,
-              url: 'https://example.com/terms',
-            },
-            privacyPolicyUrl: 'https://example.com/privacy',
-            refundPolicyUrl: 'https://example.com/refunds',
-          },
-        },
+        hasCheckout: true,
       }),
     );
 
@@ -95,25 +79,9 @@ describe('openapi discovery document', () => {
     const doc = (await response.json()) as Record<string, any>;
 
     expect(doc.paths['/api/orders/create'].post['x-payment-info']).toEqual({
-      version: 1,
       price: { mode: 'fixed', currency: 'USD', amount: '20.00' },
       protocols: [{ x402: {} }],
-      checkout: {
-        reason: 'high_intent',
-        display: {
-          title: 'Review order',
-          description: 'This request creates a paid fulfillment order.',
-          submitLabel: 'Place order',
-        },
-        consent: {
-          termsOfService: {
-            required: true,
-            url: 'https://example.com/terms',
-          },
-          privacyPolicyUrl: 'https://example.com/privacy',
-          refundPolicyUrl: 'https://example.com/refunds',
-        },
-      },
+      has_checkout: true,
     });
   });
 
@@ -177,7 +145,6 @@ describe('openapi discovery document', () => {
     expect(siwxPaidOperation.security).toEqual([{ siwx: [] }]);
     expect(siwxPaidOperation.responses['402']).toBeDefined();
     expect(siwxPaidOperation['x-payment-info']).toEqual({
-      version: 1,
       price: { mode: 'fixed', currency: 'USD', amount: '0.10' },
       protocols: [{ x402: {} }],
     });
@@ -187,7 +154,6 @@ describe('openapi discovery document', () => {
     expect(apiKeyPaidOperation.responses['401']).toBeDefined();
     expect(apiKeyPaidOperation.responses['402']).toBeDefined();
     expect(apiKeyPaidOperation['x-payment-info']).toEqual({
-      version: 1,
       price: { mode: 'fixed', currency: 'USD', amount: '0.10' },
       protocols: [{ x402: {} }],
     });
@@ -254,7 +220,6 @@ describe('openapi discovery document', () => {
 
     const operation = doc.paths['/api/dynamic/quote'].post;
     expect(operation['x-payment-info']).toEqual({
-      version: 1,
       price: { mode: 'dynamic', currency: 'USD', min: '0.01', max: '0.25' },
       protocols: [{ x402: {} }],
     });
