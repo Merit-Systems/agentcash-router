@@ -114,6 +114,7 @@ type BuilderState<TBody> = {
   validateFn: ((body: TBody) => void | Promise<void>) | undefined;
   settlement: SettlementLifecycle<TBody> | undefined;
   mppInfo: MppProtocolInfo | undefined;
+  hasCheckout: boolean;
 };
 
 export interface RouteBuilderDefaults {
@@ -167,6 +168,7 @@ export class RouteBuilder<
       validateFn: undefined,
       settlement: undefined,
       mppInfo: undefined,
+      hasCheckout: false,
     };
   }
 
@@ -215,7 +217,7 @@ export class RouteBuilder<
    * - `{ price }` — fixed price (object form of the string sugar).
    * - `{ field, tiers, default? }` — pick a tier from `body[field]`.
    *
-   * Common knobs (`protocols`, `maxPrice`, `minPrice`, `payTo`, `mpp`) live
+   * Common knobs (`protocols`, `maxPrice`, `minPrice`, `payTo`, `mpp`, `checkout`) live
    * alongside the pricing shape. For handler-computed billing use `.upTo()`;
    * for per-tick billing use `.metered()`.
    *
@@ -366,6 +368,7 @@ export class RouteBuilder<
     if (resolvedOptions.minPrice) next.#s.minPrice = resolvedOptions.minPrice;
     if (resolvedOptions.payTo) next.#s.payTo = resolvedOptions.payTo;
     if (resolvedOptions.mpp) next.#s.mppInfo = resolvedOptions.mpp;
+    if (resolvedOptions.checkout) next.#s.hasCheckout = true;
     next.#s.billing = billing;
     if (tickCost) next.#s.tickCost = tickCost;
     if (unitType) next.#s.unitType = unitType;
@@ -909,6 +912,7 @@ export class RouteBuilder<
       validateFn: this.#s.validateFn as ((body: unknown) => void | Promise<void>) | undefined,
       settlement: this.#s.settlement as SettlementLifecycle | undefined,
       mppInfo: this.#s.mppInfo,
+      hasCheckout: this.#s.hasCheckout ? true : undefined,
       tickCost: this.#s.tickCost,
       unitType: this.#s.unitType,
     };

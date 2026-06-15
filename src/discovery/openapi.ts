@@ -127,6 +127,7 @@ function buildOperation(
   const requiresSiwxScheme = entry.authMode === 'siwx' || Boolean(entry.siwxEnabled);
   const requiresApiKeyScheme = Boolean(entry.apiKeyResolver) && entry.authMode !== 'siwx';
   const pricingInfo = buildPricingInfo(entry);
+  const hasCheckout = entry.hasCheckout === true;
 
   const operation: Record<string, unknown> = {
     operationId: routeKey.replace(/\//g, '_'),
@@ -154,10 +155,11 @@ function buildOperation(
     },
   };
 
-  if (paymentRequired && (pricingInfo || protocols)) {
+  if (paymentRequired && (pricingInfo || protocols || hasCheckout)) {
     operation['x-payment-info'] = {
       ...(pricingInfo ?? {}),
       ...(protocols && { protocols }),
+      ...(hasCheckout && { has_checkout: true }),
     };
   }
 

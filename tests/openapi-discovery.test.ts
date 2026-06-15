@@ -58,6 +58,33 @@ describe('openapi discovery document', () => {
     expect(operation.security).toBeUndefined();
   });
 
+  it('emits the checkout flag in x-payment-info', async () => {
+    const registry = new RouteRegistry();
+    registry.register(
+      makeEntry({
+        key: 'orders/create',
+        path: 'orders/create',
+        method: 'POST',
+        pricing: '20.00',
+        hasCheckout: true,
+      }),
+    );
+
+    const handler = createOpenAPIHandler(registry, 'https://example.com', undefined, {
+      title: 'Example API',
+      version: '1.0.0',
+    });
+
+    const response = await handler(request);
+    const doc = (await response.json()) as Record<string, any>;
+
+    expect(doc.paths['/api/orders/create'].post['x-payment-info']).toEqual({
+      price: { mode: 'fixed', currency: 'USD', amount: '20.00' },
+      protocols: [{ x402: {} }],
+      has_checkout: true,
+    });
+  });
+
   it('emits SIWX and API key security schemes and operation security requirements', async () => {
     const registry = new RouteRegistry();
     registry.register(

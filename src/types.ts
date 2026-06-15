@@ -148,6 +148,8 @@ export interface PaidOptions {
   payTo?: PayToConfig;
   /** Override MPP protocol metadata in x-payment-info discovery. */
   mpp?: MppProtocolInfo;
+  /** Signal in discovery that clients should use an explicit checkout flow before payment. */
+  checkout?: boolean;
 }
 export type PaidArg =
   | (PaidOptions & { price: string }) // fixed price (any protocol)
@@ -315,6 +317,7 @@ export interface RouteEntry {
   validateFn?: (body: unknown) => void | Promise<void>;
   settlement?: SettlementLifecycle;
   mppInfo?: MppProtocolInfo;
+  hasCheckout?: boolean;
   /** Per-tick cost (decimal-dollar). Required when `metered` is true. */
   tickCost?: string;
   /** Cosmetic unit label for 402 challenges and client UIs. */

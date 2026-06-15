@@ -402,6 +402,18 @@ describe('registration-time safety', () => {
     expect(registry.get('protocols/copy')!.protocols).toEqual(['x402']);
   });
 
+  it('.paid() preserves the checkout flag in the route registry', () => {
+    const { builder, registry } = makeBuilder('checkout/high-intent');
+
+    builder
+      .paid('20.00', {
+        checkout: true,
+      })
+      .handler(async () => ({}));
+
+    expect(registry.get('checkout/high-intent')!.hasCheckout).toBe(true);
+  });
+
   it('.body() and .query() allow omitted examples', () => {
     const { builder: bodyBuilder, registry: bodyRegistry } = makeBuilder('no/input-example');
     expect(() =>
