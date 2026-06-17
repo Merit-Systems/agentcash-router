@@ -39,6 +39,10 @@ export function firePluginResponse(
   failure?: PluginFailure,
 ): void {
   attachRequestId(response, ctx.meta.requestId);
+  const error =
+    response.status >= 400 && response.status !== 402
+      ? buildErrorEvent(ctx, response, failure)
+      : undefined;
 
   firePluginHook(ctx.deps.plugin, 'onResponse', ctx.pluginCtx, {
     statusCode: response.status,
@@ -48,10 +52,10 @@ export function firePluginResponse(
     headers: Object.fromEntries(response.headers.entries()),
     requestBody,
     responseBody,
+    error,
   });
 
-  if (response.status >= 400 && response.status !== 402) {
-    const error = buildErrorEvent(ctx, response, failure);
+  if (error) {
     if (response.status >= 500) logRouterFailure(error);
     firePluginHook(ctx.deps.plugin, 'onError', ctx.pluginCtx, error);
   }
