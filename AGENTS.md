@@ -39,6 +39,8 @@ src/
 
 `auth check -> body parse -> validate -> 402 challenge -> payment verify -> handler -> settle -> finalize`
 
+Paid `.paid()` routes may set `mpp: { settleBeforeHandler: true }` (or chain `.mpp({ settleBeforeHandler: true })` on auto-priced routes) to broadcast MPP transaction (pull) credentials at verify instead of after the handler. x402 on the same route is unaffected. MPP hash (push) credentials already settle at verify. Use `.settlement({ onSettledHandlerError })` when eager MPP settle can charge before an upstream failure.
+
 ## Naming
 
 Constructor-style functions use `build<Noun>` — one verb, one domain noun. Name them after the domain concept, never after an HTTP status code or transport detail (the function that builds a payment challenge is `buildChallengeResponse`, not `build402`). The challenge family shares the `Challenge` backbone: `buildChallengeResponse`, `buildChallengeExtensions`, `buildSiwxChallenge`, `buildSessionChallenge`, `buildX402Challenge`.

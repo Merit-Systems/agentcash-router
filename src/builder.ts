@@ -221,8 +221,9 @@ export class RouteBuilder<
    * - `{ field, tiers, default? }` — pick a tier from `body[field]`.
    *
    * Common knobs (`protocols`, `maxPrice`, `minPrice`, `payTo`, `mpp`, `checkout`,
-   * `checkoutSession`) live alongside the pricing shape. For handler-computed billing use `.upTo()`;
-   * for per-tick billing use `.metered()`.
+   * `checkoutSession`) live alongside the pricing shape. Set `mpp.settleBeforeHandler`
+   * on slow upstream routes so MPP transaction (pull) credentials broadcast at verify.
+   * For auto-priced routes from `RouterConfig.prices`, chain `.mpp({ settleBeforeHandler: true })`.
    *
    * @example
    * ```ts
@@ -370,7 +371,9 @@ export class RouteBuilder<
     if (maxPrice) next.#s.maxPrice = maxPrice;
     if (resolvedOptions.minPrice) next.#s.minPrice = resolvedOptions.minPrice;
     if (resolvedOptions.payTo) next.#s.payTo = resolvedOptions.payTo;
-    if (resolvedOptions.mpp) next.#s.mppInfo = resolvedOptions.mpp;
+    if (resolvedOptions.mpp) {
+      next.#s.mppInfo = { ...next.#s.mppInfo, ...resolvedOptions.mpp };
+    }
     if (resolvedOptions.checkout || resolvedOptions.checkoutSession) next.#s.hasCheckout = true;
     if (resolvedOptions.checkoutSession) next.#s.checkoutSession = resolvedOptions.checkoutSession;
     next.#s.billing = billing;
@@ -746,6 +749,27 @@ export class RouteBuilder<
   }
 
   /**
+   * Override MPP protocol metadata and per-route MPP settlement options.
+   * Merges with any `mpp` options passed to `.paid()`. Use on auto-priced routes
+   * (from `RouterConfig.prices`) when you cannot call `.paid()` again.
+   *
+   * @example
+   * ```ts
+   * router.route('exa/answer')
+   *   .mpp({ settleBeforeHandler: true })
+   *   .body(schema)
+   *   .handler(handler);
+   * ```
+   */
+  mpp(
+    info: MppProtocolInfo,
+  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill> {
+    const next = this.fork();
+    next.#s.mppInfo = { ...this.#s.mppInfo, ...info };
+    return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill>;
+  }
+
+  /**
    * Hook into the settlement lifecycle. `beforeSettle` runs after the handler
    * succeeds but before on-chain settlement and can cancel the charge;
    * `afterSettle` runs after settlement completes (success or failure).
@@ -762,7 +786,7 @@ export class RouteBuilder<
     lifecycle: SettlementLifecycle<TBody>,
   ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill> {
     const next = this.fork();
-    next.#s.settlement = lifecycle;
+    next.#s.settlement = { ...this.#s.settlement, ...lifecycle };
     return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill>;
   }
 
@@ -827,6 +851,21 @@ export class RouteBuilder<
     }
     if (this.#s.settlement && !this.#s.pricing) {
       throw new Error(`route '${this.#s.key}': .settlement() requires a paid route`);
+    }
+    if (this.#s.mppInfo?.settleBeforeHandler) {
+      if (!this.#s.pricing) {
+        throw new Error(`route '${this.#s.key}': mpp.settleBeforeHandler requires a paid route`);
+      }
+      if (this.#s.billing !== 'exact') {
+        throw new Error(
+          `route '${this.#s.key}': mpp.settleBeforeHandler is only supported on .paid() routes`,
+        );
+      }
+      if (this.#s.settlement?.beforeSettle) {
+        throw new Error(
+          `route '${this.#s.key}': mpp.settleBeforeHandler is incompatible with .settlement({ beforeSettle }) — MPP payment is already broadcast before the handler runs`,
+        );
+      }
     }
     if (this.#s.billing === 'upto') {
       const hasUpto = this.#s.deps.x402Accepts.some((accept) => accept.scheme === 'upto');

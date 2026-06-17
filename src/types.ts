@@ -138,6 +138,7 @@ export interface MppProtocolInfo {
   method?: string;
   intent?: string;
   currency?: string;
+  settleBeforeHandler?: boolean;
 }
 
 export type CheckoutSessionResponse = Record<string, unknown>;

@@ -256,6 +256,7 @@ export type {
   RouterConfig,
   DiscoveryConfig,
   PaidOptions,
+  MppProtocolInfo,
   CheckoutSessionContext,
   CheckoutSessionFn,
   CheckoutSessionResponse,

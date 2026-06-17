@@ -95,6 +95,63 @@ describe('fluent chain', () => {
     expect(entry?.settlement?.afterSettle).toBe(afterSettle);
   });
 
+  it('.paid({ mpp: { settleBeforeHandler: true } }) stores MPP settle timing on the route entry', () => {
+    const { builder, registry } = makeBuilder('settle/before');
+    builder
+      .paid('0.05', { mpp: { settleBeforeHandler: true } })
+      .body(bodySchema)
+      .inputExample({ query: 'hello' })
+      .handler(async ({ body }) => ({ result: body.query }));
+
+    expect(registry.get('settle/before')?.mppInfo?.settleBeforeHandler).toBe(true);
+  });
+
+  it('paid routes omit mpp.settleBeforeHandler by default', () => {
+    const { builder, registry } = makeBuilder('settle/default');
+    builder
+      .paid('0.05')
+      .body(bodySchema)
+      .inputExample({ query: 'hello' })
+      .handler(async ({ body }) => ({ result: body.query }));
+
+    expect(registry.get('settle/default')?.mppInfo?.settleBeforeHandler).toBeUndefined();
+  });
+
+  it('.mpp({ settleBeforeHandler: true }).settlement() merges lifecycle hooks', () => {
+    const { builder, registry } = makeBuilder('settle/merge');
+    const afterSettle = async () => {};
+    const onSettledHandlerError = async () => {};
+
+    builder
+      .paid('0.05')
+      .body(bodySchema)
+      .inputExample({ query: 'hello' })
+      .mpp({ settleBeforeHandler: true })
+      .settlement({ afterSettle })
+      .settlement({ onSettledHandlerError })
+      .handler(async ({ body }) => ({ result: body.query }));
+
+    const entry = registry.get('settle/merge');
+    expect(entry?.mppInfo?.settleBeforeHandler).toBe(true);
+    expect(entry?.settlement?.afterSettle).toBe(afterSettle);
+    expect(entry?.settlement?.onSettledHandlerError).toBe(onSettledHandlerError);
+  });
+
+  it('.mpp() merges with .paid({ mpp }) options', () => {
+    const { builder, registry } = makeBuilder('mpp/merge');
+    builder
+      .paid('0.05', { mpp: { method: 'tempo' } })
+      .mpp({ settleBeforeHandler: true })
+      .body(bodySchema)
+      .inputExample({ query: 'hello' })
+      .handler(async ({ body }) => ({ result: body.query }));
+
+    expect(registry.get('mpp/merge')?.mppInfo).toEqual({
+      method: 'tempo',
+      settleBeforeHandler: true,
+    });
+  });
+
   it('route key is stored in registry on construction', () => {
     const { builder, registry } = makeBuilder('stored/key');
     builder.unprotected().handler(async () => ({ ok: true }));
@@ -365,6 +422,36 @@ describe('registration-time safety', () => {
         .settlement({ afterSettle: async () => {} })
         .handler(async () => ({})),
     ).not.toThrow();
+  });
+
+  it('mpp.settleBeforeHandler without .paid() throws at registration', () => {
+    const { builder } = makeBuilder('settle/not-paid');
+    expect(() =>
+      builder
+        .unprotected()
+        .mpp({ settleBeforeHandler: true })
+        .handler(async () => ({})),
+    ).toThrow('mpp.settleBeforeHandler requires a paid route');
+  });
+
+  it('mpp.settleBeforeHandler on .upTo() throws at registration', () => {
+    const { builder } = makeBuilder('settle/upto');
+    expect(() =>
+      builder
+        .upTo('0.05')
+        .mpp({ settleBeforeHandler: true })
+        .handler(async () => ({})),
+    ).toThrow('mpp.settleBeforeHandler is only supported on .paid() routes');
+  });
+
+  it('mpp.settleBeforeHandler with beforeSettle throws at registration', () => {
+    const { builder } = makeBuilder('settle/conflict');
+    expect(() =>
+      builder
+        .paid('0.01', { mpp: { settleBeforeHandler: true } })
+        .settlement({ beforeSettle: async () => {} })
+        .handler(async () => ({})),
+    ).toThrow('mpp.settleBeforeHandler is incompatible with .settlement({ beforeSettle })');
   });
 
   it('fork() does not leak protocol array mutations', () => {
