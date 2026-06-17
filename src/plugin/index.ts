@@ -48,6 +48,8 @@ export interface ResponseMeta {
   requestBody?: unknown;
   /** Handler return value or structured router-generated error body. */
   responseBody?: unknown;
+  /** Rich error details for non-402 failure responses. */
+  error?: ErrorEvent;
 }
 
 export interface ErrorEvent {

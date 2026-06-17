@@ -114,6 +114,7 @@ describe('plugin lifecycle', () => {
     const res = await handler(req);
     expect(plugin.calls.onResponse).toHaveLength(1);
     expect(res.headers.get(HEADERS.REQUEST_ID)).toBeTruthy();
+    expect((plugin.calls.onResponse[0][1] as { error?: unknown }).error).toBeUndefined();
   });
 
   it('onResponse fires on error', async () => {
@@ -135,9 +136,28 @@ describe('plugin lifecycle', () => {
     const response = plugin.calls.onResponse[0][1] as {
       statusCode: number;
       responseBody?: unknown;
+      error?: {
+        status: number;
+        message: string;
+        requestId?: string;
+        route?: string;
+        method?: string;
+        errorName?: string;
+        stack?: string;
+      };
     };
+    const requestId = res.headers.get(HEADERS.REQUEST_ID);
     expect(response.statusCode).toBe(500);
     expect(response.responseBody).toEqual({ success: false, error: 'boom' });
+    expect(response.error).toMatchObject({
+      status: 500,
+      message: 'boom',
+      requestId,
+      route: 'test/route',
+      method: 'GET',
+      errorName: 'Error',
+    });
+    expect(response.error?.stack).toContain('boom');
   });
 
   it('onError fires when handler throws', async () => {
