@@ -1,5 +1,12 @@
 # @agentcash/router
 
+## 1.10.7
+
+### Patch Changes
+
+- e259b42: Adding extra header
+- f55ea15: Include rich error details on failed response plugin events.
+
 ## 1.10.6
 
 ### Patch Changes
