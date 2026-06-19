@@ -5,6 +5,7 @@ import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { UptoEvmScheme } from '@x402/evm/upto/client';
 import { createRequestHandler, type RouterDeps } from '../src/pipeline/orchestrate.js';
 import { MemoryNonceStore, MemoryEntitlementStore } from '../src/kv-store/index.js';
+import { makeTestAgentIdentityNonceStore } from './fakes/agent-identity-deps.js';
 import { FakeX402Server, KNOWN_PAYEE } from './fakes/x402-server.js';
 import type { RouteEntry } from '../src/types.js';
 import type { ResolvedX402Facilitator } from '../src/protocols/x402/facilitators.js';
@@ -42,6 +43,7 @@ function makeDeps(server: FakeX402Server, accepts: RouterDeps['x402Accepts']): R
     x402Server: server as unknown as RouterDeps['x402Server'],
     initPromise: Promise.resolve(),
     nonceStore: new MemoryNonceStore(),
+    agentIdentityNonceStore: makeTestAgentIdentityNonceStore(),
     entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: KNOWN_PAYEE,
     network: BASE_MAINNET_NETWORK,

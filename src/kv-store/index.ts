@@ -8,3 +8,7 @@ export type { EntitlementStore } from './entitlement.js';
 export { MemoryEntitlementStore, createKvEntitlementStore } from './entitlement.js';
 
 export { createKvMppStore } from './mpp.js';
+export {
+  createAgentIdentityNonceStore,
+  createKvAgentIdentityNonceStore,
+} from './agent-identity-nonce.js';

@@ -6,6 +6,7 @@ import { RouteBuilder } from '../src/builder.js';
 import { createRequestHandler, type RouterDeps } from '../src/pipeline/orchestrate.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
+import { makeTestAgentIdentityNonceStore } from './fakes/agent-identity-deps.js';
 import type { HandlerPaymentContext, RouteEntry, SettlementSettledContext } from '../src/types.js';
 import type { RouterPlugin, SettlementEvent } from '../src/plugin/index.js';
 
@@ -184,6 +185,7 @@ function makeSessionDeps(
     x402Server: null,
     initPromise: Promise.resolve(),
     nonceStore: new MemoryNonceStore(),
+    agentIdentityNonceStore: makeTestAgentIdentityNonceStore(),
     entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: KNOWN_PAYEE,
     network: 'tempo:42431',

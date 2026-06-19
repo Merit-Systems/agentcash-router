@@ -11,6 +11,7 @@ import {
   errorResult,
   isAsyncIterable,
   isThenable,
+  resolveActorOrError,
   toResponse,
 } from './shared.js';
 
@@ -22,6 +23,9 @@ export async function invokeMetered(
   body: unknown,
   payment: HandlerPaymentContext,
 ): Promise<DynamicInvokeResult> {
+  const actorResult = await resolveActorOrError(ctx);
+  if ('response' in actorResult) return actorResult;
+
   const chargeContext = ctx.routeEntry.streaming
     ? createChargeContext({
         tickCost: ctx.routeEntry.tickCost!,
@@ -30,7 +34,14 @@ export async function invokeMetered(
       })
     : null;
 
-  const baseHandlerCtx = buildBaseHandlerCtx(ctx, wallet, account, body, payment);
+  const baseHandlerCtx = buildBaseHandlerCtx(
+    ctx,
+    wallet,
+    account,
+    body,
+    payment,
+    actorResult.actor,
+  );
   const handlerCtx: HandlerContext | StreamingHandlerContext =
     chargeContext !== null
       ? ({ ...baseHandlerCtx, charge: chargeContext.charge } as StreamingHandlerContext)

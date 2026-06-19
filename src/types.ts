@@ -260,6 +260,8 @@ export interface HandlerContext<TBody = undefined, TQuery = undefined> {
   requestId: string;
   route: string;
   wallet: string | null;
+  /** Optional DID from `X-Agent-Identity` proof. Null when the client omits identity. */
+  actor: string | null;
   payment: HandlerPaymentContext | null;
   account: unknown;
   alert: AlertFn;

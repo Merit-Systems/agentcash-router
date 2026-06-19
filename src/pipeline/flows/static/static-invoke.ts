@@ -1,28 +1,45 @@
 import { NextResponse } from 'next/server';
+import { resolveActor } from '../../../auth/agent-identity.js';
 import type { HandlerContext, HandlerPaymentContext, UptoHandlerContext } from '../../../types.js';
 import { HttpError } from '../../../types.js';
 import type { FlowCtx, StaticRequestResult } from '../../steps/types.js';
 
-export function invokePaidStatic(
+export async function invokePaidStatic(
   ctx: FlowCtx,
   wallet: string,
   account: unknown,
   body: unknown,
   payment: HandlerPaymentContext,
 ): Promise<StaticRequestResult> {
-  return runHandler(ctx, buildHandlerCtx(ctx, wallet, account, body, payment));
+  const actorResult = await resolveActorForHandler(ctx);
+  if (actorResult.kind === 'error') return actorResult.result;
+  return runHandler(ctx, buildHandlerCtx(ctx, wallet, account, body, payment, actorResult.actor));
 }
 
-export function invokeUnauthed(
+export async function invokeUnauthed(
   ctx: FlowCtx,
   wallet: string | null,
   account: unknown,
   body: unknown,
 ): Promise<StaticRequestResult> {
-  const base = buildHandlerCtx(ctx, wallet, account, body, null);
+  const actorResult = await resolveActorForHandler(ctx);
+  if (actorResult.kind === 'error') return actorResult.result;
+
+  const base = buildHandlerCtx(ctx, wallet, account, body, null, actorResult.actor);
   if (ctx.routeEntry.billing !== 'upto') return runHandler(ctx, base);
   const uptoCtx: UptoHandlerContext = { ...base, charge: async () => {} };
   return runHandler(ctx, uptoCtx);
+}
+
+async function resolveActorForHandler(
+  ctx: FlowCtx,
+): Promise<{ kind: 'ok'; actor: string | null } | { kind: 'error'; result: StaticRequestResult }> {
+  try {
+    const actor = await resolveActor(ctx.request, ctx.deps.agentIdentityNonceStore);
+    return { kind: 'ok', actor };
+  } catch (error) {
+    return { kind: 'error', result: errorResult(error) };
+  }
 }
 
 function buildHandlerCtx(
@@ -31,6 +48,7 @@ function buildHandlerCtx(
   account: unknown,
   body: unknown,
   payment: HandlerPaymentContext | null,
+  actor: string | null,
 ): HandlerContext {
   return {
     body: body as never,
@@ -39,6 +57,7 @@ function buildHandlerCtx(
     requestId: ctx.meta.requestId,
     route: ctx.routeEntry.key,
     wallet,
+    actor,
     payment,
     account,
     alert: ctx.report,

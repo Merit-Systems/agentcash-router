@@ -9,6 +9,7 @@ import type {
 } from '../types.js';
 import type { ResolvedX402Facilitator } from './x402/facilitators.js';
 import type { MppxMiddleware } from './mpp/middleware-types.js';
+import type { NonceStoreInterface } from 'did-auth-challenge';
 import type { NonceStore, EntitlementStore } from '../kv-store/index.js';
 import type { RouterPlugin } from '../plugin/index.js';
 import type { ReportFn } from '../plugin/reporter.js';
@@ -20,6 +21,7 @@ export interface RouterDeps {
   mppInitError?: string;
   plugin?: RouterPlugin;
   nonceStore: NonceStore;
+  agentIdentityNonceStore: NonceStoreInterface;
   entitlementStore: EntitlementStore;
   payeeAddress: string;
   mppRecipient?: string;

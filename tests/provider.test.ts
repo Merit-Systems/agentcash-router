@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { createRequestHandler, type RouterDeps } from '../src/pipeline/orchestrate.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
+import { makeTestAgentIdentityNonceStore } from './fakes/agent-identity-deps.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
 import { withX402Payment } from './fakes/request.js';
 import { createDefaultContext } from '../src/plugin/index.js';
@@ -36,6 +37,7 @@ function makeDeps(plugin?: RouterPlugin): RouterDeps {
     x402Server: server as unknown as Record<string, Function>,
     initPromise: Promise.resolve(),
     nonceStore: new MemoryNonceStore(),
+    agentIdentityNonceStore: makeTestAgentIdentityNonceStore(),
     entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: KNOWN_PAYEE,
     network: 'eip155:8453',
@@ -328,6 +330,7 @@ describe('.provider() builder method', () => {
       x402Server: null,
       initPromise: Promise.resolve(),
       nonceStore: new MemoryNonceStore(),
+      agentIdentityNonceStore: makeTestAgentIdentityNonceStore(),
       entitlementStore: new MemoryEntitlementStore(),
       payeeAddress: '0x1234',
       network: 'eip155:8453',

@@ -10,6 +10,7 @@ import {
   MemoryEntitlementStore,
   createKvNonceStore,
   createKvEntitlementStore,
+  createAgentIdentityNonceStore,
   resolveKvStore,
 } from './kv-store/index.js';
 import { createWellKnownHandler } from './discovery/well-known.js';
@@ -57,6 +58,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
   const registry = new RouteRegistry();
   const kvStore = resolveKvStore(config.kvStore);
   const nonceStore = kvStore ? createKvNonceStore(kvStore) : new MemoryNonceStore();
+  const agentIdentityNonceStore = createAgentIdentityNonceStore(kvStore);
   const entitlementStore = kvStore
     ? createKvEntitlementStore(kvStore)
     : new MemoryEntitlementStore();
@@ -101,6 +103,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     initPromise: Promise.resolve(),
     plugin: config.plugin,
     nonceStore,
+    agentIdentityNonceStore,
     entitlementStore,
     payeeAddress: config.payeeAddress ?? '',
     mppRecipient: config.mpp?.recipient ?? config.payeeAddress,

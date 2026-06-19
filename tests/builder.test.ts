@@ -4,6 +4,7 @@ import { RouteRegistry } from '../src/registry.js';
 import { RouteBuilder } from '../src/builder.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
+import { makeTestAgentIdentityNonceStore } from './fakes/agent-identity-deps.js';
 import type { RouterDeps } from '../src/pipeline/orchestrate.js';
 
 function makeDeps(): RouterDeps {
@@ -11,6 +12,7 @@ function makeDeps(): RouterDeps {
     x402Server: null,
     initPromise: Promise.resolve(),
     nonceStore: new MemoryNonceStore(),
+    agentIdentityNonceStore: makeTestAgentIdentityNonceStore(),
     entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: '0x1234',
     network: 'eip155:8453',

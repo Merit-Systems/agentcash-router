@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { resolveActor } from '../../../../auth/agent-identity.js';
 import type { HandlerContext, HandlerPaymentContext } from '../../../../types.js';
 import { HttpError } from '../../../../types.js';
 import type { DynamicRequestResult, FlowCtx } from '../../../steps/types.js';
@@ -9,6 +10,7 @@ export function buildBaseHandlerCtx(
   account: unknown,
   body: unknown,
   payment: HandlerPaymentContext,
+  actor: string | null = null,
 ): HandlerContext {
   return {
     body: body as never,
@@ -17,11 +19,23 @@ export function buildBaseHandlerCtx(
     requestId: ctx.meta.requestId,
     route: ctx.routeEntry.key,
     wallet,
+    actor,
     payment,
     account,
     alert: ctx.report,
     setVerifiedWallet: (addr) => ctx.pluginCtx.setVerifiedWallet(addr),
   };
+}
+
+export async function resolveActorOrError(
+  ctx: FlowCtx,
+): Promise<{ actor: string | null } | DynamicRequestResult> {
+  try {
+    const actor = await resolveActor(ctx.request, ctx.deps.agentIdentityNonceStore);
+    return { actor };
+  } catch (error) {
+    return errorResult(error);
+  }
 }
 
 export function toResponse(rawResult: unknown): NextResponse {
