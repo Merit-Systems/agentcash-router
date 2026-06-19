@@ -5,7 +5,7 @@ export interface KvAgentIdentityNonceStoreOptions {
   prefix?: string;
 }
 
-export function createKvAgentIdentityNonceStore(
+function createKvAgentIdentityNonceStore(
   kv: KvStore,
   options?: KvAgentIdentityNonceStoreOptions,
 ): NonceStoreInterface {
