@@ -56,7 +56,12 @@ export const mppStrategy: PaymentStrategy = {
 
     if (info.sessionAction) return { ok: false, kind: 'invalid' };
 
-    if (info.payloadType === 'transaction' && args.deps.tempoClient) {
+    const deferTransactionSettlement =
+      info.payloadType === 'transaction' &&
+      args.deps.tempoClient &&
+      !args.routeEntry.mppInfo?.settleBeforeHandler;
+
+    if (deferTransactionSettlement) {
       return verifyTxMode(args, info);
     }
     return verifyHashMode(args, info);
