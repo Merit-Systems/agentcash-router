@@ -7,6 +7,7 @@ import {
   errorResult,
   isAsyncIterable,
   isThenable,
+  resolveActorOrError,
   toResponse,
 } from './shared.js';
 
@@ -18,13 +19,16 @@ export async function invokeUpto(
   body: unknown,
   payment: HandlerPaymentContext,
 ): Promise<DynamicRequestResult> {
+  const actorResult = await resolveActorOrError(ctx);
+  if ('response' in actorResult) return actorResult;
+
   const uptoCtx = createUptoChargeContext({
     maxPrice: ctx.routeEntry.maxPrice!,
     route: ctx.routeEntry.key,
   });
 
   const handlerCtx: UptoHandlerContext = {
-    ...buildBaseHandlerCtx(ctx, wallet, account, body, payment),
+    ...buildBaseHandlerCtx(ctx, wallet, account, body, payment, actorResult.actor),
     charge: uptoCtx.charge,
   };
 

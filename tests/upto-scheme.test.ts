@@ -4,6 +4,7 @@ import { decodePaymentRequiredHeader, encodePaymentSignatureHeader } from '@x402
 import { createRequestHandler, type RouterDeps } from '../src/pipeline/orchestrate.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
+import { makeTestAgentIdentityNonceStore } from './fakes/agent-identity-deps.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
 import { createRouter } from '../src/index.js';
 import type { RouteEntry } from '../src/types.js';
@@ -42,6 +43,7 @@ function makeDeps(server: FakeX402Server, accepts: RouterDeps['x402Accepts']): R
     x402Server: server as unknown as RouterDeps['x402Server'],
     initPromise: Promise.resolve(),
     nonceStore: new MemoryNonceStore(),
+    agentIdentityNonceStore: makeTestAgentIdentityNonceStore(),
     entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: KNOWN_PAYEE,
     network: BASE_MAINNET_NETWORK,

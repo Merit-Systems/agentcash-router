@@ -8,6 +8,7 @@ import {
 import { createRequestHandler, type RouterDeps } from '../src/pipeline/orchestrate.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
+import { makeTestAgentIdentityNonceStore } from './fakes/agent-identity-deps.js';
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
 import type { RouteEntry } from '../src/types.js';
 import type { ResolvedX402Facilitator } from '../src/protocols/x402/facilitators.js';
@@ -46,6 +47,7 @@ function makeDeps(server: FakeX402Server): RouterDeps {
     x402Server: server as unknown as RouterDeps['x402Server'],
     initPromise: Promise.resolve(),
     nonceStore: new MemoryNonceStore(),
+    agentIdentityNonceStore: makeTestAgentIdentityNonceStore(),
     entitlementStore: new MemoryEntitlementStore(),
     payeeAddress: KNOWN_PAYEE,
     network: BASE_MAINNET_NETWORK,

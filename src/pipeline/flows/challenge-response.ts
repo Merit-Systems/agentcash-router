@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { PricingStrategy } from '../../pricing/index.js';
+import { attachAgentIdentityChallenge } from '../../auth/agent-identity.js';
 import { getAllowedStrategies } from '../../protocols/index.js';
 import type { ChallengeContribution, VerifyFailure } from '../../protocols/types.js';
 import { buildChallengeExtensions } from '../challenge-extensions.js';
@@ -90,6 +91,8 @@ export async function buildChallengeResponse(
       }
     }
   }
+
+  await attachAgentIdentityChallenge(response, ctx.request, ctx.deps.agentIdentityNonceStore);
 
   firePluginResponse(ctx, response);
   return response;

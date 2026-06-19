@@ -23,7 +23,8 @@ export function createNotFoundHandler(baseUrl: string) {
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, DELETE, PUT, PATCH, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key, SIGN-IN-WITH-X',
+          'Access-Control-Allow-Headers':
+            'Content-Type, Authorization, X-API-Key, SIGN-IN-WITH-X, X-Agent-Identity',
         },
       },
     );
