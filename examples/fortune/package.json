@@ -12,11 +12,11 @@
   "dependencies": {
     "@agentcash/router": "link:../..",
     "@modelcontextprotocol/sdk": "^1.26.0",
-    "mppx": "^0.6.16",
+    "mppx": "^0.7.0",
     "next": "^15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "viem": "^2.47.6",
+    "viem": "^2.53.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
