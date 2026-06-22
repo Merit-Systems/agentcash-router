@@ -1,6 +1,5 @@
 import type { NextResponse } from 'next/server';
 import type { Transport } from 'mppx/server';
-import type { Session } from 'mppx/tempo';
 import { AUTH_SCHEME, HEADERS } from '../../headers.js';
 import { multiplyDecimal } from '../../pricing/format.js';
 import type { HandlerPaymentContext } from '../../types.js';
@@ -90,7 +89,9 @@ export const mppStrategy: PaymentStrategy = {
       { status: 200 }
     >;
     const { bindChannelCharge, source: handlerStream } = args;
-    async function* forwardHandlerStreamWithChannelDebit(channel: Session.Sse.SessionController) {
+    // Structural shape of mppx's per-chunk SSE channel controller (no longer
+    // publicly re-exported as of mppx 0.7.0); we only call `charge()`.
+    async function* forwardHandlerStreamWithChannelDebit(channel: { charge(): Promise<void> }) {
       bindChannelCharge(channel.charge);
       try {
         for await (const chunk of handlerStream) {

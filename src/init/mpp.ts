@@ -53,6 +53,9 @@ export async function initMpp(
       ...(operatorAccount ? { account: operatorAccount } : {}),
       ...(feePayerAccount ? { feePayer: feePayerAccount } : {}),
       ...(resolvedStore ? { store: resolvedStore } : {}),
+      ...(mppConfig.session?.settlementSchedule
+        ? { settlementSchedule: mppConfig.session.settlementSchedule }
+        : {}),
     };
     const mppxArgs = {
       Mppx,

@@ -405,6 +405,15 @@ export interface RouterConfig {
     session?: {
       /** Suggested deposit on the 402 challenge = `tickCost × depositMultiplier` USDC. Route `maxPrice` overrides. @default 10 */
       depositMultiplier?: number;
+      /** Server-side automatic settlement cadence. When set, mppx settles channels in the background once a threshold is crossed instead of on every request/tick — fewer on-chain settles, less gas. Thresholds are additive since the previous scheduled settlement; set any combination. Omit to settle per request (legacy behavior). */
+      settlementSchedule?: {
+        /** Settle after this many additional paid units. */
+        units?: number;
+        /** Settle after this much additional settlement amount (decimal-dollar string or raw bigint). */
+        amount?: string | bigint;
+        /** Settle after this many milliseconds since the previous scheduled settlement. */
+        intervalMs?: number;
+      };
     };
   };
   /** Payment protocols to accept on paid routes unless overridden per route. @default ['x402'] */
