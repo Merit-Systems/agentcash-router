@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.12.0
+
+### Minor Changes
+
+- 5b5c8ca: Add optional `email` to `discovery.contact`. It is published verbatim in the generated OpenAPI `info.contact.email`, letting origins expose a contact address for ownership verification, user contact, and merchant-page customization (e.g. on Poncho). Omit it to keep the existing behavior.
+
 ## 1.11.0
 
 ### Minor Changes
