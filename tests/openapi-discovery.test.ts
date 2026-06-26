@@ -190,6 +190,30 @@ describe('openapi discovery document', () => {
     expect(operation.responses['401']).toBeUndefined();
   });
 
+  it('publishes discovery.contact (incl. email) verbatim in info.contact', async () => {
+    const registry = new RouteRegistry();
+    registry.register(makeEntry({ key: 'search', path: 'search', method: 'POST' }));
+
+    const handler = createOpenAPIHandler(registry, 'https://example.com', undefined, {
+      title: 'Example API',
+      version: '1.0.0',
+      contact: {
+        name: 'Merit Systems',
+        url: 'https://example.com',
+        email: 'me@example.com',
+      },
+    });
+
+    const response = await handler(request);
+    const doc = (await response.json()) as Record<string, any>;
+
+    expect(doc.info.contact).toEqual({
+      name: 'Merit Systems',
+      url: 'https://example.com',
+      email: 'me@example.com',
+    });
+  });
+
   it('emits x-discovery metadata and quote pricing for dynamic routes', async () => {
     const registry = new RouteRegistry();
     registry.register(
