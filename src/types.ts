@@ -358,7 +358,7 @@ export interface DiscoveryConfig {
   title: string;
   version: string;
   description?: string;
-  contact?: { name?: string; url?: string };
+  contact?: { name?: string; url?: string; email?: string };
   ownershipProofs?: string[];
   methodHints?: 'off' | 'non-default' | 'always';
   /** Natural language guidance for agents. Served as wellknown `instructions` and `/llms.txt`. */
