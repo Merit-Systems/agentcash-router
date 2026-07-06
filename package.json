@@ -1,6 +1,6 @@
 {
   "name": "@agentcash/router",
-  "version": "1.14.0",
+  "version": "1.14.1",
   "description": "Unified route builder for Next.js App Router APIs with x402, MPP, SIWX, and API key auth",
   "type": "module",
   "exports": {
@@ -28,7 +28,7 @@
   ],
   "scripts": {
     "build": "tsup",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tests/tsconfig.json --noEmit",
     "lint": "eslint src/ tests/ --max-warnings 0",
     "lint:fix": "eslint src/ tests/ --fix",
     "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts' 'examples/fortune/**/*.ts' 'examples/fortune/**/*.md' '*.json' '*.mjs'",
