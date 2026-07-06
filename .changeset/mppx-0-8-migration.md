@@ -13,4 +13,11 @@ Compatibility notes:
 - Clients on mppx <0.7 (e.g. `agentcash` CLI ≤0.15) can no longer open MPP **sessions** against the router — they sign the legacy v1 flow against the v2 precompile and revert. Those CLI versions also fail one-shot MPP charge due to a client-side response-clone bug fixed in newer releases. x402 routes are unaffected for all clients.
 - Fee-sponsored (gas-sponsored) flows now pass mppx's sponsor policy checks (0.6.16 rejected current clients' fee budgets outright). Sponsorship requires the `MPP_FEE_PAYER_KEY` account to hold the Tempo fee token (pathUSD) — with an unfunded sponsor, verification fails at broadcast with `insufficient funds for gas`.
 
+New options adopted from the 0.6.17→0.8.5 changelog review:
+
+- `mpp.session.settlementSchedule` — server-owned automatic settlement cadence for session channels (`{ units?, amount?, intervalMs? }`; whichever threshold trips first). Omitted, channels settle only on client close, as before.
+- `mpp.feePayerPolicy` — partial override of mppx's sponsor fee-budget ceilings (`maxGas`, `maxFeePerGas`, `maxPriorityFeePerGas`, `maxTotalFee`, `maxValidityWindowSeconds`) for fee-sponsored charge co-signs and session open/topUp/close.
+- mppx `payment.failed` server events are now forwarded to `plugin.onAlert` (level `warn`, or `error` for status ≥500, with method/error-type/hint/payer metadata) — previously these details only appeared in mppx's own `console.error`.
+- Tempo chain config now imports from `viem/tempo/chains`, the canonical entrypoint mppx itself uses.
+
 Internal: mppx stopped exporting the SSE `SessionController` type from a public subpath; the router now declares the structural equivalent locally. The middleware contract (`charge/session → 402 challenge | 200 withReceipt`), `Credential.fromRequest`, session credential actions (`open/topUp/voucher/close`), and the `Store.upstash` atomic-store adapter are all unchanged.

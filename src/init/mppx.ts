@@ -53,6 +53,7 @@ export function getMppxRequestContext(args: MppxContextArgs): MppxRequestContext
         getClient,
         ...(feePayerAccount ? { feePayer: feePayerAccount } : {}),
         ...(resolvedStore ? { store: resolvedStore } : {}),
+        ...(mppConfig.feePayerPolicy ? { feePayerPolicy: mppConfig.feePayerPolicy } : {}),
       } as unknown as Parameters<typeof tempo.charge>[0]),
       ...(sessionEnabled
         ? [
