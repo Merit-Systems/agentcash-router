@@ -113,6 +113,16 @@ $CLI fetch http://localhost:3000/api/fortune/profile --payment-network solana
 
 Expect: `{"wallet": "<base58 Solana address>", "message": "Identity verified via Sign-In with X"}` and **no payment**. The 402 challenge's `extensions.sign-in-with-x.supportedChains` must include `{chainId: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", type: "ed25519"}`. If you get an EVM address back, the CLI fell through to Base — the `--payment-network solana` flag was ignored or the route's supported chains are misconfigured.
 
+## Bonus: mppx's own validator
+
+mppx ≥0.8.4 ships an end-to-end validator that discovers paid endpoints, checks challenge shape, exercises malformed-credential handling, and runs real Tempo payment flows:
+
+```bash
+npx mppx@latest validate http://localhost:3000/api/fortune
+```
+
+Useful as a second opinion when a CLI test above fails — it distinguishes "server emitted a bad challenge" from "client couldn't pay it".
+
 ## Reporting back
 
 Summarize as a table: test #, endpoint, protocol/network, pass/fail, tx hash or channel id. Note any retries needed (test 4's funding race is the only expected flake).

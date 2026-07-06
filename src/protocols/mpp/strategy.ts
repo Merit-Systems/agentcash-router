@@ -1,6 +1,5 @@
 import type { NextResponse } from 'next/server';
 import type { Transport } from 'mppx/server';
-import type { Session } from 'mppx/tempo';
 import { HEADERS } from '../../headers.js';
 import { multiplyDecimal } from '../../pricing/format.js';
 import type { HandlerPaymentContext } from '../../types.js';
@@ -30,6 +29,9 @@ import { settleTxMode, verifyTxMode, type TxModeToken } from './transaction-mode
 import { settleHashMode, verifyHashMode, type HashModeToken } from './hash-mode.js';
 
 type AnyMppToken = TxModeToken | HashModeToken | MppSessionToken;
+
+/** Structural stand-in for mppx's SSE `SessionController` — not exported from a public subpath since mppx 0.7. */
+type SessionController = { charge(): Promise<void> };
 
 export const mppStrategy: PaymentStrategy = {
   protocol: 'mpp',
@@ -88,7 +90,7 @@ export const mppStrategy: PaymentStrategy = {
       { status: 200 }
     >;
     const { bindChannelCharge, source: handlerStream } = args;
-    async function* forwardHandlerStreamWithChannelDebit(channel: Session.Sse.SessionController) {
+    async function* forwardHandlerStreamWithChannelDebit(channel: SessionController) {
       bindChannelCharge(channel.charge);
       try {
         for await (const chunk of handlerStream) {

@@ -385,6 +385,25 @@ export interface DiscoveryConfig {
   serverUrl?: string;
 }
 
+/** Sponsor fee-budget ceilings for fee-sponsored Tempo transactions. Structural mirror of mppx's `FeePayer.Policy`, all fields optional. */
+export interface MppFeePayerPolicy {
+  maxGas?: bigint;
+  maxFeePerGas?: bigint;
+  maxPriorityFeePerGas?: bigint;
+  maxTotalFee?: bigint;
+  maxValidityWindowSeconds?: number;
+}
+
+/** Server-owned automatic settlement cadence for MPP session channels. Structural mirror of mppx's `SettlementSchedule`. */
+export interface MppSettlementSchedule {
+  /** Settle after this many additional paid units since the previous settlement. */
+  units?: number;
+  /** Settle after this much additional billed amount (decimal-dollar string) since the previous settlement. */
+  amount?: string;
+  /** Settle after this many milliseconds since the previous settlement. */
+  intervalMs?: number;
+}
+
 export interface RouterConfig {
   /** Default payee for paid routes — populates `payTo` on the auto-generated x402 `exact` accept and acts as the MPP `recipient` fallback. Override per-protocol via `x402.accepts[i].payTo` / `mpp.recipient`, or per-route via the `payTo` option on `.paid()` / `.upTo()` / `.metered()`. */
   payeeAddress?: string;
@@ -417,12 +436,16 @@ export interface RouterConfig {
     rpcUrl?: string;
     /** Hex private key. Signs channel close/settle; required for `session`. Address MUST equal `recipient`/payee — mppx asserts sender===payee on settle. Validated at init. */
     operatorKey?: string;
-    /** Hex private key. Sponsors gas for client channel open/topUp. MUST resolve to a different address than `operatorKey` — Tempo rejects sender===feePayer. Validated at init. Omit to make clients pay their own gas. */
+    /** Hex private key. Sponsors gas for client channel open/topUp. MUST resolve to a different address than `operatorKey` — Tempo rejects sender===feePayer. Validated at init. Omit to make clients pay their own gas. The account must hold the Tempo fee token (pathUSD) to pay sponsored gas. */
     feePayerKey?: string;
+    /** Partial override of mppx's sponsor fee-budget ceilings for fee-sponsored Tempo transactions (charge co-signs and session open/topUp/close). Raise `maxTotalFee` alongside `maxGas`/`maxFeePerGas`. Omit for mppx's per-chain defaults. */
+    feePayerPolicy?: MppFeePayerPolicy;
     /** Enables MPP payment-channel sessions for `.metered()` routes (registers both request and SSE session middleware). Also requires `mpp.operatorKey`. */
     session?: {
       /** Suggested deposit on the 402 challenge = `tickCost × depositMultiplier` USDC. Route `maxPrice` overrides. @default 10 */
       depositMultiplier?: number;
+      /** Server-owned automatic settlement cadence for session channels. Omitted: channels settle only on client close. Thresholds compose (whichever trips first). */
+      settlementSchedule?: MppSettlementSchedule;
     };
   };
   /** Payment protocols to accept on paid routes unless overridden per route. @default ['x402'] */

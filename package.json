@@ -45,8 +45,8 @@
     "@x402/extensions": "^2.13.0",
     "@x402/svm": "^2.13.0",
     "did-auth-challenge": "^0.0.1",
-    "mppx": "^0.6.16",
-    "viem": "^2.47.6",
+    "mppx": "^0.8.5",
+    "viem": "^2.54.6",
     "zod-openapi": "^5.0.0"
   },
   "peerDependencies": {
