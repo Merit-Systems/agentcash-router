@@ -12,8 +12,7 @@ export function createNotFoundHandler(baseUrl: string) {
         error:
           'Route not found. Rediscover this origin and retry with the current discovery document.',
         requestedUrl: request.url,
-        // `/.well-known/x402` is deprecated as a discovery recommendation and
-        // intentionally not advertised here, though the handler still serves it.
+        // The deprecated /.well-known/x402 surface is intentionally not advertised.
         discovery: {
           openapi: `${normalizedBase}/openapi.json`,
           llmsTxt: `${normalizedBase}/llms.txt`,

@@ -6,8 +6,6 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     passWithNoTests: true,
     typecheck: {
-      // Type-level tests for the builder's compile-time invariants.
-      // `*.test-d.ts` files are typechecked (tsc), not executed.
       enabled: true,
       include: ['tests/**/*.test-d.ts'],
       tsconfig: './tsconfig.typetest.json',

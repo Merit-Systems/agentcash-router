@@ -24,13 +24,9 @@ export type PaidPreambleResult =
     };
 
 /**
- * Shared prefix of the static and dynamic paid flows:
- * API-key gate → pricing selection → strategy detection → early body →
- * SIWX fast path → 402 challenge when no payment credential is present.
- *
- * Returns `{ done: true }` when the request was fully answered (auth failure,
- * SIWX replay, challenge, or protocol init error) and `{ done: false }` with
- * the resolved context when the flow should proceed to payment verification.
+ * Shared prefix of the static and dynamic paid flows. `{ done: true }` means
+ * the request was fully answered (auth failure, SIWX replay, or challenge);
+ * `{ done: false }` carries the context for payment verification.
  */
 export async function runPaidPreamble(ctx: FlowCtx): Promise<PaidPreambleResult> {
   const { request, routeEntry, deps, report } = ctx;
@@ -68,11 +64,7 @@ export type PaidVerifyResult =
   | { ok: false; response: NextResponse }
   | { ok: true; verifyOutcome: VerifySuccess };
 
-/**
- * Shared verify step of the static and dynamic paid flows: run the strategy's
- * `verify`, map config failures to a structured 500 and invalid payments to a
- * fresh 402 challenge, and fire the payment-verified plugin event on success.
- */
+/** Shared verify step of the paid flows: config failure → 500, invalid payment → 402 challenge. */
 export async function runPaidVerify(args: {
   ctx: FlowCtx;
   strategy: PaymentStrategy;

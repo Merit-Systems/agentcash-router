@@ -3,11 +3,7 @@ import { AUTH_SCHEME, HEADERS } from '../headers.js';
 
 export type DetectedProtocol = ProtocolType | 'siwx';
 
-/**
- * Single source of truth for "does this request carry an x402 payment?".
- * Shared by `detectProtocol` and `x402Strategy.detects` so a new payment
- * header variant can't desync the two.
- */
+/** Shared by `detectProtocol` and `x402Strategy.detects` — one predicate so they can't desync. */
 export function hasX402Payment(request: Request): boolean {
   return Boolean(
     request.headers.get(HEADERS.X402_PAYMENT_SIGNATURE) ??
@@ -15,10 +11,7 @@ export function hasX402Payment(request: Request): boolean {
   );
 }
 
-/**
- * Single source of truth for "does this request carry an MPP credential?".
- * Shared by `detectProtocol` and `mppStrategy.detects`.
- */
+/** Shared by `detectProtocol` and `mppStrategy.detects` — one predicate so they can't desync. */
 export function hasMppPayment(request: Request): boolean {
   const auth = request.headers.get(HEADERS.AUTHORIZATION);
   return Boolean(auth && auth.startsWith(AUTH_SCHEME.MPP_PAYMENT));

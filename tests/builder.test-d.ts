@@ -1,9 +1,5 @@
-// Type-level tests for the RouteBuilder's compile-time invariants.
-// This file is typechecked by vitest's typecheck runner (see vitest.config.ts),
-// never executed — each `@ts-expect-error` line FAILS the suite if the
-// combination below it stops being a compile error, so the builder's
-// mutual-exclusion rules can't silently regress to runtime-only checks.
-// Every rejection here mirrors a registration-time throw in src/builder.ts.
+// Type-level tests for the builder's compile-time invariants — typechecked by
+// vitest (never executed). An unused `@ts-expect-error` fails the suite.
 import { describe, it, expectTypeOf } from 'vitest';
 import { z } from 'zod';
 import type { NextRequest } from 'next/server';
@@ -20,65 +16,65 @@ function make() {
 
 describe('auth mode is required before .handler()', () => {
   it('rejects .handler() with no auth mode', () => {
-    // @ts-expect-error — pick an auth mode first
+    // @ts-expect-error
     make().handler(async () => ({}));
   });
 
   it('rejects .body().handler() with no auth mode', () => {
     make()
       .body(z.object({ q: z.string() }))
-      // @ts-expect-error — .body() alone does not select an auth mode
+      // @ts-expect-error
       .handler(async () => ({}));
   });
 });
 
 describe('pricing modes are mutually exclusive', () => {
   it('rejects a second .paid()', () => {
-    // @ts-expect-error — one pricing mode per route
+    // @ts-expect-error
     make().paid('0.01').paid('0.02');
   });
 
   it('rejects .upTo() after .paid()', () => {
-    // @ts-expect-error — one pricing mode per route
+    // @ts-expect-error
     make().paid('0.01').upTo('0.05');
   });
 
   it('rejects .metered() after .upTo()', () => {
-    // @ts-expect-error — one pricing mode per route
+    // @ts-expect-error
     make().upTo('0.05').metered({ tickCost: '0.001', maxPrice: '0.05' });
   });
 
   it('rejects .paid() after .metered()', () => {
-    // @ts-expect-error — one pricing mode per route
+    // @ts-expect-error
     make().metered({ tickCost: '0.001', maxPrice: '0.05' }).paid('0.01');
   });
 });
 
 describe('.unprotected() excludes every other mode', () => {
   it('rejects pricing after .unprotected()', () => {
-    // @ts-expect-error — unprotected routes cannot charge
+    // @ts-expect-error
     make().unprotected().paid('0.01');
-    // @ts-expect-error — unprotected routes cannot charge
+    // @ts-expect-error
     make().unprotected().upTo('0.05');
-    // @ts-expect-error — unprotected routes cannot charge
+    // @ts-expect-error
     make().unprotected().metered({ tickCost: '0.001', maxPrice: '0.05' });
   });
 
   it('rejects identity after .unprotected()', () => {
-    // @ts-expect-error — unprotected excludes .siwx()
+    // @ts-expect-error
     make().unprotected().siwx();
-    // @ts-expect-error — unprotected excludes .apiKey()
+    // @ts-expect-error
     make()
       .unprotected()
       .apiKey(() => ({}));
   });
 
   it('rejects .unprotected() after any auth mode', () => {
-    // @ts-expect-error — pricing excludes .unprotected()
+    // @ts-expect-error
     make().paid('0.01').unprotected();
-    // @ts-expect-error — .siwx() excludes .unprotected()
+    // @ts-expect-error
     make().siwx().unprotected();
-    // @ts-expect-error — .apiKey() excludes .unprotected()
+    // @ts-expect-error
     make()
       .apiKey(() => ({}))
       .unprotected();
@@ -87,14 +83,14 @@ describe('.unprotected() excludes every other mode', () => {
 
 describe('.siwx() and .apiKey() are mutually exclusive', () => {
   it('rejects .apiKey() after .siwx()', () => {
-    // @ts-expect-error — not supported on the same route
+    // @ts-expect-error
     make()
       .siwx()
       .apiKey(() => ({}));
   });
 
   it('rejects .siwx() after .apiKey()', () => {
-    // @ts-expect-error — not supported on the same route
+    // @ts-expect-error
     make()
       .apiKey(() => ({}))
       .siwx();
@@ -103,12 +99,12 @@ describe('.siwx() and .apiKey() are mutually exclusive', () => {
 
 describe('.metered() and .siwx() are mutually exclusive', () => {
   it('rejects .metered() after .siwx()', () => {
-    // @ts-expect-error — per-tick billing has no entitlement model
+    // @ts-expect-error
     make().siwx().metered({ tickCost: '0.001', maxPrice: '0.05' });
   });
 
   it('rejects .siwx() after .metered()', () => {
-    // @ts-expect-error — per-tick billing has no entitlement model
+    // @ts-expect-error
     make().metered({ tickCost: '0.001', maxPrice: '0.05' }).siwx();
   });
 });
@@ -117,7 +113,7 @@ describe('.stream() requires .metered()', () => {
   it('rejects .stream() on .paid()', () => {
     make()
       .paid('0.01')
-      // @ts-expect-error — streaming requires metered pricing
+      // @ts-expect-error
       .stream(async function* () {
         yield 'x';
       });
@@ -126,7 +122,7 @@ describe('.stream() requires .metered()', () => {
   it('rejects .stream() on .upTo()', () => {
     make()
       .upTo('0.05')
-      // @ts-expect-error — streaming is not supported on .upTo()
+      // @ts-expect-error
       .stream(async function* () {
         yield 'x';
       });
@@ -135,7 +131,7 @@ describe('.stream() requires .metered()', () => {
   it('rejects .stream() on .unprotected()', () => {
     make()
       .unprotected()
-      // @ts-expect-error — streaming requires metered pricing
+      // @ts-expect-error
       .stream(async function* () {
         yield 'x';
       });
@@ -146,14 +142,14 @@ describe('body-derived pricing requires .body()', () => {
   it('rejects .handler() when .paid(fn) has no .body()', () => {
     make()
       .paid((body: { tokens: number }) => `${body.tokens}`, { maxPrice: '1.00' })
-      // @ts-expect-error — body-derived pricing reads the parsed body
+      // @ts-expect-error
       .handler(async () => ({}));
   });
 
   it('rejects .handler() when tiered pricing has no .body()', () => {
     make()
       .paid({ field: 'tier', tiers: { sm: { price: '0.01' } } })
-      // @ts-expect-error — tiered pricing reads the parsed body
+      // @ts-expect-error
       .handler(async () => ({}));
   });
 
@@ -161,7 +157,7 @@ describe('body-derived pricing requires .body()', () => {
     make()
       .paid((body: { tokens: number }) => `${body.tokens}`, { maxPrice: '1.00' })
       .siwx()
-      // @ts-expect-error — .siwx() does not satisfy body-derived pricing's .body() requirement
+      // @ts-expect-error
       .handler(async () => ({}));
   });
 });
