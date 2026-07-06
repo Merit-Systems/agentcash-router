@@ -109,26 +109,6 @@ function makePaymentRequest(
   });
 }
 
-async function withFetchMock<T>(
-  response: unknown,
-  run: (fetchMock: ReturnType<typeof vi.fn>) => Promise<T>,
-): Promise<T> {
-  const originalFetch = globalThis.fetch;
-  const fetchMock = vi.fn(
-    async () =>
-      new Response(JSON.stringify(response), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
-  );
-  globalThis.fetch = fetchMock as typeof fetch;
-  try {
-    return await run(fetchMock);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-}
-
 async function withSupportedFacilitatorMock<T>(
   kinds: Array<{
     scheme: string;
