@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  getAcceptsHeadersForFacilitator,
   getResolvedX402Facilitator,
   getResolvedX402Facilitators,
   getResolvedX402FacilitatorGroups,
+  getSupportedHeadersForFacilitator,
 } from '../src/protocols/x402/facilitators.js';
 import { DEFAULT_SOLANA_FACILITATOR_URL } from '../src/constants.js';
 import type { RouterConfig } from '../src/types.js';
@@ -31,7 +31,7 @@ function makeConfig(overrides: Partial<RouterConfig> = {}): RouterConfig {
 }
 
 describe('x402 facilitator resolution', () => {
-  it('defaults Base to CDP and Solana to Corbits', () => {
+  it('defaults Base to CDP and Solana to PayAI', () => {
     const config = makeConfig();
 
     expect(
@@ -77,8 +77,7 @@ describe('x402 facilitator resolution', () => {
     expect(facilitators[SOLANA_NETWORK]?.url).toBe('https://solana.example');
   });
 
-  it('uses accepts-specific auth headers before supported headers', async () => {
-    const acceptsHeaders = { authorization: 'Bearer accepts-token' };
+  it('uses createAuthHeaders().supported for /supported enrichment', async () => {
     const supportedHeaders = { authorization: 'Bearer supported-token' };
     const config = makeConfig({
       x402: {
@@ -88,7 +87,6 @@ describe('x402 facilitator resolution', () => {
         facilitators: {
           solana: {
             url: 'https://solana.example',
-            createAcceptsHeaders: async () => acceptsHeaders,
             createAuthHeaders: async () => ({
               verify: {},
               settle: {},
@@ -101,7 +99,7 @@ describe('x402 facilitator resolution', () => {
 
     const facilitator = getResolvedX402Facilitator(config, SOLANA_NETWORK, DEFAULT_CDP_FACILITATOR);
 
-    expect(await getAcceptsHeadersForFacilitator(facilitator!)).toEqual(acceptsHeaders);
+    expect(await getSupportedHeadersForFacilitator(facilitator!)).toEqual(supportedHeaders);
   });
 
   it('groups networks by family — EVM uses CDP default, Solana respects override', () => {

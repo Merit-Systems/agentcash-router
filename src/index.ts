@@ -61,9 +61,13 @@ export interface ServiceRouter<TPriceKeys extends string = never> {
   registry: RouteRegistry;
 }
 
-export function createRouter<const P extends Record<string, string> = Record<never, string>>(
-  config: RouterConfig & { prices?: P },
-): ServiceRouter<Extract<keyof P, string>> {
+type ExtractPriceKeys<C> = [C] extends [{ prices: infer P extends Record<string, string> }]
+  ? Extract<keyof P, string>
+  : never;
+
+export function createRouter<const C extends RouterConfig>(
+  config: C,
+): ServiceRouter<ExtractPriceKeys<C>> {
   const registry = new RouteRegistry();
   const kvStore = resolveKvStore(config.kvStore);
   const nonceStore = kvStore ? createKvNonceStore(kvStore) : new MemoryNonceStore();
@@ -119,6 +123,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     network,
     x402FacilitatorsByNetwork: undefined,
     x402Accepts,
+    kvStore,
     mppx: null,
     tempoClient: null,
     mppSessionConfig:
@@ -215,7 +220,7 @@ export function createRouter<const P extends Record<string, string> = Record<nev
     },
 
     registry,
-  };
+  } as ServiceRouter<ExtractPriceKeys<C>>;
 }
 
 function normalizePath(path: string): string {
@@ -245,10 +250,12 @@ function normalizePath(path: string): string {
  * });
  * ```
  */
-export function createRouterFromEnv<const P extends Record<string, string> = Record<never, string>>(
-  options: CreateRouterFromEnvOptions<P>,
-): ServiceRouter<Extract<keyof P, string>> {
-  return createRouter<P>(routerConfigFromEnv(options));
+export function createRouterFromEnv<const O extends CreateRouterFromEnvOptions>(
+  options: O,
+): ServiceRouter<ExtractPriceKeys<O>> {
+  return createRouter(routerConfigFromEnv(options)) as unknown as ServiceRouter<
+    ExtractPriceKeys<O>
+  >;
 }
 
 export { HttpError, RouteDefinitionError } from './types.js';

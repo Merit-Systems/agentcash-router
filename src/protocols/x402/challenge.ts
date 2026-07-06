@@ -1,5 +1,6 @@
 import type { PaymentRequirements } from '@x402/core/types';
 import type { RouteEntry, X402ResolvedAccept, X402Server } from '../../types.js';
+import type { KvStore } from '../../kv-store/index.js';
 import type { ReportFn } from '../../plugin/reporter.js';
 import {
   getFacilitatorForRequirement,
@@ -8,7 +9,7 @@ import {
   type ResolvedX402Facilitators,
 } from './facilitators.js';
 import {
-  enrichRequirementsWithFacilitatorAccepts,
+  enrichRequirementsFromFacilitatorSupported,
   hasSolanaAccepts,
   isSolanaRequirement,
 } from './solana.js';
@@ -40,11 +41,21 @@ interface BuildChallengeOptions {
   facilitatorsByNetwork?: ResolvedX402Facilitators;
   extensions?: Record<string, unknown>;
   report?: ReportFn;
+  kvStore?: KvStore;
 }
 
 export async function buildX402Challenge(opts: BuildChallengeOptions) {
-  const { server, routeEntry, request, price, accepts, facilitatorsByNetwork, extensions, report } =
-    opts;
+  const {
+    server,
+    routeEntry,
+    request,
+    price,
+    accepts,
+    facilitatorsByNetwork,
+    extensions,
+    report,
+    kvStore,
+  } = opts;
   const { encodePaymentRequiredHeader } = await import('@x402/core/http');
   const resource = buildChallengeResource(request, routeEntry);
   const requirements = await buildChallengeRequirements(
@@ -52,9 +63,9 @@ export async function buildX402Challenge(opts: BuildChallengeOptions) {
     request,
     price,
     accepts,
-    resource,
     facilitatorsByNetwork,
     report,
+    kvStore,
   );
   const paymentRequired = await server.createPaymentRequiredResponse(
     requirements,
@@ -72,13 +83,13 @@ async function buildChallengeRequirements(
   request: Request,
   price: string,
   accepts: X402ResolvedAccept[],
-  resource: ChallengeResource,
   facilitatorsByNetwork?: ResolvedX402Facilitators,
   report?: ReportFn,
+  kvStore?: KvStore,
 ): Promise<PaymentRequirements[]> {
   const requirements = await buildExpectedRequirements(server, request, price, accepts, report);
   if (!needsFacilitatorEnrichment(accepts)) return requirements;
-  return enrichChallengeRequirements(requirements, resource, facilitatorsByNetwork, report);
+  return enrichChallengeRequirements(requirements, facilitatorsByNetwork, report, kvStore);
 }
 
 function needsFacilitatorEnrichment(accepts: X402ResolvedAccept[]): boolean {
@@ -87,16 +98,16 @@ function needsFacilitatorEnrichment(accepts: X402ResolvedAccept[]): boolean {
 
 async function enrichGroup(
   group: EnrichmentGroup,
-  resource: ChallengeResource,
+  kvStore?: KvStore,
 ): Promise<PaymentRequirements[]> {
-  const accepted = await enrichRequirementsWithFacilitatorAccepts(
+  const accepted = await enrichRequirementsFromFacilitatorSupported(
     group.facilitator,
-    resource,
     group.items.map(({ requirement }) => requirement),
+    kvStore,
   );
   if (accepted.length !== group.items.length) {
     throw new Error(
-      `Facilitator /accepts returned ${accepted.length} requirements for ${group.items.length} inputs on ${group.facilitator.url ?? group.facilitator.network}`,
+      `Facilitator /supported enrichment returned ${accepted.length} requirements for ${group.items.length} inputs on ${group.facilitator.url ?? group.facilitator.network}`,
     );
   }
   return accepted;
@@ -104,9 +115,9 @@ async function enrichGroup(
 
 async function enrichChallengeRequirements(
   requirements: PaymentRequirements[],
-  resource: ChallengeResource,
   facilitatorsByNetwork?: ResolvedX402Facilitators,
   report?: ReportFn,
+  kvStore?: KvStore,
 ): Promise<PaymentRequirements[]> {
   const groups = collectEnrichmentGroups(requirements, facilitatorsByNetwork);
   if (groups.length === 0) return requirements;
@@ -118,13 +129,13 @@ async function enrichChallengeRequirements(
   const results = await Promise.all(
     groups.map(async (group): Promise<EnrichmentResult> => {
       try {
-        return { success: true, group, accepted: await enrichGroup(group, resource) };
+        return { success: true, group, accepted: await enrichGroup(group, kvStore) };
       } catch (err) {
         const label = group.facilitator.url ?? group.facilitator.network;
         const reason = err instanceof Error ? err.message : String(err);
         report?.(
           'warn',
-          `${label} /accepts failed, dropping ${group.items.length} requirement(s): ${reason}`,
+          `${label} /supported enrichment failed, dropping ${group.items.length} requirement(s): ${reason}`,
         );
         return { success: false, group };
       }
