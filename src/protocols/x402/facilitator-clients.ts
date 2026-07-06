@@ -70,14 +70,7 @@ function mergeKindExtras(
 function buildSupportedKinds(group: ResolvedX402FacilitatorGroup): SupportedResponse['kinds'] {
   return group.networks.flatMap((network) => {
     if (group.family === 'solana') {
-      return [
-        {
-          x402Version: 2 as const,
-          scheme: 'exact' as const,
-          network,
-          extra: { features: { xSettlementAccountSupported: true } },
-        },
-      ];
+      return [{ x402Version: 2 as const, scheme: 'exact' as const, network }];
     }
     return [
       { x402Version: 2 as const, scheme: 'exact' as const, network },

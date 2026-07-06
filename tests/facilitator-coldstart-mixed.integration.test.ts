@@ -117,6 +117,28 @@ describe('facilitator /supported enrichment', () => {
     });
   });
 
+  it('does not claim feature flags the facilitator omits', async () => {
+    const facilitator = await startStubFacilitator([
+      {
+        scheme: 'exact',
+        network: SOLANA_NETWORK,
+        x402Version: 2,
+        extra: { feePayer: FEE_PAYER },
+      },
+    ]);
+
+    const router = buildSolanaRouter(facilitator.url);
+    const handler = router.route('test/route').handler(async () => ({ ok: true }));
+
+    const response = await handler(newRequest());
+    expect(response.status).toBe(402);
+
+    const challenge = decodePaymentRequiredHeader(response.headers.get('PAYMENT-REQUIRED')!);
+    const extra = challenge.accepts[0]?.extra as Record<string, unknown>;
+    expect(extra.feePayer).toBe(FEE_PAYER);
+    expect(extra.features).toBeUndefined();
+  });
+
   it('returns 500 when the Solana facilitator /supported is unreachable', async () => {
     const facilitator = await startStubFacilitator([], { supportedStatus: 500 });
     const router = buildSolanaRouter(facilitator.url);

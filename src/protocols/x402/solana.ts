@@ -124,6 +124,9 @@ function enrichRequirementFromKind(
   const kindExtra = kind.extra ?? {};
   const requirementFeatures = (requirementExtra.features ?? {}) as Record<string, unknown>;
   const kindFeatures = (kindExtra.features ?? {}) as Record<string, unknown>;
+  // Capability flags (e.g. xSettlementAccountSupported) are only forwarded when
+  // the facilitator advertises them — never asserted on its behalf.
+  const features = { ...requirementFeatures, ...kindFeatures };
 
   return {
     ...requirement,
@@ -131,13 +134,7 @@ function enrichRequirementFromKind(
     extra: {
       ...requirementExtra,
       ...kindExtra,
-      features: {
-        // Solana-family default (mirrors buildSupportedKinds); a facilitator
-        // that advertises features can override it.
-        xSettlementAccountSupported: true,
-        ...requirementFeatures,
-        ...kindFeatures,
-      },
+      ...(Object.keys(features).length > 0 ? { features } : {}),
     },
   };
 }
