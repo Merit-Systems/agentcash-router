@@ -17,6 +17,18 @@ export default tseslint.config(
     },
   },
   {
+    files: ['tests/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off', // Tests poke at untyped JSON output
+    },
+  },
+  {
+    files: ['tests/**/*.test-d.ts'],
+    rules: {
+      '@typescript-eslint/ban-ts-comment': 'off', // Bare @ts-expect-error IS the assertion; the it() title is the description
+    },
+  },
+  {
     ignores: ['dist/', 'node_modules/', 'tsup.config.ts', 'vitest.config.ts'],
   },
 );

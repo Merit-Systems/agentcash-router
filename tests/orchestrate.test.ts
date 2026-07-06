@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { decodePaymentRequiredHeader } from '@x402/core/http';
 import { z } from 'zod';
@@ -9,7 +9,6 @@ import { makeTestAgentIdentityNonceStore } from './fakes/agent-identity-deps.js'
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
 import { withX402Payment } from './fakes/request.js';
 import type {
-  HandlerContext,
   HandlerPaymentContext,
   RouteEntry,
   SettlementErrorContext,
@@ -236,7 +235,7 @@ function makeSIWXRequest(
 // Fake mppx instance for tests
 function createFakeMppx() {
   return {
-    charge: (options: { amount: string }) => async (input: Request) => {
+    charge: (_options: { amount: string }) => async (input: Request) => {
       const auth = input.headers.get('Authorization');
       if (!auth?.startsWith('Payment ')) {
         // No credential — return 402 challenge
@@ -357,7 +356,7 @@ describe('probe request (no auth header)', () => {
 
   it('uses maxPrice for dynamic pricing in 402 challenge', async () => {
     const entry = makeEntry({
-      pricing: (body: unknown) => '0.05',
+      pricing: (_body: unknown) => '0.05',
       maxPrice: '1.00',
     });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());

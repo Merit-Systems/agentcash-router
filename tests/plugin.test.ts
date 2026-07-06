@@ -8,7 +8,7 @@ import { makeTestAgentIdentityNonceStore } from './fakes/agent-identity-deps.js'
 import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
 import { withX402Payment } from './fakes/request.js';
 import { createDefaultContext } from '../src/plugin/index.js';
-import type { RouterPlugin, RequestMeta, PluginContext } from '../src/plugin/index.js';
+import type { RouterPlugin, RequestMeta } from '../src/plugin/index.js';
 import type { RouteEntry } from '../src/types.js';
 import { HEADERS } from '../src/headers.js';
 
