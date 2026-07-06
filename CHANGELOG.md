@@ -1,5 +1,41 @@
 # @agentcash/router
 
+## 1.13.0
+
+### Minor Changes
+
+- 0e27642: Developer/agent-experience audit fixes: real compile-time builder safety, typed registration errors, and doc corrections.
+
+  **Builder invariants are now compile-time errors.** The `RouteBuilder` phantom generics previously only enforced "pick an auth mode before `.handler()`"; every other documented mutual-exclusion rule compiled clean and threw at module-import time. The builder now tracks identity mode (`IdentMode`: `'none' | 'siwx' | 'apiKey' | 'open'`) and pricing mode (`BillingMode` gains `'exact'`), so all of these are TypeScript errors with readable `RouteError<'…'>` messages, matching the runtime throws: repeat pricing calls (`.paid().upTo()`), `.unprotected()` combined with anything, `.siwx()` + `.apiKey()`, `.siwx()` + `.metered()`, and `.stream()` off `.metered()`. Type-level regression tests live in `tests/builder.test-d.ts`, run by vitest's typecheck pass. Code that compiled before but threw at import time may now fail `tsc` — that's the point; runtime behavior is unchanged, with one fix below.
+
+  **Fix: `.unprotected().apiKey(...)` no longer silently ignored `.unprotected()`.** `.apiKey()` was missing the mutual-exclusion guard every sibling method has; the combination now throws at registration (and fails to compile), in both call orders.
+
+  **New: `RouteDefinitionError`.** All registration-time builder throws (invalid combos, malformed prices, missing protocol config) are now instances of the exported `RouteDefinitionError` (with a `.route` field) instead of plain `Error` — the registration-time sibling of `RouterConfigError`. Messages are unchanged.
+
+  **Deprecated: `.wellKnown()` / `/.well-known/x402` as a discovery surface.** The handler keeps working — existing deployments and legacy x402-native clients are unaffected — but it is no longer recommended: `ServiceRouter.wellKnown()` carries an `@deprecated` JSDoc tag, the README no longer suggests mounting it, the example apps no longer mount it at all, and the `router.notFound()` 404 body's `discovery` hint now lists only `openapi` and `llmsTxt` (the `wellKnown` field was removed). Recommended discovery surfaces are `/openapi.json` and `/llms.txt`.
+
+  **Docs.** Fixed contradictory discovery paths in shipped doc comments (`/api/openapi` and `.well-known/agentcash` → the real `/openapi.json`); README documents the recommended discovery route files (`openapi()`, `llmsTxt()`), adds `.method('GET')` to the health example (the exported const name never affects the advertised discovery verb), documents the 402 challenge shape per auth mode (header-only for payment routes, JSON body for SIWX), the `X-Agent-Identity` DID-auth header, `.upTo()`'s `CHARGE_OVER_CAP` behavior, the init-time facilitator fetch, when the body is validated relative to the 402 challenge, and a local-dev MPP keypair recipe.
+
+  **Internal.** De-duplicated `getConfiguredX402Accepts` (config/schema now imports the canonical copy), protocol header detection (`hasX402Payment`/`hasMppPayment` shared between `detectProtocol` and the strategies), and the verbatim static/dynamic paid-flow prefix (new `runPaidPreamble`/`runPaidVerify` in `pipeline/flows/paid-preamble.ts`).
+
+- 3586d3e: Migrate to mppx 0.8.x (TIP-1034 sessions) and viem ≥2.54.
+
+  `mppx ^0.6.16 → ^0.8.5`: MPP session challenges are now TIP-1034 reserve-precompile sessions (`sessionProtocol: "v2"`, escrow `0x4d5050…`) — the format current clients expect. The `agentcash` CLI ≥0.16 (mppx 0.8.x) can now open sessions against `.metered()` routes; on the old server it failed session negotiation entirely. One-shot MPP charge, x402 (exact/upto), SIWX, and entitlement replay are wire-unchanged.
+
+  `viem ^2.47.6 → ^2.54.0`: mppx 0.8.3+ requires viem ≥2.54 (Tempo transfer call builders moved to the two-argument convention); pnpm silently satisfies the peer range with the host copy, so the router's own floor must be ≥2.54 or every non-zero Tempo charge fails at credential verify.
+
+  Compatibility notes:
+  - Clients on mppx <0.7 (e.g. `agentcash` CLI ≤0.15) can no longer open MPP **sessions** against the router — they sign the legacy v1 flow against the v2 precompile and revert. Those CLI versions also fail one-shot MPP charge due to a client-side response-clone bug fixed in newer releases. x402 routes are unaffected for all clients.
+  - Fee-sponsored (gas-sponsored) flows now pass mppx's sponsor policy checks (0.6.16 rejected current clients' fee budgets outright). Sponsorship requires the `MPP_FEE_PAYER_KEY` account to hold the Tempo fee token (pathUSD) — with an unfunded sponsor, verification fails at broadcast with `insufficient funds for gas`.
+
+  New options adopted from the 0.6.17→0.8.5 changelog review:
+  - `mpp.session.settlementSchedule` — server-owned automatic settlement cadence for session channels (`{ units?, amount?, intervalMs? }`; whichever threshold trips first). Omitted, channels settle only on client close, as before.
+  - `mpp.feePayerPolicy` — partial override of mppx's sponsor fee-budget ceilings (`maxGas`, `maxFeePerGas`, `maxPriorityFeePerGas`, `maxTotalFee`, `maxValidityWindowSeconds`) for fee-sponsored charge co-signs and session open/topUp/close.
+  - mppx `payment.failed` server events are now forwarded to `plugin.onAlert` (level `warn`, or `error` for status ≥500, with method/error-type/hint/payer metadata) — previously these details only appeared in mppx's own `console.error`.
+  - Tempo chain config now imports from `viem/tempo/chains`, the canonical entrypoint mppx itself uses.
+
+  Internal: mppx stopped exporting the SSE `SessionController` type from a public subpath; the router now declares the structural equivalent locally. The middleware contract (`charge/session → 402 challenge | 200 withReceipt`), `Credential.fromRequest`, session credential actions (`open/topUp/voucher/close`), and the `Store.upstash` atomic-store adapter are all unchanged.
+
 ## 1.12.0
 
 ### Minor Changes
