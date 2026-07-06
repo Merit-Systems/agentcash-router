@@ -280,7 +280,7 @@ async function main(): Promise<void> {
 
   // Sanity-check the server is reachable.
   try {
-    const ping = await fetch(`${BASE_URL}/.well-known/x402`);
+    const ping = await fetch(`${BASE_URL}/llms.txt`);
     console.log(`Server reachable (status ${ping.status})`);
   } catch (err) {
     console.error(`Server not reachable at ${BASE_URL}: ${(err as Error).message}`);

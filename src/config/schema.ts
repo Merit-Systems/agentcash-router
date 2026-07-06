@@ -12,6 +12,7 @@
 
 import { z } from 'zod';
 import type { ProtocolType, RouterConfig, X402AcceptConfig } from '../types.js';
+import { getConfiguredX402Accepts } from '../protocols/x402/accepts.js';
 import {
   BASE_MAINNET_NETWORK,
   BASE_USDC_ADDRESS,
@@ -277,17 +278,6 @@ function deriveBaseUrlEnv(
 // Hand-written checks (not zod) because RouterConfig is already a structured
 // object with opaque slots (plugin, kvStore, payTo functions) that zod can't
 // usefully model. Mirrors the env-side cross-field logic.
-
-function getConfiguredX402Accepts(config: RouterConfig): X402AcceptConfig[] {
-  if (config.x402?.accepts?.length) return [...config.x402.accepts];
-  return [
-    {
-      scheme: 'exact',
-      network: config.network ?? BASE_MAINNET_NETWORK,
-      payTo: config.payeeAddress,
-    },
-  ];
-}
 
 function validateX402Config(
   config: RouterConfig,

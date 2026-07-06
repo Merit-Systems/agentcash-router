@@ -13,6 +13,7 @@ import type {
   VerifyArgs,
   VerifyOutcome,
 } from '../types.js';
+import { hasX402Payment } from '../detect.js';
 import { resolveX402Accepts, selectRouteAccepts } from './accepts.js';
 import { buildX402Challenge } from './challenge.js';
 import { settleX402Payment } from './settle.js';
@@ -48,12 +49,7 @@ interface X402Token {
 export const x402Strategy: PaymentStrategy = {
   protocol: 'x402',
 
-  detects(request: Request): boolean {
-    return Boolean(
-      request.headers.get(HEADERS.X402_PAYMENT_SIGNATURE) ??
-      request.headers.get(HEADERS.X402_PAYMENT_LEGACY),
-    );
-  },
+  detects: hasX402Payment,
 
   verify: (args: VerifyArgs) => verifyX402(args),
   settle: (args: SettleArgs) => settleX402(args),

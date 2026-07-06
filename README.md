@@ -44,6 +44,8 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 | `EVM_PAYEE_ADDRESS` | yes | EVM address that receives x402 and MPP payments (`0x…`, 20 bytes). Canonicalized to lowercase. The zero address is rejected. |
 | `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | yes (EVM) | Coinbase Developer Platform credentials for the default EVM facilitator. Create API keys in the generous CDP free tier at https://portal.cdp.coinbase.com/projects/api-keys. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
 
+> **Router construction phones the facilitator.** Creating the router kicks off a background fetch of the facilitator's supported payment kinds — including during `next build`. With missing or placeholder CDP keys you'll see `[x402] facilitator /supported failed, using hardcoded baseline: …` in build/dev logs. That's a graceful fallback, not a fatal error; paid routes still serve correct 402 challenges.
+
 ### Solana
 
 | Var | Required | Purpose |
@@ -60,6 +62,16 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 | `TEMPO_RPC_URL` | no | Tempo JSON-RPC endpoint for MPP on-chain verification. Defaults to the public `DEFAULT_TEMPO_RPC_URL` (`https://rpc.tempo.xyz`). Override only if you have a dedicated endpoint. |
 | `MPP_OPERATOR_KEY` | no | Signs server-side close/settle. When set, MPP session mode is enabled automatically (required for `.metered()`: both streaming and request-mode per-tick billing). Address must equal the payee. |
 | `MPP_FEE_PAYER_KEY` | no | Sponsors client gas for channel open/topUp. Must resolve to a different address than `MPP_OPERATOR_KEY` (Tempo rejects fee-delegated txs where `sender === feePayer`). |
+
+> **MPP session mode needs the payee's private key.** Unlike x402 (address only), `.metered()` routes settle server-side, so `MPP_OPERATOR_KEY` must be the private key *of* `EVM_PAYEE_ADDRESS`. For local development, mint a throwaway keypair where the two line up:
+>
+> ```bash
+> npm i -D viem  # or pnpm add -D viem
+> node -e "const {generatePrivateKey, privateKeyToAccount} = require('viem/accounts');
+>   const pk = generatePrivateKey();
+>   console.log('EVM_PAYEE_ADDRESS=' + privateKeyToAccount(pk).address);
+>   console.log('MPP_OPERATOR_KEY=' + pk);"
+> ```
 
 ### Other
 
@@ -134,21 +146,32 @@ export const GET = router.route({ path: 'inbox/status' })
 // app/api/health/route.ts
 export const GET = router.route({ path: 'health' })
   .unprotected()
+  .method('GET')
   .handler(async () => ({ status: 'ok' }));
 ```
 
+> **The exported const name and `.method()` are independent.** The name you export (`GET`/`POST`) controls which verb Next.js serves; `.method()` controls the verb advertised in discovery output (OpenAPI). The router defaults to `POST` (or `GET` when `.query()` is used) — so any other GET route must chain `.method('GET')` explicitly or discovery will advertise the wrong verb.
+
 ### 3. Auto-discovery
 
+The router generates two recommended discovery surfaces. Mount both — agents look for each of them:
+
 ```typescript
-// app/openapi.json/route.ts
+// app/openapi.json/route.ts — OpenAPI 3.1, served at GET <origin>/openapi.json
 import { router } from '@/lib/router';
 import '@/lib/routes-barrel';  // imports every route module so the registry is populated
 export const GET = router.openapi();
 ```
 
-The barrel forces every route module to load before the discovery handler walks the registry. Next.js otherwise lazy-loads route files on first hit, and unloaded routes don't appear in the spec.
+```typescript
+// app/llms.txt/route.ts — plain-text agent guidance, served at GET <origin>/llms.txt
+import { router } from '@/lib/router';
+export const GET = router.llmsTxt();
+```
 
-The `openapi.json` should be hosted at `GET <origin>/openapi.json`. 
+The barrel forces every route module to load before the discovery handlers walk the registry. Next.js otherwise lazy-loads route files on first hit, and unloaded routes don't appear in the spec (`llms.txt` renders from static config only, so it doesn't need the barrel).
+
+> **Deprecated:** `router.wellKnown()` (the `/.well-known/x402` resource listing) is no longer a recommended discovery surface. The handler still works if you already serve it — existing x402-native clients won't break — but new integrations should rely on `/openapi.json` and `/llms.txt`.
 
 ### 4. Unmatched route fallback
 
@@ -200,7 +223,18 @@ router.route({ path: 'inbox' })
 
 > **Gotcha:** serverless / multi-instance deployments must provide a real `kvStore` (Upstash / Vercel KV). Without one the entitlement is kept in a per-process `Map`, so a wallet that paid on instance A is treated as unpaid on instance B and the user gets charged again.
 
-## Pricing
+## Reading a 402 challenge
+
+What an unpaid request gets back depends on the route's auth mode:
+
+- **Payment-only routes** (`.paid()`, `.upTo()`, `.metered()` without `.siwx()`) return a 402 with an **empty body**. The entire challenge — accepts, price, schema — is base64-encoded in the `PAYMENT-REQUIRED` response header (x402 v2), with MPP challenges in `WWW-Authenticate`. Don't `res.json()` these; decode the header.
+- **SIWX routes** (`.siwx()`, alone or composed with a pricing mode) return a 402 with a **JSON body** that mirrors the `PAYMENT-REQUIRED` header, including the `sign-in-with-x` extension. Header and body are always identical.
+
+Every 402 also carries an `X-Agent-Identity` response header: an optional [DID-auth challenge](https://www.npmjs.com/package/did-auth-challenge) (nonce, domain/route binding, expiry). Clients that hold a DID may sign it and send the proof back in `X-Agent-Identity` on the retry; the verified DID is then available to handlers as `ctx.actor`. It is fully optional — it never gates the request and is unrelated to SIWX or payment. Clients without a DID can ignore it.
+
+### When the body is validated
+
+For args-derived (`.paid(fn)`) and tiered pricing, and for routes with `.validate()` or a checkout session, the body is parsed **before** the 402 challenge so the challenge can quote an accurate price (and `.validate()` can reject with its own status). On every other paid route, a bare unpaid probe gets its 402 **without the body being inspected** — a malformed body still yields 402, not 400. The paying retry then parses and validates the body *before* payment verification and settlement, so a 400 never costs the caller money.
 
 `.paid()`, `.upTo()`, and `.metered()` are mutually exclusive pricing modes: pick one per route.
 
@@ -233,7 +267,7 @@ router.route({ path: 'inbox' })
 
 ### `.upTo()`: handler-computed, x402 only
 
-Handler calls `charge(amount)` one or more times; the request settles once for the accumulated total, capped at `maxPrice`. Requires an `'upto'` accept on at least one configured x402 network (`createRouterFromEnv` auto-adds one on Base).
+Handler calls `charge(amount)` one or more times; the request settles once for the accumulated total, capped at `maxPrice`. A `charge()` that would push the running total past `maxPrice` throws a 400 `CHARGE_OVER_CAP` error (the request fails and nothing settles) — it is not silently clamped, so guard your loop if partial work should still be billed. Requires an `'upto'` accept on at least one configured x402 network (`createRouterFromEnv` auto-adds one on Base).
 
 ```typescript
 .upTo('0.05')
@@ -285,7 +319,7 @@ router.route({ path: 'domain/register' })
   .handler(async ({ body, wallet }) => registerDomain(body.domain, wallet));
 ```
 
-Pipeline order: `body parse -> validate -> 402 challenge -> payment -> handler`.
+Pipeline order on these routes: `body parse -> validate -> 402 challenge -> payment -> handler`. (`.validate()` is one of the triggers for pre-challenge body parsing — see [When the body is validated](#when-the-body-is-validated).)
 
 ## Plugin Hooks
 

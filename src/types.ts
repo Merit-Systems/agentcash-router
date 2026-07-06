@@ -18,6 +18,24 @@ export class HttpError extends Error {
   }
 }
 
+/**
+ * Thrown when a route definition is invalid — an impossible builder
+ * combination, a malformed price, or a route that needs config the router
+ * wasn't given. Fires at module-import time (when the route file is first
+ * loaded), so Next.js surfaces it as a build/dev error, never as a response.
+ * The registration-time sibling of {@link RouterConfigError}.
+ */
+export class RouteDefinitionError extends Error {
+  constructor(
+    /** Registry key of the offending route. */
+    public readonly route: string,
+    detail: string,
+  ) {
+    super(`route '${route}': ${detail}`);
+    this.name = 'RouteDefinitionError';
+  }
+}
+
 export type AlertLevel = 'info' | 'warn' | 'error' | 'critical';
 
 export interface AlertEvent {
@@ -411,6 +429,6 @@ export interface RouterConfig {
   protocols?: ProtocolType[];
   /** When true, `.route('key')` is rejected (use `.route({ path })`) and custom `key !== path` is rejected. Prevents discovery/openapi drift. */
   strictRoutes?: boolean;
-  /** Static metadata for auto-generated discovery surfaces — `/.well-known/x402`, OpenAPI (`/api/openapi`), and `/llms.txt`. */
+  /** Static metadata for auto-generated discovery surfaces — `/openapi.json` (`.openapi()`) and `/llms.txt` (`.llmsTxt()`). Also feeds the deprecated `.wellKnown()` handler. */
   discovery: DiscoveryConfig;
 }

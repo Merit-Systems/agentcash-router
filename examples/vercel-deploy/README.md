@@ -50,7 +50,6 @@ The landing page at `/` lists every endpoint with a copy-pasteable `npx agentcas
 | `lib/routes.ts` | Barrel that imports every route module — required so the discovery handlers see them. Add new routes to this list. |
 | `app/api/fortune/*` | The demo endpoints. Each file leads with a comment explaining which payment mode it exercises. |
 | `app/openapi.json/route.ts` | AgentCash Discovery — the OpenAPI 3.x spec with pricing extensions. |
-| `app/.well-known/x402/route.ts` | x402-native discovery (separate from `/openapi.json`). |
 | `app/llms.txt/route.ts` | LLM-readable guidance for agents that don't speak AgentCash Discovery natively. |
 | `app/page.tsx` | The landing page you saw after deploying. |
 | `next.config.ts` | Minimal Next config; router env derivation lives in `@agentcash/router`. |
@@ -95,7 +94,6 @@ MPP (multi-payment protocol on Tempo) adds per-request metered billing and SSE t
 Once deployed, agents find your endpoints via:
 
 - `https://<your-domain>/openapi.json` — AgentCash Discovery (OpenAPI 3.x + AgentCash extensions). Indexed by [AgentCash](https://agentcash.dev), [x402scan](https://x402scan.com), [MPPScan](https://mppscan.com), and anyone else who crawls the format.
-- `https://<your-domain>/.well-known/x402` — native x402 discovery for clients that don't speak OpenAPI.
 - `https://<your-domain>/llms.txt` — plain-English usage guidance.
 
 No registration, no marketplace, no API keys. The spec is the contract.

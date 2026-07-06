@@ -76,7 +76,6 @@ const DISCOVERY = [
     path: '/openapi.json',
     description: 'AgentCash Discovery — OpenAPI 3.x with pricing extensions.',
   },
-  { path: '/.well-known/x402', description: 'x402 protocol discovery endpoint.' },
   { path: '/llms.txt', description: 'Agent-readable usage guidance.' },
 ];
 

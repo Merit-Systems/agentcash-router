@@ -1,5 +1,5 @@
 // Barrel import — registers every route module before discovery handlers run.
-// Without this, `/openapi.json`, `/llms.txt`, and `/.well-known/x402` would
+// Without this, `/openapi.json` and `/llms.txt` would
 // miss any route Next hasn't lazy-loaded yet on first hit.
 //
 // All routes work out of the box with just the three x402 env vars.

@@ -1,16 +1,6 @@
 import type { NextResponse } from 'next/server';
-import { selectPricing } from '../../../pricing/index.js';
-import { selectIncomingStrategy } from '../../../protocols/index.js';
-import {
-  fail,
-  firePaymentVerified,
-  protocolInitError,
-  resolveEarlyBody,
-  runApiKeyGate,
-  trySiwxFastPath,
-  type FlowCtx,
-} from '../../steps/index.js';
-import { buildChallengeResponse } from '../challenge-response.js';
+import { type FlowCtx } from '../../steps/index.js';
+import { runPaidPreamble, runPaidVerify } from '../paid-preamble.js';
 import { resolveDynamicBodyAndPrice } from './dynamic-body-and-price.js';
 import { runDynamicChannelMgmtFlow } from './dynamic-channel-mgmt.js';
 import { invokeMetered, invokeUpto } from './dynamic-invoke/index.js';
@@ -21,33 +11,11 @@ import type { VerifySuccess } from '../../../protocols/types.js';
 import type { DynamicInvokeResult } from '../../steps/types.js';
 
 export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
-  const { request, routeEntry, deps, report } = ctx;
+  const { request, routeEntry } = ctx;
 
-  const apiKeyGate = await runApiKeyGate(ctx);
-  if (!apiKeyGate.ok) return apiKeyGate.response;
-  const { account } = apiKeyGate;
-
-  const pricing = selectPricing(routeEntry.pricing, {
-    alert: report,
-    maxPrice: routeEntry.maxPrice,
-    minPrice: routeEntry.minPrice,
-    route: routeEntry.key,
-  });
-
-  const incomingStrategy = selectIncomingStrategy(request, routeEntry.protocols);
-
-  const earlyResolution = await resolveEarlyBody({ ctx, pricing, incomingStrategy });
-  if (!earlyResolution.ok) return earlyResolution.response;
-  const { earlyBody } = earlyResolution;
-
-  const siwxFastPath = await trySiwxFastPath(ctx, account);
-  if (siwxFastPath) return siwxFastPath;
-
-  if (!incomingStrategy) {
-    const initError = protocolInitError(routeEntry, deps);
-    if (initError) return fail(ctx, 500, initError);
-    return buildChallengeResponse(ctx, pricing, earlyBody);
-  }
+  const preamble = await runPaidPreamble(ctx);
+  if (preamble.done) return preamble.response;
+  const { account, pricing, incomingStrategy } = preamble;
 
   const { skipBody, skipHandler } = resolveDynamicPreflight(incomingStrategy, request, routeEntry);
 
@@ -65,29 +33,15 @@ export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
   if (!bodyAndPrice.ok) return bodyAndPrice.response;
   const { parsedBody, price } = bodyAndPrice;
 
-  const verifyOutcome = await incomingStrategy.verify({
-    request,
-    body: parsedBody,
+  const verify = await runPaidVerify({
+    ctx,
+    strategy: incomingStrategy,
+    pricing,
+    parsedBody,
     price,
-    routeEntry,
-    deps,
-    report,
   });
-
-  if (verifyOutcome.ok === false) {
-    if (verifyOutcome.kind === 'config') {
-      return fail(ctx, 500, verifyOutcome.message, parsedBody);
-    }
-    return buildChallengeResponse(ctx, pricing, parsedBody, verifyOutcome.failure);
-  }
-
-  ctx.pluginCtx.setVerifiedWallet(verifyOutcome.wallet);
-  firePaymentVerified(ctx, {
-    protocol: incomingStrategy.protocol,
-    payer: verifyOutcome.wallet,
-    amount: price,
-    network: verifyOutcome.payment.network,
-  });
+  if (!verify.ok) return verify.response;
+  const { verifyOutcome } = verify;
 
   const result = await invokeDynamic(ctx, verifyOutcome, account, parsedBody);
 

@@ -4,6 +4,12 @@ import type { RouteRegistry } from '../registry.js';
 import type { DiscoveryConfig } from '../types.js';
 import { resolveGuidance } from './utils/guidance.js';
 
+/**
+ * @deprecated `/.well-known/x402` is no longer a recommended discovery
+ * surface. Kept fully functional for legacy x402-native clients — do not
+ * remove — but don't recommend it anywhere; point new integrations at
+ * `/openapi.json` and `/llms.txt`.
+ */
 export function createWellKnownHandler(
   registry: RouteRegistry,
   baseUrl: string,
