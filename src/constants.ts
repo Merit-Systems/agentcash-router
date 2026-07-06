@@ -13,6 +13,6 @@ export const BASE_USDC_DECIMALS = 6;
 /** All-zeros EVM address. Used as a placeholder/sentinel; not a valid payee. */
 export const ZERO_EVM_ADDRESS = '0x0000000000000000000000000000000000000000';
 /** Public Solana x402 facilitator. Override per-deployment via `SOLANA_FACILITATOR_URL`. */
-export const DEFAULT_SOLANA_FACILITATOR_URL = 'https://facilitator.corbits.dev';
+export const DEFAULT_SOLANA_FACILITATOR_URL = 'https://facilitator.payai.network';
 /** Public Tempo JSON-RPC endpoint used for MPP on-chain verification. Override per-deployment via `TEMPO_RPC_URL`. */
 export const DEFAULT_TEMPO_RPC_URL = 'https://rpc.tempo.xyz';

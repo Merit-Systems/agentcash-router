@@ -8,7 +8,7 @@ import {
   type ResolvedX402Facilitators,
 } from './facilitators.js';
 import {
-  enrichRequirementsWithFacilitatorAccepts,
+  enrichRequirementsFromFacilitatorSupported,
   hasSolanaAccepts,
   isSolanaRequirement,
 } from './solana.js';
@@ -85,18 +85,14 @@ function needsFacilitatorEnrichment(accepts: X402ResolvedAccept[]): boolean {
   return hasSolanaAccepts(accepts);
 }
 
-async function enrichGroup(
-  group: EnrichmentGroup,
-  resource: ChallengeResource,
-): Promise<PaymentRequirements[]> {
-  const accepted = await enrichRequirementsWithFacilitatorAccepts(
+async function enrichGroup(group: EnrichmentGroup): Promise<PaymentRequirements[]> {
+  const accepted = await enrichRequirementsFromFacilitatorSupported(
     group.facilitator,
-    resource,
     group.items.map(({ requirement }) => requirement),
   );
   if (accepted.length !== group.items.length) {
     throw new Error(
-      `Facilitator /accepts returned ${accepted.length} requirements for ${group.items.length} inputs on ${group.facilitator.url ?? group.facilitator.network}`,
+      `Facilitator /supported enrichment returned ${accepted.length} requirements for ${group.items.length} inputs on ${group.facilitator.url ?? group.facilitator.network}`,
     );
   }
   return accepted;
@@ -118,13 +114,13 @@ async function enrichChallengeRequirements(
   const results = await Promise.all(
     groups.map(async (group): Promise<EnrichmentResult> => {
       try {
-        return { success: true, group, accepted: await enrichGroup(group, resource) };
+        return { success: true, group, accepted: await enrichGroup(group) };
       } catch (err) {
         const label = group.facilitator.url ?? group.facilitator.network;
         const reason = err instanceof Error ? err.message : String(err);
         report?.(
           'warn',
-          `${label} /accepts failed, dropping ${group.items.length} requirement(s): ${reason}`,
+          `${label} /supported enrichment failed, dropping ${group.items.length} requirement(s): ${reason}`,
         );
         return { success: false, group };
       }

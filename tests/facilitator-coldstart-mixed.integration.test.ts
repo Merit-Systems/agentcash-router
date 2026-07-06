@@ -6,6 +6,7 @@ import { createRouter } from '../src/index.js';
 
 const SOLANA_NETWORK = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
 const SOLANA_PAYEE = '9tCZP1W2jNYZjikmteU1HRrkoSGaRqcNs9ciLeQZb4a2';
+const FEE_PAYER = '2wKupLR9q6wXYppw8Gr2NvWxKBUqm4PPJKkQfoxHDBg4';
 
 const servers: http.Server[] = [];
 
@@ -18,7 +19,8 @@ afterEach(() => {
 interface StubKind {
   scheme: string;
   network: string;
-  x402Version: number;
+  x402Version?: number;
+  asset?: string;
   extra?: Record<string, unknown>;
 }
 
@@ -29,7 +31,6 @@ interface StubFacilitatorOptions {
 async function startStubFacilitator(kinds: StubKind[], options: StubFacilitatorOptions = {}) {
   const { supportedStatus = 200 } = options;
   let supportedCalls = 0;
-  let acceptsCalls = 0;
 
   const server = http.createServer((req, res) => {
     if (req.url === '/supported') {
@@ -41,20 +42,6 @@ async function startStubFacilitator(kinds: StubKind[], options: StubFacilitatorO
       }
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ kinds, extensions: [], signers: {} }));
-      return;
-    }
-
-    if (req.url === '/accepts' && req.method === 'POST') {
-      acceptsCalls += 1;
-      let raw = '';
-      req.on('data', (chunk) => {
-        raw += chunk;
-      });
-      req.on('end', () => {
-        const body = JSON.parse(raw || '{}') as { accepts?: unknown[] };
-        res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ accepts: body.accepts ?? [] }));
-      });
       return;
     }
 
@@ -73,7 +60,6 @@ async function startStubFacilitator(kinds: StubKind[], options: StubFacilitatorO
   return {
     url: `http://127.0.0.1:${address.port}`,
     getSupportedCalls: () => supportedCalls,
-    getAcceptsCalls: () => acceptsCalls,
   };
 }
 
@@ -94,14 +80,17 @@ function newRequest() {
   return new NextRequest('http://localhost:3000/api/test/route', { method: 'POST' });
 }
 
-describe('facilitator /supported memoization', () => {
-  it('never calls /supported on the Solana facilitator and yields a Solana challenge', async () => {
+describe('facilitator /supported enrichment', () => {
+  it('calls /supported and merges feePayer into the Solana challenge', async () => {
     const facilitator = await startStubFacilitator([
       {
         scheme: 'exact',
         network: SOLANA_NETWORK,
         x402Version: 2,
-        extra: { features: { xSettlementAccountSupported: true } },
+        extra: {
+          feePayer: FEE_PAYER,
+          features: { xSettlementAccountSupported: true },
+        },
       },
     ]);
 
@@ -113,7 +102,7 @@ describe('facilitator /supported memoization', () => {
 
     expect(first.status).toBe(402);
     expect(second.status).toBe(402);
-    expect(facilitator.getSupportedCalls()).toBe(0);
+    expect(facilitator.getSupportedCalls()).toBe(2);
 
     const challenge = decodePaymentRequiredHeader(first.headers.get('PAYMENT-REQUIRED')!);
     expect(challenge.accepts).toHaveLength(1);
@@ -121,29 +110,37 @@ describe('facilitator /supported memoization', () => {
       scheme: 'exact',
       network: SOLANA_NETWORK,
       payTo: SOLANA_PAYEE,
+      extra: {
+        feePayer: FEE_PAYER,
+        features: { xSettlementAccountSupported: true },
+      },
     });
   });
 
-  it('still builds a 402 challenge when the Solana facilitator is unreachable', async () => {
+  it('returns 500 when the Solana facilitator /supported is unreachable', async () => {
     const facilitator = await startStubFacilitator([], { supportedStatus: 500 });
     const router = buildSolanaRouter(facilitator.url);
     const handler = router.route('test/route').handler(async () => ({ ok: true }));
 
     const response = await handler(newRequest());
-    expect(response.status).toBe(402);
-    expect(facilitator.getSupportedCalls()).toBe(0);
-
-    const challenge = decodePaymentRequiredHeader(response.headers.get('PAYMENT-REQUIRED')!);
-    const solanaSchemes = challenge.accepts
-      .filter((accept) => accept.network === SOLANA_NETWORK)
-      .map((accept) => accept.scheme);
-    expect(solanaSchemes).toEqual(['exact']);
+    expect(response.status).toBe(500);
+    expect(facilitator.getSupportedCalls()).toBe(1);
   });
 
   it('omits upto on Solana even when the facilitator advertises it', async () => {
     const facilitator = await startStubFacilitator([
-      { scheme: 'exact', network: SOLANA_NETWORK, x402Version: 2 },
-      { scheme: 'upto', network: SOLANA_NETWORK, x402Version: 2 },
+      {
+        scheme: 'exact',
+        network: SOLANA_NETWORK,
+        x402Version: 2,
+        extra: { feePayer: FEE_PAYER },
+      },
+      {
+        scheme: 'upto',
+        network: SOLANA_NETWORK,
+        x402Version: 2,
+        extra: { feePayer: FEE_PAYER },
+      },
     ]);
 
     const router = buildSolanaRouter(facilitator.url);

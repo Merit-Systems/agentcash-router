@@ -139,10 +139,7 @@ export interface X402ResolvedAccept extends X402AcceptBase {
   payTo: string;
 }
 
-export interface X402RouterFacilitatorConfig extends FacilitatorConfig {
-  /** Async header builder invoked per facilitator call. Use for short-lived auth tokens (e.g. CDP signed headers). */
-  createAcceptsHeaders?: () => Promise<Record<string, string>>;
-}
+export interface X402RouterFacilitatorConfig extends FacilitatorConfig {}
 
 /** A facilitator URL or a full `FacilitatorConfig` (URL + auth header builders). */
 export type X402FacilitatorTarget = string | X402RouterFacilitatorConfig;

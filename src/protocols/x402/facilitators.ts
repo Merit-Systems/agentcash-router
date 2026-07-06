@@ -98,13 +98,9 @@ export function sameResolvedX402Facilitator(
   return sameFacilitatorConfig(a.config, b.config);
 }
 
-export async function getAcceptsHeadersForFacilitator(
+export async function getSupportedHeadersForFacilitator(
   facilitator: ResolvedX402Facilitator,
 ): Promise<Record<string, string>> {
-  if (facilitator.config.createAcceptsHeaders) {
-    return facilitator.config.createAcceptsHeaders();
-  }
-
   if (facilitator.config.createAuthHeaders) {
     const headers = await facilitator.config.createAuthHeaders();
     return headers.supported;
@@ -138,9 +134,5 @@ function sameFacilitatorConfig(
   a: X402RouterFacilitatorConfig,
   b: X402RouterFacilitatorConfig,
 ): boolean {
-  return (
-    a.url === b.url &&
-    a.createAuthHeaders === b.createAuthHeaders &&
-    a.createAcceptsHeaders === b.createAcceptsHeaders
-  );
+  return a.url === b.url && a.createAuthHeaders === b.createAuthHeaders;
 }

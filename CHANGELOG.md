@@ -1,5 +1,12 @@
 # @agentcash/router
 
+## 1.14.0
+
+### Breaking Changes
+
+- Solana x402 challenge enrichment now uses **`GET /supported` only** — the Corbits-style `POST /accepts` path is removed. Facilitators must expose `feePayer` (and optionally `asset`) on their `/supported` kinds. Default Solana facilitator is now PayAI (`https://facilitator.payai.network`).
+- Removed `createAcceptsHeaders` from `X402RouterFacilitatorConfig`. Use `createAuthHeaders().supported` for authenticated `/supported` calls.
+
 ## 1.13.0
 
 ### Minor Changes
