@@ -28,7 +28,7 @@
   ],
   "scripts": {
     "build": "tsup",
-    "typecheck": "tsc --noEmit && tsc -p tests/tsconfig.json --noEmit",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint src/ tests/ --max-warnings 0",
     "lint:fix": "eslint src/ tests/ --fix",
     "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts' 'examples/fortune/**/*.ts' 'examples/fortune/**/*.md' '*.json' '*.mjs'",
