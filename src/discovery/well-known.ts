@@ -4,6 +4,10 @@ import type { RouteRegistry } from '../registry.js';
 import type { DiscoveryConfig } from '../types.js';
 import { resolveGuidance } from './utils/guidance.js';
 
+/**
+ * @deprecated No longer a recommended discovery surface — keep functional for
+ * legacy x402-native clients, but recommend `/openapi.json` + `/llms.txt`.
+ */
 export function createWellKnownHandler(
   registry: RouteRegistry,
   baseUrl: string,

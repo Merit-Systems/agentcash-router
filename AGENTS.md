@@ -31,7 +31,7 @@ src/
   kv-store/             one KvStore backs siwx nonce, siwx entitlement, mpp replay
   pricing/              fixed, tiered, dynamic (args-derived), upto-charge, metered-charge, format (atomic conversion)
   pipeline/             orchestrate.ts + steps/ + flows/ (paid → static-paid | dynamic-paid; siwx-only, api-key-only, unprotected)
-  discovery/            well-known, openapi, llms-txt
+  discovery/            openapi, llms-txt, well-known (deprecated surface), not-found
   config/               RouterConfig + env schema (single source of truth), RouterConfigError, issue codes
 ```
 
@@ -39,17 +39,25 @@ src/
 
 `auth check -> body parse -> validate -> 402 challenge -> payment verify -> handler -> settle -> finalize`
 
+The `body parse -> validate -> 402 challenge` prefix only holds when the challenge needs the body: args-derived/tiered pricing, `.validate()`, or a checkout session (`shouldParseBodyEarly`). On other paid routes a bare unpaid probe gets its 402 without the body being inspected (malformed body ⇒ 402, not 400); the paying retry parses and validates before verify/settle, so a 400 never charges the caller.
+
 Paid `.paid()` routes may set `mpp: { settleBeforeHandler: true }` (or chain `.mpp({ settleBeforeHandler: true })` on auto-priced routes) to broadcast MPP transaction (pull) credentials at verify instead of after the handler. x402 on the same route is unaffected. MPP hash (push) credentials already settle at verify. Use `.settlement({ onSettledHandlerError })` when eager MPP settle can charge before an upstream failure.
 
 ## Naming
 
-Constructor-style functions use `build<Noun>` — one verb, one domain noun. Name them after the domain concept, never after an HTTP status code or transport detail (the function that builds a payment challenge is `buildChallengeResponse`, not `build402`). The challenge family shares the `Challenge` backbone: `buildChallengeResponse`, `buildChallengeExtensions`, `buildSiwxChallenge`, `buildSessionChallenge`, `buildX402Challenge`.
+Two constructor-verb families, split by audience:
+
+- `create<Noun>` — public, top-level factories that return long-lived objects: `createRouter`, `createRouterFromEnv`, `createRequestHandler`, `createUptoChargeContext`.
+- `build<Noun>` — internal, per-request assembly of protocol payloads and contexts: one verb, one domain noun, named after the domain concept, never after an HTTP status code or transport detail (the function that builds a payment challenge is `buildChallengeResponse`, not `build402`). The challenge family shares the `Challenge` backbone: `buildChallengeResponse`, `buildChallengeExtensions`, `buildSiwxChallenge`, `buildSessionChallenge`, `buildX402Challenge`.
+
+Pipeline steps use `run<Noun>` (executes and may answer the request), `resolve<Noun>` (computes a value), or `try<Noun>` (optional fast path returning null to continue).
 
 ## Critical rules
 
-- **Error handling.** Respect `.status` on any thrown error, not just `HttpError`. Pattern: `throw Object.assign(new Error('msg'), { status: 409 })`.
+- **Error handling.** Respect `.status` on any thrown error, not just `HttpError`. Pattern: `throw Object.assign(new Error('msg'), { status: 409 })`. Three typed error classes, by phase: `RouterConfigError` (router construction), `RouteDefinitionError` (route registration, thrown at module-import time — never a JSON response), `HttpError` (request time, becomes a structured JSON response). New registration-time guards must throw `RouteDefinitionError`, not plain `Error`.
 - **SIWX challenge.** Must return an x402v2 challenge with a `PAYMENT-REQUIRED` header and a JSON body whose `extensions['sign-in-with-x']` carries `info` (an object with `domain`, `uri`, `version`, `chainId`, `type`, `nonce`, `issuedAt`, `expirationTime`, `statement`), `supportedChains`, and an optional `schema`. The header-encoded challenge and the JSON body must stay identical.
-- **Discovery visibility.** `authMode !== 'unprotected'` determines well-known visibility, not the protocol list. SIWX routes are discoverable. All three pricing modes set `authMode = 'paid'`; the `billing` field (`'exact' | 'upto' | 'metered'`) distinguishes them downstream.
+- **Discovery visibility.** `authMode !== 'unprotected'` determines discovery visibility (OpenAPI `x-payment-info` and the deprecated well-known listing), not the protocol list. SIWX routes are discoverable. All three pricing modes set `authMode = 'paid'`; the `billing` field (`'exact' | 'upto' | 'metered'`) distinguishes them downstream.
+- **`.wellKnown()` is deprecated as a discovery recommendation.** The `/.well-known/x402` handler keeps working for legacy x402 clients (do not remove the logic), but never recommend it in docs, examples, or the 404 rediscovery hint — the recommended surfaces are `/openapi.json` and `/llms.txt`.
 - **OpenAPI.** Merge paths for multi-method endpoints (GET + DELETE on same path). Never overwrite.
 - **Duplicate route keys.** Registry silently overwrites (last write wins) with a dev-only `console.warn`. This is intentional: Next.js module load order is non-deterministic, so stub + real handler may register either order.
 - **Args-derived pricing.** Body is parsed before the 402 challenge via `request.clone()` when `.paid(fn)` is used. `maxPrice` is optional: it caps the computed amount and acts as a fallback on non-`HttpError` exceptions; `HttpError` is always rethrown so a pricing function can reject the request with its intended status before any payment is taken.
@@ -58,6 +66,9 @@ Constructor-style functions use `build<Noun>` — one verb, one domain noun. Nam
 - **MPP operator vs fee-payer.** `mpp.operatorKey` and `mpp.feePayerKey` MUST resolve to different addresses. Tempo rejects fee-delegated txs where `sender === feePayer`. `createRouter` validates this at construction and throws `mpp_operator_equals_fee_payer`.
 - **MPP operator address.** Must equal `recipient` / payee. mppx's close handler asserts `sender === payee` on settle.
 - **Streaming requires `.metered()`.** `.stream()` on a `.paid()` / `.upTo()` / `.unprotected()` route throws at registration. x402 has no streaming primitive, so `.stream()` is MPP-only by construction.
+- **Builder invariants are enforced twice.** Every mutual-exclusion rule above is a compile-time `RouteError<'…'>` (via the `Ident`/`Bill` phantom generics in `builder.ts`) *and* a registration-time throw (for JS consumers). When adding or changing a rule, update both, plus the type tests in `tests/builder.test-d.ts` and the runtime tests in `tests/builder.test.ts`. Type tests run via vitest's typecheck pass (`pnpm test`), not `pnpm typecheck` — `tsconfig.json` excludes `tests/`.
+- **`.method()` is discovery-only.** The exported const name (`GET`/`POST`) controls what Next.js serves; `.method()` controls what discovery output advertises. Default is `POST` (`GET` when `.query()` is used) — GET routes without `.query()` must chain `.method('GET')` or discovery advertises the wrong verb.
+- **`X-Agent-Identity`.** Every 402 carries an optional DID-auth challenge header (`src/auth/agent-identity.ts`, `did-auth-challenge` package). Clients may return a signed proof; the verified DID surfaces as `ctx.actor`. Never gates a request; independent of SIWX and payment.
 
 ## Two entry points
 

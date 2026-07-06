@@ -24,6 +24,7 @@ import type {
 import type { RouteRegistry } from './registry.js';
 import type { RouterDeps, RouteHandler } from './pipeline/orchestrate.js';
 import { createRequestHandler } from './pipeline/orchestrate.js';
+import { RouteDefinitionError } from './types.js';
 import { isPositiveDecimal } from './pricing/format.js';
 import { validateExamples } from './validate-examples.js';
 
@@ -50,40 +51,64 @@ type StreamingHandlerFn<TBody, TQuery> = (
   ctx: StreamingHandlerContext<TBody, TQuery>,
 ) => AsyncIterable<unknown>;
 
-/** Discriminator threaded through the builder so `.handler()` / `.stream()` can pick the right handler shape. */
-export type BillingMode = 'none' | 'upto' | 'metered';
+/**
+ * Pricing-mode discriminator threaded through the builder. `'none'` until a
+ * pricing method is chained; then `'exact'` (`.paid()`), `'upto'`, or
+ * `'metered'`. Gates repeat pricing calls and picks the handler shape.
+ */
+export type BillingMode = 'none' | 'exact' | 'upto' | 'metered';
+
+/**
+ * Identity-mode discriminator threaded through the builder. `'none'` until an
+ * identity method is chained; then `'siwx'`, `'apiKey'`, or `'open'`
+ * (`.unprotected()`). Gates the mutually-exclusive combinations at compile
+ * time, mirroring the registration-time throws.
+ */
+export type IdentMode = 'none' | 'siwx' | 'apiKey' | 'open';
+
+/** Resolves to `TSelf` when a pricing method may be chained, else a `RouteError`. Mirrors the runtime guards in `applyPaid`. */
+type PricingGate<
+  TSelf,
+  Ident extends IdentMode,
+  Bill extends BillingMode,
+  M extends string,
+> = Ident extends 'open'
+  ? RouteError<`Cannot combine .unprotected() and .${M}() on the same route`>
+  : Bill extends 'none'
+    ? TSelf
+    : RouteError<'Cannot combine .paid(), .upTo(), and .metered() — pick one pricing mode'>;
 
 type HandlerArg<
   TBody,
   TQuery,
-  HasAuth extends boolean,
+  Ident extends IdentMode,
   NeedsBody extends boolean,
   HasBody extends boolean,
   Bill extends BillingMode,
-> = HasAuth extends true
-  ? [NeedsBody, HasBody] extends [true, false]
+> = [Ident, Bill] extends ['none', 'none']
+  ? RouteError<'Pick an auth mode first: .paid(...), .upTo(...), .metered(...), .siwx(), .apiKey(...), or .unprotected()'>
+  : [NeedsBody, HasBody] extends [true, false]
     ? RouteError<'Call .body(schema) — body-derived/tiered pricing reads the parsed body'>
     : Bill extends 'upto'
       ? UptoHandlerFn<TBody, TQuery>
-      : RequestHandlerFn<TBody, TQuery>
-  : RouteError<'Pick an auth mode first: .paid(...), .upTo(...), .metered(...), .siwx(), .apiKey(...), or .unprotected()'>;
+      : RequestHandlerFn<TBody, TQuery>;
 
 type StreamArg<
   TBody,
   TQuery,
-  HasAuth extends boolean,
+  Ident extends IdentMode,
   NeedsBody extends boolean,
   HasBody extends boolean,
   Bill extends BillingMode,
-> = HasAuth extends true
-  ? Bill extends 'metered'
+> = [Ident, Bill] extends ['none', 'none']
+  ? RouteError<'Pick an auth mode first: .metered({ ... }) — streaming requires metered pricing'>
+  : Bill extends 'metered'
     ? [NeedsBody, HasBody] extends [true, false]
       ? RouteError<'Call .body(schema) — metered pricing reads the parsed body'>
       : StreamingHandlerFn<TBody, TQuery>
     : Bill extends 'upto'
       ? RouteError<'Streaming is not supported on .upTo() — use .metered() on MPP for per-yield billing'>
-      : RouteError<'Streaming requires .metered({ tickCost, maxPrice }) — static/free routes cannot meter per-chunk billing'>
-  : RouteError<'Pick an auth mode first: .metered({ ... }) — streaming requires metered pricing'>;
+      : RouteError<'Streaming requires .metered({ tickCost, maxPrice }) — static/free routes cannot meter per-chunk billing'>;
 
 type BuilderState<TBody> = {
   key: string;
@@ -127,7 +152,7 @@ export class RouteBuilder<
   TBody = undefined,
   TQuery = undefined,
   TOutput = undefined,
-  HasAuth extends boolean = false,
+  Ident extends IdentMode = 'none',
   NeedsBody extends boolean = false,
   HasBody extends boolean = false,
   Bill extends BillingMode = 'none',
@@ -176,7 +201,7 @@ export class RouteBuilder<
   }
 
   private fork(): this {
-    const next = new RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill>(
+    const next = new RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>(
       this.#s.key,
       this.#s.registry,
       this.#s.deps,
@@ -194,9 +219,15 @@ export class RouteBuilder<
    * ```
    */
   paid(
+    this: PricingGate<
+      RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>,
+      Ident,
+      Bill,
+      'paid'
+    >,
     price: string,
     options?: PaidOptions,
-  ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, 'none'>;
+  ): RouteBuilder<TBody, TQuery, TOutput, Ident, False, HasBody, 'exact'>;
   /**
    * Compute the price from the parsed body before issuing the 402 challenge.
    * Throw an `HttpError` from the pricing function to reject the request
@@ -211,9 +242,15 @@ export class RouteBuilder<
    * ```
    */
   paid<TBodyIn>(
+    this: PricingGate<
+      RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>,
+      Ident,
+      Bill,
+      'paid'
+    >,
     fn: (body: TBodyIn) => string | Promise<string>,
     options?: PaidOptions,
-  ): RouteBuilder<TBody, TQuery, TOutput, True, True, HasBody, 'none'>;
+  ): RouteBuilder<TBody, TQuery, TOutput, Ident, True, HasBody, 'exact'>;
   /**
    * Options-object form of fixed or body-derived pricing. Pass exactly one of:
    *
@@ -233,28 +270,38 @@ export class RouteBuilder<
    * ```
    */
   paid<T extends PaidArg>(
+    this: PricingGate<
+      RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>,
+      Ident,
+      Bill,
+      'paid'
+    >,
     arg: T,
   ): RouteBuilder<
     TBody,
     TQuery,
     TOutput,
-    True,
+    Ident,
     T extends { tiers: Record<string, TierConfig> } ? True : False,
     HasBody,
-    'none'
+    'exact'
   >;
   paid(
+    this:
+      | RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>
+      | RouteError<string>,
     arg: string | PaidArg | ((body: never) => string | Promise<string>),
     options?: PaidOptions,
-  ): RouteBuilder<TBody, TQuery, TOutput, True, boolean, HasBody, 'none'> {
-    return this.applyPaid(normalizePaidArg(this.#s.key, arg, options), 'paid') as RouteBuilder<
+  ): RouteBuilder<TBody, TQuery, TOutput, Ident, boolean, HasBody, 'exact'> {
+    const self = this as RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>;
+    return self.applyPaid(normalizePaidArg(self.#s.key, arg, options), 'paid') as RouteBuilder<
       TBody,
       TQuery,
       TOutput,
-      True,
+      Ident,
       boolean,
       HasBody,
-      'none'
+      'exact'
     >;
   }
 
@@ -273,13 +320,26 @@ export class RouteBuilder<
    * ```
    */
   upTo(
+    this: PricingGate<
+      RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>,
+      Ident,
+      Bill,
+      'upTo'
+    >,
     arg: string | UpToOptions,
-  ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, 'upto'> {
-    return this.applyPaid(normalizeUpToArg(this.#s.key, arg), 'upTo') as RouteBuilder<
+  ): RouteBuilder<TBody, TQuery, TOutput, Ident, False, HasBody, 'upto'>;
+  upTo(
+    this:
+      | RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>
+      | RouteError<string>,
+    arg: string | UpToOptions,
+  ): RouteBuilder<TBody, TQuery, TOutput, Ident, False, HasBody, 'upto'> {
+    const self = this as RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>;
+    return self.applyPaid(normalizeUpToArg(self.#s.key, arg), 'upTo') as RouteBuilder<
       TBody,
       TQuery,
       TOutput,
-      True,
+      Ident,
       False,
       HasBody,
       'upto'
@@ -299,13 +359,28 @@ export class RouteBuilder<
    * ```
    */
   metered(
+    this: Ident extends 'siwx'
+      ? RouteError<'Cannot combine .siwx() and .metered() — per-tick MPP billing has no entitlement model'>
+      : PricingGate<
+          RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>,
+          Ident,
+          Bill,
+          'metered'
+        >,
     options: MeteredOptions,
-  ): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, 'metered'> {
-    return this.applyPaid(normalizeMeteredArg(this.#s.key, options), 'metered') as RouteBuilder<
+  ): RouteBuilder<TBody, TQuery, TOutput, Ident, False, HasBody, 'metered'>;
+  metered(
+    this:
+      | RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>
+      | RouteError<string>,
+    options: MeteredOptions,
+  ): RouteBuilder<TBody, TQuery, TOutput, Ident, False, HasBody, 'metered'> {
+    const self = this as RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>;
+    return self.applyPaid(normalizeMeteredArg(self.#s.key, options), 'metered') as RouteBuilder<
       TBody,
       TQuery,
       TOutput,
-      True,
+      Ident,
       False,
       HasBody,
       'metered'
@@ -315,22 +390,25 @@ export class RouteBuilder<
   private applyPaid(
     normalized: NormalizedPaidArg,
     method: 'paid' | 'upTo' | 'metered',
-  ): RouteBuilder<TBody, TQuery, TOutput, True, boolean, HasBody, BillingMode> {
+  ): RouteBuilder<TBody, TQuery, TOutput, Ident, boolean, HasBody, BillingMode> {
     const { pricing, resolvedOptions, billing, tickCost, unitType, maxPrice } = normalized;
 
     if (this.#s.authMode === 'unprotected') {
-      throw new Error(
-        `route '${this.#s.key}': Cannot combine .unprotected() and .${method}() on the same route.`,
+      throw new RouteDefinitionError(
+        this.#s.key,
+        `Cannot combine .unprotected() and .${method}() on the same route.`,
       );
     }
     if (this.#s.pricing !== undefined) {
-      throw new Error(
-        `route '${this.#s.key}': Cannot combine .paid(), .upTo(), and .metered() — pick one pricing mode.`,
+      throw new RouteDefinitionError(
+        this.#s.key,
+        `Cannot combine .paid(), .upTo(), and .metered() — pick one pricing mode.`,
       );
     }
     if (this.#s.siwxEnabled && billing === 'metered') {
-      throw new Error(
-        `route '${this.#s.key}': Cannot combine .siwx() and .metered() — per-tick MPP billing has no entitlement model. ` +
+      throw new RouteDefinitionError(
+        this.#s.key,
+        `Cannot combine .siwx() and .metered() — per-tick MPP billing has no entitlement model. ` +
           `Use .paid() or .upTo() with .siwx(), or drop .siwx() for metered routes.`,
       );
     }
@@ -339,7 +417,7 @@ export class RouteBuilder<
       TBody,
       TQuery,
       TOutput,
-      True,
+      Ident,
       boolean,
       HasBody,
       BillingMode
@@ -349,16 +427,18 @@ export class RouteBuilder<
     if (billing === 'upto') {
       // .upTo() is x402-only — handler-computed billing settles a single x402 payment.
       if (resolvedOptions.protocols?.some((p) => p !== 'x402')) {
-        throw new Error(
-          `route '${this.#s.key}': .upTo() is x402-only — remove the conflicting protocols override.`,
+        throw new RouteDefinitionError(
+          this.#s.key,
+          `.upTo() is x402-only — remove the conflicting protocols override.`,
         );
       }
       next.#s.protocols = ['x402'];
     } else if (billing === 'metered') {
       // .metered() is MPP-only — per-tick billing runs over an MPP payment channel.
       if (resolvedOptions.protocols?.some((p) => p !== 'mpp')) {
-        throw new Error(
-          `route '${this.#s.key}': .metered() is MPP-only — remove the conflicting protocols override.`,
+        throw new RouteDefinitionError(
+          this.#s.key,
+          `.metered() is MPP-only — remove the conflicting protocols override.`,
         );
       }
       next.#s.protocols = ['mpp'];
@@ -383,38 +463,44 @@ export class RouteBuilder<
     if (typeof pricing === 'object' && 'tiers' in pricing) {
       for (const [tierKey, tierConfig] of Object.entries(pricing.tiers)) {
         if (!tierKey) {
-          throw new Error(`route '${this.#s.key}': tier key cannot be empty`);
+          throw new RouteDefinitionError(this.#s.key, `tier key cannot be empty`);
         }
         if (!isPositiveDecimal(tierConfig.price)) {
-          throw new Error(
-            `route '${this.#s.key}': tier '${tierKey}' price '${tierConfig.price}' must be a positive decimal string`,
+          throw new RouteDefinitionError(
+            this.#s.key,
+            `tier '${tierKey}' price '${tierConfig.price}' must be a positive decimal string`,
           );
         }
       }
     }
     if (billing === 'exact' && typeof pricing === 'string' && !isPositiveDecimal(pricing)) {
-      throw new Error(
-        `route '${this.#s.key}': price '${pricing}' must be a positive decimal string`,
+      throw new RouteDefinitionError(
+        this.#s.key,
+        `price '${pricing}' must be a positive decimal string`,
       );
     }
     if (typeof pricing === 'function' && next.#s.maxPrice === undefined) {
-      throw new Error(
-        `route '${this.#s.key}': dynamic pricing requires maxPrice — without it, bare probes would advertise a $0 challenge`,
+      throw new RouteDefinitionError(
+        this.#s.key,
+        `dynamic pricing requires maxPrice — without it, bare probes would advertise a $0 challenge`,
       );
     }
     if (next.#s.maxPrice !== undefined && !isPositiveDecimal(next.#s.maxPrice)) {
-      throw new Error(
-        `route '${this.#s.key}': maxPrice '${next.#s.maxPrice}' must be a positive decimal string`,
+      throw new RouteDefinitionError(
+        this.#s.key,
+        `maxPrice '${next.#s.maxPrice}' must be a positive decimal string`,
       );
     }
     if (next.#s.minPrice !== undefined && !isPositiveDecimal(next.#s.minPrice)) {
-      throw new Error(
-        `route '${this.#s.key}': minPrice '${next.#s.minPrice}' must be a positive decimal string`,
+      throw new RouteDefinitionError(
+        this.#s.key,
+        `minPrice '${next.#s.minPrice}' must be a positive decimal string`,
       );
     }
     if (next.#s.tickCost !== undefined && !isPositiveDecimal(next.#s.tickCost)) {
-      throw new Error(
-        `route '${this.#s.key}': tickCost '${next.#s.tickCost}' must be a positive decimal string`,
+      throw new RouteDefinitionError(
+        this.#s.key,
+        `tickCost '${next.#s.tickCost}' must be a positive decimal string`,
       );
     }
 
@@ -435,27 +521,52 @@ export class RouteBuilder<
    * router.route('inbox').paid('0.01').siwx().handler(async ({ wallet }) => getInbox(wallet));
    * ```
    */
-  siwx(): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, Bill> {
-    if (this.#s.authMode === 'unprotected') {
-      throw new Error(
-        `route '${this.#s.key}': Cannot combine .unprotected() and .siwx() on the same route.`,
+  siwx(
+    this: Ident extends 'open'
+      ? RouteError<'Cannot combine .unprotected() and .siwx() on the same route'>
+      : Ident extends 'apiKey'
+        ? RouteError<'Combining .siwx() and .apiKey() is not supported on the same route'>
+        : Bill extends 'metered'
+          ? RouteError<'Cannot combine .metered() and .siwx() — per-tick MPP billing has no entitlement model'>
+          : RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>,
+  ): RouteBuilder<TBody, TQuery, TOutput, 'siwx', NeedsBody, HasBody, Bill>;
+  siwx(
+    this:
+      | RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>
+      | RouteError<string>,
+  ): RouteBuilder<TBody, TQuery, TOutput, 'siwx', NeedsBody, HasBody, Bill> {
+    const self = this as RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>;
+    if (self.#s.authMode === 'unprotected') {
+      throw new RouteDefinitionError(
+        self.#s.key,
+        `Cannot combine .unprotected() and .siwx() on the same route.`,
       );
     }
 
-    if (this.#s.apiKeyResolver) {
-      throw new Error(
-        `route '${this.#s.key}': Combining .siwx() and .apiKey() is not supported on the same route.`,
+    if (self.#s.apiKeyResolver) {
+      throw new RouteDefinitionError(
+        self.#s.key,
+        `Combining .siwx() and .apiKey() is not supported on the same route.`,
       );
     }
 
-    if (this.#s.billing === 'metered') {
-      throw new Error(
-        `route '${this.#s.key}': Cannot combine .metered() and .siwx() — per-tick MPP billing has no entitlement model. ` +
+    if (self.#s.billing === 'metered') {
+      throw new RouteDefinitionError(
+        self.#s.key,
+        `Cannot combine .metered() and .siwx() — per-tick MPP billing has no entitlement model. ` +
           `Use .paid() or .upTo() with .siwx(), or drop .siwx() for metered routes.`,
       );
     }
 
-    const next = this.fork() as RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, Bill>;
+    const next = self.fork() as unknown as RouteBuilder<
+      TBody,
+      TQuery,
+      TOutput,
+      'siwx',
+      NeedsBody,
+      HasBody,
+      Bill
+    >;
     next.#s.siwxEnabled = true;
 
     if (next.#s.authMode === 'paid' || next.#s.pricing) {
@@ -483,18 +594,37 @@ export class RouteBuilder<
    * ```
    */
   apiKey(
+    this: Ident extends 'open'
+      ? RouteError<'Cannot combine .unprotected() and .apiKey() on the same route'>
+      : Ident extends 'siwx'
+        ? RouteError<'Combining .apiKey() and .siwx() is not supported on the same route'>
+        : RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>,
     resolver: (key: string) => unknown | Promise<unknown>,
-  ): RouteBuilder<TBody, TQuery, TOutput, True, NeedsBody, HasBody, Bill> {
-    if (this.#s.siwxEnabled) {
-      throw new Error(
-        `route '${this.#s.key}': Combining .apiKey() and .siwx() is not supported on the same route.`,
+  ): RouteBuilder<TBody, TQuery, TOutput, 'apiKey', NeedsBody, HasBody, Bill>;
+  apiKey(
+    this:
+      | RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>
+      | RouteError<string>,
+    resolver: (key: string) => unknown | Promise<unknown>,
+  ): RouteBuilder<TBody, TQuery, TOutput, 'apiKey', NeedsBody, HasBody, Bill> {
+    const self = this as RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>;
+    if (self.#s.authMode === 'unprotected') {
+      throw new RouteDefinitionError(
+        self.#s.key,
+        `Cannot combine .unprotected() and .apiKey() on the same route.`,
       );
     }
-    const next = this.fork() as RouteBuilder<
+    if (self.#s.siwxEnabled) {
+      throw new RouteDefinitionError(
+        self.#s.key,
+        `Combining .apiKey() and .siwx() is not supported on the same route.`,
+      );
+    }
+    const next = self.fork() as unknown as RouteBuilder<
       TBody,
       TQuery,
       TOutput,
-      True,
+      'apiKey',
       NeedsBody,
       HasBody,
       Bill
@@ -513,20 +643,44 @@ export class RouteBuilder<
    * router.route('health').unprotected().handler(async () => ({ status: 'ok' }));
    * ```
    */
-  unprotected(): RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, Bill> {
-    if (this.#s.authMode && this.#s.authMode !== 'unprotected') {
-      throw new Error(
-        `route '${this.#s.key}': Cannot combine .unprotected() and .${this.#s.authMode}() on the same route.`,
+  unprotected(
+    this: Bill extends 'none'
+      ? Ident extends 'siwx'
+        ? RouteError<'Cannot combine .unprotected() and .siwx() on the same route'>
+        : Ident extends 'apiKey'
+          ? RouteError<'Cannot combine .unprotected() and .apiKey() on the same route'>
+          : RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>
+      : RouteError<'Cannot combine .unprotected() and a pricing mode on the same route'>,
+  ): RouteBuilder<TBody, TQuery, TOutput, 'open', NeedsBody, HasBody, Bill>;
+  unprotected(
+    this:
+      | RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>
+      | RouteError<string>,
+  ): RouteBuilder<TBody, TQuery, TOutput, 'open', NeedsBody, HasBody, Bill> {
+    const self = this as RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>;
+    if (self.#s.authMode && self.#s.authMode !== 'unprotected') {
+      throw new RouteDefinitionError(
+        self.#s.key,
+        `Cannot combine .unprotected() and .${self.#s.authMode}() on the same route.`,
       );
     }
 
-    if (this.#s.pricing) {
-      throw new Error(
-        `route '${this.#s.key}': Cannot combine .unprotected() and .paid() on the same route.`,
+    if (self.#s.pricing) {
+      throw new RouteDefinitionError(
+        self.#s.key,
+        `Cannot combine .unprotected() and .paid() on the same route.`,
       );
     }
 
-    const next = this.fork() as RouteBuilder<TBody, TQuery, TOutput, True, False, HasBody, Bill>;
+    const next = self.fork() as unknown as RouteBuilder<
+      TBody,
+      TQuery,
+      TOutput,
+      'open',
+      NeedsBody,
+      HasBody,
+      Bill
+    >;
     next.#s.authMode = 'unprotected';
     next.#s.protocols = [];
     return next;
@@ -534,8 +688,8 @@ export class RouteBuilder<
 
   /**
    * Tag the route with an upstream provider for discovery and provider-side
-   * monitoring. The provider name and config surface in `well-known` and
-   * OpenAPI output.
+   * monitoring. The provider name and config surface in OpenAPI discovery
+   * output.
    *
    * @example
    * ```ts
@@ -563,12 +717,12 @@ export class RouteBuilder<
    *   .handler(async ({ body }) => search(body.query));
    * ```
    */
-  body<T>(schema: ZodType<T>): RouteBuilder<T, TQuery, TOutput, HasAuth, NeedsBody, True, Bill> {
+  body<T>(schema: ZodType<T>): RouteBuilder<T, TQuery, TOutput, Ident, NeedsBody, True, Bill> {
     const next = this.fork() as unknown as RouteBuilder<
       T,
       TQuery,
       TOutput,
-      HasAuth,
+      Ident,
       NeedsBody,
       True,
       Bill
@@ -588,12 +742,12 @@ export class RouteBuilder<
    *   .handler(async ({ query }) => getById(query.id));
    * ```
    */
-  query<T>(schema: ZodType<T>): RouteBuilder<TBody, T, TOutput, HasAuth, NeedsBody, HasBody, Bill> {
+  query<T>(schema: ZodType<T>): RouteBuilder<TBody, T, TOutput, Ident, NeedsBody, HasBody, Bill> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       T,
       TOutput,
-      HasAuth,
+      Ident,
       NeedsBody,
       HasBody,
       Bill
@@ -615,12 +769,12 @@ export class RouteBuilder<
    *   .handler(async () => ({ result: 'ok' }));
    * ```
    */
-  output<T>(schema: ZodType<T>): RouteBuilder<TBody, TQuery, T, HasAuth, NeedsBody, HasBody, Bill> {
+  output<T>(schema: ZodType<T>): RouteBuilder<TBody, TQuery, T, Ident, NeedsBody, HasBody, Bill> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       TQuery,
       T,
-      HasAuth,
+      Ident,
       NeedsBody,
       HasBody,
       Bill
@@ -640,12 +794,12 @@ export class RouteBuilder<
    */
   inputExample(
     example: InputTypeFor<TBody, TQuery> & JsonObject,
-  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill> {
+  ): RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       TQuery,
       TOutput,
-      HasAuth,
+      Ident,
       NeedsBody,
       HasBody,
       Bill
@@ -666,12 +820,12 @@ export class RouteBuilder<
    */
   outputExample(
     example: TOutput & JsonValue,
-  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill> {
+  ): RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       TQuery,
       TOutput,
-      HasAuth,
+      Ident,
       NeedsBody,
       HasBody,
       Bill
@@ -682,8 +836,8 @@ export class RouteBuilder<
   }
 
   /**
-   * Set a human-readable summary of the route. Surfaces in OpenAPI,
-   * `well-known`, and `llms.txt` discovery output.
+   * Set a human-readable summary of the route. Surfaces in OpenAPI and
+   * `llms.txt` discovery output.
    *
    * @example
    * ```ts
@@ -742,10 +896,10 @@ export class RouteBuilder<
    */
   validate(
     fn: (body: TBody) => void | Promise<void>,
-  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill> {
+  ): RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill> {
     const next = this.fork();
     next.#s.validateFn = fn;
-    return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill>;
+    return next as RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>;
   }
 
   /**
@@ -763,10 +917,10 @@ export class RouteBuilder<
    */
   mpp(
     info: MppProtocolInfo,
-  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill> {
+  ): RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill> {
     const next = this.fork();
     next.#s.mppInfo = { ...this.#s.mppInfo, ...info };
-    return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill>;
+    return next as RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>;
   }
 
   /**
@@ -784,10 +938,10 @@ export class RouteBuilder<
    */
   settlement(
     lifecycle: SettlementLifecycle<TBody>,
-  ): RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill> {
+  ): RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill> {
     const next = this.fork();
     next.#s.settlement = { ...this.#s.settlement, ...lifecycle };
-    return next as RouteBuilder<TBody, TQuery, TOutput, HasAuth, NeedsBody, HasBody, Bill>;
+    return next as RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>;
   }
 
   /**
@@ -805,7 +959,7 @@ export class RouteBuilder<
    * ```
    */
   handler(
-    fn: HandlerArg<TBody, TQuery, HasAuth, NeedsBody, HasBody, Bill>,
+    fn: HandlerArg<TBody, TQuery, Ident, NeedsBody, HasBody, Bill>,
   ): (request: NextRequest) => Promise<Response> {
     return this.register(fn as unknown as RouteHandler, false);
   }
@@ -830,7 +984,7 @@ export class RouteBuilder<
    * ```
    */
   stream(
-    fn: StreamArg<TBody, TQuery, HasAuth, NeedsBody, HasBody, Bill>,
+    fn: StreamArg<TBody, TQuery, Ident, NeedsBody, HasBody, Bill>,
   ): (request: NextRequest) => Promise<Response> {
     return this.register(fn as unknown as RouteHandler, true);
   }
@@ -840,38 +994,46 @@ export class RouteBuilder<
     streaming: boolean,
   ): (request: NextRequest) => Promise<Response> {
     if (!this.#s.authMode) {
-      throw new Error(
-        `route '${this.#s.key}': Select an auth mode: .paid(pricing), .upTo(maxPrice), .metered(options), .siwx(), .apiKey(resolver), or .unprotected()`,
+      throw new RouteDefinitionError(
+        this.#s.key,
+        `Select an auth mode: .paid(pricing), .upTo(maxPrice), .metered(options), .siwx(), .apiKey(resolver), or .unprotected()`,
       );
     }
     if (this.#s.validateFn && !this.#s.bodySchema) {
-      throw new Error(
-        `route '${this.#s.key}': .validate() requires .body() — validation runs on parsed body`,
+      throw new RouteDefinitionError(
+        this.#s.key,
+        `.validate() requires .body() — validation runs on parsed body`,
       );
     }
     if (this.#s.settlement && !this.#s.pricing) {
-      throw new Error(`route '${this.#s.key}': .settlement() requires a paid route`);
+      throw new RouteDefinitionError(this.#s.key, `.settlement() requires a paid route`);
     }
     if (this.#s.mppInfo?.settleBeforeHandler) {
       if (!this.#s.pricing) {
-        throw new Error(`route '${this.#s.key}': mpp.settleBeforeHandler requires a paid route`);
+        throw new RouteDefinitionError(
+          this.#s.key,
+          `mpp.settleBeforeHandler requires a paid route`,
+        );
       }
       if (this.#s.billing !== 'exact') {
-        throw new Error(
-          `route '${this.#s.key}': mpp.settleBeforeHandler is only supported on .paid() routes`,
+        throw new RouteDefinitionError(
+          this.#s.key,
+          `mpp.settleBeforeHandler is only supported on .paid() routes`,
         );
       }
       if (this.#s.settlement?.beforeSettle) {
-        throw new Error(
-          `route '${this.#s.key}': mpp.settleBeforeHandler is incompatible with .settlement({ beforeSettle }) — MPP payment is already broadcast before the handler runs`,
+        throw new RouteDefinitionError(
+          this.#s.key,
+          `mpp.settleBeforeHandler is incompatible with .settlement({ beforeSettle }) — MPP payment is already broadcast before the handler runs`,
         );
       }
     }
     if (this.#s.billing === 'upto') {
       const hasUpto = this.#s.deps.x402Accepts.some((accept) => accept.scheme === 'upto');
       if (!hasUpto) {
-        throw new Error(
-          `route '${this.#s.key}': .upTo() requires an 'upto' accept on at least one configured network. ` +
+        throw new RouteDefinitionError(
+          this.#s.key,
+          `.upTo() requires an 'upto' accept on at least one configured network. ` +
             `Add { scheme: 'upto', network, asset } to RouterConfig.x402.accepts.`,
         );
       }
@@ -885,8 +1047,9 @@ export class RouteBuilder<
         (accept) => (accept.scheme ?? 'exact') !== 'upto',
       );
       if (!hasExact) {
-        throw new Error(
-          `route '${this.#s.key}': .paid() needs a non-'upto' x402 accept — an 'upto'-only accept ` +
+        throw new RouteDefinitionError(
+          this.#s.key,
+          `.paid() needs a non-'upto' x402 accept — an 'upto'-only accept ` +
             `list cannot serve a fixed-price route. Add { scheme: 'exact', network } to ` +
             `RouterConfig.x402.accepts, or use .upTo() for handler-computed billing.`,
         );
@@ -894,15 +1057,17 @@ export class RouteBuilder<
     }
     if (this.#s.billing === 'metered') {
       if (!this.#s.deps.mppSessionConfig) {
-        throw new Error(
-          `route '${this.#s.key}': .metered() requires MPP session mode. ` +
+        throw new RouteDefinitionError(
+          this.#s.key,
+          `.metered() requires MPP session mode. ` +
             `Set RouterConfig.mpp.session = {} and provide mpp.operatorKey.`,
         );
       }
     }
     if (streaming && this.#s.billing !== 'metered') {
-      throw new Error(
-        `route '${this.#s.key}': .stream() requires .metered() — ` +
+      throw new RouteDefinitionError(
+        this.#s.key,
+        `.stream() requires .metered() — ` +
           `static/free/upto routes can't meter per-chunk billing.`,
       );
     }
@@ -912,8 +1077,9 @@ export class RouteBuilder<
       this.#s.pricing !== undefined &&
       this.#s.protocols.includes('x402')
     ) {
-      throw new Error(
-        `route '${this.#s.key}': .description() is ${this.#s.description.length} chars; ` +
+      throw new RouteDefinitionError(
+        this.#s.key,
+        `.description() is ${this.#s.description.length} chars; ` +
           `must be ≤ ${MAX_X402_DESCRIPTION_LENGTH} chars — the CDP x402 facilitator rejects ` +
           `payments whose 402 challenge resource.description exceeds ~500 chars.`,
       );
@@ -1005,8 +1171,9 @@ function normalizePaidArg(
     return { pricing: arg.price, resolvedOptions: arg, billing: 'exact' };
   }
 
-  throw new Error(
-    `route '${routeKey}': .paid() requires one of: a price string, a (body) => string function, { price }, or { field, tiers }. ` +
+  throw new RouteDefinitionError(
+    routeKey,
+    `.paid() requires one of: a price string, a (body) => string function, { price }, or { field, tiers }. ` +
       `For handler-computed billing use .upTo(); for per-tick billing use .metered().`,
   );
 }
@@ -1014,7 +1181,7 @@ function normalizePaidArg(
 function normalizeUpToArg(routeKey: string, arg: string | UpToOptions): NormalizedPaidArg {
   const options: UpToOptions = typeof arg === 'string' ? { maxPrice: arg } : arg;
   if (!options.maxPrice) {
-    throw new Error(`route '${routeKey}': .upTo() requires maxPrice`);
+    throw new RouteDefinitionError(routeKey, `.upTo() requires maxPrice`);
   }
   return {
     pricing: options.maxPrice,
@@ -1027,10 +1194,10 @@ function normalizeUpToArg(routeKey: string, arg: string | UpToOptions): Normaliz
 
 function normalizeMeteredArg(routeKey: string, options: MeteredOptions): NormalizedPaidArg {
   if (!options.maxPrice) {
-    throw new Error(`route '${routeKey}': .metered() requires maxPrice`);
+    throw new RouteDefinitionError(routeKey, `.metered() requires maxPrice`);
   }
   if (!options.tickCost) {
-    throw new Error(`route '${routeKey}': .metered() requires tickCost`);
+    throw new RouteDefinitionError(routeKey, `.metered() requires tickCost`);
   }
   return {
     pricing: options.maxPrice,

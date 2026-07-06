@@ -66,7 +66,7 @@ export interface CreateRouterFromEnvOptions<
   /** Defaults to `process.env`. Pass an explicit object in tests. */
   env?: Record<string, string | undefined>;
 
-  /** Discovery title. Shown in `.well-known/agentcash`, OpenAPI, and `/llms.txt`. */
+  /** Discovery title. Shown in `/openapi.json` and `/llms.txt`. */
   title: string;
   /** Discovery description. */
   description: string;
@@ -76,7 +76,7 @@ export interface CreateRouterFromEnvOptions<
   version?: string;
   /** Optional contact metadata published in discovery. */
   contact?: DiscoveryConfig['contact'];
-  /** Optional ownership proofs published in `.well-known/agentcash`. */
+  /** Optional ownership proofs published in `/openapi.json` (and the deprecated `/.well-known/x402`). */
   ownershipProofs?: string[];
   /** Per-route HTTP method hint visibility. */
   methodHints?: DiscoveryConfig['methodHints'];

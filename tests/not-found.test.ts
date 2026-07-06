@@ -20,9 +20,9 @@ describe('router notFound fallback', () => {
       error:
         'Route not found. Rediscover this origin and retry with the current discovery document.',
       requestedUrl: 'https://stable.example.com/api/old/route?x=1',
+      // The deprecated /.well-known/x402 surface is intentionally absent.
       discovery: {
         openapi: 'https://stable.example.com/openapi.json',
-        wellKnown: 'https://stable.example.com/.well-known/x402',
         llmsTxt: 'https://stable.example.com/llms.txt',
       },
     });

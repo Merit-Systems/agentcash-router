@@ -1,7 +1,7 @@
 import type { NextResponse } from 'next/server';
 import type { Transport } from 'mppx/server';
 import type { Session } from 'mppx/tempo';
-import { AUTH_SCHEME, HEADERS } from '../../headers.js';
+import { HEADERS } from '../../headers.js';
 import { multiplyDecimal } from '../../pricing/format.js';
 import type { HandlerPaymentContext } from '../../types.js';
 import type { MppxMiddlewareResponse } from './middleware-types.js';
@@ -17,6 +17,7 @@ import type {
   VerifyOutcome,
 } from '../types.js';
 import type { RouteEntry } from '../../types.js';
+import { hasMppPayment } from '../detect.js';
 import { readMppCredential } from './credential.js';
 import {
   buildSessionChallenge,
@@ -33,10 +34,7 @@ type AnyMppToken = TxModeToken | HashModeToken | MppSessionToken;
 export const mppStrategy: PaymentStrategy = {
   protocol: 'mpp',
 
-  detects(request: Request): boolean {
-    const auth = request.headers.get(HEADERS.AUTHORIZATION);
-    return Boolean(auth && auth.startsWith(AUTH_SCHEME.MPP_PAYMENT));
-  },
+  detects: hasMppPayment,
 
   preflight(request: Request, _routeEntry: RouteEntry): PreflightOutcome | null {
     const info = readMppCredential(request);

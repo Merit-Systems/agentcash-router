@@ -5,10 +5,10 @@ import { createRequestHandler, type RouterDeps } from '../src/pipeline/orchestra
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import { makeTestAgentIdentityNonceStore } from './fakes/agent-identity-deps.js';
-import { FakeX402Server, KNOWN_PAYER, KNOWN_PAYEE } from './fakes/x402-server.js';
+import { FakeX402Server, KNOWN_PAYEE } from './fakes/x402-server.js';
 import { withX402Payment } from './fakes/request.js';
 import { createDefaultContext } from '../src/plugin/index.js';
-import type { RouterPlugin, RequestMeta, PluginContext } from '../src/plugin/index.js';
+import type { RouterPlugin, RequestMeta } from '../src/plugin/index.js';
 import type { RouteEntry, ProviderQuotaEvent } from '../src/types.js';
 import { RouteRegistry } from '../src/registry.js';
 import { RouteBuilder } from '../src/builder.js';

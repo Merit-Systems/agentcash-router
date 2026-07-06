@@ -252,7 +252,6 @@ describe('upto scheme', () => {
       const handler = createRequestHandler(
         makeUptoRouteEntry(),
         async ({ charge }) => {
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           await (charge as (a: string) => Promise<void>)!('0.05');
           return { settled: true };
         },
@@ -374,9 +373,7 @@ describe('upto scheme', () => {
       const handler = createRequestHandler(
         makeUptoEntry(),
         async ({ charge }) => {
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           await (charge as (a: string) => Promise<void>)!('0.0001');
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           await (charge as (a: string) => Promise<void>)!('0.0002');
           return { ok: true };
         },
@@ -401,7 +398,6 @@ describe('upto scheme', () => {
       const handler = createRequestHandler(
         { ...makeUptoEntry(), streaming: true },
         async function* ({ charge }) {
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           await (charge as (a: string) => Promise<void>)!('0.0001');
           yield 'chunk';
         },

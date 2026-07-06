@@ -23,7 +23,6 @@ pnpm dev                      # http://localhost:3000
 | `/api/fortune/dynamic`   | POST       | `.paid(fn, { maxPrice })`                               | Args-derived pricing (x402 / MPP)                  | auto                 |
 | `/api/fortune/favorites` | POST / GET | `.siwx()`                                               | SIWX (Sign-In-with-X, no payment)                  | auto                 |
 | `/api/fortune/profile`   | GET        | `.siwx()`                                               | SIWX (Sign-In-with-X, no payment)                  | auto                 |
-| `/.well-known/x402`      | GET        | —                                                       | Discovery                                          | auto                 |
 | `/openapi.json`          | GET        | —                                                       | OpenAPI spec                                       | n/a                  |
 | `/llms.txt`              | GET        | —                                                       | Agent guidance (`discovery.guidance`)              | n/a                  |
 

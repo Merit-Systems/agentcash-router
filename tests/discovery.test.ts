@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
 import { RouteRegistry } from '../src/registry.js';
 import { createWellKnownHandler } from '../src/discovery/well-known.js';
 import type { RouteEntry } from '../src/types.js';

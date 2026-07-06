@@ -42,11 +42,20 @@ export interface ServiceRouter<TPriceKeys extends string = never> {
   route<K extends string>(
     keyOrDefinition: K | RouteDefinition<K>,
   ): [K] extends [TPriceKeys]
-    ? RouteBuilder<undefined, undefined, undefined, true, false, false>
-    : RouteBuilder<undefined, undefined, undefined, false, false, false>;
+    ? RouteBuilder<undefined, undefined, undefined, 'none', false, false, 'exact'>
+    : RouteBuilder<undefined, undefined, undefined, 'none', false, false, 'none'>;
+  /**
+   * @deprecated The `/.well-known/x402` surface is no longer a recommended
+   * discovery location. The handler keeps working for legacy x402 clients,
+   * but new integrations should mount `.openapi()` (at `/openapi.json`) and
+   * `.llmsTxt()` (at `/llms.txt`) instead.
+   */
   wellKnown(): (request: NextRequest) => Promise<NextResponse>;
+  /** OpenAPI 3.1 discovery document. Mount at `GET /openapi.json`. */
   openapi(): (request: NextRequest) => Promise<NextResponse>;
+  /** Plain-text agent guidance. Mount at `GET /llms.txt`. */
   llmsTxt(): (request: NextRequest) => Promise<NextResponse>;
+  /** JSON 404 fallback with rediscovery links. Mount in a catch-all route. */
   notFound(): (request: NextRequest) => Promise<NextResponse>;
   monitors(): MonitorEntry[];
   registry: RouteRegistry;
@@ -242,7 +251,7 @@ export function createRouterFromEnv<const P extends Record<string, string> = Rec
   return createRouter<P>(routerConfigFromEnv(options));
 }
 
-export { HttpError } from './types.js';
+export { HttpError, RouteDefinitionError } from './types.js';
 export {
   BASE_MAINNET_NETWORK,
   SOLANA_MAINNET_NETWORK,

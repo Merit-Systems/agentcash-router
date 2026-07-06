@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { RouteRegistry } from '../src/registry.js';
 import { RouteBuilder } from '../src/builder.js';
+import { RouteDefinitionError } from '../src/types.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import { makeTestAgentIdentityNonceStore } from './fakes/agent-identity-deps.js';
@@ -189,6 +190,31 @@ describe('registration-time safety', () => {
     expect(() => builder.unprotected().paid('0.01')).toThrow(
       'Cannot combine .unprotected() and .paid()',
     );
+  });
+
+  it('rejects .apiKey() after .unprotected()', () => {
+    const { builder } = makeBuilder('unprotected/apikey');
+    expect(() => builder.unprotected().apiKey(() => ({}))).toThrow(
+      'Cannot combine .unprotected() and .apiKey()',
+    );
+  });
+
+  it('rejects .siwx() after .unprotected()', () => {
+    const { builder } = makeBuilder('unprotected/siwx');
+    expect(() => builder.unprotected().siwx()).toThrow('Cannot combine .unprotected() and .siwx()');
+  });
+
+  it('registration-time throws are RouteDefinitionError with the route key attached', () => {
+    const { builder } = makeBuilder('typed/error');
+    try {
+      // @ts-expect-error — intentionally invalid combination
+      builder.unprotected().paid('0.01');
+      expect.unreachable('expected .unprotected().paid() to throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(RouteDefinitionError);
+      expect((err as RouteDefinitionError).route).toBe('typed/error');
+      expect((err as RouteDefinitionError).name).toBe('RouteDefinitionError');
+    }
   });
 
   it('rejects repeated .paid() calls on the same route', () => {
