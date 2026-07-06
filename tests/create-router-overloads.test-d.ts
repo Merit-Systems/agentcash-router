@@ -15,7 +15,10 @@ const routerConfig: RouterConfig = {
 
 const router = createRouter(routerConfig);
 
-router.route('search').paid('0.01').handler(async () => ({ ok: true }));
+router
+  .route('search')
+  .paid('0.01')
+  .handler(async () => ({ ok: true }));
 
 const pricedRouter = createRouter({
   ...routerConfig,
