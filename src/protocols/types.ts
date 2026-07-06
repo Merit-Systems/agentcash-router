@@ -10,7 +10,7 @@ import type {
 import type { ResolvedX402Facilitator } from './x402/facilitators.js';
 import type { MppxMiddleware } from './mpp/middleware-types.js';
 import type { NonceStoreInterface } from 'did-auth-challenge';
-import type { NonceStore, EntitlementStore } from '../kv-store/index.js';
+import type { NonceStore, EntitlementStore, KvStore } from '../kv-store/index.js';
 import type { RouterPlugin } from '../plugin/index.js';
 import type { ReportFn } from '../plugin/reporter.js';
 
@@ -28,6 +28,7 @@ export interface RouterDeps {
   network: string;
   x402FacilitatorsByNetwork?: Record<string, ResolvedX402Facilitator>;
   x402Accepts: X402AcceptConfig[];
+  kvStore?: KvStore;
   mppx?: {
     charge: MppxMiddleware<{ amount: string }, Transport.Http>;
     sessionRequest?: MppxMiddleware<

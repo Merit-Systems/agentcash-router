@@ -189,6 +189,7 @@ async function buildX402ChallengeContribution(args: ChallengeArgs): Promise<Chal
     facilitatorsByNetwork: deps.x402FacilitatorsByNetwork,
     extensions,
     report,
+    kvStore: deps.kvStore,
   });
 
   return { headers: { [HEADERS.X402_PAYMENT_REQUIRED]: encoded } };

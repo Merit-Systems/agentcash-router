@@ -81,7 +81,7 @@ function newRequest() {
 }
 
 describe('facilitator /supported enrichment', () => {
-  it('calls /supported and merges feePayer into the Solana challenge', async () => {
+  it('fetches /supported once, caches it, and merges feePayer into the Solana challenge', async () => {
     const facilitator = await startStubFacilitator([
       {
         scheme: 'exact',
@@ -102,7 +102,7 @@ describe('facilitator /supported enrichment', () => {
 
     expect(first.status).toBe(402);
     expect(second.status).toBe(402);
-    expect(facilitator.getSupportedCalls()).toBe(2);
+    expect(facilitator.getSupportedCalls()).toBe(1);
 
     const challenge = decodePaymentRequiredHeader(first.headers.get('PAYMENT-REQUIRED')!);
     expect(challenge.accepts).toHaveLength(1);

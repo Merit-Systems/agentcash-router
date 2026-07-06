@@ -357,6 +357,7 @@ describe('x402 multi-network integration', () => {
 
         expect(fetchMock).toHaveBeenCalledWith('https://facilitator.example/supported', {
           headers: {},
+          signal: expect.any(AbortSignal),
         });
         expect(settlementAccept).toMatchObject({
           scheme: SOLANA_SETTLEMENT_SCHEME,
@@ -398,6 +399,7 @@ describe('x402 multi-network integration', () => {
 
         expect(fetchMock).toHaveBeenCalledWith('https://facilitator.example/supported', {
           headers: {},
+          signal: expect.any(AbortSignal),
         });
         expect(fetchMock).toHaveBeenCalledTimes(1);
         expect(solanaAccept).toMatchObject({
@@ -430,6 +432,7 @@ describe('x402 multi-network integration', () => {
 
         expect(fetchMock).toHaveBeenCalledWith('https://facilitator.example/supported', {
           headers: { authorization: 'Bearer supported-token' },
+          signal: expect.any(AbortSignal),
         });
       },
     );

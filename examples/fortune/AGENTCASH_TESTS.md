@@ -101,7 +101,7 @@ Force the wallet onto Solana with `--payment-network solana`. Fund the Solana ac
 $CLI fetch http://localhost:3000/api/fortune --method POST -p x402 --payment-network solana
 ```
 
-Expect: `"protocol": "x402"`, `"network": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"`, a `transactionHash`. The 402 challenge's Solana accepts entry must include `extra.feePayer`, `recentBlockhash`, `decimals`, and `tokenProgram` — the client signs against that feePayer and the facilitator co-signs.
+Expect: `"protocol": "x402"`, `"network": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"`, a `transactionHash`. The 402 challenge's Solana accepts entry must include `extra.feePayer` (merged from the facilitator's `GET /supported` kinds) — the client builds the transaction with a fresh recent blockhash from RPC, signs against that feePayer, and the facilitator co-signs. The challenge no longer carries per-request fields like `recentBlockhash`; static extras (`decimals`, `tokenProgram`) appear only if the facilitator advertises them on its `/supported` kind.
 
 **Watch for:** `Payment rejected (invalid_payload): feePayer not managed: <address>`. That means the server advertised a feePayer the configured Solana facilitator doesn't sign for — usually a mismatch between the facilitator that answered `getSupported()` (quote time) and the one handling `/settle` (settle time). Check `src/protocols/x402/solana.ts` and the facilitator wiring in `src/protocols/x402/facilitator-clients.ts`.
 

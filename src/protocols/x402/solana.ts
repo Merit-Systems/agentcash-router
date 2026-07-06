@@ -1,5 +1,7 @@
 import type { Network, PaymentRequirements } from '@x402/core/types';
 import type { X402ResolvedAccept } from '../../types.js';
+import type { KvStore } from '../../kv-store/index.js';
+import { createCachedSupportedFetch } from '../../kv-store/facilitator-supported.js';
 import type { ResolvedX402Facilitator } from './facilitators.js';
 import { getSupportedHeadersForFacilitator } from './facilitators.js';
 
@@ -9,6 +11,10 @@ type SupportedKind = {
   asset?: string;
   extra?: Record<string, unknown>;
 };
+
+type SupportedBody = { kinds: SupportedKind[] };
+
+const SUPPORTED_FETCH_TIMEOUT_MS = 10_000;
 
 export function isSolanaNetwork(network: string): network is `solana:${string}` {
   return network.startsWith('solana:');
@@ -57,10 +63,11 @@ function matchesSupportedKind(requirement: PaymentRequirements, kind: SupportedK
 
 async function fetchFacilitatorSupported(
   facilitator: ResolvedX402Facilitator,
-): Promise<SupportedKind[]> {
+): Promise<SupportedBody> {
   const authHeaders = await getSupportedHeadersForFacilitator(facilitator);
   const response = await fetch(`${facilitatorBaseUrl(facilitator)}/supported`, {
     headers: authHeaders,
+    signal: AbortSignal.timeout(SUPPORTED_FETCH_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -72,7 +79,27 @@ async function fetchFacilitatorSupported(
     throw new Error('Facilitator /supported response did not include kinds');
   }
 
-  return body.kinds;
+  return { kinds: body.kinds };
+}
+
+// Keyed by facilitator identity so each router instance caches independently;
+// no fallback baseline — a failed fetch must drop enrichment, not memoize a
+// feePayer-less response.
+const supportedFetchers = new WeakMap<ResolvedX402Facilitator, () => Promise<SupportedBody>>();
+
+function getCachedSupportedFetch(
+  facilitator: ResolvedX402Facilitator,
+  kv: KvStore | undefined,
+): () => Promise<SupportedBody> {
+  let fetcher = supportedFetchers.get(facilitator);
+  if (!fetcher) {
+    fetcher = createCachedSupportedFetch(() => fetchFacilitatorSupported(facilitator), {
+      kv,
+      cacheKey: facilitator.url,
+    });
+    supportedFetchers.set(facilitator, fetcher);
+  }
+  return fetcher;
 }
 
 function enrichRequirementFromKind(
@@ -105,9 +132,11 @@ function enrichRequirementFromKind(
       ...requirementExtra,
       ...kindExtra,
       features: {
+        // Solana-family default (mirrors buildSupportedKinds); a facilitator
+        // that advertises features can override it.
+        xSettlementAccountSupported: true,
         ...requirementFeatures,
         ...kindFeatures,
-        xSettlementAccountSupported: true,
       },
     },
   };
@@ -116,8 +145,9 @@ function enrichRequirementFromKind(
 export async function enrichRequirementsFromFacilitatorSupported(
   facilitator: ResolvedX402Facilitator,
   requirements: PaymentRequirements[],
+  kv?: KvStore,
 ): Promise<PaymentRequirements[]> {
-  const kinds = await fetchFacilitatorSupported(facilitator);
+  const { kinds } = await getCachedSupportedFetch(facilitator, kv)();
   return requirements.map((requirement) => enrichRequirementFromKind(requirement, kinds));
 }
 

@@ -123,6 +123,7 @@ export function createRouter<const C extends RouterConfig>(
     network,
     x402FacilitatorsByNetwork: undefined,
     x402Accepts,
+    kvStore,
     mppx: null,
     tempoClient: null,
     mppSessionConfig:
@@ -249,15 +250,11 @@ function normalizePath(path: string): string {
  * });
  * ```
  */
-type ExtractEnvPriceKeys<O> = [O] extends [{ prices: infer P extends Record<string, string> }]
-  ? Extract<keyof P, string>
-  : never;
-
 export function createRouterFromEnv<const O extends CreateRouterFromEnvOptions>(
   options: O,
-): ServiceRouter<ExtractEnvPriceKeys<O>> {
+): ServiceRouter<ExtractPriceKeys<O>> {
   return createRouter(routerConfigFromEnv(options)) as unknown as ServiceRouter<
-    ExtractEnvPriceKeys<O>
+    ExtractPriceKeys<O>
   >;
 }
 
