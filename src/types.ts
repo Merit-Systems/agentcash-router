@@ -1,5 +1,4 @@
 import type { FacilitatorConfig } from '@x402/core/http';
-import type { NextRequest, NextResponse } from 'next/server';
 import type { ZodType } from 'zod';
 import type {
   PaymentRequired,
@@ -159,7 +158,7 @@ export interface MppProtocolInfo {
 export type CheckoutSessionResponse = Record<string, unknown>;
 
 export interface CheckoutSessionContext<TBody = unknown> {
-  request: NextRequest;
+  request: Request;
   route: string;
   body: TBody | undefined;
   /** Decimal-dollar price quoted for this 402 challenge. */
@@ -241,12 +240,12 @@ export interface HandlerPaymentContext {
 
 export interface SettlementLifecycleContext<TBody = unknown> {
   route: string;
-  request: NextRequest;
+  request: Request;
   body: TBody;
   wallet: string;
   account: unknown;
   payment: HandlerPaymentContext;
-  response: NextResponse;
+  response: Response;
   result: unknown;
 }
 
@@ -285,7 +284,9 @@ export type UptoChargeFn = (amount: string) => Promise<void>;
 export interface HandlerContext<TBody = undefined, TQuery = undefined> {
   body: TBody;
   query: TQuery;
-  request: NextRequest;
+  /** Path-template params extracted from the route's own `{param}` segments (e.g. `drafts/{draftId}/commit` → `{ draftId }`). Empty object when the path declares no params. */
+  params: Record<string, string>;
+  request: Request;
   requestId: string;
   route: string;
   wallet: string | null;
@@ -386,6 +387,12 @@ export interface DiscoveryConfig {
   title: string;
   version: string;
   description?: string;
+  /** Bazaar catalog display name on x402 challenges (`PaymentRequired.resource.serviceName`, ≤32 printable-ASCII chars). Defaults to `title` when the title fits the constraint. */
+  serviceName?: string;
+  /** Bazaar catalog tags on x402 challenges (≤5 entries, each ≤32 printable-ASCII chars). */
+  tags?: string[];
+  /** Bazaar catalog icon on x402 challenges (HTTPS URL, ≤2048 chars). */
+  iconUrl?: string;
   contact?: { name?: string; url?: string; email?: string };
   ownershipProofs?: string[];
   methodHints?: 'off' | 'non-default' | 'always';
@@ -419,6 +426,8 @@ export interface RouterConfig {
   payeeAddress?: string;
   /** Origin URL (required). Used as 402 realm, discovery base, OpenAPI server, and MPP memo prefix — must match the public domain or payment matching breaks. */
   baseUrl: string;
+  /** URL prefix routes are mounted and advertised under (`{baseUrl}/{basePath}/{path}`). Pass an empty string to mount routes at the origin root. @default 'api' */
+  basePath?: string;
   /** Default chain for the auto-generated x402 `exact` accept (e.g. `base`, `base-sepolia`). Ignored when `x402.accepts` is set. @default 'base' */
   network?: string;
   /** x402 protocol settings. Omit to default to a single `exact`/USDC accept on `network` paid to `payeeAddress`, verified via the Coinbase default facilitator (requires `CDP_API_KEY_ID`/`CDP_API_KEY_SECRET`). */
@@ -427,6 +436,14 @@ export interface RouterConfig {
     accepts?: X402AcceptConfig[];
     /** Per-chain facilitator overrides (`evm`/`solana`). Defaults to the Coinbase facilitator on EVM; set `solana` to accept Solana payments. */
     facilitators?: X402FacilitatorsConfig;
+    /**
+     * Base Builder Code for ERC-8021 on-chain attribution (register at
+     * https://dashboard.base.org → Settings → Builder Codes; must match
+     * `^[a-z0-9_]{1,32}$`). Declared as the app code (`a`) on every x402
+     * payment challenge; the facilitator appends it to settlement calldata,
+     * attributing every settled payment to this service on-chain.
+     */
+    builderCode?: string;
   };
   /** Observability hook receiving request/auth/payment/settlement events. Implement `RouterPlugin` for structured logs/analytics. */
   plugin?: import('./plugin/index.js').RouterPlugin;

@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import { NextRequest } from 'next/server';
 import { decodePaymentRequiredHeader } from '@x402/core/http';
 import { z } from 'zod';
 import { createRequestHandler, type RouterDeps } from '../src/pipeline/orchestrate.js';
@@ -212,21 +211,17 @@ function makeDeps(overrides: Partial<RouterDeps> = {}): RouterDeps {
   };
 }
 
-function makeProbeRequest(url = 'http://localhost:3000/api/test'): NextRequest {
-  return new NextRequest(url, { method: 'POST' });
+function makeProbeRequest(url = 'http://localhost:3000/api/test'): Request {
+  return new Request(url, { method: 'POST' });
 }
 
-function makePaymentRequest(body?: unknown, payer = KNOWN_PAYER): NextRequest {
+function makePaymentRequest(body?: unknown, payer = KNOWN_PAYER): Request {
   return withX402Payment({ payer, body });
 }
 
-function makeSIWXRequest(
-  wallet = '0xSIWX_WALLET',
-  nonce = 'test-nonce',
-  expired = false,
-): NextRequest {
+function makeSIWXRequest(wallet = '0xSIWX_WALLET', nonce = 'test-nonce', expired = false): Request {
   const payload = Buffer.from(JSON.stringify({ wallet, nonce, expired })).toString('base64');
-  return new NextRequest('http://localhost:3000/api/test', {
+  return new Request('http://localhost:3000/api/test', {
     method: 'GET',
     headers: { 'SIGN-IN-WITH-X': payload },
   });
@@ -309,12 +304,12 @@ function makeMPPEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
 
 function withMPPPayment(
   options: { payer?: string; body?: unknown; payload?: Record<string, unknown> } = {},
-): NextRequest {
+): Request {
   const credential = Buffer.from(
     JSON.stringify({ payer: options.payer ?? KNOWN_MPP_PAYER, payload: options.payload }),
   ).toString('base64');
 
-  return new NextRequest('http://localhost:3000/api/test', {
+  return new Request('http://localhost:3000/api/test', {
     method: 'POST',
     headers: { Authorization: `Payment ${credential}` },
     ...(options.body && { body: JSON.stringify(options.body) }),
@@ -380,7 +375,7 @@ describe('probe request (no auth header)', () => {
     });
     const handler = createRequestHandler(entry, async () => ({ ok: true }), makeDeps());
     // Probe with body specifying the cheap tier
-    const req = new NextRequest('http://localhost:3000/api/test', {
+    const req = new Request('http://localhost:3000/api/test', {
       method: 'POST',
       body: JSON.stringify({ tier: '10mb' }),
     });
@@ -409,7 +404,7 @@ describe('probe request (no auth header)', () => {
       checkoutSession,
     });
     const handler = createRequestHandler(entry, async () => ({ ok: true }), makeDeps());
-    const req = new NextRequest('http://localhost:3000/api/test', {
+    const req = new Request('http://localhost:3000/api/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: 'expensive' }),
@@ -457,8 +452,8 @@ describe('probe request (no auth header)', () => {
 
 describe('discovery probe (x402scan prober)', () => {
   // x402scan sends POST with empty JSON body '{}' for discovery
-  function makeX402ScanProbe(url = 'http://localhost:3000/api/test'): NextRequest {
-    return new NextRequest(url, {
+  function makeX402ScanProbe(url = 'http://localhost:3000/api/test'): Request {
+    return new Request(url, {
       method: 'POST',
       body: '{}',
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
@@ -486,7 +481,7 @@ describe('discovery probe (x402scan prober)', () => {
       });
       const handler = createRequestHandler(entry, async () => ({}), makeDeps());
       // No body, no Content-Type — bare probe
-      const req = new NextRequest('http://localhost:3000/api/test', { method: 'POST' });
+      const req = new Request('http://localhost:3000/api/test', { method: 'POST' });
       const res = await handler(req);
       expect(res.status).toBe(402);
       expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
@@ -520,7 +515,7 @@ describe('discovery probe (x402scan prober)', () => {
         }),
       });
       const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-      const req = new NextRequest('http://localhost:3000/api/test', {
+      const req = new Request('http://localhost:3000/api/test', {
         method: 'POST',
         body: JSON.stringify({ tier: 'short-5gb' }),
         headers: { 'Content-Type': 'application/json' },
@@ -541,7 +536,7 @@ describe('discovery probe (x402scan prober)', () => {
         bodySchema,
       });
       const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-      const req = new NextRequest('http://localhost:3000/api/test', {
+      const req = new Request('http://localhost:3000/api/test', {
         method: 'POST',
         body: JSON.stringify({ query: 'test' }),
       });
@@ -561,7 +556,7 @@ describe('discovery probe (x402scan prober)', () => {
         },
       });
       const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-      const req = new NextRequest('http://localhost:3000/api/test', {
+      const req = new Request('http://localhost:3000/api/test', {
         method: 'POST',
         body: JSON.stringify({ query: 'taken.com' }),
         headers: { 'Content-Type': 'application/json' },
@@ -581,7 +576,7 @@ describe('discovery probe (x402scan prober)', () => {
         validateFn,
       });
       const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-      const req = new NextRequest('http://localhost:3000/api/test', {
+      const req = new Request('http://localhost:3000/api/test', {
         method: 'POST',
         body: JSON.stringify({ query: 'available.com' }),
         headers: { 'Content-Type': 'application/json' },
@@ -615,7 +610,7 @@ describe('discovery probe (x402scan prober)', () => {
         bodySchema,
       });
       const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-      const req = new NextRequest('http://localhost:3000/api/test', {
+      const req = new Request('http://localhost:3000/api/test', {
         method: 'POST',
         body: '{not json',
         headers: { 'Content-Type': 'application/json' },
@@ -646,7 +641,7 @@ describe('discovery probe (x402scan prober)', () => {
         bodySchema,
       });
       const handler = createRequestHandler(entry, async () => ({}), makeMPPDeps());
-      const req = new NextRequest('http://localhost:3000/api/test', { method: 'POST' });
+      const req = new Request('http://localhost:3000/api/test', { method: 'POST' });
       const res = await handler(req);
       expect(res.status).toBe(402);
       expect(res.headers.get('WWW-Authenticate')).toBeTruthy();
@@ -689,9 +684,7 @@ describe('discovery probe (x402scan prober)', () => {
     it('challenge nests SIWX fields under extensions.sign-in-with-x.info', async () => {
       const entry = makeEntry({ authMode: 'siwx', protocols: [], pricing: undefined });
       const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-      const res = await handler(
-        new NextRequest('http://localhost:3000/api/test', { method: 'POST' }),
-      );
+      const res = await handler(new Request('http://localhost:3000/api/test', { method: 'POST' }));
       expect(res.status).toBe(402);
 
       const body = await res.json();
@@ -725,7 +718,7 @@ describe('discovery probe (x402scan prober)', () => {
       const payload = Buffer.from(JSON.stringify({ payer: KNOWN_PAYER, amount: '0.05' })).toString(
         'base64',
       );
-      const req = new NextRequest('http://localhost:3000/api/test', {
+      const req = new Request('http://localhost:3000/api/test', {
         method: 'POST',
         headers: { 'PAYMENT-SIGNATURE': payload, 'Content-Type': 'application/json' },
         body: '{}',
@@ -738,7 +731,7 @@ describe('discovery probe (x402scan prober)', () => {
       const entry = makeMPPEntry({ bodySchema });
       const handler = createRequestHandler(entry, async () => ({}), makeMPPDeps());
       const credential = Buffer.from(JSON.stringify({ payer: KNOWN_MPP_PAYER })).toString('base64');
-      const req = new NextRequest('http://localhost:3000/api/test', {
+      const req = new Request('http://localhost:3000/api/test', {
         method: 'POST',
         headers: { Authorization: `Payment ${credential}`, 'Content-Type': 'application/json' },
         body: '{}',
@@ -768,7 +761,7 @@ describe('query schema validation', () => {
       },
       makeDeps(),
     );
-    const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=5'));
+    const res = await handler(new Request('http://localhost:3000/api/test?limit=5'));
     expect(res.status).toBe(200);
     expect(seen).toEqual({ limit: 5 });
   });
@@ -789,7 +782,7 @@ describe('query schema validation', () => {
       },
       makeDeps(),
     );
-    const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=abc'));
+    const res = await handler(new Request('http://localhost:3000/api/test?limit=abc'));
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.success).toBe(false);
@@ -800,7 +793,7 @@ describe('query schema validation', () => {
   it('paid: missing query on unpaid probe returns 402 challenge (not 400)', async () => {
     const entry = makeEntry({ querySchema, method: 'GET' });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const res = await handler(new NextRequest('http://localhost:3000/api/test'));
+    const res = await handler(new Request('http://localhost:3000/api/test'));
     expect(res.status).toBe(402);
     expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
   });
@@ -808,7 +801,7 @@ describe('query schema validation', () => {
   it('paid: invalid query on unpaid probe returns 402 challenge (not 400)', async () => {
     const entry = makeEntry({ querySchema, method: 'GET' });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=abc'));
+    const res = await handler(new Request('http://localhost:3000/api/test?limit=abc'));
     expect(res.status).toBe(402);
     expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
   });
@@ -820,7 +813,7 @@ describe('query schema validation', () => {
       'base64',
     );
     const res = await handler(
-      new NextRequest('http://localhost:3000/api/test?limit=abc', {
+      new Request('http://localhost:3000/api/test?limit=abc', {
         method: 'GET',
         headers: { 'PAYMENT-SIGNATURE': payload },
       }),
@@ -831,7 +824,7 @@ describe('query schema validation', () => {
   it('paid: valid query still issues a 402 challenge on a probe request', async () => {
     const entry = makeEntry({ querySchema, method: 'GET' });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=5'));
+    const res = await handler(new Request('http://localhost:3000/api/test?limit=5'));
     expect(res.status).toBe(402);
   });
 
@@ -844,7 +837,7 @@ describe('query schema validation', () => {
       method: 'GET',
     });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const res = await handler(new NextRequest('http://localhost:3000/api/test'));
+    const res = await handler(new Request('http://localhost:3000/api/test'));
     expect(res.status).toBe(402);
     expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
   });
@@ -858,7 +851,7 @@ describe('query schema validation', () => {
       method: 'GET',
     });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=abc'));
+    const res = await handler(new Request('http://localhost:3000/api/test?limit=abc'));
     expect(res.status).toBe(402);
     expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
   });
@@ -872,7 +865,7 @@ describe('query schema validation', () => {
       method: 'GET',
     });
     const handler = createRequestHandler(entry, async () => ({}), makeMPPDeps());
-    const res = await handler(new NextRequest('http://localhost:3000/api/test'));
+    const res = await handler(new Request('http://localhost:3000/api/test'));
     expect(res.status).toBe(402);
     expect(res.headers.get('WWW-Authenticate')).toBeTruthy();
   });
@@ -886,7 +879,7 @@ describe('query schema validation', () => {
       method: 'GET',
     });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const res = await handler(new NextRequest('http://localhost:3000/api/test'));
+    const res = await handler(new Request('http://localhost:3000/api/test'));
     expect(res.status).toBe(402);
   });
 
@@ -899,7 +892,7 @@ describe('query schema validation', () => {
       method: 'GET',
     });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=abc'));
+    const res = await handler(new Request('http://localhost:3000/api/test?limit=abc'));
     expect(res.status).toBe(402);
   });
 
@@ -912,7 +905,7 @@ describe('query schema validation', () => {
       method: 'GET',
     });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const res = await handler(new NextRequest('http://localhost:3000/api/test?limit=5'));
+    const res = await handler(new Request('http://localhost:3000/api/test?limit=5'));
     expect(res.status).toBe(402);
   });
 
@@ -929,7 +922,7 @@ describe('query schema validation', () => {
       'base64',
     );
     const res = await handler(
-      new NextRequest('http://localhost:3000/api/test?limit=abc', {
+      new Request('http://localhost:3000/api/test?limit=abc', {
         method: 'GET',
         headers: { 'SIGN-IN-WITH-X': siwxPayload },
       }),
@@ -950,7 +943,7 @@ describe('query schema validation', () => {
       'base64',
     );
     const res = await handler(
-      new NextRequest('http://localhost:3000/api/test?limit=abc', {
+      new Request('http://localhost:3000/api/test?limit=abc', {
         method: 'GET',
         headers: { Authorization: `Payment ${mppPayload}` },
       }),
@@ -967,7 +960,7 @@ describe('query schema validation', () => {
       method: 'GET',
     });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const res = await handler(new NextRequest('http://localhost:3000/api/test'));
+    const res = await handler(new Request('http://localhost:3000/api/test'));
     expect(res.status).toBe(400);
   });
 });
@@ -1001,10 +994,7 @@ describe('x402 paid route', () => {
     const server = deps.x402Server as unknown as FakeX402Server;
     const handler = createRequestHandler(
       entry,
-      async () => {
-        const { NextResponse } = await import('next/server');
-        return NextResponse.json({ error: 'bad request' }, { status: 400 });
-      },
+      async () => Response.json({ error: 'bad request' }, { status: 400 }),
       deps,
     );
     const res = await handler(makePaymentRequest({ query: 'test' }));
@@ -1428,7 +1418,7 @@ describe('SIWX route', () => {
   it('returns 402 challenge when no SIWX header', async () => {
     const entry = makeEntry({ authMode: 'siwx', protocols: [] });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const req = new NextRequest('http://localhost:3000/api/test', { method: 'GET' });
+    const req = new Request('http://localhost:3000/api/test', { method: 'GET' });
     const res = await handler(req);
     expect(res.status).toBe(402);
   });
@@ -1546,7 +1536,7 @@ describe('unprotected route', () => {
   it('returns 200 with no auth required', async () => {
     const entry = makeEntry({ authMode: 'unprotected', protocols: [] });
     const handler = createRequestHandler(entry, async () => ({ status: 'ok' }), makeDeps());
-    const req = new NextRequest('http://localhost:3000/api/test', { method: 'GET' });
+    const req = new Request('http://localhost:3000/api/test', { method: 'GET' });
     const res = await handler(req);
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -1566,7 +1556,7 @@ describe('unprotected route', () => {
       },
       makeDeps(),
     );
-    const req = new NextRequest('http://localhost:3000/api/test', { method: 'GET' });
+    const req = new Request('http://localhost:3000/api/test', { method: 'GET' });
     await handler(req);
     expect(capturedWallet).toBeNull();
     expect(capturedPayment).toBeNull();
@@ -1583,7 +1573,7 @@ describe('API key + paid route', () => {
       pricing: '0.01',
     });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const req = new NextRequest('http://localhost:3000/api/test', { method: 'POST' });
+    const req = new Request('http://localhost:3000/api/test', { method: 'POST' });
     const res = await handler(req);
     expect(res.status).toBe(401);
   });
@@ -1595,7 +1585,7 @@ describe('API key + paid route', () => {
       pricing: '0.01',
     });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const req = new NextRequest('http://localhost:3000/api/test', {
+    const req = new Request('http://localhost:3000/api/test', {
       method: 'POST',
       headers: { 'X-API-Key': 'bad-key' },
     });
@@ -1620,7 +1610,7 @@ describe('API key + paid route', () => {
       },
       makeDeps(),
     );
-    const req = new NextRequest('http://localhost:3000/api/test', {
+    const req = new Request('http://localhost:3000/api/test', {
       method: 'POST',
       headers: { 'X-API-Key': 'valid-key' },
     });
@@ -1651,7 +1641,7 @@ describe('API key + paid route', () => {
     const payload = Buffer.from(JSON.stringify({ payer: KNOWN_PAYER, amount: '0.01' })).toString(
       'base64',
     );
-    const req = new NextRequest('http://localhost:3000/api/test', {
+    const req = new Request('http://localhost:3000/api/test', {
       method: 'POST',
       headers: {
         'X-API-Key': 'valid-key',
@@ -1675,7 +1665,7 @@ describe('validate()', () => {
     });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
     // Probe request (no payment)
-    const req = new NextRequest('http://localhost:3000/api/test', {
+    const req = new Request('http://localhost:3000/api/test', {
       method: 'POST',
       body: JSON.stringify({ query: 'test' }),
     });
@@ -1693,7 +1683,7 @@ describe('validate()', () => {
       },
     });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const req = new NextRequest('http://localhost:3000/api/test', {
+    const req = new Request('http://localhost:3000/api/test', {
       method: 'POST',
       body: JSON.stringify({ query: 'test' }),
     });
@@ -1710,7 +1700,7 @@ describe('validate()', () => {
       },
     });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const req = new NextRequest('http://localhost:3000/api/test', {
+    const req = new Request('http://localhost:3000/api/test', {
       method: 'POST',
       body: JSON.stringify({ query: 'test' }),
     });
@@ -1775,7 +1765,7 @@ describe('validate()', () => {
       },
     });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const req = new NextRequest('http://localhost:3000/api/test', {
+    const req = new Request('http://localhost:3000/api/test', {
       method: 'POST',
       body: JSON.stringify({ query: 'test' }),
     });
@@ -1794,7 +1784,7 @@ describe('validate()', () => {
     });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
     // No SIWX header - should validate before challenge
-    const req = new NextRequest('http://localhost:3000/api/test', {
+    const req = new Request('http://localhost:3000/api/test', {
       method: 'POST',
       body: JSON.stringify({ query: 'test' }),
     });
@@ -1814,7 +1804,7 @@ describe('validate()', () => {
       },
     });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const req = new NextRequest('http://localhost:3000/api/test', {
+    const req = new Request('http://localhost:3000/api/test', {
       method: 'POST',
       headers: { 'X-API-Key': 'valid' },
       body: JSON.stringify({ query: 'test' }),
@@ -1834,7 +1824,7 @@ describe('validate()', () => {
       },
     });
     const handler = createRequestHandler(entry, async () => ({}), makeDeps());
-    const req = new NextRequest('http://localhost:3000/api/test', {
+    const req = new Request('http://localhost:3000/api/test', {
       method: 'POST',
       body: JSON.stringify({ query: 'test' }),
     });

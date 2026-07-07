@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { NextResponse } from 'next/server';
 import { safeCallHandler } from '../src/pipeline/handler.js';
 import { HttpError } from '../src/types.js';
 
 describe('safeCallHandler', () => {
-  it('plain object → NextResponse.json(result)', async () => {
+  it('plain object → Response.json(result)', async () => {
     const handler = async () => ({ data: 'hello' });
     const res = await safeCallHandler(handler as never, {});
     expect(res.status).toBe(200);
@@ -12,8 +11,8 @@ describe('safeCallHandler', () => {
     expect(body).toEqual({ data: 'hello' });
   });
 
-  it('NextResponse passthrough unchanged', async () => {
-    const original = NextResponse.json({ custom: true }, { status: 201 });
+  it('Response passthrough unchanged', async () => {
+    const original = Response.json({ custom: true }, { status: 201 });
     const handler = async () => original;
     const res = await safeCallHandler(handler as never, {});
     expect(res.status).toBe(201);

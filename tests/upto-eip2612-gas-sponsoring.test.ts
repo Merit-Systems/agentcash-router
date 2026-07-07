@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
 import { decodePaymentRequiredHeader } from '@x402/core/http';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { UptoEvmScheme } from '@x402/evm/upto/client';
@@ -69,7 +68,7 @@ describe('upto + EIP-2612 gas sponsoring on fortune/llm', () => {
     ]);
 
     const handler = createRequestHandler(makeFortuneLlmEntry(), async () => ({ ok: true }), deps);
-    const response = await handler(new NextRequest(FORTUNE_LLM_URL, { method: 'POST' }));
+    const response = await handler(new Request(FORTUNE_LLM_URL, { method: 'POST' }));
 
     expect(response.status).toBe(402);
     const challenge = decodePaymentRequiredHeader(response.headers.get('PAYMENT-REQUIRED')!);
@@ -119,7 +118,7 @@ describe('upto + EIP-2612 gas sponsoring on fortune/llm', () => {
     };
     const handler = createRequestHandler(entry, async () => ({ ok: true }), deps);
     const response = await handler(
-      new NextRequest('http://localhost:3000/api/fortune/premium', { method: 'POST' }),
+      new Request('http://localhost:3000/api/fortune/premium', { method: 'POST' }),
     );
 
     expect(response.status).toBe(402);

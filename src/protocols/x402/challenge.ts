@@ -14,12 +14,17 @@ import {
   isSolanaRequirement,
 } from './solana.js';
 import { buildExpectedRequirements } from './requirements.js';
+import { deriveTag, isValidServiceName } from './resource-metadata.js';
+import type { X402ResourceMetadata } from './resource-metadata.js';
 
 type ChallengeResource = {
   url: string;
   method: string;
   description?: string;
   mimeType: string;
+  serviceName?: string;
+  tags?: string[];
+  iconUrl?: string;
 };
 
 type IndexedRequirement = {
@@ -42,6 +47,8 @@ interface BuildChallengeOptions {
   extensions?: Record<string, unknown>;
   report?: ReportFn;
   kvStore?: KvStore;
+  /** Bazaar service metadata merged into `PaymentRequired.resource` (persisted to the catalog at settlement). */
+  resourceMetadata?: X402ResourceMetadata;
 }
 
 export async function buildX402Challenge(opts: BuildChallengeOptions) {
@@ -55,9 +62,10 @@ export async function buildX402Challenge(opts: BuildChallengeOptions) {
     extensions,
     report,
     kvStore,
+    resourceMetadata,
   } = opts;
   const { encodePaymentRequiredHeader } = await import('@x402/core/http');
-  const resource = buildChallengeResource(request, routeEntry);
+  const resource = buildChallengeResource(request, routeEntry, resourceMetadata);
   const requirements = await buildChallengeRequirements(
     server,
     request,
@@ -212,11 +220,21 @@ function requiresFacilitatorEnrichment(requirement: PaymentRequirements): boolea
   return isSolanaRequirement(requirement);
 }
 
-function buildChallengeResource(request: Request, routeEntry: RouteEntry): ChallengeResource {
+function buildChallengeResource(
+  request: Request,
+  routeEntry: RouteEntry,
+  metadata?: X402ResourceMetadata,
+): ChallengeResource {
+  // Default the Bazaar tags to the same per-route tag the OpenAPI document
+  // advertises (`deriveTag`), so both discovery surfaces share one taxonomy.
+  // Configured discovery tags (in `metadata`) win.
+  const derivedTag = deriveTag(routeEntry.key);
   return {
     url: request.url,
     method: routeEntry.method,
     description: routeEntry.description,
     mimeType: 'application/json',
+    ...(isValidServiceName(derivedTag) ? { tags: [derivedTag] } : {}),
+    ...metadata,
   };
 }

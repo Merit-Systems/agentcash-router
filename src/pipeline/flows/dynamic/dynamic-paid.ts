@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import { type FlowCtx } from '../../steps/index.js';
 import { runPaidPreamble, runPaidVerify } from '../paid-preamble.js';
 import { resolveDynamicBodyAndPrice } from './dynamic-body-and-price.js';
@@ -10,14 +9,18 @@ import { runDynamicStreamFlow } from './dynamic-stream.js';
 import type { VerifySuccess } from '../../../protocols/types.js';
 import type { DynamicInvokeResult } from '../../steps/types.js';
 
-export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
+export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<Response> {
   const { request, routeEntry } = ctx;
 
   const preamble = await runPaidPreamble(ctx);
   if (preamble.done) return preamble.response;
   const { account, pricing, incomingStrategy } = preamble;
 
-  const { skipBody, skipHandler } = resolveDynamicPreflight(incomingStrategy, request, routeEntry);
+  const { skipBody, skipHandler } = await resolveDynamicPreflight(
+    incomingStrategy,
+    request,
+    routeEntry,
+  );
 
   if (skipHandler) {
     return runDynamicChannelMgmtFlow({

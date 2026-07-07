@@ -1,11 +1,8 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-
 export function createNotFoundHandler(baseUrl: string) {
   const normalizedBase = baseUrl.replace(/\/+$/, '');
 
-  return async (request: NextRequest): Promise<NextResponse> =>
-    NextResponse.json(
+  return async (request: Request): Promise<Response> =>
+    Response.json(
       {
         success: false,
         code: 'route_not_found',

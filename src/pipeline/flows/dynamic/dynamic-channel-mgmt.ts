@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import type { PricingStrategy } from '../../../pricing/index.js';
 import type { PaymentStrategy } from '../../../protocols/types.js';
 import {
@@ -20,7 +19,7 @@ export async function runDynamicChannelMgmtFlow(args: {
   account: unknown;
   pricing: PricingStrategy | null;
   skipBody: boolean;
-}): Promise<NextResponse> {
+}): Promise<Response> {
   const { ctx, strategy, account, pricing, skipBody } = args;
   const { request, routeEntry, deps, report } = ctx;
 
@@ -52,7 +51,7 @@ export async function runDynamicChannelMgmtFlow(args: {
     network: verifyOutcome.payment.network,
   });
 
-  const synthetic = new NextResponse(null, { status: 200 });
+  const synthetic = new Response(null, { status: 200 });
   const settleScope: SettleScope = {
     wallet: verifyOutcome.wallet,
     account,

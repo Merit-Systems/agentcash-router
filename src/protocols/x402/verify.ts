@@ -1,5 +1,4 @@
 import type { PaymentPayload, PaymentRequirements } from '@x402/core/types';
-import { VerifyError } from '@x402/core/types';
 import type { X402ResolvedAccept, X402Server } from '../../types.js';
 import type { ReportFn } from '../../plugin/reporter.js';
 import { HEADERS } from '../../headers.js';
@@ -46,6 +45,8 @@ export async function verifyX402Payment(opts: VerifyPaymentOptions) {
   try {
     verify = await server.verifyPayment(payload, matching);
   } catch (err: unknown) {
+    // Lazy-loaded: @x402/core/types is only needed here for the instanceof.
+    const { VerifyError } = await import('@x402/core/types');
     if (err instanceof VerifyError && err.statusCode >= 400 && err.statusCode < 500) {
       return invalidPaymentVerification({
         reason: err.invalidReason ?? 'verify_error',

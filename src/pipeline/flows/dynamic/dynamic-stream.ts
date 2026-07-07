@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import type { PaymentStrategy, VerifySuccess } from '../../../protocols/types.js';
 import { settleAndFinalizeStream } from '../../steps/index.js';
 import type { DynamicStreamResult, FlowCtx } from '../../steps/types.js';
@@ -10,7 +9,7 @@ export async function runDynamicStreamFlow(args: {
   account: unknown;
   body: unknown;
   result: DynamicStreamResult;
-}): Promise<NextResponse> {
+}): Promise<Response> {
   const { ctx, strategy, verifyOutcome, account, body, result } = args;
 
   return settleAndFinalizeStream({

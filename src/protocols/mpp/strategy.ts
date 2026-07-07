@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import type { Transport } from 'mppx/server';
 import { HEADERS } from '../../headers.js';
 import { multiplyDecimal } from '../../pricing/format.js';
@@ -38,15 +37,15 @@ export const mppStrategy: PaymentStrategy = {
 
   detects: hasMppPayment,
 
-  preflight(request: Request, _routeEntry: RouteEntry): PreflightOutcome | null {
-    const info = readMppCredential(request);
+  async preflight(request: Request, _routeEntry: RouteEntry): Promise<PreflightOutcome | null> {
+    const info = await readMppCredential(request);
     if (!info?.sessionAction) return null;
     if (!isChannelOnlyAction(info, request)) return null;
     return { skipBody: true, skipHandler: true };
   },
 
   async verify(args: VerifyArgs): Promise<VerifyOutcome> {
-    const info = readMppCredential(args.request);
+    const info = await readMppCredential(args.request);
     if (!info) return { ok: false, kind: 'invalid' };
 
     if (args.routeEntry.billing === 'metered') {
@@ -101,7 +100,7 @@ export const mppStrategy: PaymentStrategy = {
       }
     }
 
-    const sse = sseResult.withReceipt(forwardHandlerStreamWithChannelDebit) as NextResponse;
+    const sse = sseResult.withReceipt(forwardHandlerStreamWithChannelDebit) as Response;
     sse.headers.set('Cache-Control', 'private');
 
     const settledPayment: HandlerPaymentContext & { status: 'settled' } = {

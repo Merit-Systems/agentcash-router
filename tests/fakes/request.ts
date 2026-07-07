@@ -1,4 +1,3 @@
-import { NextRequest } from 'next/server';
 import { KNOWN_PAYER } from './x402-server.js';
 
 const BASE_URL = 'http://localhost:3000/api/test';
@@ -10,10 +9,10 @@ function makeRequest(
     headers?: Record<string, string>;
     body?: unknown;
   } = {},
-): NextRequest {
+): Request {
   const { method = 'POST', url = BASE_URL, headers = {}, body } = options;
 
-  return new NextRequest(url, {
+  return new Request(url, {
     method,
     headers,
     ...(body !== undefined && { body: JSON.stringify(body) }),
@@ -27,7 +26,7 @@ export function withX402Payment(
     body?: unknown;
     headers?: Record<string, string>;
   } = {},
-): NextRequest {
+): Request {
   const payer = options.payer ?? KNOWN_PAYER;
   const paymentPayload = Buffer.from(
     JSON.stringify({ payer, amount: options.amount ?? '0.02' }),

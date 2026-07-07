@@ -1,4 +1,5 @@
 import { createRouterFromEnv } from '@agentcash/router';
+import { loggingPlugin } from './logging-plugin';
 
 export const router = createRouterFromEnv({
   title: 'Fortune API',
@@ -10,4 +11,5 @@ export const router = createRouterFromEnv({
     'POST /api/fortune/stream for an MPP session SSE stream. ' +
     'POST /api/fortune/dynamic for function-based body-derived pricing. ' +
     'GET /api/fortune/profile and POST /api/fortune/favorites are SIWX (identity, no payment).',
+  plugin: loggingPlugin,
 });

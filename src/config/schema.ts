@@ -14,6 +14,13 @@ import { z } from 'zod';
 import type { ProtocolType, RouterConfig, X402AcceptConfig } from '../types.js';
 import { getConfiguredX402Accepts } from '../protocols/x402/accepts.js';
 import {
+  ICON_URL_MAX_LENGTH,
+  MAX_TAGS,
+  SERVICE_NAME_MAX_LENGTH,
+  isValidIconUrl,
+  isValidServiceName,
+} from '../protocols/x402/resource-metadata.js';
+import {
   BASE_MAINNET_NETWORK,
   BASE_USDC_ADDRESS,
   BASE_USDC_DECIMALS,
@@ -32,6 +39,7 @@ import type {
 import {
   canonicalizeEvm,
   evmAddressFromKey,
+  isBuilderCode,
   isEvmAddress,
   isEvmPrivateKey,
   isPlaceholderEvm,
@@ -92,6 +100,15 @@ const envShape = {
 
   CDP_API_KEY_ID: z.string().optional(),
   CDP_API_KEY_SECRET: z.string().optional(),
+
+  X402_BUILDER_CODE: z
+    .string()
+    .refine(isBuilderCode, {
+      params: { code: 'invalid_builder_code', ...x402 },
+      message:
+        'X402_BUILDER_CODE must be 1-32 lowercase alphanumeric/underscore characters (e.g. "bc_b7k3p9da") — the Base Builder Code declared for ERC-8021 settlement attribution. Register one at https://dashboard.base.org → Settings → Builder Codes.',
+    })
+    .optional(),
 
   SOLANA_PAYEE_ADDRESS: z
     .string()
@@ -316,6 +333,12 @@ function validateX402Config(
     push(
       'missing_x402_payee',
       'x402 requires payeeAddress in router config or payTo on every x402 accept.',
+    );
+  }
+  if (config.x402?.builderCode !== undefined && !isBuilderCode(config.x402.builderCode)) {
+    push(
+      'invalid_builder_code',
+      `x402 builderCode must be 1-32 lowercase alphanumeric/underscore characters (e.g. "bc_b7k3p9da"). Register one at https://dashboard.base.org → Settings → Builder Codes. Got: ${JSON.stringify(config.x402.builderCode)}`,
     );
   }
   const placeholder = [
@@ -572,6 +595,7 @@ export function routerConfigFromEnv<
         ...options.x402Facilitators,
         solana: solanaFacilitator,
       },
+      ...(env.X402_BUILDER_CODE ? { builderCode: env.X402_BUILDER_CODE } : {}),
     },
     ...(mppConfig ? { mpp: mppConfig } : {}),
     discovery: {
@@ -583,6 +607,9 @@ export function routerConfigFromEnv<
       ...(options.ownershipProofs ? { ownershipProofs: options.ownershipProofs } : {}),
       ...(options.methodHints ? { methodHints: options.methodHints } : {}),
       ...(options.serverUrl ? { serverUrl: options.serverUrl } : {}),
+      ...(options.serviceName ? { serviceName: options.serviceName } : {}),
+      ...(options.tags ? { tags: options.tags } : {}),
+      ...(options.iconUrl ? { iconUrl: options.iconUrl } : {}),
     },
     ...(options.prices ? { prices: options.prices } : {}),
     ...(options.plugin ? { plugin: options.plugin } : {}),
@@ -622,7 +649,37 @@ export function getRouterConfigIssues(
         "RouterConfig.protocols cannot be empty. Omit the field to use default ['x402'] or specify protocols explicitly.",
     });
   }
+  issues.push(...validateDiscoveryMetadata(config));
   if (protocols.includes('x402')) issues.push(...validateX402Config(config, env));
   if (protocols.includes('mpp')) issues.push(...validateMppConfig(config));
+  return issues;
+}
+
+function validateDiscoveryMetadata(config: RouterConfig): RouterConfigIssue[] {
+  const issues: RouterConfigIssue[] = [];
+  const discovery = config.discovery;
+  if (!discovery) return issues;
+
+  if (discovery.serviceName !== undefined && !isValidServiceName(discovery.serviceName)) {
+    issues.push({
+      code: 'invalid_discovery_service_name',
+      message: `discovery \`serviceName\` must be 1-${SERVICE_NAME_MAX_LENGTH} printable-ASCII characters (Bazaar catalog display name). Got: ${JSON.stringify(discovery.serviceName)}`,
+    });
+  }
+  if (discovery.tags !== undefined) {
+    const badTag = discovery.tags.find((tag) => !isValidServiceName(tag));
+    if (discovery.tags.length > MAX_TAGS || badTag !== undefined) {
+      issues.push({
+        code: 'invalid_discovery_tags',
+        message: `discovery \`tags\` allows at most ${MAX_TAGS} entries of 1-${SERVICE_NAME_MAX_LENGTH} printable-ASCII characters each.${badTag !== undefined ? ` Got: ${JSON.stringify(badTag)}` : ` Got ${discovery.tags.length} entries.`}`,
+      });
+    }
+  }
+  if (discovery.iconUrl !== undefined && !isValidIconUrl(discovery.iconUrl)) {
+    issues.push({
+      code: 'invalid_discovery_icon_url',
+      message: `discovery \`iconUrl\` must be an HTTPS URL of at most ${ICON_URL_MAX_LENGTH} characters. Got: ${JSON.stringify(discovery.iconUrl)}`,
+    });
+  }
   return issues;
 }

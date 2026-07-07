@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { NextRequest } from 'next/server';
 import { RouteRegistry } from '../src/registry.js';
 import { createWellKnownHandler } from '../src/discovery/well-known.js';
 import type { RouteEntry } from '../src/types.js';
@@ -16,7 +15,7 @@ function makeEntry(overrides: Partial<RouteEntry> = {}): RouteEntry {
   };
 }
 
-const dummyRequest = new NextRequest('http://localhost:3000/.well-known/x402');
+const dummyRequest = new Request('http://localhost:3000/.well-known/x402');
 const defaultDiscovery = { title: 'Test', version: '1.0.0' };
 
 describe('.well-known/x402', () => {

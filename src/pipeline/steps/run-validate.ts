@@ -1,9 +1,8 @@
-import type { NextResponse } from 'next/server';
 import { errorMessage, errorStatus } from './errors.js';
 import { fail } from './fail.js';
 import type { FlowCtx } from './types.js';
 
-export async function runValidate(ctx: FlowCtx, body: unknown): Promise<NextResponse | null> {
+export async function runValidate(ctx: FlowCtx, body: unknown): Promise<Response | null> {
   if (!ctx.routeEntry.validateFn) return null;
   try {
     await ctx.routeEntry.validateFn(body);

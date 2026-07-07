@@ -5,7 +5,6 @@ import {
   type Challenge,
   type NonceStoreInterface,
 } from 'did-auth-challenge';
-import type { NextRequest, NextResponse } from 'next/server';
 import { HEADERS } from '../headers.js';
 import { HttpError } from '../types.js';
 
@@ -48,7 +47,7 @@ export async function buildAgentIdentityChallengeHeader(
 }
 
 export async function attachAgentIdentityChallenge(
-  response: NextResponse,
+  response: Response,
   request: Request,
   nonceStore: NonceStoreInterface,
 ): Promise<void> {
@@ -59,7 +58,7 @@ export async function attachAgentIdentityChallenge(
 }
 
 export async function resolveActor(
-  request: NextRequest,
+  request: Request,
   nonceStore: NonceStoreInterface,
 ): Promise<string | null> {
   const header = request.headers.get(HEADERS.AGENT_IDENTITY);

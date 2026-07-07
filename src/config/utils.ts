@@ -11,6 +11,9 @@ const EVM_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const EVM_PRIVATE_KEY_RE = /^0x[a-fA-F0-9]{64}$/;
 const SOLANA_ADDRESS_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const ZERO_EVM_ADDRESS_RE = /^0x0{40}$/i;
+// ERC-8021 builder-code pattern (mirrors @x402/extensions BUILDER_CODE_PATTERN;
+// kept local so config validation stays free of the lazy-loaded x402 imports).
+const BUILDER_CODE_RE = /^[a-z0-9_]{1,32}$/;
 
 export function isUrl(value: string): boolean {
   try {
@@ -26,6 +29,7 @@ export const isEvmPrivateKey = (v: string) => EVM_PRIVATE_KEY_RE.test(v);
 export const isPlaceholderEvm = (v: string) => ZERO_EVM_ADDRESS_RE.test(v);
 export const isSolanaAddress = (v: string) => SOLANA_ADDRESS_RE.test(v);
 export const isX402Network = (v: string) => v.startsWith('eip155:') || v.startsWith('solana:');
+export const isBuilderCode = (v: string) => BUILDER_CODE_RE.test(v);
 export const canonicalizeEvm = (addr: string) => addr.toLowerCase();
 
 /** Derive the lowercased EVM address for a private key, or null if the key is malformed. */

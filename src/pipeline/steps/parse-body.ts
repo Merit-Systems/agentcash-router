@@ -1,12 +1,10 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 import { bufferBody, MalformedJsonError, validateBody } from '../body.js';
 import { firePluginResponse } from '../../plugin/events.js';
 import type { FlowCtx, ParseBodyResult } from './types.js';
 
 export async function parseBody(
   ctx: FlowCtx,
-  request: NextRequest = ctx.request,
+  request: Request = ctx.request,
 ): Promise<ParseBodyResult> {
   if (!ctx.routeEntry.bodySchema) return { ok: true, data: undefined };
   let raw: unknown;
@@ -15,7 +13,7 @@ export async function parseBody(
   } catch (err) {
     if (!(err instanceof MalformedJsonError)) throw err;
     const responseBody = { success: false, error: 'Invalid JSON', issues: [] };
-    const response = NextResponse.json(responseBody, { status: 400 });
+    const response = Response.json(responseBody, { status: 400 });
     firePluginResponse(ctx, response, undefined, responseBody, {
       message: responseBody.error,
       cause: err,
@@ -25,7 +23,7 @@ export async function parseBody(
   const result = validateBody(raw, ctx.routeEntry.bodySchema);
   if (result.success) return { ok: true, data: result.data };
   const responseBody = { success: false, error: result.error, issues: result.issues };
-  const response = NextResponse.json(responseBody, { status: 400 });
+  const response = Response.json(responseBody, { status: 400 });
   firePluginResponse(ctx, response, raw, responseBody, { message: result.error });
   return { ok: false, response };
 }

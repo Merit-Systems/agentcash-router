@@ -1,0 +1,23 @@
+{
+  "name": "agentcash-router-hono-example",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Minimal @agentcash/router example on a plain Hono + Node server (no Next.js)",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agentcash/router": "link:../..",
+    "@hono/node-server": "^1.14.0",
+    "hono": "^4.12.25",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,8 +1,8 @@
-import { Receipt } from 'mppx';
-
-export function extractTxHash(receiptHeader: string | null | undefined): string {
+export async function extractTxHash(receiptHeader: string | null | undefined): Promise<string> {
   if (!receiptHeader) return '';
   try {
+    // Lazy-loaded so x402-only deployments never pull mppx into their bundle.
+    const { Receipt } = await import('mppx');
     return Receipt.deserialize(receiptHeader).reference;
   } catch {
     return '';

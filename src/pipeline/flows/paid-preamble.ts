@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import { selectPricing, type PricingStrategy } from '../../pricing/index.js';
 import { selectIncomingStrategy } from '../../protocols/index.js';
 import type { PaymentStrategy, VerifySuccess } from '../../protocols/types.js';
@@ -14,7 +13,7 @@ import {
 import { buildChallengeResponse } from './challenge-response.js';
 
 export type PaidPreambleResult =
-  | { done: true; response: NextResponse }
+  | { done: true; response: Response }
   | {
       done: false;
       account: unknown;
@@ -61,7 +60,7 @@ export async function runPaidPreamble(ctx: FlowCtx): Promise<PaidPreambleResult>
 }
 
 export type PaidVerifyResult =
-  | { ok: false; response: NextResponse }
+  | { ok: false; response: Response }
   | { ok: true; verifyOutcome: VerifySuccess };
 
 /** Shared verify step of the paid flows: config failure → 500, invalid payment → 402 challenge. */

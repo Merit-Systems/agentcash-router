@@ -1,10 +1,10 @@
-import type { NextRequest } from 'next/server';
-import type { NextResponse } from 'next/server';
+import { Hono } from 'hono';
 import type { RouterConfig } from './types.js';
 import type { RouteDefinition, RouteMethod } from './types.js';
 import type { RouterDeps } from './pipeline/orchestrate.js';
 import { RouteRegistry } from './registry.js';
 import { RouteBuilder } from './builder.js';
+import { normalizePath, toHonoPath } from './path-params.js';
 import {
   MemoryNonceStore,
   MemoryEntitlementStore,
@@ -18,6 +18,7 @@ import { createOpenAPIHandler } from './discovery/openapi.js';
 import { createLlmsTxtHandler } from './discovery/llms-txt.js';
 import { createNotFoundHandler } from './discovery/not-found.js';
 import { getConfiguredX402Accepts } from './protocols/x402/accepts.js';
+import { resolveResourceMetadata } from './protocols/x402/resource-metadata.js';
 import { BASE_MAINNET_NETWORK } from './constants.js';
 import {
   RouterConfigError,
@@ -50,15 +51,26 @@ export interface ServiceRouter<TPriceKeys extends string = never> {
    * but new integrations should mount `.openapi()` (at `/openapi.json`) and
    * `.llmsTxt()` (at `/llms.txt`) instead.
    */
-  wellKnown(): (request: NextRequest) => Promise<NextResponse>;
+  wellKnown(): (request: Request) => Promise<Response>;
   /** OpenAPI 3.1 discovery document. Mount at `GET /openapi.json`. */
-  openapi(): (request: NextRequest) => Promise<NextResponse>;
+  openapi(): (request: Request) => Promise<Response>;
   /** Plain-text agent guidance. Mount at `GET /llms.txt`. */
-  llmsTxt(): (request: NextRequest) => Promise<NextResponse>;
+  llmsTxt(): (request: Request) => Promise<Response>;
   /** JSON 404 fallback with rediscovery links. Mount in a catch-all route. */
-  notFound(): (request: NextRequest) => Promise<NextResponse>;
+  notFound(): (request: Request) => Promise<Response>;
   monitors(): MonitorEntry[];
   registry: RouteRegistry;
+  /**
+   * Standard fetch handler serving all registered routes at
+   * `/{basePath}/{path}` plus the discovery surfaces (`/.well-known/x402`,
+   * `/openapi.json`, `/llms.txt` — at the root and under the basePath).
+   * Unmatched requests get the `.notFound()` JSON envelope. This is the entry
+   * point for the Next.js catch-all adapter (`@agentcash/router/next`) and any
+   * fetch runtime (Bun, Deno, Node ≥18 via `serve`-style adapters).
+   */
+  fetch(request: Request): Promise<Response>;
+  /** The internal Hono app, for mounting into a larger app: `app.route('/', router.hono())`. */
+  hono(): Hono;
 }
 
 type ExtractPriceKeys<C> = [C] extends [{ prices: infer P extends Record<string, string> }]
@@ -123,6 +135,8 @@ export function createRouter<const C extends RouterConfig>(
     network,
     x402FacilitatorsByNetwork: undefined,
     x402Accepts,
+    builderCode: config.x402?.builderCode,
+    x402ResourceMetadata: resolveResourceMetadata(config.discovery),
     kvStore,
     mppx: null,
     tempoClient: null,
@@ -148,6 +162,51 @@ export function createRouter<const C extends RouterConfig>(
   })();
 
   const pricesKeys = config.prices ? Object.keys(config.prices) : undefined;
+
+  // Internal Hono app: serves all registered routes under `/{basePath}/{path}`
+  // plus the discovery surfaces. Route handlers are bound via registry lookup
+  // at request time (not the handler closure) so re-registration of the same
+  // key+method (last write wins) dispatches to the newest handler.
+  const basePath = (config.basePath ?? 'api').replace(/^\/+|\/+$/g, '');
+  const prefix = basePath ? `/${basePath}` : '';
+  const app = new Hono();
+  const wellKnownHandler = createWellKnownHandler(
+    registry,
+    resolvedBaseUrl,
+    pricesKeys,
+    config.discovery,
+    basePath,
+  );
+  const openapiHandler = createOpenAPIHandler(
+    registry,
+    resolvedBaseUrl,
+    pricesKeys,
+    config.discovery,
+    basePath,
+  );
+  const llmsTxtHandler = createLlmsTxtHandler(config.discovery);
+  const notFoundHandler = createNotFoundHandler(resolvedBaseUrl);
+  app.get('/.well-known/x402', (c) => wellKnownHandler(c.req.raw));
+  app.get('/openapi.json', (c) => openapiHandler(c.req.raw));
+  app.get('/llms.txt', (c) => llmsTxtHandler(c.req.raw));
+  if (prefix) {
+    // Also serve discovery under the basePath so a Next.js catch-all route
+    // (`app/api/[[...route]]/route.ts`) can reach it via a middleware rewrite.
+    app.get(`${prefix}/.well-known/x402`, (c) => wellKnownHandler(c.req.raw));
+    app.get(`${prefix}/openapi.json`, (c) => openapiHandler(c.req.raw));
+    app.get(`${prefix}/llms.txt`, (c) => llmsTxtHandler(c.req.raw));
+  }
+  app.notFound((c) => notFoundHandler(c.req.raw));
+
+  const mountedPaths = new Set<string>();
+  registry.onRegister = (entry) => {
+    const template = entry.path ?? entry.key;
+    const honoPath = `${prefix}/${toHonoPath(template)}`;
+    const mountKey = `${entry.method} ${honoPath}`;
+    if (mountedPaths.has(mountKey)) return; // path already mounted; dispatch is by key+method
+    mountedPaths.add(mountKey);
+    app.on(entry.method, honoPath, (c) => registry.dispatch(entry.key, entry.method)(c.req.raw));
+  };
 
   return {
     route(keyOrDefinition) {
@@ -187,19 +246,27 @@ export function createRouter<const C extends RouterConfig>(
     },
 
     wellKnown() {
-      return createWellKnownHandler(registry, resolvedBaseUrl, pricesKeys, config.discovery);
+      return wellKnownHandler;
     },
 
     openapi() {
-      return createOpenAPIHandler(registry, resolvedBaseUrl, pricesKeys, config.discovery);
+      return openapiHandler;
     },
 
     llmsTxt() {
-      return createLlmsTxtHandler(config.discovery);
+      return llmsTxtHandler;
     },
 
     notFound() {
-      return createNotFoundHandler(resolvedBaseUrl);
+      return notFoundHandler;
+    },
+
+    fetch(request: Request): Promise<Response> {
+      return Promise.resolve(app.fetch(request));
+    },
+
+    hono(): Hono {
+      return app;
     },
 
     monitors(): MonitorEntry[] {
@@ -221,13 +288,6 @@ export function createRouter<const C extends RouterConfig>(
 
     registry,
   } as ServiceRouter<ExtractPriceKeys<C>>;
-}
-
-function normalizePath(path: string): string {
-  let normalized = path.trim();
-  normalized = normalized.replace(/^\/+/, '');
-  normalized = normalized.replace(/^api\/+/, '');
-  return normalized.replace(/\/+$/, '');
 }
 
 /**

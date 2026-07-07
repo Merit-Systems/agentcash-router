@@ -1,4 +1,3 @@
-import type { NextRequest, NextResponse } from 'next/server';
 import type { Transport } from 'mppx/server';
 import type {
   HandlerPaymentContext,
@@ -8,6 +7,7 @@ import type {
   X402Server,
 } from '../types.js';
 import type { ResolvedX402Facilitator } from './x402/facilitators.js';
+import type { X402ResourceMetadata } from './x402/resource-metadata.js';
 import type { MppxMiddleware } from './mpp/middleware-types.js';
 import type { NonceStoreInterface } from 'did-auth-challenge';
 import type { NonceStore, EntitlementStore, KvStore } from '../kv-store/index.js';
@@ -28,6 +28,10 @@ export interface RouterDeps {
   network: string;
   x402FacilitatorsByNetwork?: Record<string, ResolvedX402Facilitator>;
   x402Accepts: X402AcceptConfig[];
+  /** Base Builder Code declared as the ERC-8021 app code (`a`) on every x402 challenge. */
+  builderCode?: string;
+  /** Bazaar service metadata (`serviceName`/`tags`/`iconUrl`) merged into `PaymentRequired.resource`. */
+  x402ResourceMetadata?: X402ResourceMetadata;
   kvStore?: KvStore;
   mppx?: {
     charge: MppxMiddleware<{ amount: string }, Transport.Http>;
@@ -45,7 +49,7 @@ export interface RouterDeps {
 }
 
 export interface VerifyArgs {
-  request: NextRequest;
+  request: Request;
   body: unknown;
   price: string;
   routeEntry: RouteEntry;
@@ -72,8 +76,8 @@ export type VerifyOutcome =
   | { ok: false; kind: 'config'; message: string };
 
 export interface SettleArgs {
-  request: NextRequest;
-  response: NextResponse;
+  request: Request;
+  response: Response;
   payment: HandlerPaymentContext;
   token: unknown;
   routeEntry: RouteEntry;
@@ -83,7 +87,7 @@ export interface SettleArgs {
 }
 
 export interface StreamSettleArgs {
-  request: NextRequest;
+  request: Request;
   source: AsyncIterable<unknown>;
   payment: HandlerPaymentContext;
   token: unknown;
@@ -96,13 +100,13 @@ export interface StreamSettleArgs {
 export type SettleOutcome =
   | {
       ok: true;
-      response: NextResponse;
+      response: Response;
       settledPayment: HandlerPaymentContext & { status: 'settled' };
     }
   | { ok: false; error: unknown; failMessage: string; failStatus?: number };
 
 export interface ChallengeArgs {
-  request: NextRequest;
+  request: Request;
   routeEntry: RouteEntry;
   body: unknown | undefined;
   price: string;
@@ -126,7 +130,10 @@ export interface PaymentStrategy {
 
   detects(request: Request): boolean;
 
-  preflight?(request: Request, routeEntry: RouteEntry): PreflightOutcome | null;
+  preflight?(
+    request: Request,
+    routeEntry: RouteEntry,
+  ): PreflightOutcome | null | Promise<PreflightOutcome | null>;
 
   verify(args: VerifyArgs): Promise<VerifyOutcome>;
 

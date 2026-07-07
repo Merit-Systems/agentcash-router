@@ -26,6 +26,7 @@ export async function initMpp(
 
   try {
     const { Mppx, tempo } = await import('mppx/server');
+    const { Store } = await import('mppx');
     const { createClient, http } = await import('viem');
     // viem/tempo/chains is the canonical Tempo entrypoint (mppx moved off viem/chains in 0.6.27).
     const { tempo: tempoChain } = await import('viem/tempo/chains');
@@ -43,6 +44,12 @@ export async function initMpp(
       : undefined;
 
     const resolvedStore = kvStore ? await createKvMppStore(kvStore) : undefined;
+    // One channel store shared by every method instance. Without this, the
+    // request-mode and streaming session middlewares (two Mppx.create calls)
+    // each default to a private Store.memory(), so a channel opened through
+    // one is 'channel-not-found' (410) through the other — and a mid-stream
+    // voucher top-up can land in a store the blocked stream never reads.
+    const sessionStore = resolvedStore ?? Store.memory();
 
     const realm = new URL(resolvedBaseUrl).host;
     const mppConfig = config.mpp;
@@ -54,7 +61,7 @@ export async function initMpp(
       getClient,
       ...(operatorAccount ? { account: operatorAccount } : {}),
       ...(feePayerAccount ? { feePayer: feePayerAccount } : {}),
-      ...(resolvedStore ? { store: resolvedStore } : {}),
+      store: sessionStore,
       ...(mppConfig.feePayerPolicy ? { feePayerPolicy: mppConfig.feePayerPolicy } : {}),
       ...(mppConfig.session?.settlementSchedule
         ? { settlementSchedule: mppConfig.session.settlementSchedule }
@@ -67,7 +74,7 @@ export async function initMpp(
       payeeAddress: config.payeeAddress ?? '',
       getClient,
       feePayerAccount,
-      resolvedStore,
+      resolvedStore: sessionStore,
       sessionEnabled,
       sharedSessionParams,
       realm,

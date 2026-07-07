@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { NextRequest } from 'next/server';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { createChallenge } from 'did-auth-challenge';
 import { createRequestHandler } from '../src/pipeline/orchestrate.js';
@@ -67,7 +66,7 @@ function makeDeps(nonceStore = makeTestAgentIdentityNonceStore()): RouterDeps {
 describe('agent identity', () => {
   it('buildAgentIdentityChallengeHeader encodes challenge envelope', async () => {
     const nonceStore = createAgentIdentityNonceStore();
-    const request = new NextRequest('http://localhost:3000/api/test', { method: 'POST' });
+    const request = new Request('http://localhost:3000/api/test', { method: 'POST' });
     const header = await buildAgentIdentityChallengeHeader(request, nonceStore);
     const decoded = decodeAgentHeader(header);
     expect(decoded.v).toBe(1);
@@ -78,9 +77,7 @@ describe('agent identity', () => {
 
   it('probe returns X-Agent-Identity alongside payment challenge', async () => {
     const handler = createRequestHandler(makePaidEntry(), async () => ({}), makeDeps());
-    const res = await handler(
-      new NextRequest('http://localhost:3000/api/test', { method: 'POST' }),
-    );
+    const res = await handler(new Request('http://localhost:3000/api/test', { method: 'POST' }));
     expect(res.status).toBe(402);
     expect(res.headers.get(HEADERS.X402_PAYMENT_REQUIRED)).toBeTruthy();
     expect(res.headers.get(HEADERS.AGENT_IDENTITY)).toBeTruthy();
@@ -98,9 +95,7 @@ describe('agent identity', () => {
       },
       makeDeps(),
     );
-    const res = await handler(
-      new NextRequest('http://localhost:3000/api/test', { method: 'POST' }),
-    );
+    const res = await handler(new Request('http://localhost:3000/api/test', { method: 'POST' }));
     expect(res.status).toBe(200);
     expect(capturedActor).toBeNull();
   });
@@ -128,7 +123,7 @@ describe('agent identity', () => {
       makeDeps(nonceStore),
     );
 
-    const request = new NextRequest('http://localhost:3000/api/test', {
+    const request = new Request('http://localhost:3000/api/test', {
       method: 'POST',
       headers: { [HEADERS.AGENT_IDENTITY]: proofHeader },
     });
@@ -157,7 +152,7 @@ describe('agent identity', () => {
       async () => ({ ok: true }),
       makeDeps(nonceStore),
     );
-    const request = new NextRequest('http://localhost:3000/api/test', {
+    const request = new Request('http://localhost:3000/api/test', {
       method: 'POST',
       headers: { [HEADERS.AGENT_IDENTITY]: badProof },
     });
@@ -167,15 +162,14 @@ describe('agent identity', () => {
 
   it('resolveActor returns null when header is absent', async () => {
     const nonceStore = createAgentIdentityNonceStore();
-    const request = new NextRequest('http://localhost:3000/api/test');
+    const request = new Request('http://localhost:3000/api/test');
     await expect(resolveActor(request, nonceStore)).resolves.toBeNull();
   });
 
   it('attachAgentIdentityChallenge sets response header', async () => {
-    const { NextResponse } = await import('next/server');
     const nonceStore = createAgentIdentityNonceStore();
-    const request = new NextRequest('http://localhost:3000/api/test');
-    const response = new NextResponse(null, { status: 402 });
+    const request = new Request('http://localhost:3000/api/test');
+    const response = new Response(null, { status: 402 });
     await attachAgentIdentityChallenge(response, request, nonceStore);
     expect(response.headers.get(HEADERS.AGENT_IDENTITY)).toBeTruthy();
   });

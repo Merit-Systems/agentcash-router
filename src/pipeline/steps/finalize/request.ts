@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import type { PaymentStrategy, VerifySuccess } from '../../../protocols/types.js';
 import { fail } from '../fail.js';
 import type { FlowCtx, SettleScope } from '../types.js';
@@ -13,7 +12,7 @@ export async function settleAndFinalizeRequest(args: {
   body: unknown;
   billedAmount: string;
   onSettleError?: (error: unknown, failMessage: string) => Promise<void>;
-}): Promise<NextResponse> {
+}): Promise<Response> {
   const { ctx, strategy, verifyOutcome, scope, rawResult, body, billedAmount, onSettleError } =
     args;
   const { request, routeEntry, deps, report } = ctx;

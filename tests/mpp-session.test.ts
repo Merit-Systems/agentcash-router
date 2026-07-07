@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { RouteRegistry } from '../src/registry.js';
 import { RouteBuilder } from '../src/builder.js';
@@ -232,7 +231,7 @@ function withSessionCredential(options: {
   action?: 'open' | 'voucher' | 'topUp' | 'close';
   payer?: string;
   body?: unknown;
-}): NextRequest {
+}): Request {
   const credential = Buffer.from(
     JSON.stringify({
       payer: options.payer ?? KNOWN_PAYER,
@@ -246,14 +245,14 @@ function withSessionCredential(options: {
     const serialized = JSON.stringify(options.body);
     init.body = serialized;
     headers['Content-Type'] = 'application/json';
-    // NextRequest doesn't auto-set Content-Length — set it explicitly so
+    // Request doesn't auto-set Content-Length — set it explicitly so
     // session-mode's hasRequestBody() correctly classifies the credential.
     headers['Content-Length'] = String(Buffer.byteLength(serialized));
   }
-  return new NextRequest('http://localhost:3000/api/test', init);
+  return new Request('http://localhost:3000/api/test', init);
 }
 
-function withChargeCredential(payer = KNOWN_PAYER, body?: unknown): NextRequest {
+function withChargeCredential(payer = KNOWN_PAYER, body?: unknown): Request {
   const credential = Buffer.from(
     JSON.stringify({ payer, payload: { type: 'hash', signature: '0xdead' } }),
   ).toString('base64');
@@ -262,7 +261,7 @@ function withChargeCredential(payer = KNOWN_PAYER, body?: unknown): NextRequest 
     headers: { Authorization: `Payment ${credential}` },
   };
   if (body !== undefined) init.body = JSON.stringify(body);
-  return new NextRequest('http://localhost:3000/api/test', init);
+  return new Request('http://localhost:3000/api/test', init);
 }
 
 const bodySchema = z.object({ prompt: z.string() });
@@ -276,9 +275,7 @@ describe('MPP session — challenge', () => {
     const fake = createFakeSessionMppx();
     const entry = makeDynamicSessionEntry();
     const handler = createRequestHandler(entry, async () => ({}), makeSessionDeps(fake));
-    const res = await handler(
-      new NextRequest('http://localhost:3000/api/test', { method: 'POST' }),
-    );
+    const res = await handler(new Request('http://localhost:3000/api/test', { method: 'POST' }));
     expect(res.status).toBe(402);
     expect(res.headers.get('WWW-Authenticate')).toMatch(/intent="session"/);
   });
@@ -287,7 +284,7 @@ describe('MPP session — challenge', () => {
     const fake = createFakeSessionMppx();
     const entry = makeDynamicSessionEntry({ maxPrice: '0.10' });
     const handler = createRequestHandler(entry, async () => ({}), makeSessionDeps(fake));
-    await handler(new NextRequest('http://localhost:3000/api/test', { method: 'POST' }));
+    await handler(new Request('http://localhost:3000/api/test', { method: 'POST' }));
     expect(fake.state.lastSuggestedDeposit).toBe('0.10');
   });
 
@@ -295,7 +292,7 @@ describe('MPP session — challenge', () => {
     const fake = createFakeSessionMppx();
     const entry = makeDynamicSessionEntry({ tickCost: '0.0005', unitType: 'frame' });
     const handler = createRequestHandler(entry, async () => ({}), makeSessionDeps(fake));
-    await handler(new NextRequest('http://localhost:3000/api/test', { method: 'POST' }));
+    await handler(new Request('http://localhost:3000/api/test', { method: 'POST' }));
     expect(fake.state.lastAmount).toBe('0.0005');
     expect(fake.state.lastUnitType).toBe('frame');
   });
@@ -313,7 +310,7 @@ describe('MPP session — challenge', () => {
     const fake = createFakeSessionMppx();
     const entry = makeStreamingSessionEntry();
     const handler = createRequestHandler(entry, async () => ({}), makeSessionDeps(fake));
-    await handler(new NextRequest('http://localhost:3000/api/test', { method: 'POST' }));
+    await handler(new Request('http://localhost:3000/api/test', { method: 'POST' }));
     expect(fake.state.lastMeta).toEqual({ streaming: 'true' });
   });
 
@@ -321,7 +318,7 @@ describe('MPP session — challenge', () => {
     const fake = createFakeSessionMppx();
     const entry = makeDynamicSessionEntry();
     const handler = createRequestHandler(entry, async () => ({}), makeSessionDeps(fake));
-    await handler(new NextRequest('http://localhost:3000/api/test', { method: 'POST' }));
+    await handler(new Request('http://localhost:3000/api/test', { method: 'POST' }));
     expect(fake.state.lastMeta).toBeUndefined();
   });
 });

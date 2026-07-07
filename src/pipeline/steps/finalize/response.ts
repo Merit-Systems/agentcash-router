@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import {
   firePluginResponse,
   fireProviderQuota,
@@ -8,11 +7,11 @@ import type { FlowCtx } from '../types.js';
 
 export function finalize(
   ctx: FlowCtx,
-  response: NextResponse,
+  response: Response,
   rawResult: unknown,
   requestBody?: unknown,
   failure?: PluginFailure,
-): NextResponse {
+): Response {
   fireProviderQuota(ctx, response, rawResult);
   firePluginResponse(ctx, response, requestBody, rawResult, failure);
   return response;

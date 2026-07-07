@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import type { Transport } from 'mppx/server';
 import { HEADERS } from '../../headers.js';
 import type { HandlerPaymentContext } from '../../types.js';
@@ -107,7 +106,7 @@ export async function settleSessionMode(args: SettleArgs): Promise<SettleOutcome
   if (isChannelOnlyAction(sessionToken.info, request)) {
     const wrapped = (sessionToken.sessionResult.withReceipt as (r: Response) => Response)(
       new Response(null, { status: 200 }),
-    ) as NextResponse;
+    ) as Response;
     return {
       ok: true,
       response: wrapped,
@@ -126,7 +125,7 @@ export async function settleSessionMode(args: SettleArgs): Promise<SettleOutcome
 
   const wrapped = (sessionToken.sessionResult.withReceipt as (r: Response) => Response)(
     response,
-  ) as NextResponse;
+  ) as Response;
   wrapped.headers.set('Cache-Control', 'private');
   const receiptHeader = wrapped.headers.get(HEADERS.MPP_PAYMENT_RECEIPT) ?? undefined;
 

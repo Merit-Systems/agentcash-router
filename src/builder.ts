@@ -1,4 +1,3 @@
-import type { NextRequest } from 'next/server';
 import type { ZodType } from 'zod';
 import type {
   HandlerContext,
@@ -27,6 +26,7 @@ import type { RouterDeps, RouteHandler } from './pipeline/orchestrate.js';
 import { createRequestHandler } from './pipeline/orchestrate.js';
 import { RouteDefinitionError } from './types.js';
 import { isPositiveDecimal } from './pricing/format.js';
+import { normalizePath } from './path-params.js';
 import { validateExamples } from './validate-examples.js';
 
 const MAX_X402_DESCRIPTION_LENGTH = 400;
@@ -391,9 +391,9 @@ export class RouteBuilder<
   }
 
   /**
-   * @deprecated Renamed to {@link session} — `.metered()` is the pre-1.16 name
-   * for the MPP `session` intent (and `tickCost` for `unitCost`). This alias
-   * behaves identically and will be removed in the next major version.
+   * @deprecated Renamed to {@link session} — the MPP intent is named `session`
+   * (and `tickCost` is now `unitCost`). This alias behaves identically and
+   * will be removed in a future release.
    */
   metered(
     this: Ident extends 'siwx'
@@ -888,8 +888,10 @@ export class RouteBuilder<
   }
 
   /**
-   * Override the URL path advertised in discovery output. Defaults to the
-   * registry key passed to `.route()`.
+   * Override the URL path the route is mounted and advertised under. Defaults
+   * to the registry key passed to `.route()`. Normalized like `.route()` paths
+   * (leading slashes and an `api/` prefix stripped) so both produce the same
+   * mounted URL.
    *
    * @example
    * ```ts
@@ -898,7 +900,7 @@ export class RouteBuilder<
    */
   path(p: string): this {
     const next = this.fork();
-    next.#s.path = p;
+    next.#s.path = normalizePath(p);
     return next;
   }
 
@@ -997,7 +999,7 @@ export class RouteBuilder<
    */
   handler(
     fn: HandlerArg<TBody, TQuery, Ident, NeedsBody, HasBody, Bill>,
-  ): (request: NextRequest) => Promise<Response> {
+  ): (request: Request) => Promise<Response> {
     return this.register(fn as unknown as RouteHandler, false);
   }
 
@@ -1023,14 +1025,14 @@ export class RouteBuilder<
    */
   stream(
     fn: StreamArg<TBody, TQuery, Ident, NeedsBody, HasBody, Bill>,
-  ): (request: NextRequest) => Promise<Response> {
+  ): (request: Request) => Promise<Response> {
     return this.register(fn as unknown as RouteHandler, true);
   }
 
   private register(
     handlerFn: RouteHandler,
     streaming: boolean,
-  ): (request: NextRequest) => Promise<Response> {
+  ): (request: Request) => Promise<Response> {
     if (!this.#s.authMode) {
       throw new RouteDefinitionError(
         this.#s.key,
@@ -1165,9 +1167,10 @@ export class RouteBuilder<
       unitType: this.#s.unitType,
     };
 
-    this.#s.registry.register(entry);
+    const requestHandler = createRequestHandler(entry, handlerFn, this.#s.deps);
+    this.#s.registry.register(entry, requestHandler);
 
-    return createRequestHandler(entry, handlerFn, this.#s.deps);
+    return requestHandler;
   }
 }
 
