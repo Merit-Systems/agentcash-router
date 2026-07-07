@@ -190,6 +190,7 @@ async function buildX402ChallengeContribution(args: ChallengeArgs): Promise<Chal
     extensions,
     report,
     kvStore: deps.kvStore,
+    resourceMetadata: deps.x402ResourceMetadata,
   });
 
   return { headers: { [HEADERS.X402_PAYMENT_REQUIRED]: encoded } };

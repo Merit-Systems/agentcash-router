@@ -31,6 +31,10 @@ export type RouterConfigIssueCode =
   | 'missing_discovery_title'
   | 'missing_discovery_description'
   | 'missing_discovery_guidance'
+  | 'invalid_builder_code'
+  | 'invalid_discovery_service_name'
+  | 'invalid_discovery_tags'
+  | 'invalid_discovery_icon_url'
   | 'invalid_server_url'
   | 'kv_url_without_token'
   | 'kv_token_without_url'
@@ -82,6 +86,12 @@ export interface CreateRouterFromEnvOptions<
   methodHints?: DiscoveryConfig['methodHints'];
   /** Override the OpenAPI `servers[].url`. Defaults to `BASE_URL`. */
   serverUrl?: string;
+  /** Bazaar catalog display name on x402 challenges (≤32 printable-ASCII chars). Defaults to `title` when the title fits. */
+  serviceName?: string;
+  /** Bazaar catalog tags on x402 challenges (≤5 entries, each ≤32 printable-ASCII chars). */
+  tags?: string[];
+  /** Bazaar catalog icon on x402 challenges (HTTPS URL, ≤2048 chars). */
+  iconUrl?: string;
 
   /** Centralized price map keyed by route id. `route(key)` auto-applies `.paid(prices[key])` for matching keys. */
   prices?: TPrices;

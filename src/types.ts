@@ -387,6 +387,12 @@ export interface DiscoveryConfig {
   title: string;
   version: string;
   description?: string;
+  /** Bazaar catalog display name on x402 challenges (`PaymentRequired.resource.serviceName`, ≤32 printable-ASCII chars). Defaults to `title` when the title fits the constraint. */
+  serviceName?: string;
+  /** Bazaar catalog tags on x402 challenges (≤5 entries, each ≤32 printable-ASCII chars). */
+  tags?: string[];
+  /** Bazaar catalog icon on x402 challenges (HTTPS URL, ≤2048 chars). */
+  iconUrl?: string;
   contact?: { name?: string; url?: string; email?: string };
   ownershipProofs?: string[];
   methodHints?: 'off' | 'non-default' | 'always';
@@ -430,6 +436,14 @@ export interface RouterConfig {
     accepts?: X402AcceptConfig[];
     /** Per-chain facilitator overrides (`evm`/`solana`). Defaults to the Coinbase facilitator on EVM; set `solana` to accept Solana payments. */
     facilitators?: X402FacilitatorsConfig;
+    /**
+     * Base Builder Code for ERC-8021 on-chain attribution (register at
+     * https://dashboard.base.org → Settings → Builder Codes; must match
+     * `^[a-z0-9_]{1,32}$`). Declared as the app code (`a`) on every x402
+     * payment challenge; the facilitator appends it to settlement calldata,
+     * attributing every settled payment to this service on-chain.
+     */
+    builderCode?: string;
   };
   /** Observability hook receiving request/auth/payment/settlement events. Implement `RouterPlugin` for structured logs/analytics. */
   plugin?: import('./plugin/index.js').RouterPlugin;
