@@ -15,7 +15,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@agentcash/router"><img alt="npm" src="https://img.shields.io/npm/v/@agentcash/router.svg?color=111&label=npm"></a>
   <a href="https://agentcash.dev/docs"><img alt="docs" src="https://img.shields.io/badge/docs-agentcash.dev-111"></a>
-  <a href="#install"><img alt="next.js" src="https://img.shields.io/badge/Next.js-App%20Router-111"></a>
+  <a href="#hosting"><img alt="runtimes" src="https://img.shields.io/badge/Next.js%20%C2%B7%20Hono%20%C2%B7%20Bun%20%C2%B7%20Node-framework--agnostic-111"></a>
 </p>
 
 <p align="center">
@@ -41,32 +41,32 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 
 ### x402
 
-| Var | Required | Purpose |
-|-----|----------|---------|
-| `EVM_PAYEE_ADDRESS` | yes | EVM address that receives x402 and MPP payments (`0x…`, 20 bytes). Canonicalized to lowercase. The zero address is rejected. |
+| Var                                    | Required  | Purpose                                                                                                                                                                                                                                              |
+| -------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EVM_PAYEE_ADDRESS`                    | yes       | EVM address that receives x402 and MPP payments (`0x…`, 20 bytes). Canonicalized to lowercase. The zero address is rejected.                                                                                                                         |
 | `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | yes (EVM) | Coinbase Developer Platform credentials for the default EVM facilitator. Create API keys in the generous CDP free tier at https://portal.cdp.coinbase.com/projects/api-keys. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
 
 > **Router construction phones the facilitator.** Creating the router kicks off a background fetch of the facilitator's supported payment kinds — including during `next build`. With missing or placeholder CDP keys you'll see `[x402] facilitator /supported failed, using hardcoded baseline: …` in build/dev logs. That's a graceful fallback, not a fatal error; paid routes still serve correct 402 challenges.
 
 ### Solana
 
-| Var | Required | Purpose |
-|-----|----------|---------|
-| `X402_BUILDER_CODE` | no | Base Builder Code for ERC-8021 on-chain attribution (`^[a-z0-9_]{1,32}$`). Declared as the app code on every x402 challenge; the facilitator appends it to settlement calldata, crediting each settled payment to your app at https://dashboard.base.org. Register one under **Settings → Builder Codes**. |
-| `SOLANA_PAYEE_ADDRESS` | no | When set, adds a Solana `exact` accept so the router takes Solana payments. **`.upTo()` is Base-only and `.session()` is MPP-only**. Solana clients can only pay static-priced `.paid()` routes. |
-| `SOLANA_FACILITATOR_URL` | no | Override the Solana x402 facilitator. Defaults to `DEFAULT_SOLANA_FACILITATOR_URL`. |
+| Var                      | Required | Purpose                                                                                                                                                                                                                                                                                                    |
+| ------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `X402_BUILDER_CODE`      | no       | Base Builder Code for ERC-8021 on-chain attribution (`^[a-z0-9_]{1,32}$`). Declared as the app code on every x402 challenge; the facilitator appends it to settlement calldata, crediting each settled payment to your app at https://dashboard.base.org. Register one under **Settings → Builder Codes**. |
+| `SOLANA_PAYEE_ADDRESS`   | no       | When set, adds a Solana `exact` accept so the router takes Solana payments. **`.upTo()` is Base-only and `.session()` is MPP-only**. Solana clients can only pay static-priced `.paid()` routes.                                                                                                           |
+| `SOLANA_FACILITATOR_URL` | no       | Override the Solana x402 facilitator. Defaults to `DEFAULT_SOLANA_FACILITATOR_URL`.                                                                                                                                                                                                                        |
 
 ### MPP (auto-enabled when `MPP_SECRET_KEY` is set)
 
-| Var | Required | Purpose |
-|-----|----------|---------|
-| `MPP_SECRET_KEY` | when MPP is enabled | Server-side MPP secret. Presence toggles MPP on. |
-| `MPP_CURRENCY` | when MPP is enabled | Tempo currency address. Use `TEMPO_USDC_ADDRESS` for Tempo USDC. |
-| `TEMPO_RPC_URL` | no | Tempo JSON-RPC endpoint for MPP on-chain verification. Defaults to the public `DEFAULT_TEMPO_RPC_URL` (`https://rpc.tempo.xyz`). Override only if you have a dedicated endpoint. |
-| `MPP_OPERATOR_KEY` | no | Signs server-side close/settle. When set, MPP session mode is enabled automatically (required for `.session()`: both streaming and request-mode per-unit billing). Address must equal the payee. |
-| `MPP_FEE_PAYER_KEY` | no | Sponsors client gas for channel open/topUp. Must resolve to a different address than `MPP_OPERATOR_KEY` (Tempo rejects fee-delegated txs where `sender === feePayer`). |
+| Var                 | Required            | Purpose                                                                                                                                                                                          |
+| ------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `MPP_SECRET_KEY`    | when MPP is enabled | Server-side MPP secret. Presence toggles MPP on.                                                                                                                                                 |
+| `MPP_CURRENCY`      | when MPP is enabled | Tempo currency address. Use `TEMPO_USDC_ADDRESS` for Tempo USDC.                                                                                                                                 |
+| `TEMPO_RPC_URL`     | no                  | Tempo JSON-RPC endpoint for MPP on-chain verification. Defaults to the public `DEFAULT_TEMPO_RPC_URL` (`https://rpc.tempo.xyz`). Override only if you have a dedicated endpoint.                 |
+| `MPP_OPERATOR_KEY`  | no                  | Signs server-side close/settle. When set, MPP session mode is enabled automatically (required for `.session()`: both streaming and request-mode per-unit billing). Address must equal the payee. |
+| `MPP_FEE_PAYER_KEY` | no                  | Sponsors client gas for channel open/topUp. Must resolve to a different address than `MPP_OPERATOR_KEY` (Tempo rejects fee-delegated txs where `sender === feePayer`).                           |
 
-> **MPP session mode needs the payee's private key.** Unlike x402 (address only), `.session()` routes settle server-side, so `MPP_OPERATOR_KEY` must be the private key *of* `EVM_PAYEE_ADDRESS`. For local development, mint a throwaway keypair where the two line up:
+> **MPP session mode needs the payee's private key.** Unlike x402 (address only), `.session()` routes settle server-side, so `MPP_OPERATOR_KEY` must be the private key _of_ `EVM_PAYEE_ADDRESS`. For local development, mint a throwaway keypair where the two line up:
 >
 > ```bash
 > npm i -D viem  # or pnpm add -D viem
@@ -78,11 +78,11 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 
 ### Other
 
-| Var | Required | Purpose |
-|-----|----------|---------|
-| `BASE_URL` | yes outside Vercel | Origin URL (`https://api.example.com`). Load-bearing: used as the 402 realm, OpenAPI server URL, and MPP memo prefix. Must match the public domain. On Vercel, `createRouterFromEnv` auto-derives this from `VERCEL_PROJECT_PRODUCTION_URL`, then `VERCEL_URL`. |
-| `VERCEL_PROJECT_PRODUCTION_URL`, `VERCEL_URL` | no | Vercel system env vars used as fallbacks when `BASE_URL` is unset. Do not set these manually; Vercel provides them during builds and runtime. |
-| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | no | Upstash / Vercel KV. Backs SIWX nonce, SIWX entitlement, and MPP replay. In-memory fallback is unsafe in serverless production. Providing a Kv Store is highly recommended. |
+| Var                                           | Required           | Purpose                                                                                                                                                                                                                                                         |
+| --------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BASE_URL`                                    | yes outside Vercel | Origin URL (`https://api.example.com`). Load-bearing: used as the 402 realm, OpenAPI server URL, and MPP memo prefix. Must match the public domain. On Vercel, `createRouterFromEnv` auto-derives this from `VERCEL_PROJECT_PRODUCTION_URL`, then `VERCEL_URL`. |
+| `VERCEL_PROJECT_PRODUCTION_URL`, `VERCEL_URL` | no                 | Vercel system env vars used as fallbacks when `BASE_URL` is unset. Do not set these manually; Vercel provides them during builds and runtime.                                                                                                                   |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN`        | no                 | Upstash / Vercel KV. Backs SIWX nonce, SIWX entitlement, and MPP replay. In-memory fallback is unsafe in serverless production. Providing a Kv Store is highly recommended.                                                                                     |
 
 ## Quick start
 
@@ -114,7 +114,11 @@ export const router = createRouter({
   payeeAddress: '0x…',
   network: BASE_MAINNET_NETWORK,
   protocols: ['x402'],
-  x402: { accepts: [/* … */] },
+  x402: {
+    accepts: [
+      /* … */
+    ],
+  },
   discovery: {
     title: 'My API',
     version: '1.0.0',
@@ -124,36 +128,77 @@ export const router = createRouter({
 });
 ```
 
-### 2. Define routes
+### 2. Register routes
+
+One side-effect module registers every route. Importing it populates the registry; the host (next step) serves whatever is registered.
 
 ```typescript
-// app/api/search/route.ts
-import { router } from '@/lib/router';
-import { searchSchema } from '@/lib/schemas';
+// lib/routes.ts
+import { z } from 'zod';
+import { router } from './router';
 
-export const POST = router.route({ path: 'search' })
+router
+  .route('search')
   .paid('0.01')
-  .body(searchSchema)
-  .handler(async ({ body }) => search(body));
-```
+  .body(z.object({ q: z.string() }))
+  .handler(async ({ body }) => search(body.q));
 
-```typescript
-// app/api/inbox/status/route.ts
-export const GET = router.route({ path: 'inbox/status' })
+router
+  .route({ path: 'inbox/status', method: 'GET' })
   .siwx()
-  .method('GET')
   .handler(async ({ wallet }) => getStatus(wallet));
-```
 
-```typescript
-// app/api/health/route.ts
-export const GET = router.route({ path: 'health' })
+router
+  .route({ path: 'health', method: 'GET' })
   .unprotected()
-  .method('GET')
   .handler(async () => ({ status: 'ok' }));
 ```
 
-> **The exported const name and `.method()` are independent.** The name you export (`GET`/`POST`) controls which verb Next.js serves; `.method()` controls the verb advertised in discovery output (OpenAPI). The router defaults to `POST` (or `GET` when `.query()` is used) — so any other GET route must chain `.method('GET')` explicitly or discovery will advertise the wrong verb.
+Every route picks exactly one auth mode — `.paid()`, `.upTo()`, `.session()`, `.siwx()`, `.apiKey()`, or `.unprotected()` — see [Auth modes](#auth-modes). Paths may declare `{param}` segments (`drafts/{draftId}/commit` → `ctx.params.draftId`).
+
+### 3. Serve it
+
+**Next.js — one catch-all file** (recommended):
+
+```typescript
+// app/api/[[...route]]/route.ts
+import '@/lib/routes'; // side-effect import: registers all routes
+import { router } from '@/lib/router';
+import { nextHandlers } from '@agentcash/router/next';
+
+export const { GET, POST, PUT, PATCH, DELETE } = nextHandlers(router);
+```
+
+**Hono / Bun / Node / any fetch runtime:**
+
+```typescript
+import { serve } from '@hono/node-server';
+import './routes';
+import { router } from './router';
+
+serve({ fetch: router.fetch, port: 3000 });
+```
+
+Per-file Next.js routes (`export const POST = router.route(…)…handler(…)`) also work — see [Hosting](#hosting) for all three modes, path params, and `basePath`.
+
+### 4. Discovery
+
+`router.fetch` (and therefore the catch-all) serves `/{basePath}/openapi.json` and `/{basePath}/llms.txt` automatically, plus the root aliases on fetch runtimes. On Next.js, add the conventional root paths with two one-line route files:
+
+```typescript
+// app/openapi.json/route.ts — OpenAPI 3.1 at GET <origin>/openapi.json
+import '@/lib/routes';
+import { router } from '@/lib/router';
+export const GET = router.openapi();
+```
+
+```typescript
+// app/llms.txt/route.ts — plain-text agent guidance at GET <origin>/llms.txt
+import { router } from '@/lib/router';
+export const GET = router.llmsTxt();
+```
+
+> **Deprecated:** `router.wellKnown()` (the `/.well-known/x402` resource listing) is no longer a recommended discovery surface. The handler still works if you already serve it — existing x402-native clients won't break — but new integrations should rely on `/openapi.json` and `/llms.txt`.
 
 ### Bazaar catalog metadata
 
@@ -171,41 +216,24 @@ createRouterFromEnv({
 
 Invalid values fail at startup with structured config issues rather than being silently dropped by the facilitator.
 
-### 3. Auto-discovery
+### 5. Call it
 
-The router generates two recommended discovery surfaces. Mount both — agents look for each of them:
+Unpaid requests get a `402` whose challenge lives in headers (see [Reading a 402 challenge](#reading-a-402-challenge)):
 
-```typescript
-// app/openapi.json/route.ts — OpenAPI 3.1, served at GET <origin>/openapi.json
-import { router } from '@/lib/router';
-import '@/lib/routes-barrel';  // imports every route module so the registry is populated
-export const GET = router.openapi();
+```bash
+curl -i -X POST https://api.example.com/api/search \
+  -H 'content-type: application/json' -d '{"q":"hello"}'
 ```
 
-```typescript
-// app/llms.txt/route.ts — plain-text agent guidance, served at GET <origin>/llms.txt
-import { router } from '@/lib/router';
-export const GET = router.llmsTxt();
+Pay it with any x402/MPP client:
+
+```bash
+# AgentCash CLI — auto-negotiates x402 or MPP
+npx agentcash fetch https://api.example.com/api/search -m POST -b '{"q":"hello"}'
+
+# mppx CLI — MPP reference client
+npx mppx https://api.example.com/api/search -J '{"q":"hello"}'
 ```
-
-The barrel forces every route module to load before the discovery handlers walk the registry. Next.js otherwise lazy-loads route files on first hit, and unloaded routes don't appear in the spec (`llms.txt` renders from static config only, so it doesn't need the barrel).
-
-> **Deprecated:** `router.wellKnown()` (the `/.well-known/x402` resource listing) is no longer a recommended discovery surface. The handler still works if you already serve it — existing x402-native clients won't break — but new integrations should rely on `/openapi.json` and `/llms.txt`.
-
-### 4. Unmatched route fallback
-
-```typescript
-// app/api/[[...path]]/route.ts
-import { router } from '@/lib/router';
-
-export const GET = router.notFound();
-export const POST = router.notFound();
-export const DELETE = router.notFound();
-export const PUT = router.notFound();
-export const PATCH = router.notFound();
-```
-
-This catches stale agent calls to API paths that no longer exist and returns a JSON 404 telling the client to rediscover the origin. (The [catch-all hosting mode](#hosting) does this automatically — `router.fetch` answers unmatched paths with the same envelope.)
 
 ## Hosting
 
@@ -217,7 +245,7 @@ One route file serves every registered route — no per-route files, no discover
 
 ```typescript
 // app/api/[[...route]]/route.ts
-import '@/lib/routes';   // side-effect import: registers all routes
+import '@/lib/routes'; // side-effect import: registers all routes
 import { router } from '@/lib/router';
 import { nextHandlers } from '@agentcash/router/next';
 
@@ -235,6 +263,12 @@ The 1.x style — unchanged, and still the right fit when you want per-route fil
 export const POST = router.route('search').paid('0.01').body(schema).handler(handler);
 ```
 
+Three per-file specifics the catch-all mode makes obsolete:
+
+- **Exported const name vs `.method()`.** The name you export (`GET`/`POST`) controls which verb Next.js serves; `.method()` (or `route({ method })`) controls the verb advertised in discovery. The router defaults to `POST` (or `GET` when `.query()` is used) — any other GET route must declare it explicitly or discovery advertises the wrong verb.
+- **Discovery needs a barrel.** Next.js lazy-loads route files on first hit, so `app/openapi.json/route.ts` must `import '@/lib/routes-barrel'` (a module importing every route file) or unloaded routes won't appear in the spec. (`llms.txt` renders from static config only and doesn't need it.)
+- **Unmatched route fallback.** Mount `router.notFound()` in a catch-all (`app/api/[[...path]]/route.ts`, one export per verb) so stale agent calls get a JSON 404 with rediscovery links instead of an HTML error page.
+
 ### Hono / Bun / Node / any fetch runtime
 
 ```typescript
@@ -242,7 +276,7 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 
 const app = new Hono();
-app.route('/', router.hono());   // or use router.fetch directly
+app.route('/', router.hono()); // or use router.fetch directly
 serve({ fetch: app.fetch, port: 3000 });
 ```
 
@@ -253,7 +287,8 @@ serve({ fetch: app.fetch, port: 3000 });
 Route paths may declare `{param}` segments, extracted identically in every hosting mode:
 
 ```typescript
-router.route('drafts/{draftId}/commit')
+router
+  .route('drafts/{draftId}/commit')
   .unprotected()
   .handler(async ({ params }) => commit(params.draftId));
 ```
@@ -262,22 +297,25 @@ router.route('drafts/{draftId}/commit')
 
 ## Auth modes
 
-| Method | Purpose |
-|--------|---------|
-| `.paid(price)` | Fixed, args-derived, or tiered payment up front (x402, MPP, or both). |
-| `.upTo(maxPrice)` | Handler-computed billing; handler calls `charge(amount)` and the request settles once for the running total. **x402 only.** |
+| Method                             | Purpose                                                                                                                                                                                                                                                       |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.paid(price)`                     | Fixed, args-derived, or tiered payment up front (x402, MPP, or both).                                                                                                                                                                                         |
+| `.upTo(maxPrice)`                  | Handler-computed billing; handler calls `charge(amount)` and the request settles once for the running total. **x402 only.**                                                                                                                                   |
 | `.session({ unitCost, maxPrice })` | Per-unit billing over an MPP payment channel (the MPP `session` intent). `.handler()` bills exactly `unitCost`; `.stream()` calls `charge()` per yield. **MPP only.** Streaming requires this. (`.metered({ tickCost, ... })` remains as a deprecated alias.) |
-| `.siwx()` | Wallet identity, no payment. Returns 402 with a SIWX challenge. |
-| `.apiKey(resolver)` | `X-API-Key` or `Authorization: Bearer <key>`. Composes with `.paid()` / `.upTo()` / `.session()`. |
-| `.unprotected()` | No auth. |
+| `.siwx()`                          | Wallet identity, no payment. Returns 402 with a SIWX challenge.                                                                                                                                                                                               |
+| `.apiKey(resolver)`                | `X-API-Key` or `Authorization: Bearer <key>`. Composes with `.paid()` / `.upTo()` / `.session()`.                                                                                                                                                             |
+| `.unprotected()`                   | No auth.                                                                                                                                                                                                                                                      |
 
 ```typescript
-router.route({ path: 'admin/users' })
-  .apiKey(async (key) => db.admin.findByKey(key))  // null => 401
+router
+  .route({ path: 'admin/users' })
+  .apiKey(async (key) => db.admin.findByKey(key)) // null => 401
   .handler(async ({ account }) => db.user.findMany());
 
-router.route({ path: 'gated' })
-  .apiKey(resolver).paid('0.01')  // key AND payment
+router
+  .route({ path: 'gated' })
+  .apiKey(resolver)
+  .paid('0.01') // key AND payment
   .handler(fn);
 ```
 
@@ -286,8 +324,10 @@ router.route({ path: 'gated' })
 `.paid()` and `.upTo()` compose with `.siwx()` for a pay-once-then-replay-for-free model. The first request settles normally (x402 payment); on success the wallet is recorded in the entitlement KV. Subsequent requests that present a valid SIWX signature for that wallet skip payment and run the handler directly. On `.upTo()` routes, `charge(amount)` becomes a no-op on the SIWX replay path. The handler can continue to call the route unconditionally.
 
 ```typescript
-router.route({ path: 'inbox' })
-  .paid('0.01').siwx()  // first call pays $0.01, later calls present a SIWX sig instead
+router
+  .route({ path: 'inbox' })
+  .paid('0.01')
+  .siwx() // first call pays $0.01, later calls present a SIWX sig instead
   .handler(async ({ wallet }) => getInbox(wallet));
 ```
 
@@ -306,18 +346,20 @@ Every 402 also carries an `X-Agent-Identity` response header: an optional [DID-a
 
 ### When the body is validated
 
-For args-derived (`.paid(fn)`) and tiered pricing, and for routes with `.validate()` or a checkout session, the body is parsed **before** the 402 challenge so the challenge can quote an accurate price (and `.validate()` can reject with its own status). On every other paid route, a bare unpaid probe gets its 402 **without the body being inspected** — a malformed body still yields 402, not 400. The paying retry then parses and validates the body *before* payment verification and settlement, so a 400 never costs the caller money.
+For args-derived (`.paid(fn)`) and tiered pricing, and for routes with `.validate()` or a checkout session, the body is parsed **before** the 402 challenge so the challenge can quote an accurate price (and `.validate()` can reject with its own status). On every other paid route, a bare unpaid probe gets its 402 **without the body being inspected** — a malformed body still yields 402, not 400. The paying retry then parses and validates the body _before_ payment verification and settlement, so a 400 never costs the caller money.
 
 `.paid()`, `.upTo()`, and `.session()` are mutually exclusive pricing modes: pick one per route.
 
 ### `.paid()`: fixed, args-derived, or tiered
 
 **Static.**
+
 ```typescript
 .paid('0.02')
 ```
 
 **Args-derived.** Compute the price from the parsed body. Throw `HttpError` to reject before the 402 challenge.
+
 ```typescript
 .paid((body) => calculateCost(body), { maxPrice: '5.00' })
 .body(genSchema)
@@ -326,6 +368,7 @@ For args-derived (`.paid(fn)`) and tiered pricing, and for routes with `.validat
 `maxPrice` caps the computed amount and acts as a fallback on non-`HttpError` exceptions thrown by the pricing function (`HttpError` is always rethrown). Without `maxPrice`, the route trusts your function fully (no cap, no fallback) and returns 500 on errors.
 
 **Tiered.**
+
 ```typescript
 .paid({
   field: 'tier',
@@ -357,12 +400,14 @@ Handler calls `charge(amount)` one or more times; the request settles once for t
 Per-unit billing over an MPP payment channel — the MPP [`session` intent](https://mpp.dev/intents). Requires `MPP_OPERATOR_KEY` (`createRouterFromEnv` auto-enables session mode when it's set). `unitCost` maps to the MPP session challenge's per-unit `amount`; `unitType` names the unit; `maxPrice` is a router-enforced total ceiling (MPP itself only bounds spend by voucher headroom and deposit).
 
 **Request-mode.** `.handler()` bills exactly `unitCost` on each request:
+
 ```typescript
 .session({ unitCost: '0.01', maxPrice: '0.05', unitType: 'request' })
 .handler(async ({ body }) => { ... });
 ```
 
 **Streaming.** `.stream()` serves the session over SSE; each `charge()` call bills one unit, up to `maxPrice`:
+
 ```typescript
 .session({ unitCost: '0.0001', maxPrice: '0.05', unitType: 'token' })
 .stream(async function* ({ body, charge }) {
@@ -382,7 +427,8 @@ Streaming is MPP-only. `.stream()` on a `.paid()` / `.upTo()` / `.unprotected()`
 For checks that need a DB lookup before quoting a price:
 
 ```typescript
-router.route({ path: 'domain/register' })
+router
+  .route({ path: 'domain/register' })
   .paid(calculatePrice, { maxPrice: '10.00' })
   .body(RegisterSchema)
   .validate(async (body) => {
