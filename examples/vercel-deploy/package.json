@@ -7,7 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@agentcash/router": "^1.15.0",
@@ -21,6 +22,8 @@
     "@types/node": "^22.10.5",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.10",
     "typescript": "^5.9.3"
   }
 }
