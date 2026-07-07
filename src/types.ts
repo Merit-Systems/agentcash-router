@@ -1,5 +1,4 @@
 import type { FacilitatorConfig } from '@x402/core/http';
-import type { NextRequest, NextResponse } from 'next/server';
 import type { ZodType } from 'zod';
 import type {
   PaymentRequired,
@@ -159,7 +158,7 @@ export interface MppProtocolInfo {
 export type CheckoutSessionResponse = Record<string, unknown>;
 
 export interface CheckoutSessionContext<TBody = unknown> {
-  request: NextRequest;
+  request: Request;
   route: string;
   body: TBody | undefined;
   /** Decimal-dollar price quoted for this 402 challenge. */
@@ -241,12 +240,12 @@ export interface HandlerPaymentContext {
 
 export interface SettlementLifecycleContext<TBody = unknown> {
   route: string;
-  request: NextRequest;
+  request: Request;
   body: TBody;
   wallet: string;
   account: unknown;
   payment: HandlerPaymentContext;
-  response: NextResponse;
+  response: Response;
   result: unknown;
 }
 
@@ -285,7 +284,9 @@ export type UptoChargeFn = (amount: string) => Promise<void>;
 export interface HandlerContext<TBody = undefined, TQuery = undefined> {
   body: TBody;
   query: TQuery;
-  request: NextRequest;
+  /** Path-template params extracted from the route's own `{param}` segments (e.g. `drafts/{draftId}/commit` → `{ draftId }`). Empty object when the path declares no params. */
+  params: Record<string, string>;
+  request: Request;
   requestId: string;
   route: string;
   wallet: string | null;
@@ -419,6 +420,8 @@ export interface RouterConfig {
   payeeAddress?: string;
   /** Origin URL (required). Used as 402 realm, discovery base, OpenAPI server, and MPP memo prefix — must match the public domain or payment matching breaks. */
   baseUrl: string;
+  /** URL prefix routes are mounted and advertised under (`{baseUrl}/{basePath}/{path}`). Pass an empty string to mount routes at the origin root. @default 'api' */
+  basePath?: string;
   /** Default chain for the auto-generated x402 `exact` accept (e.g. `base`, `base-sepolia`). Ignored when `x402.accepts` is set. @default 'base' */
   network?: string;
   /** x402 protocol settings. Omit to default to a single `exact`/USDC accept on `network` paid to `payeeAddress`, verified via the Coinbase default facilitator (requires `CDP_API_KEY_ID`/`CDP_API_KEY_SECRET`). */

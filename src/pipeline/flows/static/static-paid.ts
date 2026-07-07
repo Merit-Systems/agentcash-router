@@ -1,11 +1,10 @@
-import type { NextResponse } from 'next/server';
 import { type FlowCtx } from '../../steps/index.js';
 import { invokePaidStatic } from './static-invoke.js';
 import { runPaidPreamble, runPaidVerify } from '../paid-preamble.js';
 import { resolveStaticBodyAndPrice } from './static-body-and-price.js';
 import { runStaticRequestFlow } from './static-request.js';
 
-export async function runStaticPaidFlow(ctx: FlowCtx): Promise<NextResponse> {
+export async function runStaticPaidFlow(ctx: FlowCtx): Promise<Response> {
   const preamble = await runPaidPreamble(ctx);
   if (preamble.done) return preamble.response;
   const { account, pricing, incomingStrategy } = preamble;

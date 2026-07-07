@@ -30,8 +30,10 @@
 
 ```bash
 pnpm add @agentcash/router
-pnpm add next zod  # peer dependencies
+pnpm add zod  # peer dependency
 ```
+
+The core is framework-agnostic (Web-standard `Request`/`Response`) — Next.js is one hosting option, not a dependency. See [Hosting](#hosting).
 
 ## Environment
 
@@ -186,7 +188,60 @@ export const PUT = router.notFound();
 export const PATCH = router.notFound();
 ```
 
-This catches stale agent calls to API paths that no longer exist and returns a JSON 404 telling the client to rediscover the origin.
+This catches stale agent calls to API paths that no longer exist and returns a JSON 404 telling the client to rediscover the origin. (The [catch-all hosting mode](#hosting) does this automatically — `router.fetch` answers unmatched paths with the same envelope.)
+
+## Hosting
+
+The router speaks Web-standard `Request`/`Response` and dispatches through an embedded [Hono](https://hono.dev) app, so the same route definitions run on any fetch runtime. Three hosting modes:
+
+### Next.js catch-all (recommended)
+
+One route file serves every registered route — no per-route files, no discovery barrel:
+
+```typescript
+// app/api/[[...route]]/route.ts
+import '@/lib/routes';   // side-effect import: registers all routes
+import { router } from '@/lib/router';
+import { nextHandlers } from '@agentcash/router/next';
+
+export const { GET, POST, PUT, PATCH, DELETE } = nextHandlers(router);
+```
+
+The catch-all serves `/{basePath}/*` (default `/api/*`), including `/api/openapi.json` and `/api/llms.txt`. Unmatched paths get the `notFound()` rediscovery envelope automatically. The root discovery aliases (`/openapi.json`, `/llms.txt`) still need their own route files (`export const GET = router.openapi()`) or a middleware rewrite into the catch-all.
+
+### Next.js per-file
+
+The 1.x style — unchanged, and still the right fit when you want per-route files:
+
+```typescript
+// app/api/search/route.ts
+export const POST = router.route('search').paid('0.01').body(schema).handler(handler);
+```
+
+### Hono / Bun / Node / any fetch runtime
+
+```typescript
+import { serve } from '@hono/node-server';
+import { Hono } from 'hono';
+
+const app = new Hono();
+app.route('/', router.hono());   // or use router.fetch directly
+serve({ fetch: app.fetch, port: 3000 });
+```
+
+`router.fetch(request)` is a standard fetch handler; `router.hono()` exposes the internal app for mounting into a larger one. See `examples/hono` for a runnable server.
+
+### Path params and `basePath`
+
+Route paths may declare `{param}` segments, extracted identically in every hosting mode:
+
+```typescript
+router.route('drafts/{draftId}/commit')
+  .unprotected()
+  .handler(async ({ params }) => commit(params.draftId));
+```
+
+`RouterConfig.basePath` (default `'api'`) controls the mount/advertised prefix: routes serve at `{baseUrl}/{basePath}/{path}`. Pass an empty string to mount at the origin root.
 
 ## Auth modes
 

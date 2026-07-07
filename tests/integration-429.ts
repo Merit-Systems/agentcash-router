@@ -9,7 +9,6 @@
  */
 
 import http from 'node:http';
-import { NextRequest } from 'next/server';
 
 // ---------------------------------------------------------------------------
 // 1. Fake facilitator that always 429s on /supported
@@ -65,7 +64,7 @@ async function main() {
   // 3. Send a probe request (no payment header) — triggers 402 challenge path
   // ---------------------------------------------------------------------------
 
-  const request = new NextRequest('http://localhost:3000/api/test', { method: 'POST' });
+  const request = new Request('http://localhost:3000/api/test', { method: 'POST' });
   console.log('Sending probe request...\n');
 
   const response = await handler(request);

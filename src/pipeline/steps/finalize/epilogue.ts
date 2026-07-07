@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import type { PaymentStrategy, SettleOutcome } from '../../../protocols/types.js';
 import type { HandlerPaymentContext } from '../../../types.js';
 import { grantEntitlementIfSiwx } from '../grant-entitlement.js';
@@ -18,7 +17,7 @@ export async function runPostSettleEpilogue(args: {
   afterSettleScope: SettledScope;
   rawResult: unknown;
   body: unknown;
-}): Promise<NextResponse> {
+}): Promise<Response> {
   const { ctx, strategy, wallet, settle, afterSettleScope, rawResult, body } = args;
 
   await grantEntitlementIfSiwx(ctx, wallet);

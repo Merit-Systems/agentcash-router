@@ -1,4 +1,3 @@
-import type { NextRequest, NextResponse } from 'next/server';
 import type { HandlerContext, RouteEntry, StreamingHandlerContext } from '../types.js';
 import { preflight, validateQuery, type RouterDeps } from './steps/index.js';
 import { selectIncomingStrategy } from '../protocols/index.js';
@@ -15,7 +14,7 @@ export type RouteHandler =
   | ((ctx: HandlerContext) => Promise<unknown>)
   | ((ctx: StreamingHandlerContext) => AsyncIterable<unknown>);
 
-function shouldSkipQueryValidation(routeEntry: RouteEntry, request: NextRequest): boolean {
+function shouldSkipQueryValidation(routeEntry: RouteEntry, request: Request): boolean {
   // Paid routes: skip when no payment header (bare probe → 402 payment challenge).
   if (routeEntry.pricing || routeEntry.authMode === 'paid') {
     return selectIncomingStrategy(request, routeEntry.protocols) === null;
@@ -32,8 +31,8 @@ export function createRequestHandler(
   routeEntry: RouteEntry,
   handler: RouteHandler,
   deps: RouterDeps,
-): (request: NextRequest) => Promise<NextResponse> {
-  return async (request: NextRequest): Promise<NextResponse> => {
+): (request: Request) => Promise<Response> {
+  return async (request: Request): Promise<Response> => {
     await deps.initPromise;
     const ctx = preflight(routeEntry, handler, deps, request);
 

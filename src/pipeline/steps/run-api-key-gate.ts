@@ -1,12 +1,9 @@
-import type { NextResponse } from 'next/server';
 import { verifyApiKey } from '../../auth/api-key.js';
 import { fail } from './fail.js';
 import { fireAuthVerified } from '../../plugin/events.js';
 import type { FlowCtx } from './types.js';
 
-export type ApiKeyGateResult =
-  | { ok: true; account: unknown }
-  | { ok: false; response: NextResponse };
+export type ApiKeyGateResult = { ok: true; account: unknown } | { ok: false; response: Response };
 
 export async function runApiKeyGate(ctx: FlowCtx): Promise<ApiKeyGateResult> {
   const { request, routeEntry } = ctx;

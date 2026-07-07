@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 import type { RouteRegistry } from '../registry.js';
 import type { DiscoveryConfig } from '../types.js';
 import { resolveGuidance } from './utils/guidance.js';
@@ -13,11 +11,13 @@ export function createWellKnownHandler(
   baseUrl: string,
   pricesKeys: string[] | undefined,
   discovery: DiscoveryConfig,
+  basePath = 'api',
 ) {
   const normalizedBase = baseUrl.replace(/\/+$/, '');
+  const pathPrefix = basePath ? `/${basePath}` : '';
   let validated = false;
 
-  return async (_request: NextRequest): Promise<NextResponse> => {
+  return async (_request: Request): Promise<Response> => {
     if (!validated && pricesKeys) {
       registry.validate(pricesKeys);
       validated = true;
@@ -28,7 +28,7 @@ export function createWellKnownHandler(
     const methodHints = discovery.methodHints ?? 'non-default';
 
     for (const [, entry] of registry.entries()) {
-      const url = `${normalizedBase}/api/${entry.path ?? entry.key}`;
+      const url = `${normalizedBase}${pathPrefix}/${entry.path ?? entry.key}`;
       const resource = toDiscoveryResource(entry.method, url, methodHints);
       if (entry.authMode !== 'unprotected') x402Set.add(resource);
       if (entry.protocols.includes('mpp')) mppSet.add(resource);
@@ -58,7 +58,7 @@ export function createWellKnownHandler(
       body.instructions = instructions;
     }
 
-    return NextResponse.json(body, {
+    return Response.json(body, {
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET',

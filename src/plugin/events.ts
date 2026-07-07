@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import { HEADERS } from '../headers.js';
 import type { FlowCtx } from '../pipeline/steps/types.js';
 import type { ProviderQuotaEvent, QuotaLevel } from '../types.js';
@@ -33,7 +32,7 @@ export function firePaymentSettled(ctx: FlowCtx, event: SettlementEvent): void {
 
 export function firePluginResponse(
   ctx: FlowCtx,
-  response: NextResponse,
+  response: Response,
   requestBody?: unknown,
   responseBody?: unknown,
   failure?: PluginFailure,
@@ -61,11 +60,7 @@ export function firePluginResponse(
   }
 }
 
-export function fireProviderQuota(
-  ctx: FlowCtx,
-  response: NextResponse,
-  handlerResult: unknown,
-): void {
+export function fireProviderQuota(ctx: FlowCtx, response: Response, handlerResult: unknown): void {
   const { providerName, providerConfig } = ctx.routeEntry;
   if (!providerName || !providerConfig?.extractQuota) return;
   if (response.status >= 400) return;
@@ -104,7 +99,7 @@ function computeQuotaLevel(remaining: number | null, warn?: number, critical?: n
   return 'healthy';
 }
 
-function attachRequestId(response: NextResponse, requestId: string): void {
+function attachRequestId(response: Response, requestId: string): void {
   try {
     if (!response.headers.has(HEADERS.REQUEST_ID)) {
       response.headers.set(HEADERS.REQUEST_ID, requestId);
@@ -114,11 +109,7 @@ function attachRequestId(response: NextResponse, requestId: string): void {
   }
 }
 
-function buildErrorEvent(
-  ctx: FlowCtx,
-  response: NextResponse,
-  failure?: PluginFailure,
-): ErrorEvent {
+function buildErrorEvent(ctx: FlowCtx, response: Response, failure?: PluginFailure): ErrorEvent {
   const error = errorDetails(failure?.cause);
   const responseMessage = response.statusText || `HTTP ${response.status}`;
   const message = failure?.message ?? error.message ?? responseMessage;

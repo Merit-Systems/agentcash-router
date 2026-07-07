@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { NextRequest } from 'next/server';
 import { createRouter } from '../src/index.js';
 
 describe('router notFound fallback', () => {
@@ -10,7 +9,7 @@ describe('router notFound fallback', () => {
     });
 
     const handler = router.notFound();
-    const response = await handler(new NextRequest('https://stable.example.com/api/old/route?x=1'));
+    const response = await handler(new Request('https://stable.example.com/api/old/route?x=1'));
     const body = await response.json();
 
     expect(response.status).toBe(404);

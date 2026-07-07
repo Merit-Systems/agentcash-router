@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import type { PricingStrategy } from '../../../pricing/index.js';
 import {
   errorMessage,
@@ -11,7 +10,7 @@ import {
 
 export type StaticBodyAndPriceResolution =
   | { ok: true; parsedBody: unknown; price: string }
-  | { ok: false; response: NextResponse };
+  | { ok: false; response: Response };
 
 export async function resolveStaticBodyAndPrice(args: {
   ctx: FlowCtx;

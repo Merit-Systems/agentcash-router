@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 import type { RouteRegistry } from '../registry.js';
 import type { RouteEntry, DiscoveryConfig } from '../types.js';
 import { TEMPO_USDC_ADDRESS } from '../constants.js';
@@ -12,13 +10,15 @@ export function createOpenAPIHandler(
   baseUrl: string,
   pricesKeys: string[] | undefined,
   discovery: DiscoveryConfig,
+  basePath = 'api',
 ) {
   const normalizedBase = baseUrl.replace(/\/+$/, '');
+  const pathPrefix = basePath ? `/${basePath}` : '';
   let cached: unknown = null;
   let validated = false;
 
-  return async (_request: NextRequest): Promise<NextResponse> => {
-    if (cached) return NextResponse.json(cached);
+  return async (_request: Request): Promise<Response> => {
+    if (cached) return Response.json(cached);
 
     if (!validated && pricesKeys) {
       registry.validate(pricesKeys);
@@ -33,7 +33,7 @@ export function createOpenAPIHandler(
     let requiresApiKeyScheme = false;
 
     for (const [, entry] of registry.entries()) {
-      const apiPath = `/api/${entry.path ?? entry.key}`;
+      const apiPath = `${pathPrefix}/${entry.path ?? entry.key}`;
       const method = entry.method.toLowerCase();
       const tag = deriveTag(entry.key);
       tagSet.add(tag);
@@ -98,7 +98,7 @@ export function createOpenAPIHandler(
 
     cached = createDocument(openApiDocument as never);
 
-    return NextResponse.json(cached);
+    return Response.json(cached);
   };
 }
 

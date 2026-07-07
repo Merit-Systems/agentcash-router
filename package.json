@@ -13,16 +13,23 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./next": {
+      "import": {
+        "types": "./dist/next.d.ts",
+        "default": "./dist/next.js"
+      },
+      "require": {
+        "types": "./dist/next.d.cts",
+        "default": "./dist/next.cjs"
+      }
     }
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist/index.js",
-    "dist/index.cjs",
-    "dist/index.d.ts",
-    "dist/index.d.cts",
+    "dist",
     "AGENTS.md",
     "README.md"
   ],
@@ -45,12 +52,12 @@
     "@x402/extensions": "^2.13.0",
     "@x402/svm": "^2.13.0",
     "did-auth-challenge": "^0.0.1",
+    "hono": "4.12.28",
     "mppx": "^0.8.5",
     "viem": "^2.54.6",
     "zod-openapi": "^5.0.0"
   },
   "peerDependencies": {
-    "next": ">=15.0.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
@@ -61,9 +68,7 @@
     "@types/node": "^22.0.0",
     "eslint": "^10.0.0",
     "knip": "^6.13.1",
-    "next": "^15.0.0",
     "prettier": "^3.8.1",
-    "react": "^19.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.55.0",

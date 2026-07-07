@@ -2,7 +2,6 @@
 // vitest (never executed). An unused `@ts-expect-error` fails the suite.
 import { describe, it, expectTypeOf } from 'vitest';
 import { z } from 'zod';
-import type { NextRequest } from 'next/server';
 import { RouteBuilder } from '../src/builder.js';
 import type { RouteRegistry } from '../src/registry.js';
 import type { RouterDeps } from '../src/pipeline/orchestrate.js';
@@ -200,7 +199,7 @@ describe('documented-valid chains compile', () => {
         expectTypeOf(body).toEqualTypeOf<{ q: string }>();
         return { ok: true };
       });
-    expectTypeOf(handler).toExtend<(request: NextRequest) => Promise<Response>>();
+    expectTypeOf(handler).toExtend<(request: Request) => Promise<Response>>();
   });
 
   it('pay-once-replay and key+payment compositions', () => {

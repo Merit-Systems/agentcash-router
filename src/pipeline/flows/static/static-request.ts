@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import type { PaymentStrategy, VerifySuccess } from '../../../protocols/types.js';
 import type { HandlerPaymentContext } from '../../../types.js';
 import {
@@ -19,7 +18,7 @@ export async function runStaticRequestFlow(args: {
   body: unknown;
   price: string;
   result: StaticRequestResult;
-}): Promise<NextResponse> {
+}): Promise<Response> {
   const { ctx, strategy, verifyOutcome, account, body, price, result } = args;
 
   const settleScope: SettleScope = {

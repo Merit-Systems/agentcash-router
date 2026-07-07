@@ -1,4 +1,3 @@
-import type { NextRequest, NextResponse } from 'next/server';
 import type { PricingStrategy } from '../../pricing/index.js';
 import type { PaymentStrategy } from '../../protocols/types.js';
 import { parseBody } from './parse-body.js';
@@ -8,7 +7,7 @@ import type { FlowCtx } from './types.js';
 
 export type EarlyBodyResolution =
   | { ok: true; earlyBody: unknown }
-  | { ok: false; response: NextResponse };
+  | { ok: false; response: Response };
 
 export async function resolveEarlyBody(args: {
   ctx: FlowCtx;
@@ -21,7 +20,7 @@ export async function resolveEarlyBody(args: {
     return { ok: true, earlyBody: undefined };
   }
 
-  const earlyClone = ctx.request.clone() as NextRequest;
+  const earlyClone = ctx.request.clone() as Request;
   const earlyResult = await parseBody(ctx, earlyClone);
   // Soft-fail: let the 402 challenge use maxPrice / highest tier as fallback.
   if (!earlyResult.ok) return { ok: true, earlyBody: undefined };

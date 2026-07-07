@@ -1,4 +1,3 @@
-import type { NextResponse } from 'next/server';
 import type { PricingStrategy } from '../../../pricing/index.js';
 import type { RouteEntry } from '../../../types.js';
 import {
@@ -12,7 +11,7 @@ import {
 
 export type DynamicBodyAndPriceResolution =
   | { ok: true; parsedBody: unknown; price: string }
-  | { ok: false; response: NextResponse };
+  | { ok: false; response: Response };
 
 export async function resolveDynamicBodyAndPrice(args: {
   ctx: FlowCtx;

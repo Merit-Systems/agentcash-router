@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { resolveActor } from '../../../auth/agent-identity.js';
 import type { HandlerContext, HandlerPaymentContext, UptoHandlerContext } from '../../../types.js';
 import { HttpError } from '../../../types.js';
@@ -53,6 +52,7 @@ function buildHandlerCtx(
   return {
     body: body as never,
     query: ctx.query as never,
+    params: ctx.params,
     request: ctx.request,
     requestId: ctx.meta.requestId,
     route: ctx.routeEntry.key,
@@ -86,8 +86,7 @@ async function runHandler(ctx: FlowCtx, handlerCtx: HandlerContext): Promise<Sta
     return errorResult(error);
   }
 
-  const response =
-    rawResult instanceof Response ? (rawResult as NextResponse) : NextResponse.json(rawResult);
+  const response = rawResult instanceof Response ? rawResult : Response.json(rawResult);
   return { response, rawResult };
 }
 
@@ -101,7 +100,7 @@ function errorResult(error: unknown): StaticRequestResult {
   const message = error instanceof Error ? error.message : 'Internal error';
   const responseBody = { success: false, error: message };
   return {
-    response: NextResponse.json(responseBody, { status }),
+    response: Response.json(responseBody, { status }),
     rawResult: responseBody,
     handlerError: error,
   };
