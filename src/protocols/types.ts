@@ -7,6 +7,7 @@ import type {
   X402Server,
 } from '../types.js';
 import type { ResolvedX402Facilitator } from './x402/facilitators.js';
+import type { X402ResourceMetadata } from './x402/resource-metadata.js';
 import type { MppxMiddleware } from './mpp/middleware-types.js';
 import type { NonceStoreInterface } from 'did-auth-challenge';
 import type { NonceStore, EntitlementStore, KvStore } from '../kv-store/index.js';
@@ -27,6 +28,10 @@ export interface RouterDeps {
   network: string;
   x402FacilitatorsByNetwork?: Record<string, ResolvedX402Facilitator>;
   x402Accepts: X402AcceptConfig[];
+  /** Base Builder Code declared as the ERC-8021 app code (`a`) on every x402 challenge. */
+  builderCode?: string;
+  /** Bazaar service metadata (`serviceName`/`tags`/`iconUrl`) merged into `PaymentRequired.resource`. */
+  x402ResourceMetadata?: X402ResourceMetadata;
   kvStore?: KvStore;
   mppx?: {
     charge: MppxMiddleware<{ amount: string }, Transport.Http>;

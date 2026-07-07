@@ -18,6 +18,7 @@ import { createOpenAPIHandler } from './discovery/openapi.js';
 import { createLlmsTxtHandler } from './discovery/llms-txt.js';
 import { createNotFoundHandler } from './discovery/not-found.js';
 import { getConfiguredX402Accepts } from './protocols/x402/accepts.js';
+import { resolveResourceMetadata } from './protocols/x402/resource-metadata.js';
 import { BASE_MAINNET_NETWORK } from './constants.js';
 import {
   RouterConfigError,
@@ -134,6 +135,8 @@ export function createRouter<const C extends RouterConfig>(
     network,
     x402FacilitatorsByNetwork: undefined,
     x402Accepts,
+    builderCode: config.x402?.builderCode,
+    x402ResourceMetadata: resolveResourceMetadata(config.discovery),
     kvStore,
     mppx: null,
     tempoClient: null,

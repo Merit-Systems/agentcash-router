@@ -52,6 +52,7 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 
 | Var | Required | Purpose |
 |-----|----------|---------|
+| `X402_BUILDER_CODE` | no | Base Builder Code for ERC-8021 on-chain attribution (`^[a-z0-9_]{1,32}$`). Declared as the app code on every x402 challenge; the facilitator appends it to settlement calldata, crediting each settled payment to your app at https://dashboard.base.org. Register one under **Settings → Builder Codes**. |
 | `SOLANA_PAYEE_ADDRESS` | no | When set, adds a Solana `exact` accept so the router takes Solana payments. **`.upTo()` is Base-only and `.session()` is MPP-only**. Solana clients can only pay static-priced `.paid()` routes. |
 | `SOLANA_FACILITATOR_URL` | no | Override the Solana x402 facilitator. Defaults to `DEFAULT_SOLANA_FACILITATOR_URL`. |
 
@@ -153,6 +154,22 @@ export const GET = router.route({ path: 'health' })
 ```
 
 > **The exported const name and `.method()` are independent.** The name you export (`GET`/`POST`) controls which verb Next.js serves; `.method()` controls the verb advertised in discovery output (OpenAPI). The router defaults to `POST` (or `GET` when `.query()` is used) — so any other GET route must chain `.method('GET')` explicitly or discovery will advertise the wrong verb.
+
+### Bazaar catalog metadata
+
+x402 facilitators persist service metadata from every settled payment into the [Bazaar](https://docs.x402.org/extensions/bazaar) discovery catalog. The router forwards it from discovery config onto each 402 challenge's `resource` block:
+
+```typescript
+createRouterFromEnv({
+  title: 'Quote API',                          // serviceName defaults to title when it fits (≤32 ASCII chars)
+  serviceName: 'Quote API',                    // explicit override
+  tags: ['quotes', 'wisdom'],                  // ≤5 tags, each ≤32 chars; defaults to the route's OpenAPI tag
+  iconUrl: 'https://example.com/icon.png',     // HTTPS, ≤2048 chars
+  ...
+});
+```
+
+Invalid values fail at startup with structured config issues rather than being silently dropped by the facilitator.
 
 ### 3. Auto-discovery
 

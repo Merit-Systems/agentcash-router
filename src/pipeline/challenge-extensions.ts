@@ -54,6 +54,22 @@ export async function buildChallengeExtensions(
       /* optional enrichment */
     }
   }
+  if (ctx.deps.builderCode) {
+    try {
+      const { BUILDER_CODE, declareBuilderCodeExtension } =
+        await import('@x402/extensions/builder-code');
+      extensions = {
+        ...(extensions ?? {}),
+        [BUILDER_CODE]: declareBuilderCodeExtension(ctx.deps.builderCode),
+      };
+    } catch (err) {
+      ctx.report(
+        'warn',
+        `builder-code declaration failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   const hasEvmUpto =
     ctx.routeEntry.billing === 'upto' &&
     ctx.deps.x402Accepts.some((accept) => accept.scheme === 'upto' && isEvmNetwork(accept.network));

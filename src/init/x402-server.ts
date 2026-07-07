@@ -53,6 +53,13 @@ export async function createX402Server(config: RouterConfig, kvStore?: KvStore) 
   server.registerExtension(
     createSIWxResourceServerExtension({ storage: new InMemorySIWxStorage() }),
   );
+  if (config.x402?.builderCode) {
+    // Marker registration so the builder-code declaration on challenges passes
+    // core's declared-extension validation. The attribution itself happens at
+    // the facilitator (ERC-8021 calldata suffix at settlement), not here.
+    const { builderCodeResourceServerExtension } = await import('@x402/extensions/builder-code');
+    server.registerExtension(builderCodeResourceServerExtension);
+  }
 
   const initPromise = server.initialize();
 
