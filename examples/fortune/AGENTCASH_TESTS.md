@@ -52,7 +52,7 @@ $CLI fetch http://localhost:3000/api/fortune/llm \
   --method POST -p mpp -b '{"prompt":"Will I find love?"}'
 ```
 
-Expect: `"protocol": "mpp"`, `"network": "tempo"`, a `channelId` (no `transactionHash` — settlement is deferred until channel close). Route is `.metered({ tickCost: '0.001', maxPrice: '0.01', unitType: 'request' })` — `.handler()` (non-generator) bills exactly `tickCost` per request.
+Expect: `"protocol": "mpp"`, `"network": "tempo"`, a `channelId` (no `transactionHash` — settlement is deferred until channel close). Route is `.session({ unitCost: '0.001', maxPrice: '0.01', unitType: 'request' })` — `.handler()` (non-generator) bills exactly `unitCost` per request.
 
 **Known race:** first call after a long gap can fail with `Channel not found: channel not funded on-chain`. The CLI opens the channel and immediately tries to use it before the on-chain funding tx lands. Wait ~8s and retry — once the channel is funded, subsequent calls reuse it.
 
@@ -63,7 +63,7 @@ $CLI fetch http://localhost:3000/api/fortune/stream \
   --method POST -b '{"prompt":"What awaits me?"}' --stream
 ```
 
-Expect: `"protocol": "mpp"`, a `channelId`, and a concatenated stream of `{"event":"prompt"}`, ~9 `{"event":"token"}` lines, and one trailing `{"event":"done"}`. Route is `.metered({ tickCost: '0.0001', maxPrice: '0.05', unitType: 'token' }).stream(async function*)` — each `charge()` call inside the generator bills one tick.
+Expect: `"protocol": "mpp"`, a `channelId`, and a concatenated stream of `{"event":"prompt"}`, ~9 `{"event":"token"}` lines, and one trailing `{"event":"done"}`. Route is `.session({ unitCost: '0.0001', maxPrice: '0.05', unitType: 'token' }).stream(async function*)` — each `charge()` call inside the generator bills one unit.
 
 ### 6. x402 `upto` + SIWX entitlement — pay once, replay free
 

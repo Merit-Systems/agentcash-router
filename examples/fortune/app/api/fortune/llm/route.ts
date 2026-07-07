@@ -16,9 +16,9 @@ const LlmSchema = z.object({
 
 export const POST = router
   .route('fortune/llm')
-  .description('Request-mode metered fortune — bills tickCost per request via MPP session')
-  .metered({
-    tickCost: '0.001',
+  .description('Request-mode session fortune — bills unitCost per request via MPP session')
+  .session({
+    unitCost: '0.001',
     maxPrice: '0.01',
     unitType: 'request',
     protocols: ['mpp'],

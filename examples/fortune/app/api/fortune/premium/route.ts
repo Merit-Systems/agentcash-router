@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router } from '../../../../lib/router';
 
-// Tests x402 upto — handler-driven metered pricing settled with EIP-2612
+// Tests x402 upto — handler-driven usage-based pricing settled with EIP-2612
 // gas-sponsoring on Base. Also exercises `.validate()` running BEFORE the 402.
 // agentcash invokes this with:
 //   agentcash fetch http://localhost:3000/api/fortune/premium \

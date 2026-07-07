@@ -1,6 +1,6 @@
 # Fortune Example
 
-Minimal Next.js app exercising every transaction kind `@agentcash/router` supports — `.paid()` fixed (x402 exact / MPP one-shot), `.upTo()` (x402 handler-driven), `.metered()` request-mode (MPP session), `.metered().stream()` (MPP session SSE), `.paid(fn)` (args-derived pricing), and `.siwx()` (identity).
+Minimal Next.js app exercising every transaction kind `@agentcash/router` supports — `.paid()` fixed (x402 exact / MPP one-shot), `.upTo()` (x402 handler-driven), `.session()` request-mode (MPP session), `.session().stream()` (MPP session SSE), `.paid(fn)` (args-derived pricing), and `.siwx()` (identity).
 
 Each route is self-contained: the top-of-file comment names the payment method it tests and shows the exact `agentcash` CLI command. To smoke-test every kind in order, see [`AGENTCASH_TESTS.md`](./AGENTCASH_TESTS.md).
 
@@ -18,8 +18,8 @@ pnpm dev                      # http://localhost:3000
 | ------------------------ | ---------- | ------------------------------------------------------- | -------------------------------------------------- | -------------------- |
 | `/api/fortune`           | POST       | `.paid('0.001')`                                        | x402 exact (Base) or MPP one-shot (Tempo)          | `-p x402` / `-p mpp` |
 | `/api/fortune/premium`   | POST       | `.upTo('0.005')`                                        | x402 upto — handler-driven, EIP-2612 gas-sponsored | `-p x402`            |
-| `/api/fortune/llm`       | POST       | `.metered({ tickCost, unitType: 'request' })`           | MPP session, request-mode                          | `-p mpp`             |
-| `/api/fortune/stream`    | POST       | `.metered({ tickCost, unitType: 'token' }).stream(...)` | MPP session, SSE streaming                         | `--stream`           |
+| `/api/fortune/llm`       | POST       | `.session({ unitCost, unitType: 'request' })`           | MPP session, request-mode                          | `-p mpp`             |
+| `/api/fortune/stream`    | POST       | `.session({ unitCost, unitType: 'token' }).stream(...)` | MPP session, SSE streaming                         | `--stream`           |
 | `/api/fortune/dynamic`   | POST       | `.paid(fn, { maxPrice })`                               | Args-derived pricing (x402 / MPP)                  | auto                 |
 | `/api/fortune/favorites` | POST / GET | `.siwx()`                                               | SIWX (Sign-In-with-X, no payment)                  | auto                 |
 | `/api/fortune/profile`   | GET        | `.siwx()`                                               | SIWX (Sign-In-with-X, no payment)                  | auto                 |

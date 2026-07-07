@@ -204,9 +204,22 @@ export interface UpToOptions extends Omit<PaidOptions, 'maxPrice'> {
   unitType?: string;
 }
 
+export interface SessionOptions extends Omit<PaidOptions, 'maxPrice'> {
+  /** Cost per billable unit (positive decimal-dollar string) — the MPP session challenge's per-unit `amount`. On `.handler()` bills exactly this per request; on `.stream()` is the voucher-headroom granularity. */
+  unitCost: string;
+  /** @deprecated Renamed to `unitCost`. */
+  tickCost?: never;
+  /** Cap on total billed amount (streaming only — request-mode bills exactly `unitCost`). Router-enforced ceiling; MPP itself only bounds spend by voucher headroom and deposit. */
+  maxPrice: string;
+  /** Unit being priced, advertised on 402 challenges as the MPP `unitType` (e.g. `'token'`, `'byte'`). Does not affect billing. */
+  unitType?: string;
+}
+
+/** @deprecated Use {@link SessionOptions} with `unitCost` via `.session()`. `tickCost` is the pre-`.session()` name for `unitCost` ("tick" is mppx SDK slang; the MPP spec prices sessions as `amount` per `unitType`). */
 export interface MeteredOptions extends Omit<PaidOptions, 'maxPrice'> {
-  /** Per-tick cost (positive decimal-dollar string). On `.handler()` bills exactly this per request; on `.stream()` is the voucher-headroom granularity. */
+  /** @deprecated Renamed to `unitCost`. */
   tickCost: string;
+  unitCost?: never;
   /** Cap on total billed amount (streaming only — request-mode bills exactly `tickCost`). */
   maxPrice: string;
   /** Cosmetic unit label for 402 challenges / UIs (e.g. `'token'`, `'byte'`). Does not affect billing. */
@@ -284,7 +297,7 @@ export interface HandlerContext<TBody = undefined, TQuery = undefined> {
   setVerifiedWallet: (addr: string) => void;
 }
 
-/** Handler context for streaming `.metered()` handlers (async generators). Call `charge()` once per billable unit. */
+/** Handler context for streaming `.session()` handlers (async generators). Call `charge()` once per billable unit. */
 export interface StreamingHandlerContext<
   TBody = undefined,
   TQuery = undefined,
@@ -337,9 +350,9 @@ export interface RouteEntry {
    */
   siwxEnabled?: boolean;
   pricing?: PricingConfig;
-  /** `'exact'` settles a fixed price once; `'upto'` (x402-only) settles the handler-accumulated `charge(amount)` total capped at `maxPrice`; `'metered'` (MPP-only) bills per `tickCost`. */
+  /** `'exact'` settles a fixed price once; `'upto'` (x402-only) settles the handler-accumulated `charge(amount)` total capped at `maxPrice`; `'metered'` (MPP-only, set by `.session()`) bills per unit (`tickCost`). */
   billing: 'exact' | 'upto' | 'metered';
-  /** True iff handler is an async generator. Streaming handlers settle per-tick over SSE; non-streaming metered handlers bill exactly `tickCost` per request. Set by the builder at `.handler(fn)` time. */
+  /** True iff handler is an async generator. Streaming handlers settle per-unit over SSE; non-streaming session handlers bill exactly `tickCost` per request. Set by the builder at `.handler(fn)` time. */
   streaming?: boolean;
   protocols: ProtocolType[];
   bodySchema?: ZodType;
@@ -363,7 +376,7 @@ export interface RouteEntry {
   mppInfo?: MppProtocolInfo;
   hasCheckout?: boolean;
   checkoutSession?: CheckoutSessionFn;
-  /** Per-tick cost (decimal-dollar). Required when `metered` is true. */
+  /** Per-unit cost (decimal-dollar), set from `.session()`'s `unitCost` (or the deprecated `tickCost` alias). Required when billing is `'metered'`. */
   tickCost?: string;
   /** Cosmetic unit label for 402 challenges and client UIs. */
   unitType?: string;
@@ -402,7 +415,7 @@ export interface MppSettlementSchedule {
 }
 
 export interface RouterConfig {
-  /** Default payee for paid routes — populates `payTo` on the auto-generated x402 `exact` accept and acts as the MPP `recipient` fallback. Override per-protocol via `x402.accepts[i].payTo` / `mpp.recipient`, or per-route via the `payTo` option on `.paid()` / `.upTo()` / `.metered()`. */
+  /** Default payee for paid routes — populates `payTo` on the auto-generated x402 `exact` accept and acts as the MPP `recipient` fallback. Override per-protocol via `x402.accepts[i].payTo` / `mpp.recipient`, or per-route via the `payTo` option on `.paid()` / `.upTo()` / `.session()`. */
   payeeAddress?: string;
   /** Origin URL (required). Used as 402 realm, discovery base, OpenAPI server, and MPP memo prefix — must match the public domain or payment matching breaks. */
   baseUrl: string;
@@ -437,9 +450,9 @@ export interface RouterConfig {
     feePayerKey?: string;
     /** Partial override of mppx's sponsor fee-budget ceilings for fee-sponsored Tempo transactions (charge co-signs and session open/topUp/close). Raise `maxTotalFee` alongside `maxGas`/`maxFeePerGas`. Omit for mppx's per-chain defaults. */
     feePayerPolicy?: MppFeePayerPolicy;
-    /** Enables MPP payment-channel sessions for `.metered()` routes (registers both request and SSE session middleware). Also requires `mpp.operatorKey`. */
+    /** Enables MPP payment-channel sessions for `.session()` routes (registers both request and SSE session middleware). Also requires `mpp.operatorKey`. */
     session?: {
-      /** Suggested deposit on the 402 challenge = `tickCost × depositMultiplier` USDC. Route `maxPrice` overrides. @default 10 */
+      /** Suggested deposit on the 402 challenge = `unitCost × depositMultiplier` USDC. Route `maxPrice` overrides. @default 10 */
       depositMultiplier?: number;
       /** Server-owned automatic settlement cadence for session channels. Omitted: channels settle only on client close. Thresholds compose (whichever trips first). */
       settlementSchedule?: MppSettlementSchedule;

@@ -9,7 +9,7 @@ export function createChargeContext(args: {
   const { tickCost, maxPrice, route } = args;
   const tickAtomic = decimalToAtomic(tickCost);
   if (tickAtomic <= 0n) {
-    throw new Error(`route '${route}': tickCost '${tickCost}' must be a positive decimal string`);
+    throw new Error(`route '${route}': unitCost '${tickCost}' must be a positive decimal string`);
   }
   const capAtomic = maxPrice !== undefined ? decimalToAtomic(maxPrice) : null;
   let ticks = 0;

@@ -50,7 +50,7 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 
 | Var | Required | Purpose |
 |-----|----------|---------|
-| `SOLANA_PAYEE_ADDRESS` | no | When set, adds a Solana `exact` accept so the router takes Solana payments. **`.upTo()` is Base-only and `.metered()` is MPP-only**. Solana clients can only pay static-priced `.paid()` routes. |
+| `SOLANA_PAYEE_ADDRESS` | no | When set, adds a Solana `exact` accept so the router takes Solana payments. **`.upTo()` is Base-only and `.session()` is MPP-only**. Solana clients can only pay static-priced `.paid()` routes. |
 | `SOLANA_FACILITATOR_URL` | no | Override the Solana x402 facilitator. Defaults to `DEFAULT_SOLANA_FACILITATOR_URL`. |
 
 ### MPP (auto-enabled when `MPP_SECRET_KEY` is set)
@@ -60,10 +60,10 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 | `MPP_SECRET_KEY` | when MPP is enabled | Server-side MPP secret. Presence toggles MPP on. |
 | `MPP_CURRENCY` | when MPP is enabled | Tempo currency address. Use `TEMPO_USDC_ADDRESS` for Tempo USDC. |
 | `TEMPO_RPC_URL` | no | Tempo JSON-RPC endpoint for MPP on-chain verification. Defaults to the public `DEFAULT_TEMPO_RPC_URL` (`https://rpc.tempo.xyz`). Override only if you have a dedicated endpoint. |
-| `MPP_OPERATOR_KEY` | no | Signs server-side close/settle. When set, MPP session mode is enabled automatically (required for `.metered()`: both streaming and request-mode per-tick billing). Address must equal the payee. |
+| `MPP_OPERATOR_KEY` | no | Signs server-side close/settle. When set, MPP session mode is enabled automatically (required for `.session()`: both streaming and request-mode per-unit billing). Address must equal the payee. |
 | `MPP_FEE_PAYER_KEY` | no | Sponsors client gas for channel open/topUp. Must resolve to a different address than `MPP_OPERATOR_KEY` (Tempo rejects fee-delegated txs where `sender === feePayer`). |
 
-> **MPP session mode needs the payee's private key.** Unlike x402 (address only), `.metered()` routes settle server-side, so `MPP_OPERATOR_KEY` must be the private key *of* `EVM_PAYEE_ADDRESS`. For local development, mint a throwaway keypair where the two line up:
+> **MPP session mode needs the payee's private key.** Unlike x402 (address only), `.session()` routes settle server-side, so `MPP_OPERATOR_KEY` must be the private key *of* `EVM_PAYEE_ADDRESS`. For local development, mint a throwaway keypair where the two line up:
 >
 > ```bash
 > npm i -D viem  # or pnpm add -D viem
@@ -194,9 +194,9 @@ This catches stale agent calls to API paths that no longer exist and returns a J
 |--------|---------|
 | `.paid(price)` | Fixed, args-derived, or tiered payment up front (x402, MPP, or both). |
 | `.upTo(maxPrice)` | Handler-computed billing; handler calls `charge(amount)` and the request settles once for the running total. **x402 only.** |
-| `.metered({ tickCost, maxPrice })` | Per-tick billing over an MPP payment channel. `.handler()` bills exactly `tickCost`; `.stream()` calls `charge()` per yield. **MPP only.** Streaming requires this. |
+| `.session({ unitCost, maxPrice })` | Per-unit billing over an MPP payment channel (the MPP `session` intent). `.handler()` bills exactly `unitCost`; `.stream()` calls `charge()` per yield. **MPP only.** Streaming requires this. (`.metered({ tickCost, ... })` remains as a deprecated alias.) |
 | `.siwx()` | Wallet identity, no payment. Returns 402 with a SIWX challenge. |
-| `.apiKey(resolver)` | `X-API-Key` or `Authorization: Bearer <key>`. Composes with `.paid()` / `.upTo()` / `.metered()`. |
+| `.apiKey(resolver)` | `X-API-Key` or `Authorization: Bearer <key>`. Composes with `.paid()` / `.upTo()` / `.session()`. |
 | `.unprotected()` | No auth. |
 
 ```typescript
@@ -219,7 +219,7 @@ router.route({ path: 'inbox' })
   .handler(async ({ wallet }) => getInbox(wallet));
 ```
 
-`.metered()` is mutually exclusive with `.siwx()` — per-tick MPP billing has no entitlement model — and the builder throws at registration if you combine them.
+`.session()` is mutually exclusive with `.siwx()` — per-unit MPP billing has no entitlement model — and the builder throws at registration if you combine them.
 
 > **Gotcha:** serverless / multi-instance deployments must provide a real `kvStore` (Upstash / Vercel KV). Without one the entitlement is kept in a per-process `Map`, so a wallet that paid on instance A is treated as unpaid on instance B and the user gets charged again.
 
@@ -227,7 +227,7 @@ router.route({ path: 'inbox' })
 
 What an unpaid request gets back depends on the route's auth mode:
 
-- **Payment-only routes** (`.paid()`, `.upTo()`, `.metered()` without `.siwx()`) return a 402 with an **empty body**. The entire challenge — accepts, price, schema — is base64-encoded in the `PAYMENT-REQUIRED` response header (x402 v2), with MPP challenges in `WWW-Authenticate`. Don't `res.json()` these; decode the header.
+- **Payment-only routes** (`.paid()`, `.upTo()`, `.session()` without `.siwx()`) return a 402 with an **empty body**. The entire challenge — accepts, price, schema — is base64-encoded in the `PAYMENT-REQUIRED` response header (x402 v2), with MPP challenges in `WWW-Authenticate`. Don't `res.json()` these; decode the header.
 - **SIWX routes** (`.siwx()`, alone or composed with a pricing mode) return a 402 with a **JSON body** that mirrors the `PAYMENT-REQUIRED` header, including the `sign-in-with-x` extension. Header and body are always identical.
 
 Every 402 also carries an `X-Agent-Identity` response header: an optional [DID-auth challenge](https://www.npmjs.com/package/did-auth-challenge) (nonce, domain/route binding, expiry). Clients that hold a DID may sign it and send the proof back in `X-Agent-Identity` on the retry; the verified DID is then available to handlers as `ctx.actor`. It is fully optional — it never gates the request and is unrelated to SIWX or payment. Clients without a DID can ignore it.
@@ -236,7 +236,7 @@ Every 402 also carries an `X-Agent-Identity` response header: an optional [DID-a
 
 For args-derived (`.paid(fn)`) and tiered pricing, and for routes with `.validate()` or a checkout session, the body is parsed **before** the 402 challenge so the challenge can quote an accurate price (and `.validate()` can reject with its own status). On every other paid route, a bare unpaid probe gets its 402 **without the body being inspected** — a malformed body still yields 402, not 400. The paying retry then parses and validates the body *before* payment verification and settlement, so a 400 never costs the caller money.
 
-`.paid()`, `.upTo()`, and `.metered()` are mutually exclusive pricing modes: pick one per route.
+`.paid()`, `.upTo()`, and `.session()` are mutually exclusive pricing modes: pick one per route.
 
 ### `.paid()`: fixed, args-derived, or tiered
 
@@ -280,19 +280,19 @@ Handler calls `charge(amount)` one or more times; the request settles once for t
 });
 ```
 
-### `.metered()`: per-tick, MPP only
+### `.session()`: per-unit, MPP only
 
-Per-tick billing over an MPP payment channel. Requires `MPP_OPERATOR_KEY` (`createRouterFromEnv` auto-enables session mode when it's set).
+Per-unit billing over an MPP payment channel — the MPP [`session` intent](https://mpp.dev/intents). Requires `MPP_OPERATOR_KEY` (`createRouterFromEnv` auto-enables session mode when it's set). `unitCost` maps to the MPP session challenge's per-unit `amount`; `unitType` names the unit; `maxPrice` is a router-enforced total ceiling (MPP itself only bounds spend by voucher headroom and deposit).
 
-**Request-mode.** `.handler()` bills exactly `tickCost` on each request:
+**Request-mode.** `.handler()` bills exactly `unitCost` on each request:
 ```typescript
-.metered({ tickCost: '0.01', maxPrice: '0.05', unitType: 'request' })
+.session({ unitCost: '0.01', maxPrice: '0.05', unitType: 'request' })
 .handler(async ({ body }) => { ... });
 ```
 
-**Streaming.** Each `charge()` call bills one tick, up to `maxPrice`:
+**Streaming.** `.stream()` serves the session over SSE; each `charge()` call bills one unit, up to `maxPrice`:
 ```typescript
-.metered({ tickCost: '0.0001', maxPrice: '0.05', unitType: 'token' })
+.session({ unitCost: '0.0001', maxPrice: '0.05', unitType: 'token' })
 .stream(async function* ({ body, charge }) {
   for await (const token of streamLLM(body.prompt)) {
     await charge();
@@ -300,6 +300,8 @@ Per-tick billing over an MPP payment channel. Requires `MPP_OPERATOR_KEY` (`crea
   }
 });
 ```
+
+> `.metered({ tickCost, ... })` is the deprecated pre-1.16 spelling of `.session({ unitCost, ... })` and behaves identically.
 
 Streaming is MPP-only. `.stream()` on a `.paid()` / `.upTo()` / `.unprotected()` route throws at registration.
 
