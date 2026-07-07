@@ -1,5 +1,35 @@
 # @agentcash/router
 
+## 1.16.0
+
+### Minor Changes
+
+- 5fd92ff: Framework-agnostic core: the router now speaks Web-standard `Request`/`Response` and dispatches through an embedded Hono app. `next` is no longer a peer dependency (peers are just `zod`).
+
+  **Heads-up for TypeScript consumers:** handler and discovery signatures are now typed against Web-standard `Request`/`Response` instead of `NextRequest`/`NextResponse`, and `next` is no longer a peer dependency. Runtime behavior in Next.js apps is unchanged (Next accepts standard fetch handlers), but handler code that uses NextRequest-only APIs (`request.nextUrl`, `request.cookies`) needs a cast — or better, `new URL(request.url)` / the new `ctx.params`.
+
+  **New:**
+  - `router.fetch(request)` — standard fetch handler serving all registered routes at `/{basePath}/{path}` plus discovery surfaces; unmatched paths get the `notFound()` envelope.
+  - `router.hono()` — the internal Hono app, mountable into a larger app.
+  - `@agentcash/router/next` subpath — `nextHandlers(router)` for one-file Next.js catch-all hosting (`app/api/[[...route]]/route.ts`), replacing per-route files and the discovery barrel.
+  - `{param}` path templates with `ctx.params`, extracted identically in catch-all and per-file modes.
+  - `RouterConfig.basePath` (default `'api'`) — controls the mounted and advertised URL prefix.
+  - `.path()` values are normalized like `.route()` paths (leading slashes / `api/` prefix stripped), so a leading slash no longer produces a `//` URL in discovery.
+
+  Per-file Next.js hosting (`export const POST = router.route(...)...handler(...)`) is unchanged.
+
+- 3b9cecb: Rename `.metered()` to `.session()` and `tickCost` to `unitCost`, aligning the builder with MPP terminology (the `session` intent prices per-unit `amount` × `unitType`; "tick" was mppx SDK slang). `.metered()` and `tickCost` remain as deprecated aliases with identical behavior and will be removed in a future release. Registration-time and type-level error messages now reference `.session()`/`unitCost`. New exported types: `SessionOptions` (plus `MeteredOptions`/`UpToOptions` are now exported).
+- 5b76428: Two x402 2.14–2.15 features surfaced through router config:
+
+  **Base Builder Codes (ERC-8021 attribution).** Set `RouterConfig.x402.builderCode` or `X402_BUILDER_CODE` (register at dashboard.base.org → Settings → Builder Codes) and the router declares the `builder-code` extension with your app code on every x402 payment challenge; the facilitator appends it to settlement calldata, attributing every settled payment to your service on-chain. Malformed codes fail at startup with a structured `invalid_builder_code` issue.
+
+  **Bazaar catalog metadata.** `DiscoveryConfig` (and `createRouterFromEnv` options) gain `serviceName`, `tags`, and `iconUrl`, forwarded into `PaymentRequired.resource` on every x402 challenge — facilitators persist them into the Bazaar discovery catalog at settlement. `serviceName` defaults to the discovery `title` when the title fits the 32-char printable-ASCII constraint, and `tags` defaults per-resource to the same route-derived tag the OpenAPI document advertises. Explicit values that violate the catalog limits fail at startup (`invalid_discovery_service_name` / `invalid_discovery_tags` / `invalid_discovery_icon_url`) instead of being silently dropped by the facilitator.
+
+### Patch Changes
+
+- 821e508: MPP session channels now use one shared store across the request-mode and streaming middlewares (previously each defaulted to a private in-memory store, so a channel opened through one was `channel-not-found` through the other). Protocol-heavy dependencies (`mppx`, `viem/tempo`, `@x402/evm`, …) are now loaded lazily at their call sites instead of statically, so x402-only deployments no longer bundle the MPP dependency tree (and vice versa) — this also removes the webpack "Critical dependency" warning from `ox/tempo` in Next.js apps that don't use MPP.
+- ef798ea: Bump `@x402/core`/`@x402/evm`/`@x402/svm`/`@x402/extensions` from 2.13.0 to 2.17.0. Notable upstream changes for router deployments: the SIWX extension's `nonce`/`issuedAt`/`expirationTime` are now excluded from client-echo validation (fixes spurious `extension_echo_mismatch` on `.siwx()` routes, since those fields regenerate per 402), hardened wildcard route/network pattern matching, and `x402ResourceServer.initialize()` now fail-fasts on scheme/facilitator capability mismatches (surfaced through the router's existing `x402InitError` degraded-mode path, not a crash).
+
 ## 1.15.0
 
 ### Minor Changes
