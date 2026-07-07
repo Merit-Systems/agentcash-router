@@ -73,13 +73,28 @@ export interface ServiceRouter<TPriceKeys extends string = never> {
   hono(): Hono;
 }
 
-type ExtractPriceKeys<C> = [C] extends [{ prices: infer P extends Record<string, string> }]
-  ? Extract<keyof P, string>
+/**
+ * Inference is deliberately scoped to the `prices` map. A `const C extends
+ * RouterConfig` generic over the whole config captures the entire literal
+ * (guidance strings, accepts tuples, plugin closures) in the router's exported
+ * type, and every route file that touches the router re-resolves that literal —
+ * on large configs that lands at TypeScript's instantiation-depth limit
+ * ("Type instantiation is excessively deep"), tripping check-order-dependently
+ * in consumer builds. Only the `prices` keys are used at the type level.
+ *
+ * The `string extends keyof P` guard maps a non-literal `prices` type (a config
+ * annotated as plain `RouterConfig`, or a map built at runtime) to `never` so
+ * routes stay unpriced at the type level and `.paid()` still typechecks.
+ */
+type PriceKeysOf<P> = [P] extends [Record<string, string>]
+  ? string extends keyof P
+    ? never
+    : Extract<keyof P, string>
   : never;
 
-export function createRouter<const C extends RouterConfig>(
-  config: C,
-): ServiceRouter<ExtractPriceKeys<C>> {
+export function createRouter<P extends Record<string, string> | undefined = undefined>(
+  config: RouterConfig & { prices?: P },
+): ServiceRouter<PriceKeysOf<P>> {
   const registry = new RouteRegistry();
   const kvStore = resolveKvStore(config.kvStore);
   const nonceStore = kvStore ? createKvNonceStore(kvStore) : new MemoryNonceStore();
@@ -287,7 +302,7 @@ export function createRouter<const C extends RouterConfig>(
     },
 
     registry,
-  } as ServiceRouter<ExtractPriceKeys<C>>;
+  } as ServiceRouter<PriceKeysOf<P>>;
 }
 
 /**
@@ -310,11 +325,11 @@ export function createRouter<const C extends RouterConfig>(
  * });
  * ```
  */
-export function createRouterFromEnv<const O extends CreateRouterFromEnvOptions>(
-  options: O,
-): ServiceRouter<ExtractPriceKeys<O>> {
+export function createRouterFromEnv<TPrices extends Record<string, string> = Record<never, string>>(
+  options: CreateRouterFromEnvOptions<TPrices>,
+): ServiceRouter<PriceKeysOf<TPrices>> {
   return createRouter(routerConfigFromEnv(options)) as unknown as ServiceRouter<
-    ExtractPriceKeys<O>
+    PriceKeysOf<TPrices>
   >;
 }
 
