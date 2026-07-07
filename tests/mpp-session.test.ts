@@ -692,13 +692,60 @@ describe('MPP session — registration validation', () => {
     ).toThrow(/requires MPP session mode/);
   });
 
-  it('throws when .metered() without tickCost', () => {
+  it('.session({ unitCost }) registers per-unit billing (billing metered, tickCost set)', () => {
+    const fake = createFakeSessionMppx();
+    const registry = new RouteRegistry();
+    const builder = new RouteBuilder('test/route', registry, makeSessionDeps(fake));
+    builder
+      .session({ unitCost: '0.0001', maxPrice: '0.05', unitType: 'token', protocols: ['mpp'] })
+      .body(bodySchema)
+      .handler(async () => ({}));
+    const entry = registry.get('test/route')!;
+    expect(entry.billing).toBe('metered');
+    expect(entry.tickCost).toBe('0.0001');
+    expect(entry.unitType).toBe('token');
+  });
+
+  it('.session() accepts the deprecated tickCost key as an alias for unitCost', () => {
+    const fake = createFakeSessionMppx();
+    const registry = new RouteRegistry();
+    const builder = new RouteBuilder('test/route', registry, makeSessionDeps(fake));
+    builder
+      .session({ tickCost: '0.0002', maxPrice: '0.05', protocols: ['mpp'] })
+      .body(bodySchema)
+      .handler(async () => ({}));
+    expect(registry.get('test/route')!.tickCost).toBe('0.0002');
+  });
+
+  it('.metered() alias registers identically to .session()', () => {
+    const fake = createFakeSessionMppx();
+    const registry = new RouteRegistry();
+    const builder = new RouteBuilder('test/route', registry, makeSessionDeps(fake));
+    builder
+      .metered({ tickCost: '0.0003', maxPrice: '0.05', protocols: ['mpp'] })
+      .body(bodySchema)
+      .handler(async () => ({}));
+    const entry = registry.get('test/route')!;
+    expect(entry.billing).toBe('metered');
+    expect(entry.tickCost).toBe('0.0003');
+  });
+
+  it('throws when .session() without unitCost', () => {
     const fake = createFakeSessionMppx();
     const builder = makeBuilder(makeSessionDeps(fake));
     expect(() =>
-      // @ts-expect-error — exercising the runtime guard when tickCost is omitted
+      // @ts-expect-error — exercising the runtime guard when unitCost is omitted
+      builder.session({ maxPrice: '0.05', protocols: ['mpp'] }),
+    ).toThrow(/requires unitCost/);
+  });
+
+  it('throws when the deprecated .metered() alias omits tickCost/unitCost', () => {
+    const fake = createFakeSessionMppx();
+    const builder = makeBuilder(makeSessionDeps(fake));
+    expect(() =>
+      // @ts-expect-error — exercising the runtime guard when both cost fields are omitted
       builder.metered({ maxPrice: '0.05', protocols: ['mpp'] }),
-    ).toThrow(/requires tickCost/);
+    ).toThrow(/requires unitCost/);
   });
 
   it("rejects .metered() when protocols includes 'x402' (MPP-only)", () => {

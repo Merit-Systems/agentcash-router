@@ -39,14 +39,38 @@ describe('pricing modes are mutually exclusive', () => {
     make().paid('0.01').upTo('0.05');
   });
 
-  it('rejects .metered() after .upTo()', () => {
+  it('rejects .session() after .upTo()', () => {
+    // @ts-expect-error
+    make().upTo('0.05').session({ unitCost: '0.001', maxPrice: '0.05' });
+  });
+
+  it('rejects .paid() after .session()', () => {
+    // @ts-expect-error
+    make().session({ unitCost: '0.001', maxPrice: '0.05' }).paid('0.01');
+  });
+
+  it('rejects .metered() (deprecated alias) after .upTo()', () => {
     // @ts-expect-error
     make().upTo('0.05').metered({ tickCost: '0.001', maxPrice: '0.05' });
   });
+});
 
-  it('rejects .paid() after .metered()', () => {
-    // @ts-expect-error
-    make().metered({ tickCost: '0.001', maxPrice: '0.05' }).paid('0.01');
+describe('.session() option keys', () => {
+  it('accepts unitCost or the deprecated tickCost, not both', () => {
+    make()
+      .session({ unitCost: '0.001', maxPrice: '0.05' })
+      .stream(async function* ({ charge }) {
+        await charge();
+        yield 'ok';
+      });
+    make()
+      .session({ tickCost: '0.001', maxPrice: '0.05' })
+      .stream(async function* ({ charge }) {
+        await charge();
+        yield 'ok';
+      });
+    // @ts-expect-error — unitCost and tickCost are mutually exclusive
+    make().session({ unitCost: '0.001', tickCost: '0.001', maxPrice: '0.05' });
   });
 });
 
@@ -97,15 +121,20 @@ describe('.siwx() and .apiKey() are mutually exclusive', () => {
   });
 });
 
-describe('.metered() and .siwx() are mutually exclusive', () => {
-  it('rejects .metered() after .siwx()', () => {
+describe('.session() and .siwx() are mutually exclusive', () => {
+  it('rejects .session() after .siwx()', () => {
     // @ts-expect-error
-    make().siwx().metered({ tickCost: '0.001', maxPrice: '0.05' });
+    make().siwx().session({ unitCost: '0.001', maxPrice: '0.05' });
   });
 
-  it('rejects .siwx() after .metered()', () => {
+  it('rejects .siwx() after .session()', () => {
     // @ts-expect-error
-    make().metered({ tickCost: '0.001', maxPrice: '0.05' }).siwx();
+    make().session({ unitCost: '0.001', maxPrice: '0.05' }).siwx();
+  });
+
+  it('rejects the deprecated .metered() alias after .siwx()', () => {
+    // @ts-expect-error
+    make().siwx().metered({ tickCost: '0.001', maxPrice: '0.05' });
   });
 });
 

@@ -17,8 +17,8 @@ const FORTUNE_TOKENS = ['A', 'fortunate', 'turn', 'awaits', 'you', 'on', 'the', 
 export const POST = router
   .route('fortune/stream')
   .description('Streaming fortune — bills per yielded token via MPP session vouchers')
-  .metered({
-    tickCost: '0.0001',
+  .session({
+    unitCost: '0.0001',
     maxPrice: '0.05',
     unitType: 'token',
     protocols: ['mpp'],

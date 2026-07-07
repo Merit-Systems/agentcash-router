@@ -15,7 +15,7 @@ import {
   toResponse,
 } from './shared.js';
 
-/** `.metered()` invocation: `.handler()` bills exactly `tickCost`; `.stream()` charges per yield. */
+/** `.session()` invocation: `.handler()` bills exactly the per-unit cost; `.stream()` charges per yield. */
 export async function invokeMetered(
   ctx: FlowCtx,
   wallet: string,

@@ -220,28 +220,35 @@ describe('registration-time safety', () => {
   it('rejects repeated .paid() calls on the same route', () => {
     const { builder } = makeBuilder('paid/twice');
     expect(() => builder.paid('0.01').paid('0.02')).toThrow(
-      'Cannot combine .paid(), .upTo(), and .metered()',
+      'Cannot combine .paid(), .upTo(), and .session()',
     );
   });
 
   it('rejects combining .paid() with .upTo() on the same route', () => {
     const { builder } = makeBuilder('paid/upto');
     expect(() => builder.paid('0.01').upTo('0.05')).toThrow(
-      'Cannot combine .paid(), .upTo(), and .metered()',
+      'Cannot combine .paid(), .upTo(), and .session()',
     );
   });
 
-  it('rejects .siwx() after .metered()', () => {
-    const { builder } = makeBuilder('metered/siwx');
-    expect(() => builder.metered({ tickCost: '0.001', maxPrice: '0.05' }).siwx()).toThrow(
-      'Cannot combine .metered() and .siwx()',
+  it('rejects .siwx() after .session()', () => {
+    const { builder } = makeBuilder('session/siwx');
+    expect(() => builder.session({ unitCost: '0.001', maxPrice: '0.05' }).siwx()).toThrow(
+      'Cannot combine .session() and .siwx()',
     );
   });
 
-  it('rejects .metered() after .siwx()', () => {
+  it('rejects .session() after .siwx()', () => {
+    const { builder } = makeBuilder('siwx/session');
+    expect(() => builder.siwx().session({ unitCost: '0.001', maxPrice: '0.05' })).toThrow(
+      'Cannot combine .siwx() and .session()',
+    );
+  });
+
+  it('rejects the deprecated .metered() alias after .siwx() with the same guard', () => {
     const { builder } = makeBuilder('siwx/metered');
     expect(() => builder.siwx().metered({ tickCost: '0.001', maxPrice: '0.05' })).toThrow(
-      'Cannot combine .siwx() and .metered()',
+      'Cannot combine .siwx() and .session()',
     );
   });
 

@@ -9,6 +9,7 @@ import type {
   PaidOptions,
   PaidArg,
   UpToOptions,
+  SessionOptions,
   MeteredOptions,
   AuthMode,
   ProtocolType,
@@ -54,7 +55,8 @@ type StreamingHandlerFn<TBody, TQuery> = (
 /**
  * Pricing-mode discriminator threaded through the builder. `'none'` until a
  * pricing method is chained; then `'exact'` (`.paid()`), `'upto'`, or
- * `'metered'`. Gates repeat pricing calls and picks the handler shape.
+ * `'metered'` (`.session()` / deprecated `.metered()`). Gates repeat pricing
+ * calls and picks the handler shape.
  */
 export type BillingMode = 'none' | 'exact' | 'upto' | 'metered';
 
@@ -76,7 +78,7 @@ type PricingGate<
   ? RouteError<`Cannot combine .unprotected() and .${M}() on the same route`>
   : Bill extends 'none'
     ? TSelf
-    : RouteError<'Cannot combine .paid(), .upTo(), and .metered() — pick one pricing mode'>;
+    : RouteError<'Cannot combine .paid(), .upTo(), and .session() — pick one pricing mode'>;
 
 type HandlerArg<
   TBody,
@@ -86,7 +88,7 @@ type HandlerArg<
   HasBody extends boolean,
   Bill extends BillingMode,
 > = [Ident, Bill] extends ['none', 'none']
-  ? RouteError<'Pick an auth mode first: .paid(...), .upTo(...), .metered(...), .siwx(), .apiKey(...), or .unprotected()'>
+  ? RouteError<'Pick an auth mode first: .paid(...), .upTo(...), .session(...), .siwx(), .apiKey(...), or .unprotected()'>
   : [NeedsBody, HasBody] extends [true, false]
     ? RouteError<'Call .body(schema) — body-derived/tiered pricing reads the parsed body'>
     : Bill extends 'upto'
@@ -101,14 +103,14 @@ type StreamArg<
   HasBody extends boolean,
   Bill extends BillingMode,
 > = [Ident, Bill] extends ['none', 'none']
-  ? RouteError<'Pick an auth mode first: .metered({ ... }) — streaming requires metered pricing'>
+  ? RouteError<'Pick an auth mode first: .session({ ... }) — streaming requires session pricing'>
   : Bill extends 'metered'
     ? [NeedsBody, HasBody] extends [true, false]
-      ? RouteError<'Call .body(schema) — metered pricing reads the parsed body'>
+      ? RouteError<'Call .body(schema) — session pricing reads the parsed body'>
       : StreamingHandlerFn<TBody, TQuery>
     : Bill extends 'upto'
-      ? RouteError<'Streaming is not supported on .upTo() — use .metered() on MPP for per-yield billing'>
-      : RouteError<'Streaming requires .metered({ tickCost, maxPrice }) — static/free routes cannot meter per-chunk billing'>;
+      ? RouteError<'Streaming is not supported on .upTo() — use .session() on MPP for per-yield billing'>
+      : RouteError<'Streaming requires .session({ unitCost, maxPrice }) — static/free routes cannot meter per-chunk billing'>;
 
 type BuilderState<TBody> = {
   key: string;
@@ -347,36 +349,71 @@ export class RouteBuilder<
   }
 
   /**
-   * MPP-only per-tick billing. `.handler()` bills exactly `tickCost`;
-   * `.stream()` calls `charge()` (no-arg) per yield, settling per tick up to
-   * `maxPrice`. Requires `RouterConfig.mpp.session`.
+   * MPP-only per-unit billing over a payment channel (the MPP `session`
+   * intent). `.handler()` bills exactly `unitCost` per request; `.stream()`
+   * calls `charge()` (no-arg) per yield, settling per unit up to `maxPrice`.
+   * Requires `RouterConfig.mpp.session`.
    *
    * @example
    * ```ts
    * router.route('llm/stream')
-   *   .metered({ tickCost: '0.0001', maxPrice: '0.05', unitType: 'token' })
+   *   .session({ unitCost: '0.0001', maxPrice: '0.05', unitType: 'token' })
    *   .stream(async function* ({ charge }) { await charge(); yield 'hi'; });
    * ```
    */
+  session(
+    this: Ident extends 'siwx'
+      ? RouteError<'Cannot combine .siwx() and .session() — per-unit MPP billing has no entitlement model'>
+      : PricingGate<
+          RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>,
+          Ident,
+          Bill,
+          'session'
+        >,
+    options: SessionOptions | MeteredOptions,
+  ): RouteBuilder<TBody, TQuery, TOutput, Ident, False, HasBody, 'metered'>;
+  session(
+    this:
+      | RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>
+      | RouteError<string>,
+    options: SessionOptions | MeteredOptions,
+  ): RouteBuilder<TBody, TQuery, TOutput, Ident, False, HasBody, 'metered'> {
+    const self = this as RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>;
+    return self.applyPaid(normalizeSessionArg(self.#s.key, options), 'session') as RouteBuilder<
+      TBody,
+      TQuery,
+      TOutput,
+      Ident,
+      False,
+      HasBody,
+      'metered'
+    >;
+  }
+
+  /**
+   * @deprecated Renamed to {@link session} — `.metered()` is the pre-1.16 name
+   * for the MPP `session` intent (and `tickCost` for `unitCost`). This alias
+   * behaves identically and will be removed in the next major version.
+   */
   metered(
     this: Ident extends 'siwx'
-      ? RouteError<'Cannot combine .siwx() and .metered() — per-tick MPP billing has no entitlement model'>
+      ? RouteError<'Cannot combine .siwx() and .session() — per-unit MPP billing has no entitlement model'>
       : PricingGate<
           RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>,
           Ident,
           Bill,
           'metered'
         >,
-    options: MeteredOptions,
+    options: MeteredOptions | SessionOptions,
   ): RouteBuilder<TBody, TQuery, TOutput, Ident, False, HasBody, 'metered'>;
   metered(
     this:
       | RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>
       | RouteError<string>,
-    options: MeteredOptions,
+    options: MeteredOptions | SessionOptions,
   ): RouteBuilder<TBody, TQuery, TOutput, Ident, False, HasBody, 'metered'> {
     const self = this as RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>;
-    return self.applyPaid(normalizeMeteredArg(self.#s.key, options), 'metered') as RouteBuilder<
+    return self.applyPaid(normalizeSessionArg(self.#s.key, options), 'metered') as RouteBuilder<
       TBody,
       TQuery,
       TOutput,
@@ -389,7 +426,7 @@ export class RouteBuilder<
 
   private applyPaid(
     normalized: NormalizedPaidArg,
-    method: 'paid' | 'upTo' | 'metered',
+    method: 'paid' | 'upTo' | 'session' | 'metered',
   ): RouteBuilder<TBody, TQuery, TOutput, Ident, boolean, HasBody, BillingMode> {
     const { pricing, resolvedOptions, billing, tickCost, unitType, maxPrice } = normalized;
 
@@ -402,14 +439,14 @@ export class RouteBuilder<
     if (this.#s.pricing !== undefined) {
       throw new RouteDefinitionError(
         this.#s.key,
-        `Cannot combine .paid(), .upTo(), and .metered() — pick one pricing mode.`,
+        `Cannot combine .paid(), .upTo(), and .session() — pick one pricing mode.`,
       );
     }
     if (this.#s.siwxEnabled && billing === 'metered') {
       throw new RouteDefinitionError(
         this.#s.key,
-        `Cannot combine .siwx() and .metered() — per-tick MPP billing has no entitlement model. ` +
-          `Use .paid() or .upTo() with .siwx(), or drop .siwx() for metered routes.`,
+        `Cannot combine .siwx() and .session() — per-unit MPP billing has no entitlement model. ` +
+          `Use .paid() or .upTo() with .siwx(), or drop .siwx() for session routes.`,
       );
     }
 
@@ -434,11 +471,11 @@ export class RouteBuilder<
       }
       next.#s.protocols = ['x402'];
     } else if (billing === 'metered') {
-      // .metered() is MPP-only — per-tick billing runs over an MPP payment channel.
+      // .session() is MPP-only — per-unit billing runs over an MPP payment channel.
       if (resolvedOptions.protocols?.some((p) => p !== 'mpp')) {
         throw new RouteDefinitionError(
           this.#s.key,
-          `.metered() is MPP-only — remove the conflicting protocols override.`,
+          `.session() is MPP-only — remove the conflicting protocols override.`,
         );
       }
       next.#s.protocols = ['mpp'];
@@ -500,7 +537,7 @@ export class RouteBuilder<
     if (next.#s.tickCost !== undefined && !isPositiveDecimal(next.#s.tickCost)) {
       throw new RouteDefinitionError(
         this.#s.key,
-        `tickCost '${next.#s.tickCost}' must be a positive decimal string`,
+        `unitCost '${next.#s.tickCost}' must be a positive decimal string`,
       );
     }
 
@@ -513,7 +550,7 @@ export class RouteBuilder<
    * `.upTo()` for pay-once-then-replay: the first request settles normally,
    * subsequent requests with a valid SIWX signature for the same wallet skip
    * payment (on `.upTo()`, `charge(amount)` becomes a no-op on the replay).
-   * Mutually exclusive with `.metered()`.
+   * Mutually exclusive with `.session()`.
    *
    * @example
    * ```ts
@@ -527,7 +564,7 @@ export class RouteBuilder<
       : Ident extends 'apiKey'
         ? RouteError<'Combining .siwx() and .apiKey() is not supported on the same route'>
         : Bill extends 'metered'
-          ? RouteError<'Cannot combine .metered() and .siwx() — per-tick MPP billing has no entitlement model'>
+          ? RouteError<'Cannot combine .session() and .siwx() — per-unit MPP billing has no entitlement model'>
           : RouteBuilder<TBody, TQuery, TOutput, Ident, NeedsBody, HasBody, Bill>,
   ): RouteBuilder<TBody, TQuery, TOutput, 'siwx', NeedsBody, HasBody, Bill>;
   siwx(
@@ -553,8 +590,8 @@ export class RouteBuilder<
     if (self.#s.billing === 'metered') {
       throw new RouteDefinitionError(
         self.#s.key,
-        `Cannot combine .metered() and .siwx() — per-tick MPP billing has no entitlement model. ` +
-          `Use .paid() or .upTo() with .siwx(), or drop .siwx() for metered routes.`,
+        `Cannot combine .session() and .siwx() — per-unit MPP billing has no entitlement model. ` +
+          `Use .paid() or .upTo() with .siwx(), or drop .siwx() for session routes.`,
       );
     }
 
@@ -966,14 +1003,15 @@ export class RouteBuilder<
 
   /**
    * Register a streaming handler (`async function*`) and return the Next.js
-   * route function. Each `charge()` call bills one tick (`tickCost` USDC) up
-   * to `maxPrice`; requires `.metered({ ... })` and MPP session mode.
+   * route function — the SSE transport of an MPP session. Each `charge()`
+   * call bills one unit (`unitCost` USDC) up to `maxPrice`; requires
+   * `.session({ ... })` and MPP session mode.
    *
    * @example
    * ```ts
    * export const POST = router
    *   .route('llm/stream')
-   *   .metered({ tickCost: '0.0001', maxPrice: '0.05', unitType: 'token' })
+   *   .session({ unitCost: '0.0001', maxPrice: '0.05', unitType: 'token' })
    *   .body(schema)
    *   .stream(async function* ({ body, charge }) {
    *     for await (const token of streamLLM(body.prompt)) {
@@ -996,7 +1034,7 @@ export class RouteBuilder<
     if (!this.#s.authMode) {
       throw new RouteDefinitionError(
         this.#s.key,
-        `Select an auth mode: .paid(pricing), .upTo(maxPrice), .metered(options), .siwx(), .apiKey(resolver), or .unprotected()`,
+        `Select an auth mode: .paid(pricing), .upTo(maxPrice), .session(options), .siwx(), .apiKey(resolver), or .unprotected()`,
       );
     }
     if (this.#s.validateFn && !this.#s.bodySchema) {
@@ -1059,7 +1097,7 @@ export class RouteBuilder<
       if (!this.#s.deps.mppSessionConfig) {
         throw new RouteDefinitionError(
           this.#s.key,
-          `.metered() requires MPP session mode. ` +
+          `.session() requires MPP session mode. ` +
             `Set RouterConfig.mpp.session = {} and provide mpp.operatorKey.`,
         );
       }
@@ -1067,7 +1105,7 @@ export class RouteBuilder<
     if (streaming && this.#s.billing !== 'metered') {
       throw new RouteDefinitionError(
         this.#s.key,
-        `.stream() requires .metered() — ` +
+        `.stream() requires .session() — ` +
           `static/free/upto routes can't meter per-chunk billing.`,
       );
     }
@@ -1174,7 +1212,7 @@ function normalizePaidArg(
   throw new RouteDefinitionError(
     routeKey,
     `.paid() requires one of: a price string, a (body) => string function, { price }, or { field, tiers }. ` +
-      `For handler-computed billing use .upTo(); for per-tick billing use .metered().`,
+      `For handler-computed billing use .upTo(); for per-unit billing use .session().`,
   );
 }
 
@@ -1192,18 +1230,23 @@ function normalizeUpToArg(routeKey: string, arg: string | UpToOptions): Normaliz
   };
 }
 
-function normalizeMeteredArg(routeKey: string, options: MeteredOptions): NormalizedPaidArg {
+function normalizeSessionArg(
+  routeKey: string,
+  options: SessionOptions | MeteredOptions,
+): NormalizedPaidArg {
   if (!options.maxPrice) {
-    throw new RouteDefinitionError(routeKey, `.metered() requires maxPrice`);
+    throw new RouteDefinitionError(routeKey, `.session() requires maxPrice`);
   }
-  if (!options.tickCost) {
-    throw new RouteDefinitionError(routeKey, `.metered() requires tickCost`);
+  // `tickCost` is the deprecated pre-`.session()` name for `unitCost`.
+  const unitCost = options.unitCost ?? options.tickCost;
+  if (!unitCost) {
+    throw new RouteDefinitionError(routeKey, `.session() requires unitCost`);
   }
   return {
     pricing: options.maxPrice,
     resolvedOptions: options,
     billing: 'metered',
-    tickCost: options.tickCost,
+    tickCost: unitCost,
     unitType: options.unitType,
     maxPrice: options.maxPrice,
   };
