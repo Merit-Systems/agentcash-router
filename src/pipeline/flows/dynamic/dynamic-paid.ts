@@ -16,7 +16,11 @@ export async function runDynamicPaidFlow(ctx: FlowCtx): Promise<Response> {
   if (preamble.done) return preamble.response;
   const { account, pricing, incomingStrategy } = preamble;
 
-  const { skipBody, skipHandler } = resolveDynamicPreflight(incomingStrategy, request, routeEntry);
+  const { skipBody, skipHandler } = await resolveDynamicPreflight(
+    incomingStrategy,
+    request,
+    routeEntry,
+  );
 
   if (skipHandler) {
     return runDynamicChannelMgmtFlow({

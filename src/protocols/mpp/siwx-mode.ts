@@ -1,5 +1,4 @@
 import { walletFromDid } from './credential.js';
-import { Credential } from 'mppx';
 import type { Transport } from 'mppx/server';
 import type { MppxMiddleware, MppxMiddlewareResponse } from './middleware-types.js';
 
@@ -20,9 +19,10 @@ export async function verifyMppSiwx(request: Request, mppx: MppxInstance): Promi
     return { valid: false, challenge: result.challenge };
   }
 
+  const { Credential } = await import('mppx');
   const credential = Credential.fromRequest(request);
   const rawSource = credential?.source ?? '';
-  const wallet = walletFromDid(rawSource);
+  const wallet = await walletFromDid(rawSource);
 
   return { valid: true, wallet, withReceipt: result.withReceipt };
 }

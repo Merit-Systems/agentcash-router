@@ -1,5 +1,4 @@
 import type { PaymentRequirements } from '@x402/core/types';
-import { PERMIT2_ADDRESS } from '@x402/evm';
 import type { HandlerPaymentContext } from '../../types.js';
 import type { ReportFn } from '../../plugin/reporter.js';
 import { HEADERS } from '../../headers.js';
@@ -45,6 +44,11 @@ interface X402Token {
   payload: unknown;
   requirements: PaymentRequirements;
 }
+
+// Canonical Permit2 address — CREATE2-deployed at the same address on every
+// chain. Mirrored from @x402/evm so guidance strings don't drag the whole EVM
+// scheme package into the static import graph.
+const PERMIT2_ADDRESS = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
 
 export const x402Strategy: PaymentStrategy = {
   protocol: 'x402',

@@ -1,5 +1,4 @@
-import { Credential } from 'mppx';
-import { getAddress, isAddress } from 'viem';
+import type { Credential } from 'mppx';
 import { normalizeWalletAddress } from '../../auth/normalize-wallet.js';
 
 export type MppPayloadType = 'transaction' | 'hash' | 'unknown';
@@ -15,11 +14,13 @@ export interface MppCredentialInfo {
   sessionAction?: MppSessionAction;
 }
 
-export function readMppCredential(request: Request): MppCredentialInfo | null {
+export async function readMppCredential(request: Request): Promise<MppCredentialInfo | null> {
+  // Lazy-loaded so x402-only deployments never pull mppx into their bundle.
+  const { Credential } = await import('mppx');
   const credential = Credential.fromRequest(request);
   if (!credential) return null;
 
-  const wallet = walletFromDid(credential.source ?? '');
+  const wallet = await walletFromDid(credential.source ?? '');
   const payload = credential.payload as { type?: string; action?: string } | null;
   const rawType = payload?.type;
   const payloadType: MppPayloadType =
@@ -39,7 +40,9 @@ export function readMppCredential(request: Request): MppCredentialInfo | null {
   };
 }
 
-export function walletFromDid(rawSource: string): string {
+export async function walletFromDid(rawSource: string): Promise<string> {
+  // Lazy-loaded so x402-only deployments never pull viem into their bundle.
+  const { getAddress, isAddress } = await import('viem');
   const parts = rawSource.split(':');
   const last = parts[parts.length - 1];
   return normalizeWalletAddress(isAddress(last) ? getAddress(last) : rawSource);

@@ -1,5 +1,3 @@
-import { Transaction as TempoTransaction } from 'viem/tempo';
-import { call as viemCall } from 'viem/actions';
 import { HEADERS } from '../../headers.js';
 import type { HandlerPaymentContext } from '../../types.js';
 import type { SettleArgs, SettleOutcome, VerifyArgs, VerifySuccess } from '../types.js';
@@ -27,6 +25,12 @@ export async function verifyTxMode(
   }
 
   try {
+    // Lazy-loaded so x402-only deployments never pull viem's Tempo graph
+    // (which transitively includes ox/tempo) into their bundle.
+    const [{ Transaction: TempoTransaction }, { call: viemCall }] = await Promise.all([
+      import('viem/tempo'),
+      import('viem/actions'),
+    ]);
     const serializedTx = (info.credential.payload as { signature: `0x${string}` }).signature;
     const transaction = TempoTransaction.deserialize(serializedTx) as {
       from?: `0x${string}`;
@@ -110,7 +114,7 @@ export async function settleTxMode(args: SettleArgs): Promise<SettleOutcome> {
   const receiptResponse = result.withReceipt(response) as Response;
   receiptResponse.headers.set('Cache-Control', 'private');
   const receiptHeader = receiptResponse.headers.get(HEADERS.MPP_PAYMENT_RECEIPT) ?? undefined;
-  const txHash = extractTxHash(receiptHeader);
+  const txHash = await extractTxHash(receiptHeader);
 
   const settledPayment: HandlerPaymentContext & { status: 'settled' } = {
     ...payment,

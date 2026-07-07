@@ -46,7 +46,7 @@ export async function verifyHashMode(
   const receiptHeader = (chargeResult.withReceipt(new Response()) as Response).headers.get(
     HEADERS.MPP_PAYMENT_RECEIPT,
   );
-  const txHash = extractTxHash(receiptHeader);
+  const txHash = await extractTxHash(receiptHeader);
 
   const mppRecipient = deps.mppRecipient ?? deps.payeeAddress;
   const payment: HandlerPaymentContext & { status: 'settled' } = {

@@ -130,7 +130,10 @@ export interface PaymentStrategy {
 
   detects(request: Request): boolean;
 
-  preflight?(request: Request, routeEntry: RouteEntry): PreflightOutcome | null;
+  preflight?(
+    request: Request,
+    routeEntry: RouteEntry,
+  ): PreflightOutcome | null | Promise<PreflightOutcome | null>;
 
   verify(args: VerifyArgs): Promise<VerifyOutcome>;
 
