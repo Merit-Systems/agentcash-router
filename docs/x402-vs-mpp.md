@@ -216,7 +216,7 @@ table above to the README and the `router-guide` skill so codegen agents can tra
 **Tier 3 — optional, aggressive (not recommended now).** Full protocol-native builder:
 `.charge(price)`, `.chargeUpTo(max)`, `.session(opts)`. Maximal spec alignment, but breaks every
 existing route file and introduces the `.charge()`-vs-`charge()` collision. Only worth it if we
-ever do a clean 2.0 API.
+ever do a clean break in a future major.
 
 ### Why Tier 1 is enough
 

@@ -256,7 +256,7 @@ The catch-all serves `/{basePath}/*` (default `/api/*`), including `/api/openapi
 
 ### Next.js per-file
 
-The 1.x style — unchanged, and still the right fit when you want per-route files:
+One route file per endpoint — still the right fit when you want per-route files:
 
 ```typescript
 // app/api/search/route.ts
@@ -418,7 +418,7 @@ Per-unit billing over an MPP payment channel — the MPP [`session` intent](http
 });
 ```
 
-> `.metered({ tickCost, ... })` is the deprecated pre-1.16 spelling of `.session({ unitCost, ... })` and behaves identically.
+> `.metered({ tickCost, ... })` is a deprecated alias for `.session({ unitCost, ... })` and behaves identically.
 
 Streaming is MPP-only. `.stream()` on a `.paid()` / `.upTo()` / `.unprotected()` route throws at registration.
 

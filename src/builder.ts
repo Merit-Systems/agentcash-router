@@ -391,9 +391,9 @@ export class RouteBuilder<
   }
 
   /**
-   * @deprecated Renamed to {@link session} — `.metered()` is the pre-1.16 name
-   * for the MPP `session` intent (and `tickCost` for `unitCost`). This alias
-   * behaves identically and will be removed in the next major version.
+   * @deprecated Renamed to {@link session} — the MPP intent is named `session`
+   * (and `tickCost` is now `unitCost`). This alias behaves identically and
+   * will be removed in a future release.
    */
   metered(
     this: Ident extends 'siwx'
