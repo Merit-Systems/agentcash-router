@@ -67,3 +67,17 @@ export function resolveResourceMetadata(discovery?: {
   };
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
+
+/**
+ * Derive a display tag from a route key's first path segment
+ * (`fortune/llm` → `Fortune`). Shared by the OpenAPI document and the
+ * challenge `resource.tags` default so both discovery surfaces advertise the
+ * same taxonomy for a route.
+ */
+export function deriveTag(routeKey: string): string {
+  return routeKey
+    .split('/')[0]
+    .split('-')
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join(' ');
+}

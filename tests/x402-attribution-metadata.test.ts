@@ -90,10 +90,22 @@ describe('resource metadata on challenges', () => {
     expect(resource.url).toBe(ROUTE_URL);
   });
 
-  it('leaves the resource block bare when no metadata is configured', async () => {
+  it('defaults tags to the route-derived OpenAPI tag when none are configured', async () => {
     const challenge = await challengeFor(makeDeps(new FakeX402Server()));
-    const resource = (challenge as unknown as { resource: { serviceName?: string } }).resource;
+    const resource = (
+      challenge as unknown as { resource: { serviceName?: string; tags?: string[] } }
+    ).resource;
+    // Same taxonomy the OpenAPI document advertises: deriveTag('quote') → 'Quote'.
+    expect(resource.tags).toEqual(['Quote']);
     expect(resource.serviceName).toBeUndefined();
+  });
+
+  it('configured tags override the route-derived default', async () => {
+    const challenge = await challengeFor(
+      makeDeps(new FakeX402Server(), { x402ResourceMetadata: { tags: ['custom'] } }),
+    );
+    const resource = (challenge as unknown as { resource: { tags?: string[] } }).resource;
+    expect(resource.tags).toEqual(['custom']);
   });
 });
 

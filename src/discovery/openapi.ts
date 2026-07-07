@@ -4,6 +4,7 @@ import { TEMPO_USDC_ADDRESS } from '../constants.js';
 import { HEADERS } from '../headers.js';
 import { compareDecimals } from '../pricing/format.js';
 import { resolveGuidance } from './utils/guidance.js';
+import { deriveTag } from '../protocols/x402/resource-metadata.js';
 
 export function createOpenAPIHandler(
   registry: RouteRegistry,
@@ -100,14 +101,6 @@ export function createOpenAPIHandler(
 
     return Response.json(cached);
   };
-}
-
-function deriveTag(routeKey: string): string {
-  return routeKey
-    .split('/')[0]
-    .split('-')
-    .map((w) => w[0].toUpperCase() + w.slice(1))
-    .join(' ');
 }
 
 function buildOperation(

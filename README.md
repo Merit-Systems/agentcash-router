@@ -163,7 +163,7 @@ x402 facilitators persist service metadata from every settled payment into the [
 createRouterFromEnv({
   title: 'Quote API',                          // serviceName defaults to title when it fits (≤32 ASCII chars)
   serviceName: 'Quote API',                    // explicit override
-  tags: ['quotes', 'wisdom'],                  // ≤5 tags, each ≤32 chars
+  tags: ['quotes', 'wisdom'],                  // ≤5 tags, each ≤32 chars; defaults to the route's OpenAPI tag
   iconUrl: 'https://example.com/icon.png',     // HTTPS, ≤2048 chars
   ...
 });

@@ -14,6 +14,7 @@ import {
   isSolanaRequirement,
 } from './solana.js';
 import { buildExpectedRequirements } from './requirements.js';
+import { deriveTag, isValidServiceName } from './resource-metadata.js';
 import type { X402ResourceMetadata } from './resource-metadata.js';
 
 type ChallengeResource = {
@@ -224,11 +225,16 @@ function buildChallengeResource(
   routeEntry: RouteEntry,
   metadata?: X402ResourceMetadata,
 ): ChallengeResource {
+  // Default the Bazaar tags to the same per-route tag the OpenAPI document
+  // advertises (`deriveTag`), so both discovery surfaces share one taxonomy.
+  // Configured discovery tags (in `metadata`) win.
+  const derivedTag = deriveTag(routeEntry.key);
   return {
     url: request.url,
     method: routeEntry.method,
     description: routeEntry.description,
     mimeType: 'application/json',
+    ...(isValidServiceName(derivedTag) ? { tags: [derivedTag] } : {}),
     ...metadata,
   };
 }
