@@ -527,14 +527,51 @@ export function routerConfigFromEnv<
     });
   }
 
+  // Protocol enablement — inferred from which payment credentials are present,
+  // unless `options.protocols` says otherwise. x402's default EVM facilitator
+  // (Coinbase) needs CDP keys; MPP needs MPP_SECRET_KEY. At least one protocol
+  // must be configurable, but neither is individually required.
+  const hasCdpKeys = Boolean(env.CDP_API_KEY_ID && env.CDP_API_KEY_SECRET);
+  const hasAnyCdpKey = Boolean(env.CDP_API_KEY_ID ?? env.CDP_API_KEY_SECRET);
+  const mppEnabled = options.protocols?.includes('mpp') ?? Boolean(env.MPP_SECRET_KEY);
+  // A single CDP key still signals x402 intent — enable it so the
+  // missing_cdp_keys issue below names the var that's missing.
+  const x402Enabled = options.protocols?.includes('x402') ?? hasAnyCdpKey;
+
+  const credentialIssues: RouterConfigIssue[] = [];
+  if (x402Enabled && !hasCdpKeys) {
+    const missing = ['CDP_API_KEY_ID', 'CDP_API_KEY_SECRET'].filter((k) => !env[k]);
+    credentialIssues.push({
+      code: 'missing_cdp_keys',
+      protocol: 'x402',
+      message:
+        `x402 EVM facilitator (Coinbase) requires ${missing.join(' and ')}. ` +
+        'Create an API key at https://portal.cdp.coinbase.com and set it via env.',
+    });
+  }
+  if (!options.protocols && !x402Enabled && !mppEnabled) {
+    credentialIssues.push({
+      code: 'missing_payment_credentials',
+      message:
+        'No payment protocol is configured. Set MPP_SECRET_KEY to enable MPP, ' +
+        'and/or CDP_API_KEY_ID + CDP_API_KEY_SECRET to enable x402.',
+    });
+  }
+
   const parsed = EnvInputSchema.safeParse(env);
   const envIssues = parsed.success ? [] : translateZodIssues(parsed.error);
-  const issues = [...envIssues, ...optionIssues];
+  const issues = [...envIssues, ...credentialIssues, ...optionIssues];
   if (issues.length > 0) throw new RouterConfigError(issues);
 
   // Warnings (soft) — surfaced after errors clear.
   for (const warning of collectKvWarnings(env, options.kvStore !== undefined)) {
     console.warn(`[router] ${warning.message}`);
+  }
+  if (!x402Enabled && env.SOLANA_PAYEE_ADDRESS) {
+    console.warn(
+      '[router] SOLANA_PAYEE_ADDRESS is set but x402 is disabled — the Solana accept will not be served. ' +
+        'Set CDP_API_KEY_ID + CDP_API_KEY_SECRET (env-derived x402 configs always include EVM accepts) or pass protocols explicitly.',
+    );
   }
 
   // Build the RouterConfig from validated env + options.
@@ -566,12 +603,9 @@ export function routerConfigFromEnv<
         env.SOLANA_FACILITATOR_URL ??
         DEFAULT_SOLANA_FACILITATOR_URL);
 
-  const mppEnabled = options.protocols?.includes('mpp') ?? Boolean(env.MPP_SECRET_KEY);
   const protocols: ProtocolType[] = options.protocols
     ? [...options.protocols]
-    : mppEnabled
-      ? ['x402', 'mpp']
-      : ['x402'];
+    : [...(x402Enabled ? (['x402'] as const) : []), ...(mppEnabled ? (['mpp'] as const) : [])];
 
   const mppConfig: RouterConfig['mpp'] | undefined = mppEnabled
     ? {

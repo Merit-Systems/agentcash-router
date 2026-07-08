@@ -30,6 +30,8 @@ function validEnv(overrides: Record<string, string | undefined> = {}) {
   return {
     BASE_URL: 'https://api.example.com',
     EVM_PAYEE_ADDRESS: PAYEE,
+    CDP_API_KEY_ID: 'cdp-id',
+    CDP_API_KEY_SECRET: 'cdp-secret',
     ...overrides,
   };
 }
@@ -61,10 +63,10 @@ describe('routerConfigFromEnv', () => {
   it('derives BASE_URL from VERCEL_PROJECT_PRODUCTION_URL when BASE_URL is unset', () => {
     const config = routerConfigFromEnv(
       validOptions({
-        env: {
-          EVM_PAYEE_ADDRESS: PAYEE,
+        env: validEnv({
+          BASE_URL: undefined,
           VERCEL_PROJECT_PRODUCTION_URL: 'demo.example.vercel.app',
-        },
+        }),
       }),
     );
 
@@ -74,10 +76,10 @@ describe('routerConfigFromEnv', () => {
   it('derives BASE_URL from VERCEL_URL when production URL is unavailable', () => {
     const config = routerConfigFromEnv(
       validOptions({
-        env: {
-          EVM_PAYEE_ADDRESS: PAYEE,
+        env: validEnv({
+          BASE_URL: undefined,
           VERCEL_URL: 'demo-git-main.example.vercel.app',
-        },
+        }),
       }),
     );
 
@@ -206,6 +208,94 @@ describe('routerConfigFromEnv', () => {
         'invalid_mpp_operator_key',
       );
     }
+  });
+
+  describe('protocol credential inference', () => {
+    it('enables MPP only (no x402) when MPP_SECRET_KEY is set without CDP keys', () => {
+      const config = routerConfigFromEnv(
+        validOptions({
+          env: validEnv({
+            CDP_API_KEY_ID: undefined,
+            CDP_API_KEY_SECRET: undefined,
+            MPP_SECRET_KEY: 'secret',
+            MPP_CURRENCY: TEMPO_USDC_ADDRESS,
+          }),
+        }),
+      );
+      expect(config.protocols).toEqual(['mpp']);
+      expect(config.mpp?.secretKey).toBe('secret');
+    });
+
+    it('rejects env with neither MPP_SECRET_KEY nor CDP keys', () => {
+      try {
+        routerConfigFromEnv(
+          validOptions({
+            env: validEnv({ CDP_API_KEY_ID: undefined, CDP_API_KEY_SECRET: undefined }),
+          }),
+        );
+        expect.fail('routerConfigFromEnv should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(RouterConfigError);
+        expect((error as RouterConfigError).issues.map((i) => i.code)).toContain(
+          'missing_payment_credentials',
+        );
+      }
+    });
+
+    it('rejects a partial CDP pair, naming the missing key', () => {
+      try {
+        routerConfigFromEnv(validOptions({ env: validEnv({ CDP_API_KEY_SECRET: undefined }) }));
+        expect.fail('routerConfigFromEnv should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(RouterConfigError);
+        const issue = (error as RouterConfigError).issues.find(
+          (i) => i.code === 'missing_cdp_keys',
+        );
+        expect(issue?.message).toContain('CDP_API_KEY_SECRET');
+        expect(issue?.message).not.toContain('CDP_API_KEY_ID and');
+      }
+    });
+
+    it('rejects explicit protocols including x402 without CDP keys', () => {
+      try {
+        routerConfigFromEnv(
+          validOptions({
+            env: validEnv({ CDP_API_KEY_ID: undefined, CDP_API_KEY_SECRET: undefined }),
+            protocols: ['x402'],
+          }),
+        );
+        expect.fail('routerConfigFromEnv should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(RouterConfigError);
+        expect((error as RouterConfigError).issues.map((i) => i.code)).toContain(
+          'missing_cdp_keys',
+        );
+      }
+    });
+
+    it('warns when SOLANA_PAYEE_ADDRESS is set while x402 is disabled', () => {
+      const warnings: string[] = [];
+      const original = console.warn;
+      console.warn = (msg: unknown) => {
+        warnings.push(String(msg));
+      };
+      try {
+        routerConfigFromEnv(
+          validOptions({
+            env: validEnv({
+              CDP_API_KEY_ID: undefined,
+              CDP_API_KEY_SECRET: undefined,
+              MPP_SECRET_KEY: 'secret',
+              MPP_CURRENCY: TEMPO_USDC_ADDRESS,
+              SOLANA_PAYEE_ADDRESS: SOLANA_PAYEE,
+            }),
+          }),
+        );
+      } finally {
+        console.warn = original;
+      }
+      expect(warnings.some((w) => w.includes('SOLANA_PAYEE_ADDRESS'))).toBe(true);
+    });
   });
 
   it('applies a default version of 1.0.0', () => {
