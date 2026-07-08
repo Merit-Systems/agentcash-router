@@ -1008,9 +1008,7 @@ export class RouteBuilder<
    *   .handler(async ({ body, wallet }) => searchService(body, wallet));
    * ```
    */
-  handler(
-    fn: HandlerArg<TBody, TQuery, Ident, NeedsBody, HasBody, Bill>,
-  ): RegisteredRouteHandler {
+  handler(fn: HandlerArg<TBody, TQuery, Ident, NeedsBody, HasBody, Bill>): RegisteredRouteHandler {
     return this.register(fn as unknown as RouteHandler, false);
   }
 
@@ -1034,9 +1032,7 @@ export class RouteBuilder<
    *   });
    * ```
    */
-  stream(
-    fn: StreamArg<TBody, TQuery, Ident, NeedsBody, HasBody, Bill>,
-  ): RegisteredRouteHandler {
+  stream(fn: StreamArg<TBody, TQuery, Ident, NeedsBody, HasBody, Bill>): RegisteredRouteHandler {
     return this.register(fn as unknown as RouteHandler, true);
   }
 
