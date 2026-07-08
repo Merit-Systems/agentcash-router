@@ -61,8 +61,8 @@ export async function runDynamicChannelMgmtFlow(args: {
     rawResult: undefined,
   };
 
-  const beforeErr = await runBeforeSettle(ctx, settleScope);
-  if (beforeErr) return beforeErr;
+  const outcome = await runBeforeSettle(ctx, settleScope);
+  if (outcome.action === 'fail') return outcome.response;
 
   return settleAndFinalizeRequest({
     ctx,

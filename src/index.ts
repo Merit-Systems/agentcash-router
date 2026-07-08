@@ -364,6 +364,7 @@ export type {
   CheckoutSessionFn,
   CheckoutSessionResponse,
   ProtocolType,
+  BeforeSettleDecision,
   SettlementLifecycleContext,
   SettlementSettledContext,
   SettlementErrorContext,

@@ -269,3 +269,20 @@ describe('documented-valid chains compile', () => {
       });
   });
 });
+
+describe('.settlement() beforeSettle return type', () => {
+  it('accepts skip, continue, and void returns', () => {
+    make()
+      .paid('0.01')
+      .settlement({ beforeSettle: () => 'skip' })
+      .handler(async () => ({}));
+    make()
+      .paid('0.01')
+      .settlement({ beforeSettle: () => 'continue' })
+      .handler(async () => ({}));
+    make()
+      .paid('0.01')
+      .settlement({ beforeSettle: () => {} })
+      .handler(async () => ({}));
+  });
+});
