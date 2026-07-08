@@ -341,7 +341,7 @@ export function createRouterFromEnv<TPrices extends Record<string, string> = Rec
   >;
 }
 
-export { HttpError, RouteDefinitionError } from './types.js';
+export { HttpError, RouteDefinitionError, ROUTE_ENTRY } from './types.js';
 export {
   BASE_MAINNET_NETWORK,
   SOLANA_MAINNET_NETWORK,
@@ -355,6 +355,8 @@ export {
 } from './constants.js';
 export type {
   HandlerContext,
+  RouteEntry,
+  RegisteredRouteHandler,
   RouterConfig,
   DiscoveryConfig,
   PaidOptions,
