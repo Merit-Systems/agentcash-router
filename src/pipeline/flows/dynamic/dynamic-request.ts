@@ -41,8 +41,9 @@ export async function runDynamicRequestFlow(args: {
     );
   }
 
-  const beforeErr = await runBeforeSettle(ctx, settleScope);
-  if (beforeErr) return beforeErr;
+  const outcome = await runBeforeSettle(ctx, settleScope);
+  if (outcome.action === 'fail') return outcome.response;
+  if (outcome.action === 'skip') return finalize(ctx, result.response, result.rawResult, body);
 
   const billedAmount = computeBilledAmount(routeEntry, result);
 

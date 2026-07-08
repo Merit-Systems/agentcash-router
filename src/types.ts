@@ -267,9 +267,13 @@ export interface SettledHandlerErrorContext<
   error: unknown;
 }
 
+export type BeforeSettleDecision = 'continue' | 'skip';
+
 export interface SettlementLifecycle<TBody = unknown> {
-  /** Runs after a successful handler response, before router-controlled settlement/broadcast. Throw with `.status` to fail the request and skip settlement (when not already settled). */
-  beforeSettle?: (ctx: SettlementLifecycleContext<TBody>) => void | Promise<void>;
+  /** After a successful handler response, before settlement: return `'skip'` to keep the 2xx body without charging, `'continue'`/void to settle; throw with `.status` to fail without settling (not when already settled at verify). Does not run for MPP session channel-only management (open/close/topUp). */
+  beforeSettle?: (
+    ctx: SettlementLifecycleContext<TBody>,
+  ) => BeforeSettleDecision | void | Promise<BeforeSettleDecision | void>;
   /** Runs after successful settlement; for durable ledgers and audit rows. Errors are alerted but don't change the already-settled response. */
   afterSettle?: (ctx: SettlementSettledContext<TBody>) => void | Promise<void>;
   /** Runs when payment was settled but the handler then returned an error response. Use for app-owned refund / compensation queues. */

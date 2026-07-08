@@ -4,7 +4,6 @@ import {
   errorMessage,
   fail,
   firePaymentVerified,
-  runBeforeSettle,
   runSettlementError,
   settleAndFinalizeRequest,
   type FlowCtx,
@@ -60,9 +59,6 @@ export async function runDynamicChannelMgmtFlow(args: {
     response: synthetic,
     rawResult: undefined,
   };
-
-  const beforeErr = await runBeforeSettle(ctx, settleScope);
-  if (beforeErr) return beforeErr;
 
   return settleAndFinalizeRequest({
     ctx,
