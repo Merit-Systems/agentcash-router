@@ -270,7 +270,7 @@ export interface SettledHandlerErrorContext<
 export type BeforeSettleDecision = 'continue' | 'skip';
 
 export interface SettlementLifecycle<TBody = unknown> {
-  /** After a successful handler response, before settlement: return `'skip'` to keep the 2xx body without charging, `'continue'`/void to settle; throw with `.status` to fail without settling (not when already settled at verify). */
+  /** After a successful handler response, before settlement: return `'skip'` to keep the 2xx body without charging, `'continue'`/void to settle; throw with `.status` to fail without settling (not when already settled at verify). Does not run for MPP session channel-only management (open/close/topUp). */
   beforeSettle?: (
     ctx: SettlementLifecycleContext<TBody>,
   ) => BeforeSettleDecision | void | Promise<BeforeSettleDecision | void>;
