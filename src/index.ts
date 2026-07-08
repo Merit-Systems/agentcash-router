@@ -83,8 +83,12 @@ export interface ServiceRouter<TPriceKeys extends string = never> {
  * in consumer builds. Only the `prices` keys are used at the type level.
  *
  * The `string extends keyof P` guard maps a non-literal `prices` type (a config
- * annotated as plain `RouterConfig`, or a map built at runtime) to `never` so
- * routes stay unpriced at the type level and `.paid()` still typechecks.
+ * annotated as plain `RouterConfig`, or a map built at runtime) to `never`, so
+ * routes stay unpriced at the type level. Caveat: the runtime still
+ * auto-applies `.paid(prices[key])` for keys actually present in the map, so a
+ * runtime-built map leaves `.route(key).handler(...)` untypeable while
+ * chaining `.paid()` would throw at registration ("Cannot combine"). The fix
+ * is a literal map — or dropping the deprecated map and pricing inline.
  */
 type PriceKeysOf<P> = [P] extends [Record<string, string>]
   ? string extends keyof P
@@ -176,14 +180,6 @@ export function createRouter<P extends Record<string, string> | undefined = unde
     }
   })();
 
-  if (config.prices) {
-    console.warn(
-      '[agentcash/router] RouterConfig.prices is deprecated — price routes inline with .paid() ' +
-        '(keep a central const in your service if you want one file of prices). ' +
-        'The prices map will be removed in the next major.',
-    );
-  }
-
   const pricesKeys = config.prices ? Object.keys(config.prices) : undefined;
 
   // Internal Hono app: serves all registered routes under `/{basePath}/{path}`
@@ -261,7 +257,10 @@ export function createRouter<P extends Record<string, string> | undefined = unde
         builder = builder.method(definition.method as RouteMethod);
       }
 
-      if (config.prices && key in config.prices) {
+      // Object.hasOwn, not `in`: a route key colliding with an
+      // Object.prototype member ('toString', 'valueOf', ...) must not pick up
+      // the inherited function as its "price".
+      if (config.prices && Object.hasOwn(config.prices, key)) {
         return builder.paid(config.prices[key]) as never;
       }
 
@@ -336,12 +335,10 @@ export function createRouter<P extends Record<string, string> | undefined = unde
 export function createRouterFromEnv<TPrices extends Record<string, string> = Record<never, string>>(
   options: CreateRouterFromEnvOptions<TPrices>,
 ): ServiceRouter<PriceKeysOf<TPrices>> {
-  return createRouter(routerConfigFromEnv(options)) as unknown as ServiceRouter<
-    PriceKeysOf<TPrices>
-  >;
+  return createRouter(routerConfigFromEnv(options));
 }
 
-export { HttpError, RouteDefinitionError, ROUTE_ENTRY } from './types.js';
+export { HttpError, RouteDefinitionError } from './types.js';
 export {
   BASE_MAINNET_NETWORK,
   SOLANA_MAINNET_NETWORK,
@@ -356,7 +353,6 @@ export {
 export type {
   HandlerContext,
   RouteEntry,
-  RegisteredRouteHandler,
   RouterConfig,
   DiscoveryConfig,
   PaidOptions,

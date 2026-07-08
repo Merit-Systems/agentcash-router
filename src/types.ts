@@ -342,22 +342,6 @@ export interface ProviderQuotaEvent {
   message: string;
 }
 
-/**
- * Property key under which `.handler()` / `.stream()` stamp the route's
- * {@link RouteEntry} onto the returned Next.js handler. Lets tooling ask an
- * exported handler "which route are you?" without reconciling file paths
- * against registry keys — e.g. a barrel-completeness test can import each
- * `route.ts` and assert every HTTP-method export carries this stamp.
- * `Symbol.for` (not `Symbol`) so the stamp survives duplicate router copies
- * in one process.
- */
-export const ROUTE_ENTRY: unique symbol = Symbol.for('agentcash.router.entry');
-
-/** A Next.js route handler returned by `.handler()` / `.stream()`, carrying its {@link RouteEntry} under {@link ROUTE_ENTRY}. */
-export type RegisteredRouteHandler = ((request: Request) => Promise<Response>) & {
-  readonly [ROUTE_ENTRY]: RouteEntry;
-};
-
 export interface RouteEntry {
   key: string;
   authMode: AuthMode;

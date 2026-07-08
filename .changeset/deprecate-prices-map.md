@@ -2,9 +2,7 @@
 '@agentcash/router': minor
 ---
 
-Deprecate `RouterConfig.prices` (and `CreateRouterFromEnvOptions.prices`).
+Deprecate `RouterConfig.prices` (and `CreateRouterFromEnvOptions.prices`); fix prototype-chain key lookup in the prices map.
 
-The prices map did three jobs: central price list, auto-applying `.paid(prices[key])` on `.route(key)`, and doubling as a manifest that discovery validates against to catch missing barrel imports. In practice the fleet prices inline with `.paid()` (34 of 49 services; 12 more pass a do-nothing `prices: {}`), auto-priced routes can't take pricing options, and threading price keys through the type system is the only reason `createRouter` is generic — the machinery behind the recent "type instantiation is excessively deep" failures.
-
-- `prices` still works exactly as before (auto-pricing, barrel validation, types), but is `@deprecated` and `createRouter` logs a one-time deprecation warning when it's passed (including an empty map). It will be removed in the next major.
-- Migration: replace `prices: { search: '0.01' }` + bare `.route('search')` with `.route('search').paid(PRICES.search)` — keep a central `PRICES` const if you want one file of prices. If you valued the barrel-completeness validation, add a consumer-side test that globs your route files and asserts `router.registry.has(key)`, or serve routes through the catch-all adapter (`@agentcash/router/next`) where a forgotten import 404s in dev.
+- `prices` is marked `@deprecated` (JSDoc only — no runtime change; auto-pricing and barrel validation keep working until removal in the next major). Every fleet service already prices inline with `.paid()`; auto-priced routes can't take pricing options, and the map is the only reason `createRouter` is generic. Migration: `.route('search').paid(PRICES.search)` with an optional central `PRICES` const; for the map's barrel-validation side effect, use a consumer-side test that globs route files and asserts `router.registry.has(key)`, or the catch-all adapter where a missing import 404s in dev.
+- Fixed: the auto-pricing lookup used `key in config.prices`, which walks the prototype chain — a route named `toString`/`valueOf`/etc. on any router with a prices map picked up the inherited function as its "price" and threw at registration. Now `Object.hasOwn`.
