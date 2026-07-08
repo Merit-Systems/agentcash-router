@@ -1,4 +1,4 @@
-import type { ZodType } from 'zod';
+import type { ZodType, output as ZodOutput } from 'zod';
 import type {
   HandlerContext,
   StreamingHandlerContext,
@@ -754,9 +754,15 @@ export class RouteBuilder<
    *   .handler(async ({ body }) => search(body.query));
    * ```
    */
-  body<T>(schema: ZodType<T>): RouteBuilder<T, TQuery, TOutput, Ident, NeedsBody, True, Bill> {
+  // Generic over the schema (not `ZodType<T>`) so inference binds the schema
+  // type directly instead of structurally walking zod's internals to extract
+  // the output position — measurably shallower instantiation stacks in
+  // consumer route files. Same inferred body type via the lazy `ZodOutput<S>`.
+  body<S extends ZodType>(
+    schema: S,
+  ): RouteBuilder<ZodOutput<S>, TQuery, TOutput, Ident, NeedsBody, True, Bill> {
     const next = this.fork() as unknown as RouteBuilder<
-      T,
+      ZodOutput<S>,
       TQuery,
       TOutput,
       Ident,
@@ -779,10 +785,12 @@ export class RouteBuilder<
    *   .handler(async ({ query }) => getById(query.id));
    * ```
    */
-  query<T>(schema: ZodType<T>): RouteBuilder<TBody, T, TOutput, Ident, NeedsBody, HasBody, Bill> {
+  query<S extends ZodType>(
+    schema: S,
+  ): RouteBuilder<TBody, ZodOutput<S>, TOutput, Ident, NeedsBody, HasBody, Bill> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
-      T,
+      ZodOutput<S>,
       TOutput,
       Ident,
       NeedsBody,
@@ -806,11 +814,13 @@ export class RouteBuilder<
    *   .handler(async () => ({ result: 'ok' }));
    * ```
    */
-  output<T>(schema: ZodType<T>): RouteBuilder<TBody, TQuery, T, Ident, NeedsBody, HasBody, Bill> {
+  output<S extends ZodType>(
+    schema: S,
+  ): RouteBuilder<TBody, TQuery, ZodOutput<S>, Ident, NeedsBody, HasBody, Bill> {
     const next = this.fork() as unknown as RouteBuilder<
       TBody,
       TQuery,
-      T,
+      ZodOutput<S>,
       Ident,
       NeedsBody,
       HasBody,

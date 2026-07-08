@@ -93,7 +93,14 @@ export interface CreateRouterFromEnvOptions<
   /** Bazaar catalog icon on x402 challenges (HTTPS URL, ≤2048 chars). */
   iconUrl?: string;
 
-  /** Centralized price map keyed by route id. `route(key)` auto-applies `.paid(prices[key])` for matching keys. */
+  /**
+   * Centralized price map keyed by route id. `route(key)` auto-applies
+   * `.paid(prices[key])` for matching keys.
+   *
+   * @deprecated Price routes inline with `.paid()` — keep a central const in
+   * your service if you want one file of prices. Will be removed in the next
+   * major.
+   */
   prices?: TPrices;
   /** Observability plugin. */
   plugin?: RouterPlugin;

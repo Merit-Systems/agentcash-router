@@ -40,6 +40,25 @@ describe('route definitions', () => {
     expect(entry?.pricing).toBe('0.05');
   });
 
+  it('prices lookup ignores Object.prototype members (own keys only)', () => {
+    const router = createRouter({
+      ...baseConfig,
+      prices: { 'search/query': '0.05' },
+    });
+
+    // 'toString' is not an own key of the map; without Object.hasOwn the `in`
+    // check picked up Function.prototype.toString as a "pricing function" and
+    // registration threw. The route must stay unpriced.
+    router
+      .route({ path: 'toString' })
+      .unprotected()
+      .handler(async () => ({ ok: true }));
+
+    const entry = router.registry.get('toString');
+    expect(entry?.authMode).toBe('unprotected');
+    expect(entry?.pricing).toBeUndefined();
+  });
+
   it('strictRoutes rejects string form', () => {
     const router = createRouter({
       ...baseConfig,

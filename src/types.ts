@@ -449,7 +449,19 @@ export interface RouterConfig {
   plugin?: import('./plugin/index.js').RouterPlugin;
   /** Single KV cache for SIWX nonce, SIWX entitlement, and MPP tx-hash replay (prefixed `siwx:nonce:`, `siwx:ent:`, `mpp:`). Pass `{ url, token }` for an Upstash-compatible REST endpoint (Upstash, Vercel KV), or a custom `KvStore` implementation. Omitted: auto-bootstraps from `KV_REST_API_URL` + `KV_REST_API_TOKEN`; falls back to in-memory when missing (unsafe in serverless). */
   kvStore?: import('./kv-store/index.js').KvStore | { url: string; token: string };
-  /** Centralized price map keyed by route ID. `.route(key)` auto-applies `.paid(prices[key])` when `key` is listed; per-route `.paid()` still works for keys not in the map. */
+  /**
+   * Centralized price map keyed by route ID. `.route(key)` auto-applies
+   * `.paid(prices[key])` when `key` is listed; per-route `.paid()` still works
+   * for keys not in the map.
+   *
+   * @deprecated Price routes inline with `.paid()` — keep a central const in
+   * your service if you want one file of prices. To catch forgotten barrel
+   * imports (the map's validation side effect), add a consumer-side test that
+   * globs your route files and asserts `router.registry.has(key)`, or serve
+   * routes through the catch-all adapter where a missing import 404s in dev.
+   * Auto-priced routes can't take pricing options, and this map is the only
+   * reason `createRouter` is generic — it will be removed in the next major.
+   */
   prices?: Record<string, string>;
   /** MPP (Tempo) payment-channel config. Required when `protocols` includes `'mpp'`. */
   mpp?: {
