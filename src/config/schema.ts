@@ -610,6 +610,7 @@ export function routerConfigFromEnv<
       ...(options.serviceName ? { serviceName: options.serviceName } : {}),
       ...(options.tags ? { tags: options.tags } : {}),
       ...(options.iconUrl ? { iconUrl: options.iconUrl } : {}),
+      ...(options.expectRoutes ? { expectRoutes: options.expectRoutes } : {}),
     },
     ...(options.prices ? { prices: options.prices } : {}),
     ...(options.plugin ? { plugin: options.plugin } : {}),

@@ -93,7 +93,14 @@ export interface CreateRouterFromEnvOptions<
   /** Bazaar catalog icon on x402 challenges (HTTPS URL, ≤2048 chars). */
   iconUrl?: string;
 
-  /** Centralized price map keyed by route id. `route(key)` auto-applies `.paid(prices[key])` for matching keys. */
+  /**
+   * Centralized price map keyed by route id. `route(key)` auto-applies
+   * `.paid(prices[key])` for matching keys.
+   *
+   * @deprecated Price routes inline with `.paid()` and list route keys in
+   * `expectRoutes` to keep the barrel-completeness validation. Will be removed
+   * in the next major.
+   */
   prices?: TPrices;
   /** Observability plugin. */
   plugin?: RouterPlugin;
@@ -101,6 +108,8 @@ export interface CreateRouterFromEnvOptions<
   kvStore?: KvStore;
   /** Override x402 facilitators. The Solana facilitator defaults to `SOLANA_FACILITATOR_URL` env or `DEFAULT_SOLANA_FACILITATOR_URL`. */
   x402Facilitators?: X402FacilitatorsConfig;
+  /** Route keys that must be registered before discovery output is served — catches missing barrel imports. See {@link DiscoveryConfig.expectRoutes}. */
+  expectRoutes?: readonly string[];
   /** Explicit protocol list. Default: `['x402']`, with `'mpp'` added when `MPP_SECRET_KEY` is set. */
   protocols?: readonly ProtocolType[];
   /** Require `route({ path })` form for every route. @default false */

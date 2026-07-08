@@ -400,6 +400,15 @@ export interface DiscoveryConfig {
   guidance?: string | (() => string | Promise<string>);
   /** Override the OpenAPI `servers` URL. Defaults to `RouterConfig.baseUrl`. Use when the public API hostname differs from the payment realm URL. */
   serverUrl?: string;
+  /**
+   * Route keys that must be registered before discovery output is served.
+   * Discovery handlers throw `route 'X' expected but not registered` when a
+   * listed key is missing — catching a forgotten barrel import that would
+   * otherwise silently drop the route from discovery (Next.js lazy-loads route
+   * modules). Replaces the barrel validation previously provided by the
+   * deprecated `RouterConfig.prices` map.
+   */
+  expectRoutes?: readonly string[];
 }
 
 /** Sponsor fee-budget ceilings for fee-sponsored Tempo transactions. Structural mirror of mppx's `FeePayer.Policy`, all fields optional. */
@@ -449,7 +458,17 @@ export interface RouterConfig {
   plugin?: import('./plugin/index.js').RouterPlugin;
   /** Single KV cache for SIWX nonce, SIWX entitlement, and MPP tx-hash replay (prefixed `siwx:nonce:`, `siwx:ent:`, `mpp:`). Pass `{ url, token }` for an Upstash-compatible REST endpoint (Upstash, Vercel KV), or a custom `KvStore` implementation. Omitted: auto-bootstraps from `KV_REST_API_URL` + `KV_REST_API_TOKEN`; falls back to in-memory when missing (unsafe in serverless). */
   kvStore?: import('./kv-store/index.js').KvStore | { url: string; token: string };
-  /** Centralized price map keyed by route ID. `.route(key)` auto-applies `.paid(prices[key])` when `key` is listed; per-route `.paid()` still works for keys not in the map. */
+  /**
+   * Centralized price map keyed by route ID. `.route(key)` auto-applies
+   * `.paid(prices[key])` when `key` is listed; per-route `.paid()` still works
+   * for keys not in the map.
+   *
+   * @deprecated Price routes inline with `.paid()` (keep a central const in
+   * your service if you want one file of prices) and list route keys in
+   * `discovery.expectRoutes` to keep the barrel-completeness validation.
+   * Auto-priced routes can't take pricing options, and this map is the only
+   * reason `createRouter` is generic — it will be removed in the next major.
+   */
   prices?: Record<string, string>;
   /** MPP (Tempo) payment-channel config. Required when `protocols` includes `'mpp'`. */
   mpp?: {
