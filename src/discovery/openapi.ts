@@ -9,7 +9,7 @@ import { deriveTag } from '../protocols/x402/resource-metadata.js';
 export function createOpenAPIHandler(
   registry: RouteRegistry,
   baseUrl: string,
-  expectedRouteKeys: string[] | undefined,
+  pricesKeys: string[] | undefined,
   discovery: DiscoveryConfig,
   basePath = 'api',
 ) {
@@ -21,8 +21,8 @@ export function createOpenAPIHandler(
   return async (_request: Request): Promise<Response> => {
     if (cached) return Response.json(cached);
 
-    if (!validated && expectedRouteKeys) {
-      registry.validate(expectedRouteKeys);
+    if (!validated && pricesKeys) {
+      registry.validate(pricesKeys);
       validated = true;
     }
 

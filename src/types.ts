@@ -400,15 +400,6 @@ export interface DiscoveryConfig {
   guidance?: string | (() => string | Promise<string>);
   /** Override the OpenAPI `servers` URL. Defaults to `RouterConfig.baseUrl`. Use when the public API hostname differs from the payment realm URL. */
   serverUrl?: string;
-  /**
-   * Route keys that must be registered before discovery output is served.
-   * Discovery handlers throw `route 'X' expected but not registered` when a
-   * listed key is missing — catching a forgotten barrel import that would
-   * otherwise silently drop the route from discovery (Next.js lazy-loads route
-   * modules). Replaces the barrel validation previously provided by the
-   * deprecated `RouterConfig.prices` map.
-   */
-  expectRoutes?: readonly string[];
 }
 
 /** Sponsor fee-budget ceilings for fee-sponsored Tempo transactions. Structural mirror of mppx's `FeePayer.Policy`, all fields optional. */
@@ -463,9 +454,11 @@ export interface RouterConfig {
    * `.paid(prices[key])` when `key` is listed; per-route `.paid()` still works
    * for keys not in the map.
    *
-   * @deprecated Price routes inline with `.paid()` (keep a central const in
-   * your service if you want one file of prices) and list route keys in
-   * `discovery.expectRoutes` to keep the barrel-completeness validation.
+   * @deprecated Price routes inline with `.paid()` — keep a central const in
+   * your service if you want one file of prices. To catch forgotten barrel
+   * imports (the map's validation side effect), add a consumer-side test that
+   * globs your route files and asserts `router.registry.has(key)`, or serve
+   * routes through the catch-all adapter where a missing import 404s in dev.
    * Auto-priced routes can't take pricing options, and this map is the only
    * reason `createRouter` is generic — it will be removed in the next major.
    */

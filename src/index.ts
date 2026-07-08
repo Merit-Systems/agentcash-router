@@ -179,22 +179,12 @@ export function createRouter<P extends Record<string, string> | undefined = unde
   if (config.prices) {
     console.warn(
       '[agentcash/router] RouterConfig.prices is deprecated — price routes inline with .paid() ' +
-        '(keep a central const in your service if you want one file of prices) and list route ' +
-        'keys in discovery.expectRoutes to keep barrel validation. ' +
+        '(keep a central const in your service if you want one file of prices). ' +
         'The prices map will be removed in the next major.',
     );
   }
 
-  // Barrel-completeness manifest: discovery handlers refuse to serve until
-  // every listed key is registered. Union of the explicit manifest and the
-  // deprecated prices map (which doubled as one) during the deprecation window.
-  const expectedRouteKeys = [
-    ...new Set([
-      ...(config.discovery?.expectRoutes ?? []),
-      ...(config.prices ? Object.keys(config.prices) : []),
-    ]),
-  ];
-  const expectedKeys = expectedRouteKeys.length > 0 ? expectedRouteKeys : undefined;
+  const pricesKeys = config.prices ? Object.keys(config.prices) : undefined;
 
   // Internal Hono app: serves all registered routes under `/{basePath}/{path}`
   // plus the discovery surfaces. Route handlers are bound via registry lookup
@@ -206,14 +196,14 @@ export function createRouter<P extends Record<string, string> | undefined = unde
   const wellKnownHandler = createWellKnownHandler(
     registry,
     resolvedBaseUrl,
-    expectedKeys,
+    pricesKeys,
     config.discovery,
     basePath,
   );
   const openapiHandler = createOpenAPIHandler(
     registry,
     resolvedBaseUrl,
-    expectedKeys,
+    pricesKeys,
     config.discovery,
     basePath,
   );

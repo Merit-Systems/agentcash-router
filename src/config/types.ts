@@ -97,9 +97,9 @@ export interface CreateRouterFromEnvOptions<
    * Centralized price map keyed by route id. `route(key)` auto-applies
    * `.paid(prices[key])` for matching keys.
    *
-   * @deprecated Price routes inline with `.paid()` and list route keys in
-   * `expectRoutes` to keep the barrel-completeness validation. Will be removed
-   * in the next major.
+   * @deprecated Price routes inline with `.paid()` — keep a central const in
+   * your service if you want one file of prices. Will be removed in the next
+   * major.
    */
   prices?: TPrices;
   /** Observability plugin. */
@@ -108,8 +108,6 @@ export interface CreateRouterFromEnvOptions<
   kvStore?: KvStore;
   /** Override x402 facilitators. The Solana facilitator defaults to `SOLANA_FACILITATOR_URL` env or `DEFAULT_SOLANA_FACILITATOR_URL`. */
   x402Facilitators?: X402FacilitatorsConfig;
-  /** Route keys that must be registered before discovery output is served — catches missing barrel imports. See {@link DiscoveryConfig.expectRoutes}. */
-  expectRoutes?: readonly string[];
   /** Explicit protocol list. Default: `['x402']`, with `'mpp'` added when `MPP_SECRET_KEY` is set. */
   protocols?: readonly ProtocolType[];
   /** Require `route({ path })` form for every route. @default false */

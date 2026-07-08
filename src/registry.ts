@@ -85,8 +85,7 @@ export class RouteRegistry {
     if (missing.length > 0) {
       throw new Error(
         `route${missing.length > 1 ? 's' : ''} ${missing.map((k) => `'${k}'`).join(', ')} ` +
-          `expected but not registered — add to barrel imports ` +
-          `(declared in discovery.expectRoutes or the deprecated prices map)`,
+          `in prices map but not registered — add to barrel imports`,
       );
     }
   }

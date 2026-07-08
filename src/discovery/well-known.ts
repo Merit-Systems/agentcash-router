@@ -9,7 +9,7 @@ import { resolveGuidance } from './utils/guidance.js';
 export function createWellKnownHandler(
   registry: RouteRegistry,
   baseUrl: string,
-  expectedRouteKeys: string[] | undefined,
+  pricesKeys: string[] | undefined,
   discovery: DiscoveryConfig,
   basePath = 'api',
 ) {
@@ -18,8 +18,8 @@ export function createWellKnownHandler(
   let validated = false;
 
   return async (_request: Request): Promise<Response> => {
-    if (!validated && expectedRouteKeys) {
-      registry.validate(expectedRouteKeys);
+    if (!validated && pricesKeys) {
+      registry.validate(pricesKeys);
       validated = true;
     }
 
