@@ -4,13 +4,13 @@ Guidance for AI agents working on `@agentcash/router`.
 
 ## What this is
 
-A protocol-agnostic route framework for Next.js App Router APIs. Provides x402 payments, MPP payments, SIWX identity auth, and API key auth behind a single fluent builder. A route definition is 3 to 6 lines; everything else (pricing, discovery, OpenAPI, settlement) is derived.
+A protocol-agnostic route framework with a framework-agnostic core: routes are Web-standard `Request`/`Response` handlers dispatched through an embedded Hono app. Hosts on Next.js (per-file, or a single catch-all via `@agentcash/router/next`), Hono, Bun, or any fetch runtime through `router.fetch` / `router.hono()`. Provides x402 payments, MPP payments, SIWX identity auth, and API key auth behind a single fluent builder. A route definition is 3 to 6 lines; everything else (pricing, discovery, OpenAPI, settlement) is derived.
 
 ## Guiding principles
 
 1. Route definition is 3 to 6 lines.
 2. Single source of truth: the route registry drives discovery, OpenAPI, and pricing.
-3. Pricing modes (`.paid()`, `.upTo()`, `.metered()`) and identity auth (`.siwx()`, `.apiKey()`) compose; `.unprotected()` opts out. Exactly one pricing mode per route.
+3. Pricing modes (`.paid()`, `.upTo()`, `.session()`) and identity auth (`.siwx()`, `.apiKey()`) compose; `.unprotected()` opts out. Exactly one pricing mode per route.
 4. Observability is pluggable via `RouterPlugin`. No boilerplate.
 5. The package owns x402 and MPP server lifecycles (init, verify, settle).
 6. Compose, do not reimplement. Delegate to `@x402/*`, `@coinbase/x402`, and `mppx`.
@@ -20,10 +20,10 @@ A protocol-agnostic route framework for Next.js App Router APIs. Provides x402 p
 ```
 src/
   index.ts              public surface — createRouter / createRouterFromEnv
-  builder.ts            fluent RouteBuilder (.paid / .upTo / .metered / .siwx / .apiKey / .unprotected)
+  builder.ts            fluent RouteBuilder (.paid / .upTo / .session / .siwx / .apiKey / .unprotected)
   registry.ts           Map-backed route registry
   constants.ts          network ids, USDC asset/decimals, default facilitator
-  types.ts              core types (RouteEntry, HandlerContext, HttpError, PaidOptions, UpToOptions, MeteredOptions)
+  types.ts              core types (RouteEntry, HandlerContext, HttpError, PaidOptions, UpToOptions, SessionOptions)
   plugin/               RouterPlugin types + lifecycle dispatch
   init/                 protocol init (x402.ts, x402-server.ts, mpp.ts, mppx.ts)
   protocols/            x402/ and mpp/ strategies, detect.ts, accepts
@@ -62,10 +62,10 @@ Pipeline steps use `run<Noun>` (executes and may answer the request), `resolve<N
 - **Duplicate route keys.** Registry silently overwrites (last write wins) with a dev-only `console.warn`. This is intentional: Next.js module load order is non-deterministic, so stub + real handler may register either order.
 - **Args-derived pricing.** Body is parsed before the 402 challenge via `request.clone()` when `.paid(fn)` is used. `maxPrice` is optional: it caps the computed amount and acts as a fallback on non-`HttpError` exceptions; `HttpError` is always rethrown so a pricing function can reject the request with its intended status before any payment is taken.
 - **`.upTo()` is x402-only.** Builder throws if `protocols` overrides it to anything else. Requires an `'upto'` accept on at least one configured x402 network — `createRouterFromEnv` auto-adds one on Base; programmatic `createRouter` users must add `{ scheme: 'upto', network, asset }` to `x402.accepts` themselves.
-- **`.metered()` is MPP-only.** Builder throws if `protocols` overrides it to anything else. Requires `RouterConfig.mpp.session` and `mpp.operatorKey`. `createRouterFromEnv` enables both automatically when `MPP_OPERATOR_KEY` is set.
+- **`.session()` is MPP-only.** (`.metered()` is a deprecated alias.) Builder throws if `protocols` overrides it to anything else. Requires `RouterConfig.mpp.session` and `mpp.operatorKey`. `createRouterFromEnv` enables both automatically when `MPP_OPERATOR_KEY` is set.
 - **MPP operator vs fee-payer.** `mpp.operatorKey` and `mpp.feePayerKey` MUST resolve to different addresses. Tempo rejects fee-delegated txs where `sender === feePayer`. `createRouter` validates this at construction and throws `mpp_operator_equals_fee_payer`.
 - **MPP operator address.** Must equal `recipient` / payee. mppx's close handler asserts `sender === payee` on settle.
-- **Streaming requires `.metered()`.** `.stream()` on a `.paid()` / `.upTo()` / `.unprotected()` route throws at registration. x402 has no streaming primitive, so `.stream()` is MPP-only by construction.
+- **Streaming requires `.session()`.** `.stream()` on a `.paid()` / `.upTo()` / `.unprotected()` route throws at registration. x402 has no streaming primitive, so `.stream()` is MPP-only by construction.
 - **Builder invariants are enforced twice.** Every mutual-exclusion rule above is a compile-time `RouteError<'…'>` (via the `Ident`/`Bill` phantom generics in `builder.ts`) *and* a registration-time throw (for JS consumers). When adding or changing a rule, update both, plus the type tests in `tests/builder.test-d.ts` and the runtime tests in `tests/builder.test.ts`. Type tests run via vitest's typecheck pass (`pnpm test`), not `pnpm typecheck` — `tsconfig.json` excludes `tests/`.
 - **`.method()` is discovery-only.** The exported const name (`GET`/`POST`) controls what Next.js serves; `.method()` controls what discovery output advertises. Default is `POST` (`GET` when `.query()` is used) — GET routes without `.query()` must chain `.method('GET')` or discovery advertises the wrong verb.
 - **`X-Agent-Identity`.** Every 402 carries an optional DID-auth challenge header (`src/auth/agent-identity.ts`, `did-auth-challenge` package). Clients may return a signed proof; the verified DID surfaces as `ctx.actor`. Never gates a request; independent of SIWX and payment.
