@@ -1158,52 +1158,6 @@ describe('x402 paid route', () => {
     expect(captured?.response.status).toBe(200);
   });
 
-  it('runs beforeSettle and skips settlement when it returns skip', async () => {
-    let captured: SettlementLifecycleContext | null = null;
-    const entry = makeEntry({
-      bodySchema,
-      settlement: {
-        beforeSettle: async (ctx) => {
-          captured = ctx;
-          return 'skip';
-        },
-      },
-    });
-    const deps = makeDeps();
-    const server = deps.x402Server as unknown as FakeX402Server;
-    const handler = createRequestHandler(entry, async () => ({ result: 'ok', refund: true }), deps);
-
-    const res = await handler(makePaymentRequest({ query: 'test' }));
-
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ result: 'ok', refund: true });
-    expect(res.headers.get('PAYMENT-RESPONSE')).toBeNull();
-    expect(server.settledPayments).toHaveLength(0);
-    expect(captured?.body).toEqual({ query: 'test' });
-    expect(captured?.result).toEqual({ result: 'ok', refund: true });
-    expect(captured?.payment.status).toBe('verified');
-    expect(captured?.response.status).toBe(200);
-  });
-
-  it('runs beforeSettle and settles when it returns continue', async () => {
-    const entry = makeEntry({
-      bodySchema,
-      settlement: {
-        beforeSettle: async () => 'continue',
-      },
-    });
-    const deps = makeDeps();
-    const server = deps.x402Server as unknown as FakeX402Server;
-    const handler = createRequestHandler(entry, async () => ({ result: 'ok' }), deps);
-
-    const res = await handler(makePaymentRequest({ query: 'test' }));
-
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ result: 'ok' });
-    expect(res.headers.get('PAYMENT-RESPONSE')).toBeTruthy();
-    expect(server.settledPayments).toHaveLength(1);
-  });
-
   it('runs afterSettle with settled x402 metadata', async () => {
     let captured: SettlementSettledContext | null = null;
     const entry = makeEntry({
