@@ -1171,11 +1171,7 @@ describe('x402 paid route', () => {
     });
     const deps = makeDeps();
     const server = deps.x402Server as unknown as FakeX402Server;
-    const handler = createRequestHandler(
-      entry,
-      async () => ({ result: 'ok', refund: true }),
-      deps,
-    );
+    const handler = createRequestHandler(entry, async () => ({ result: 'ok', refund: true }), deps);
 
     const res = await handler(makePaymentRequest({ query: 'test' }));
 
