@@ -39,12 +39,14 @@ The core is framework-agnostic (Web-standard `Request`/`Response`) — Next.js i
 
 The recommended entry point reads its config from `process.env`. A copy-paste `.env.example` lives at the repo root.
 
-### x402
+### x402 (auto-enabled when `CDP_API_KEY_ID` + `CDP_API_KEY_SECRET` are set)
 
-| Var                                    | Required  | Purpose                                                                                                                                                                                                                                              |
-| -------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `EVM_PAYEE_ADDRESS`                    | yes       | EVM address that receives x402 and MPP payments (`0x…`, 20 bytes). Canonicalized to lowercase. The zero address is rejected.                                                                                                                         |
-| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | yes (EVM) | Coinbase Developer Platform credentials for the default EVM facilitator. Create API keys in the generous CDP free tier at https://portal.cdp.coinbase.com/projects/api-keys. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
+At least one payment protocol must be configured: set the CDP key pair for x402, `MPP_SECRET_KEY` for MPP, or both.
+
+| Var                                    | Required             | Purpose                                                                                                                                                                                                                                                                        |
+| -------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `EVM_PAYEE_ADDRESS`                    | yes                  | EVM address that receives x402 and MPP payments (`0x…`, 20 bytes). Canonicalized to lowercase. The zero address is rejected.                                                                                                                                                   |
+| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | when x402 is enabled | Coinbase Developer Platform credentials for the default EVM facilitator. Presence toggles x402 on. Create API keys in the generous CDP free tier at https://portal.cdp.coinbase.com/projects/api-keys. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
 
 > **Router construction phones the facilitator.** Creating the router kicks off a background fetch of the facilitator's supported payment kinds — including during `next build`. With missing or placeholder CDP keys you'll see `[x402] facilitator /supported failed, using hardcoded baseline: …` in build/dev logs. That's a graceful fallback, not a fatal error; paid routes still serve correct 402 challenges.
 
@@ -90,7 +92,7 @@ The recommended entry point reads its config from `process.env`. A copy-paste `.
 
 There are two ways to initialize. Pick one.
 
-**Option A: `createRouterFromEnv` (recommended).** Reads `process.env`, validates every value up front, and throws a single `RouterConfigError` with every problem at once. Auto-enables MPP when `MPP_SECRET_KEY` is set, auto-adds a Solana accept when `SOLANA_PAYEE_ADDRESS` is set, auto-enables MPP session mode when `MPP_OPERATOR_KEY` is set.
+**Option A: `createRouterFromEnv` (recommended).** Reads `process.env`, validates every value up front, and throws a single `RouterConfigError` with every problem at once. Auto-enables x402 when `CDP_API_KEY_ID`/`CDP_API_KEY_SECRET` are set, auto-enables MPP when `MPP_SECRET_KEY` is set (at least one of the two is required), auto-adds a Solana accept when `SOLANA_PAYEE_ADDRESS` is set, auto-enables MPP session mode when `MPP_OPERATOR_KEY` is set.
 
 ```typescript
 // lib/router.ts

@@ -196,6 +196,8 @@ describe('createRouterFromEnv wiring', () => {
   const envBase = {
     BASE_URL: 'https://api.example.com',
     EVM_PAYEE_ADDRESS: '0x1234567890123456789012345678901234567890',
+    CDP_API_KEY_ID: 'id',
+    CDP_API_KEY_SECRET: 'secret',
   };
   const options = { title: 'Quote API', description: 'Quotes.', guidance: 'POST /quote.' };
 

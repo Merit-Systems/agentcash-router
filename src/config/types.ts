@@ -16,6 +16,7 @@ export type RouterConfigIssueCode =
   | 'invalid_solana_payee'
   | 'invalid_solana_facilitator_url'
   | 'missing_cdp_keys'
+  | 'missing_payment_credentials'
   | 'placeholder_payee'
   | 'missing_mpp_config'
   | 'missing_mpp_secret_key'
@@ -108,7 +109,7 @@ export interface CreateRouterFromEnvOptions<
   kvStore?: KvStore;
   /** Override x402 facilitators. The Solana facilitator defaults to `SOLANA_FACILITATOR_URL` env or `DEFAULT_SOLANA_FACILITATOR_URL`. */
   x402Facilitators?: X402FacilitatorsConfig;
-  /** Explicit protocol list. Default: `['x402']`, with `'mpp'` added when `MPP_SECRET_KEY` is set. */
+  /** Explicit protocol list. Default: inferred from credentials — `'x402'` when `CDP_API_KEY_ID`/`CDP_API_KEY_SECRET` are set, `'mpp'` when `MPP_SECRET_KEY` is set. At least one must be configured. */
   protocols?: readonly ProtocolType[];
   /** Require `route({ path })` form for every route. @default false */
   strictRoutes?: boolean;
