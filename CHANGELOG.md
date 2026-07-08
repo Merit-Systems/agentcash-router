@@ -1,5 +1,25 @@
 # @agentcash/router
 
+## 1.17.0
+
+### Minor Changes
+
+- 2d4c51d: `routerConfigFromEnv` / `createRouterFromEnv` now require one of `MPP_SECRET_KEY` or the CDP key pair, and infer enabled protocols from whichever credentials are present — MPP-only services no longer need Coinbase credentials.
+  - x402 is auto-enabled when `CDP_API_KEY_ID` + `CDP_API_KEY_SECRET` are set, mirroring how `MPP_SECRET_KEY` toggles MPP. Default protocols: CDP keys only → `['x402']`, MPP secret only → `['mpp']`, both → `['x402', 'mpp']`. An explicit `protocols` option still overrides inference.
+  - Neither credential set → new `missing_payment_credentials` issue in the up-front `RouterConfigError` (previously an MPP-less env failed later at `createRouter` with `missing_cdp_keys`).
+  - A partial CDP pair is treated as x402 intent and fails fast with `missing_cdp_keys` naming the missing variable, as does an explicit `protocols` including `'x402'` without CDP keys.
+  - Soft `console.warn` when `SOLANA_PAYEE_ADDRESS` is set while x402 is disabled, since the Solana accept would otherwise silently never be served.
+  - Programmatic `createRouter(config)` validation is unchanged: CDP keys are required only when the config has EVM x402 accepts.
+
+- bdbcddb: Deprecate `RouterConfig.prices` (and `CreateRouterFromEnvOptions.prices`); fix prototype-chain key lookup in the prices map.
+  - `prices` is marked `@deprecated` (JSDoc only — no runtime change; auto-pricing and barrel validation keep working until removal in the next major). Every fleet service already prices inline with `.paid()`; auto-priced routes can't take pricing options, and the map is the only reason `createRouter` is generic. Migration: `.route('search').paid(PRICES.search)` with an optional central `PRICES` const; for the map's barrel-validation side effect, use a consumer-side test that globs route files and asserts `router.registry.has(key)`, or the catch-all adapter where a missing import 404s in dev.
+  - Fixed: the auto-pricing lookup used `key in config.prices`, which walks the prototype chain — a route named `toString`/`valueOf`/etc. on any router with a prices map picked up the inherited function as its "price" and threw at registration. Now `Object.hasOwn`.
+
+- ec3722c: Type-performance pass: eliminate the consumer-side "Type instantiation is excessively deep" hazard and shrink per-route check cost.
+  - `createRouter` / `createRouterFromEnv` no longer capture the whole config as a `const` generic. Inference is scoped to the `prices` map (`PriceKeysOf<P>`), so the router's exported type is a small named type instead of a deferred conditional over the entire config literal (guidance strings, accepts tuples, plugin closures). Large configs previously left that conditional unresolved until some consumer file forced it at the bottom of an already-deep check stack — tripping TS's instantiation-depth limit check-order-dependently (seen on Vercel builds). The `router: ServiceRouter` annotation workaround is no longer needed. Note: an explicit type argument (`createRouter<typeof cfg>(cfg)`) now names the prices map, not the config — drop the type argument and let it infer. A prices map typed as plain `Record<string, string>` (built at runtime) no longer types its routes as pre-priced; use a literal map or price inline with `.paid()`.
+  - `.body()` / `.query()` / `.output()` are now generic over the schema (`S extends ZodType`, output via lazy `z.output<S>`) instead of extracting `T` from `ZodType<T>`, which structurally walked zod's internals per call. Router-heavy route files check 2–8× faster (e.g. 13.3ms → 1.7ms) in a traced consumer build. Handler `ctx.body` / `ctx.query` types are unchanged. Note: an explicit type argument to these methods now names the schema type, not the output type.
+  - `zod` is now declared as a peer dependency (`^4.0.0`). It was previously undeclared (dev-only) while being imported at runtime, which resolved by hoisting luck and gave consumers a second zod copy — paying cross-copy structural comparisons on every `.body(schema)` chain.
+
 ## 1.16.0
 
 ### Minor Changes
