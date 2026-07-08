@@ -176,6 +176,14 @@ export function createRouter<P extends Record<string, string> | undefined = unde
     }
   })();
 
+  if (config.prices) {
+    console.warn(
+      '[agentcash/router] RouterConfig.prices is deprecated — price routes inline with .paid() ' +
+        '(keep a central const in your service if you want one file of prices). ' +
+        'The prices map will be removed in the next major.',
+    );
+  }
+
   const pricesKeys = config.prices ? Object.keys(config.prices) : undefined;
 
   // Internal Hono app: serves all registered routes under `/{basePath}/{path}`
@@ -333,7 +341,7 @@ export function createRouterFromEnv<TPrices extends Record<string, string> = Rec
   >;
 }
 
-export { HttpError, RouteDefinitionError } from './types.js';
+export { HttpError, RouteDefinitionError, ROUTE_ENTRY } from './types.js';
 export {
   BASE_MAINNET_NETWORK,
   SOLANA_MAINNET_NETWORK,
@@ -347,6 +355,8 @@ export {
 } from './constants.js';
 export type {
   HandlerContext,
+  RouteEntry,
+  RegisteredRouteHandler,
   RouterConfig,
   DiscoveryConfig,
   PaidOptions,

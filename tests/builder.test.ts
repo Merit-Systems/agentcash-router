@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { RouteRegistry } from '../src/registry.js';
 import { RouteBuilder } from '../src/builder.js';
-import { RouteDefinitionError } from '../src/types.js';
+import { RouteDefinitionError, ROUTE_ENTRY } from '../src/types.js';
 import { MemoryNonceStore } from '../src/kv-store/index.js';
 import { MemoryEntitlementStore } from '../src/kv-store/index.js';
 import { makeTestAgentIdentityNonceStore } from './fakes/agent-identity-deps.js';
@@ -58,6 +58,21 @@ describe('fluent chain', () => {
     const { builder } = makeBuilder();
     const handler = builder.unprotected().handler(async () => ({ status: 'ok' }));
     expect(typeof handler).toBe('function');
+  });
+
+  it('.handler() stamps the RouteEntry onto the returned function', () => {
+    const { builder, registry } = makeBuilder('stamped/route');
+    const handler = builder
+      .paid('0.01')
+      .body(bodySchema)
+      .handler(async ({ body }) => ({ result: body.query }));
+
+    const entry = handler[ROUTE_ENTRY];
+    expect(entry.key).toBe('stamped/route');
+    expect(entry.pricing).toBe('0.01');
+    expect(entry.authMode).toBe('paid');
+    // Same object the registry holds — one source of truth, not a copy.
+    expect(entry).toBe(registry.get('stamped/route'));
   });
 
   it('.paid().body().output().description().handler() preserves all metadata in registry', () => {

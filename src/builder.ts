@@ -24,7 +24,8 @@ import type {
 import type { RouteRegistry } from './registry.js';
 import type { RouterDeps, RouteHandler } from './pipeline/orchestrate.js';
 import { createRequestHandler } from './pipeline/orchestrate.js';
-import { RouteDefinitionError } from './types.js';
+import { RouteDefinitionError, ROUTE_ENTRY } from './types.js';
+import type { RegisteredRouteHandler } from './types.js';
 import { isPositiveDecimal } from './pricing/format.js';
 import { normalizePath } from './path-params.js';
 import { validateExamples } from './validate-examples.js';
@@ -1007,9 +1008,7 @@ export class RouteBuilder<
    *   .handler(async ({ body, wallet }) => searchService(body, wallet));
    * ```
    */
-  handler(
-    fn: HandlerArg<TBody, TQuery, Ident, NeedsBody, HasBody, Bill>,
-  ): (request: Request) => Promise<Response> {
+  handler(fn: HandlerArg<TBody, TQuery, Ident, NeedsBody, HasBody, Bill>): RegisteredRouteHandler {
     return this.register(fn as unknown as RouteHandler, false);
   }
 
@@ -1033,16 +1032,11 @@ export class RouteBuilder<
    *   });
    * ```
    */
-  stream(
-    fn: StreamArg<TBody, TQuery, Ident, NeedsBody, HasBody, Bill>,
-  ): (request: Request) => Promise<Response> {
+  stream(fn: StreamArg<TBody, TQuery, Ident, NeedsBody, HasBody, Bill>): RegisteredRouteHandler {
     return this.register(fn as unknown as RouteHandler, true);
   }
 
-  private register(
-    handlerFn: RouteHandler,
-    streaming: boolean,
-  ): (request: Request) => Promise<Response> {
+  private register(handlerFn: RouteHandler, streaming: boolean): RegisteredRouteHandler {
     if (!this.#s.authMode) {
       throw new RouteDefinitionError(
         this.#s.key,
@@ -1180,7 +1174,9 @@ export class RouteBuilder<
     const requestHandler = createRequestHandler(entry, handlerFn, this.#s.deps);
     this.#s.registry.register(entry, requestHandler);
 
-    return requestHandler;
+    // Stamp the entry onto the returned handler (mppx-style) so tooling can
+    // identify an exported route handler without going through the registry.
+    return Object.assign(requestHandler, { [ROUTE_ENTRY]: entry });
   }
 }
 
