@@ -1,5 +1,7 @@
 import { headers } from 'next/headers';
-import { CodeBlock } from './code-block';
+import { CodeBlock, CodeTabs } from './code-block';
+
+type Protocol = 'x402' | 'mpp';
 
 const ROUTES: Array<{
   path: string;
@@ -7,14 +9,16 @@ const ROUTES: Array<{
   mode: string;
   description: string;
   body?: Record<string, unknown>;
-  agentcashFlag?: string;
+  /** Payment rails the route accepts. Paid routes render auto + one tab per rail; SIWX-only routes render a single command. */
+  protocols?: Protocol[];
+  extraFlags?: string;
 }> = [
   {
     path: '/api/fortune',
     method: 'POST',
     mode: '.paid("0.001")',
     description: 'Fixed-price fortune. x402 exact (Base) or MPP one-shot (Tempo).',
-    agentcashFlag: '-p x402',
+    protocols: ['x402', 'mpp'],
   },
   {
     path: '/api/fortune/premium',
@@ -22,25 +26,26 @@ const ROUTES: Array<{
     mode: '.upTo("0.005")',
     description: 'Handler-driven metered pricing settled with EIP-2612 gas-sponsoring on Base.',
     body: { category: 'love' },
-    agentcashFlag: '-p x402',
+    protocols: ['x402'],
   },
   {
     path: '/api/fortune/llm',
     method: 'POST',
-    mode: '.metered({ unitType: "request" })',
+    mode: '.session({ unitType: "request" })',
     description:
       'MPP session, request-mode metered billing. Returns 503 until MPP_OPERATOR_KEY is set.',
     body: { prompt: 'Will I find love?' },
-    agentcashFlag: '-p mpp',
+    protocols: ['mpp'],
   },
   {
     path: '/api/fortune/stream',
     method: 'POST',
-    mode: '.metered({ unitType: "token" }).stream()',
+    mode: '.session({ unitType: "token" }).stream()',
     description:
       'MPP session, SSE streaming with per-token billing. Returns 503 until MPP_OPERATOR_KEY is set.',
     body: { prompt: 'What awaits me?' },
-    agentcashFlag: '--stream',
+    protocols: ['mpp'],
+    extraFlags: '--stream',
   },
   {
     path: '/api/fortune/dynamic',
@@ -48,13 +53,14 @@ const ROUTES: Array<{
     mode: '.paid(pricingFn)',
     description: 'Body-derived pricing with pre-payment validation.',
     body: { category: 'love', depth: 'detailed' },
+    protocols: ['x402', 'mpp'],
   },
   {
     path: '/api/fortune/membership',
     method: 'POST',
     mode: '.upTo("0.005").siwx()',
     description: 'Pay once via x402; subsequent calls replay free with a SIWX signature.',
-    agentcashFlag: '-p x402',
+    protocols: ['x402'],
   },
   {
     path: '/api/fortune/profile',
@@ -87,9 +93,36 @@ async function getOrigin(): Promise<string> {
   return `${proto}://${host}`;
 }
 
+function fetchCommand(
+  origin: string,
+  r: { path: string; method: string; body?: Record<string, unknown>; extraFlags?: string },
+  protocol?: Protocol,
+): string {
+  return [
+    `npx agentcash fetch ${origin}${r.path}`,
+    `--method ${r.method}`,
+    protocol ? `-p ${protocol}` : '',
+    r.extraFlags ?? '',
+    r.body ? `-b '${JSON.stringify(r.body)}'` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function protocolTabs(
+  origin: string,
+  r: { path: string; method: string; body?: Record<string, unknown>; extraFlags?: string },
+  protocols: Protocol[],
+): Array<{ label: string; code: string }> {
+  return [
+    { label: 'auto', code: fetchCommand(origin, r) },
+    ...protocols.map((p) => ({ label: p, code: fetchCommand(origin, r, p) })),
+  ];
+}
+
 export default async function Page() {
   const origin = await getOrigin();
-  const tryAgentcashCommand = `npx agentcash fetch ${origin}/api/fortune --method POST -p x402`;
+  const tryRoute = { path: '/api/fortune', method: 'POST' };
   const tryCurlCommand = `curl -X POST ${origin}/api/fortune`;
 
   return (
@@ -121,9 +154,12 @@ export default async function Page() {
           <a href="https://agentcash.dev" style={link} target="_blank" rel="noreferrer">
             AgentCash CLI
           </a>{' '}
-          — a single wallet, no API keys, all endpoints work out of the box.
+          — a single wallet, no API keys, all endpoints work out of the box.{' '}
+          <strong style={{ color: '#eee', fontWeight: 600 }}>auto</strong> lets the CLI pick a rail
+          from the 402 challenge; <code style={codeInline}>-p</code> pins x402 (Base) or MPP
+          (Tempo).
         </p>
-        <CodeBlock code={tryAgentcashCommand} />
+        <CodeTabs tabs={protocolTabs(origin, tryRoute, ['x402', 'mpp'])} />
         <p style={p}>
           Or with curl — the router returns an HTTP 402 challenge you can settle manually:
         </p>
@@ -145,11 +181,11 @@ export default async function Page() {
                 <span style={{ fontSize: 12, color: '#888' }}>{r.mode}</span>
               </div>
               <p style={{ ...p, margin: '8px 0 12px' }}>{r.description}</p>
-              <CodeBlock
-                code={`npx agentcash fetch ${origin}${r.path} --method ${r.method}${
-                  r.agentcashFlag ? ` ${r.agentcashFlag}` : ''
-                }${r.body ? ` -b '${JSON.stringify(r.body)}'` : ''}`}
-              />
+              {r.protocols ? (
+                <CodeTabs tabs={protocolTabs(origin, r, r.protocols)} />
+              ) : (
+                <CodeBlock code={fetchCommand(origin, r)} />
+              )}
             </article>
           ))}
         </div>
@@ -185,7 +221,23 @@ export default async function Page() {
             Update <code style={codeInline}>lib/router.ts</code> with your API title, description,
             and agent-guidance string.
           </li>
-          <li>Push to GitHub. Vercel redeploys automatically.</li>
+          <li style={{ marginBottom: 8 }}>Push to GitHub. Vercel redeploys automatically.</li>
+          <li>
+            Once you&apos;re on a real domain, register with the explorers so agents can find you:{' '}
+            <a
+              href="https://www.x402scan.com/resources/register"
+              style={link}
+              target="_blank"
+              rel="noreferrer"
+            >
+              x402scan
+            </a>{' '}
+            and{' '}
+            <a href="https://mppscan.com/register" style={link} target="_blank" rel="noreferrer">
+              MPPScan
+            </a>
+            .
+          </li>
         </ol>
         <p style={{ ...p, marginTop: 16 }}>
           Full docs:{' '}

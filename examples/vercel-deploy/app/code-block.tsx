@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-export function CodeBlock({ code }: { code: string }) {
+export function CodeBlock({ code, attached = false }: { code: string; attached?: boolean }) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -24,8 +24,8 @@ export function CodeBlock({ code }: { code: string }) {
   }
 
   return (
-    <div style={codeShell}>
-      <pre style={codeBlock}>{code}</pre>
+    <div style={attached ? { ...codeShell, margin: 0 } : codeShell}>
+      <pre style={attached ? { ...codeBlock, borderTopLeftRadius: 0 } : codeBlock}>{code}</pre>
       <button
         type="button"
         aria-label={copied ? 'Copied command' : 'Copy command'}
@@ -35,6 +35,36 @@ export function CodeBlock({ code }: { code: string }) {
       >
         <span aria-hidden="true">{copied ? <CheckIcon /> : <CopyIcon />}</span>
       </button>
+    </div>
+  );
+}
+
+/**
+ * Protocol-variant tabs above a CodeBlock. First tab is typically "auto"
+ * (no `-p` flag — the CLI picks a rail from the 402 challenge); the rest
+ * pin a specific protocol.
+ */
+export function CodeTabs({ tabs }: { tabs: Array<{ label: string; code: string }> }) {
+  const [active, setActive] = useState(0);
+  const current = tabs[active] ?? tabs[0];
+
+  return (
+    <div style={{ margin: '8px 0' }}>
+      <div role="tablist" style={tabBar}>
+        {tabs.map((tab, i) => (
+          <button
+            key={tab.label}
+            type="button"
+            role="tab"
+            aria-selected={i === active}
+            onClick={() => setActive(i)}
+            style={i === active ? tabButtonActive : tabButton}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      <CodeBlock code={current!.code} attached />
     </div>
   );
 }
@@ -82,6 +112,29 @@ const codeBlock = {
   margin: 0,
   whiteSpace: 'pre-wrap' as const,
 };
+
+const tabBar = {
+  display: 'flex',
+  gap: 2,
+} as const;
+
+const tabButton = {
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+  fontSize: 12,
+  padding: '5px 12px',
+  border: '1px solid #222',
+  borderBottom: 'none',
+  borderRadius: '6px 6px 0 0',
+  background: 'transparent',
+  color: '#888',
+  cursor: 'pointer',
+} as const;
+
+const tabButtonActive = {
+  ...tabButton,
+  background: '#111',
+  color: '#eee',
+} as const;
 
 const copyButton = {
   position: 'absolute',

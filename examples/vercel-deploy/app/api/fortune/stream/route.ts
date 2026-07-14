@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { mppEnabled, router } from '@/lib/router';
+import { mppSessionEnabled, router } from '@/lib/router';
 
 // MPP session SSE streaming — async generator handler, each `charge()` reserves
 // one voucher tick. MPP-only; x402 has no streaming primitive.
@@ -13,12 +13,12 @@ const StreamSchema = z.object({
 
 const FORTUNE_TOKENS = ['A', 'fortunate', 'turn', 'awaits', 'you', 'on', 'the', 'next', 'block.'];
 
-export const POST = mppEnabled
+export const POST = mppSessionEnabled
   ? router
       .route('fortune/stream')
       .description('Streaming fortune — bills per yielded token via MPP session vouchers')
-      .metered({
-        tickCost: '0.0001',
+      .session({
+        unitCost: '0.0001',
         maxPrice: '0.05',
         unitType: 'token',
         protocols: ['mpp'],
@@ -39,8 +39,8 @@ export const POST = mppEnabled
   : async () =>
       new Response(
         JSON.stringify({
-          error: 'MPP not configured',
-          hint: 'Set MPP_OPERATOR_KEY in your Vercel environment and redeploy. See examples/vercel-deploy/README.md#enabling-mpp.',
+          error: 'MPP session mode not configured',
+          hint: 'Set MPP_OPERATOR_KEY in your Vercel environment and redeploy. See examples/vercel-deploy/README.md#enabling-mpp-session-routes.',
         }),
         { status: 503, headers: { 'content-type': 'application/json' } },
       );

@@ -2,10 +2,10 @@
 // Without this, `/openapi.json` and `/llms.txt` would
 // miss any route Next hasn't lazy-loaded yet on first hit.
 //
-// All routes work out of the box with just the three x402 env vars.
-// MPP routes (`llm`, `stream`) register only when MPP_OPERATOR_KEY is set;
-// otherwise they serve a 503 with a hint. They don't appear in the discovery
-// docs until MPP is configured — see `lib/router.ts` for the gating logic.
+// All routes work out of the box with just the three x402 env vars — including
+// one-shot MPP on the `.paid()` routes. MPP session routes (`llm`, `stream`)
+// register only when MPP_OPERATOR_KEY is set; otherwise they serve a 503 with
+// a hint and don't appear in the discovery docs — see `lib/router.ts`.
 import '@/app/api/fortune/route';
 import '@/app/api/fortune/premium/route';
 import '@/app/api/fortune/profile/route';

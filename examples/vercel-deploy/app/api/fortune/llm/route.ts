@@ -1,13 +1,14 @@
 import { z } from 'zod';
-import { mppEnabled, router } from '@/lib/router';
+import { mppSessionEnabled, router } from '@/lib/router';
 
 // MPP session, request-mode — one tick committed per request at credential verify.
 //   agentcash fetch <origin>/api/fortune/llm --method POST -p mpp -b '{"prompt":"Will I find love?"}'
 //
-// `.metered()` requires MPP session mode, which auto-enables when MPP_OPERATOR_KEY
+// `.session()` requires MPP session mode, which auto-enables when MPP_OPERATOR_KEY
 // is set. When it isn't, registering this route would throw at module load and
-// break `next build`. The branch below keeps the route file harmless until MPP
-// is configured.
+// break `next build`. The branch below keeps the route file harmless until
+// session mode is configured. (One-shot MPP on `.paid()` routes needs no
+// operator key and is always on.)
 
 const LlmSchema = z.object({
   prompt: z.string().min(1).max(280),
@@ -20,12 +21,12 @@ const FORTUNES = [
   'Today is the day. Probably.',
 ];
 
-export const POST = mppEnabled
+export const POST = mppSessionEnabled
   ? router
       .route('fortune/llm')
-      .description('Request-mode metered fortune — bills tickCost per request via MPP session')
-      .metered({
-        tickCost: '0.001',
+      .description('Request-mode metered fortune — bills unitCost per request via MPP session')
+      .session({
+        unitCost: '0.001',
         maxPrice: '0.01',
         unitType: 'request',
         protocols: ['mpp'],
@@ -39,8 +40,8 @@ export const POST = mppEnabled
   : async () =>
       new Response(
         JSON.stringify({
-          error: 'MPP not configured',
-          hint: 'Set MPP_OPERATOR_KEY in your Vercel environment and redeploy. See examples/vercel-deploy/README.md#enabling-mpp.',
+          error: 'MPP session mode not configured',
+          hint: 'Set MPP_OPERATOR_KEY in your Vercel environment and redeploy. See examples/vercel-deploy/README.md#enabling-mpp-session-routes.',
         }),
         { status: 503, headers: { 'content-type': 'application/json' } },
       );
