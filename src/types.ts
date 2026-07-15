@@ -113,9 +113,18 @@ export type PricingConfig<TBody = unknown> =
 
 export type PayToConfig = string | ((request: Request, body?: unknown) => string | Promise<string>);
 
+/**
+ * CAIP-2 network identifier for x402 accepts: `eip155:<chainId>` (EVM) or
+ * `solana:<genesisHash>`. Friendly names like `base` or `base-sepolia` are
+ * rejected at router construction — use the exported constants
+ * (`BASE_MAINNET_NETWORK` = `eip155:8453`, `SOLANA_MAINNET_NETWORK`) or a raw
+ * CAIP-2 string.
+ */
+export type X402Network = `eip155:${string}` | `solana:${string}`;
+
 interface X402AcceptBase {
-  /** Chain identifier (e.g. `base`, `base-sepolia`, `solana-mainnet`). */
-  network: string;
+  /** CAIP-2 chain identifier (e.g. `eip155:8453`, **not** `base`). See {@link X402Network}. */
+  network: X402Network;
   /** Token contract address (EVM) or mint (Solana). Defaults to USDC for the network. */
   asset?: string;
   /** Token decimals. Defaults to USDC's 6. */
@@ -432,8 +441,8 @@ export interface RouterConfig {
   baseUrl: string;
   /** URL prefix routes are mounted and advertised under (`{baseUrl}/{basePath}/{path}`). Pass an empty string to mount routes at the origin root. @default 'api' */
   basePath?: string;
-  /** Default chain for the auto-generated x402 `exact` accept (e.g. `base`, `base-sepolia`). Ignored when `x402.accepts` is set. @default 'base' */
-  network?: string;
+  /** Default chain for the auto-generated x402 `exact` accept, as a CAIP-2 identifier — friendly names like `base` are rejected; import `BASE_MAINNET_NETWORK` instead of hand-writing the string. Ignored when `x402.accepts` is set. @default BASE_MAINNET_NETWORK (`eip155:8453`) */
+  network?: X402Network;
   /** x402 protocol settings. Omit to default to a single `exact`/USDC accept on `network` paid to `payeeAddress`, verified via the Coinbase default facilitator (requires `CDP_API_KEY_ID`/`CDP_API_KEY_SECRET`). */
   x402?: {
     /** Explicit accepts list (scheme + network + asset). Overrides the auto-generated default. Add an `upto` accept here to enable `.upTo()` routes. */

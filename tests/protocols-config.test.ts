@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { TEMPO_USDC_ADDRESS, createRouter } from '../src/index.js';
 import { evmAddressFromKey } from '../src/config/utils.js';
-import type { RouterConfig } from '../src/types.js';
+import type { RouterConfig, X402Network } from '../src/types.js';
+
+// Deliberately invalid CAIP-2 namespace — the X402Network type rejects it at
+// compile time; these tests exercise the runtime validator JS consumers hit.
+const COSMOS_NETWORK = 'cosmos:osmosis-1' as unknown as X402Network;
 
 describe('RouterConfig.protocols', () => {
   const baseConfig: RouterConfig = {
@@ -206,7 +210,7 @@ describe('RouterConfig.protocols', () => {
             x402: {
               accepts: [
                 {
-                  network: 'cosmos:osmosis-1',
+                  network: COSMOS_NETWORK,
                   payTo: 'osmo1deadbeefdeadbeefdeadbeefdeadbeefdeadbe',
                 },
               ],
@@ -281,7 +285,7 @@ describe('RouterConfig.protocols', () => {
             x402: {
               accepts: [
                 {
-                  network: 'cosmos:osmosis-1',
+                  network: COSMOS_NETWORK,
                   payTo: 'osmo1deadbeefdeadbeefdeadbeefdeadbeefdeadbe',
                 },
               ],

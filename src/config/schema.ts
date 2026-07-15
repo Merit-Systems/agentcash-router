@@ -357,14 +357,18 @@ function validateX402Config(
   if (hasEvm) {
     const missing = ['CDP_API_KEY_ID', 'CDP_API_KEY_SECRET'].filter((k) => !env[k]);
     if (missing.length > 0) {
-      push(
-        'missing_cdp_keys',
-        `x402 EVM facilitator (Coinbase) requires ${missing.join(' and ')}. ` +
-          'Create an API key at https://portal.cdp.coinbase.com and set it via env.',
-      );
+      push('missing_cdp_keys', missingCdpKeysMessage(missing));
     }
   }
   return issues;
+}
+
+function missingCdpKeysMessage(missing: string[]): string {
+  return (
+    `x402 EVM facilitator (Coinbase) requires ${missing.join(' and ')}. ` +
+    'Create an API key at https://portal.cdp.coinbase.com (signup requires phone verification) and set it via env. ' +
+    'For a keyless local demo, set placeholder values — paid routes still serve correct 402 challenges via the hardcoded baseline, but payments will not verify or settle.'
+  );
 }
 
 function validateMppConfig(config: RouterConfig): RouterConfigIssue[] {
@@ -544,9 +548,7 @@ export function routerConfigFromEnv<
     credentialIssues.push({
       code: 'missing_cdp_keys',
       protocol: 'x402',
-      message:
-        `x402 EVM facilitator (Coinbase) requires ${missing.join(' and ')}. ` +
-        'Create an API key at https://portal.cdp.coinbase.com and set it via env.',
+      message: missingCdpKeysMessage(missing),
     });
   }
   if (!options.protocols && !x402Enabled && !mppEnabled) {

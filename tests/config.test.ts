@@ -48,7 +48,8 @@ describe('validateRouterConfig', () => {
           protocol: 'x402',
           message:
             'x402 EVM facilitator (Coinbase) requires CDP_API_KEY_ID and CDP_API_KEY_SECRET. ' +
-            'Create an API key at https://portal.cdp.coinbase.com and set it via env.',
+            'Create an API key at https://portal.cdp.coinbase.com (signup requires phone verification) and set it via env. ' +
+            'For a keyless local demo, set placeholder values — paid routes still serve correct 402 challenges via the hardcoded baseline, but payments will not verify or settle.',
         },
       ]);
     }
