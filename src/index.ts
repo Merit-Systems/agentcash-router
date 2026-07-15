@@ -96,6 +96,18 @@ type PriceKeysOf<P> = [P] extends [Record<string, string>]
     : Extract<keyof P, string>
   : never;
 
+/**
+ * Build a {@link ServiceRouter} from a fully-specified {@link RouterConfig}.
+ * Most consumers should use {@link createRouterFromEnv}; use this when you
+ * need settings env doesn't expose (custom networks, multi-payee, plugins).
+ *
+ * With `protocols: ['x402']` and EVM accepts, `CDP_API_KEY_ID` /
+ * `CDP_API_KEY_SECRET` must be present in env — but only presence is checked,
+ * never validity. Placeholder values boot fine for local dev: paid routes
+ * still serve correct 402 challenges via the hardcoded facilitator baseline
+ * (a `[x402] facilitator /supported failed` warning is logged); real keys are
+ * only needed for payment verification and settlement.
+ */
 export function createRouter<P extends Record<string, string> | undefined = undefined>(
   config: RouterConfig & { prices?: P },
 ): ServiceRouter<PriceKeysOf<P>> {
@@ -323,6 +335,12 @@ export function createRouter<P extends Record<string, string> | undefined = unde
  * The env vars this function reads are the canonical schema in
  * `src/config/schema.ts` (`ENV_SPEC`).
  *
+ * x402 is enabled by the *presence* of `CDP_API_KEY_ID` / `CDP_API_KEY_SECRET`
+ * — the keys are never validated against Coinbase at boot. Placeholder values
+ * are a supported local-dev path: paid routes serve correct 402 challenges via
+ * the hardcoded facilitator baseline; real keys are only needed for payment
+ * verification and settlement.
+ *
  * @example
  * ```ts
  * export const router = createRouterFromEnv({
@@ -369,6 +387,7 @@ export type {
   SettlementSettledContext,
   SettlementErrorContext,
   X402FacilitatorsConfig,
+  X402Network,
 } from './types.js';
 export type { RouterPlugin } from './plugin/index.js';
 export type { KvStore } from './kv-store/index.js';

@@ -46,9 +46,9 @@ At least one payment protocol must be configured: set the CDP key pair for x402,
 | Var                                    | Required             | Purpose                                                                                                                                                                                                                                                                        |
 | -------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `EVM_PAYEE_ADDRESS`                    | yes                  | EVM address that receives x402 and MPP payments (`0x…`, 20 bytes). Canonicalized to lowercase. The zero address is rejected.                                                                                                                                                   |
-| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | when x402 is enabled | Coinbase Developer Platform credentials for the default EVM facilitator. Presence toggles x402 on. Create API keys in the generous CDP free tier at https://portal.cdp.coinbase.com/projects/api-keys. T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
+| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | when x402 is enabled | Coinbase Developer Platform credentials for the default EVM facilitator. Presence toggles x402 on — validity is never checked at boot, so placeholder values work for local dev (see callout below). Create API keys in the generous CDP free tier at https://portal.cdp.coinbase.com/projects/api-keys (signup requires phone verification, so provision keys ahead of time for CI/automated setups). T3 / `@t3-oss/env-nextjs` users must declare these in their env schema. |
 
-> **Router construction phones the facilitator.** Creating the router kicks off a background fetch of the facilitator's supported payment kinds — including during `next build`. With missing or placeholder CDP keys you'll see `[x402] facilitator /supported failed, using hardcoded baseline: …` in build/dev logs. That's a graceful fallback, not a fatal error; paid routes still serve correct 402 challenges.
+> **Router construction phones the facilitator.** Creating the router kicks off a background fetch of the facilitator's supported payment kinds — including during `next build`. With missing or placeholder CDP keys you'll see `[x402] facilitator /supported failed, using hardcoded baseline: …` in build/dev logs. That's a graceful fallback, not a fatal error; paid routes still serve correct 402 challenges. Placeholder keys are a supported local-dev path — real keys are only needed for payment verification and settlement.
 
 ### Solana
 
@@ -105,6 +105,8 @@ export const router = createRouterFromEnv({
 });
 ```
 
+> **No CDP keys yet?** Set placeholder values for `CDP_API_KEY_ID` / `CDP_API_KEY_SECRET` — the router boots, logs a fallback warning, and paid routes serve correct 402 challenges. Real keys are only needed to verify and settle actual payments (and Coinbase signup requires phone verification, so it can't be fully automated).
+
 **Option B: build a `RouterConfig` and pass it to `createRouter`.** Use this when you need custom networks, multiple payees, non-standard assets, or any setting `createRouterFromEnv` doesn't expose. `createRouter` runs the same validation against the `RouterConfig` shape.
 
 ```typescript
@@ -129,6 +131,8 @@ export const router = createRouter({
   },
 });
 ```
+
+> **`network` takes CAIP-2 identifiers only** (`eip155:8453`, `solana:…`) — friendly names like `base` or `base-sepolia` fail the type check and throw `unsupported_x402_network` at construction. Import the exported constants (`BASE_MAINNET_NETWORK`, `SOLANA_MAINNET_NETWORK`) instead of hand-writing strings. The same applies to `x402.accepts[i].network`.
 
 ### 2. Register routes
 
