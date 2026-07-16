@@ -63,7 +63,11 @@ jobs:
 
   snapshot:
     name: Canary Snapshot
-    if: github.event_name == 'pull_request' && github.head_ref != 'changeset-release/main'
+    # Fork PRs can't mint OIDC tokens, so npm trusted publishing would fail — skip instead
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.head_ref != 'changeset-release/main' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     concurrency:
       group: canary-${{ github.event.pull_request.number }}
