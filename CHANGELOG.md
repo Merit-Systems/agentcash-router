@@ -1,5 +1,11 @@
 # @agentcash/router
 
+## 1.19.1
+
+### Patch Changes
+
+- d2052fd: Use mppx's public SSE session-controller type for metered streaming routes.
+
 ## 1.19.0
 
 ### Minor Changes
