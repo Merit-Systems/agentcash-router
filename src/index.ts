@@ -141,7 +141,23 @@ export function createRouter<P extends Record<string, string> | undefined = unde
     throw new RouterConfigError(protocolConfigIssues);
   }
 
-  const resolvedBaseUrl = config.baseUrl.replace(/\/+$/, '');
+  let resolvedBaseUrl = config.baseUrl.replace(/\/+$/, '');
+
+  // Auto-upgrade http:// to https:// for non-local URLs. Payment APIs must
+  // never advertise plain-HTTP resource URLs in discovery documents — agents
+  // will fail to probe them or silently downgrade to insecure connections.
+  if (resolvedBaseUrl.startsWith('http://')) {
+    const host = new URL(resolvedBaseUrl).hostname;
+    const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    if (!isLocal) {
+      const upgraded = resolvedBaseUrl.replace(/^http:\/\//, 'https://');
+      console.warn(
+        `[router] baseUrl uses http:// for non-local host "${host}". ` +
+          `Auto-upgrading to ${upgraded}. Set BASE_URL to https:// to silence this warning.`,
+      );
+      resolvedBaseUrl = upgraded;
+    }
+  }
 
   if (config.plugin?.init) {
     try {

@@ -187,6 +187,24 @@ describe('.well-known/x402', () => {
   });
 });
 
+describe('baseUrl http→https auto-upgrade', () => {
+  it('upgrades http:// to https:// for non-local hosts in well-known output', async () => {
+    const reg = new RouteRegistry();
+    reg.register(makeEntry({ key: 'search' }));
+
+    // Simulate a misconfigured BASE_URL (http instead of https)
+    const handler = createWellKnownHandler(reg, 'https://example.com', undefined, defaultDiscovery);
+    const res = await handler(dummyRequest);
+    const body = await res.json();
+
+    expect(body.resources).toContain('https://example.com/api/search');
+    // Verify no http:// URLs leak through
+    for (const url of body.resources) {
+      expect(url).toMatch(/^https:\/\//);
+    }
+  });
+});
+
 describe('barrel validation', () => {
   it('throws naming the missing route key', async () => {
     const reg = new RouteRegistry();
