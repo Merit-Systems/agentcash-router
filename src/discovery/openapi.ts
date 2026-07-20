@@ -75,7 +75,6 @@ export function createOpenAPIHandler(
         description: discovery.description,
         version: discovery.version,
         ...(guidance !== undefined && { 'x-guidance': guidance }),
-        guidance,
         ...(discovery.contact && { contact: discovery.contact }),
       },
       servers: [{ url: (discovery.serverUrl ?? normalizedBase).replace(/\/+$/, '') }],
