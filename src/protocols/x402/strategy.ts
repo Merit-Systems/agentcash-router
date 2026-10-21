@@ -130,7 +130,9 @@ async function settleX402(args: SettleArgs): Promise<SettleOutcome> {
   const override = routeEntry.billing === 'exact' ? undefined : { amount: billedAmount };
 
   try {
-    let settle = await settleX402Payment(deps.x402Server!, payload, requirements, override);
+    let settle = await settleX402Payment(deps.x402Server!, payload, requirements, override, {
+      reviews: deps.reviews,
+    });
     for (
       let attempt = 0;
       !settle.result?.success && attempt < SETTLE_RETRY_DELAYS_MS.length;
@@ -143,7 +145,9 @@ async function settleX402(args: SettleArgs): Promise<SettleOutcome> {
       await new Promise<void>((resolve) => {
         setTimeout(resolve, SETTLE_RETRY_DELAYS_MS[attempt]);
       });
-      settle = await settleX402Payment(deps.x402Server!, payload, requirements, override);
+      settle = await settleX402Payment(deps.x402Server!, payload, requirements, override, {
+        reviews: deps.reviews,
+      });
     }
 
     if (!settle.result?.success) {

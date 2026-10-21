@@ -30,6 +30,8 @@ export interface RouterDeps {
   x402Accepts: X402AcceptConfig[];
   /** Base Builder Code declared as the ERC-8021 app code (`a`) on every x402 challenge. */
   builderCode?: string;
+  /** Advertise buyer reviews (x402 `reviews` extension, Agorean provider) on challenges and settlement responses. */
+  reviews?: boolean;
   /** Bazaar service metadata (`serviceName`/`tags`/`iconUrl`) merged into `PaymentRequired.resource`. */
   x402ResourceMetadata?: X402ResourceMetadata;
   kvStore?: KvStore;

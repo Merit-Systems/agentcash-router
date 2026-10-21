@@ -1,5 +1,6 @@
 import { buildSIWXExtension } from '../auth/siwx.js';
 import { isEvmNetwork } from '../protocols/x402/evm.js';
+import { buildReviewsChallengeExtension, REVIEWS } from '../protocols/x402/reviews.js';
 import type { FlowCtx } from './steps/index.js';
 
 export async function buildChallengeExtensions(
@@ -68,6 +69,13 @@ export async function buildChallengeExtensions(
         `builder-code declaration failed: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
+  }
+
+  if (ctx.deps.reviews) {
+    extensions = {
+      ...(extensions ?? {}),
+      [REVIEWS]: buildReviewsChallengeExtension(ctx.request.url),
+    };
   }
 
   const hasEvmUpto =
