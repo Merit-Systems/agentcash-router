@@ -222,6 +222,24 @@ createRouterFromEnv({
 
 Invalid values fail at startup with structured config issues rather than being silently dropped by the facilitator.
 
+### Buyer reviews (opt-in)
+
+Off by default. Set `x402.reviews: true` to let buyers read and leave reviews of your paid routes through [Agorean](https://agorean.com/docs/show-your-reviews), using the x402 `reviews` extension ([x402-foundation/x402#3656](https://github.com/x402-foundation/x402/pull/3656)):
+
+```typescript
+import { createRouter, routerConfigFromEnv } from '@agentcash/router';
+
+const base = routerConfigFromEnv({ title: 'Quote API', description: 'Quotes.', guidance: '' });
+export const router = createRouter({ ...base, x402: { ...base.x402, reviews: true } });
+```
+
+With `createRouter`, add `reviews: true` to the `x402` block you already pass.
+
+- Every x402 challenge declares `extensions.reviews` with a `read` link (`https://agorean.com/reviews?resource=<route URL>`), so a buyer can check reviews before paying. The block is the same on every request, so the payment's echoed copy always matches.
+- Every settled `PAYMENT-RESPONSE` carries `extensions.reviews` with a `write` link (`https://agorean.com/r/<tx_hash>`), where the buyer can review that exact payment, signed by the wallet that paid.
+
+It is plain JSON: the router makes no network calls for it, and no account is needed. Reviews are recorded for payments on Base.
+
 ### 5. Call it
 
 Unpaid requests get a `402` whose challenge lives in headers (see [Reading a 402 challenge](#reading-a-402-challenge)):

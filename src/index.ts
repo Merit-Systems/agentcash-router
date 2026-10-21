@@ -167,6 +167,7 @@ export function createRouter<P extends Record<string, string> | undefined = unde
     x402FacilitatorsByNetwork: undefined,
     x402Accepts,
     builderCode: config.x402?.builderCode,
+    reviews: config.x402?.reviews === true,
     x402ResourceMetadata: resolveResourceMetadata(config.discovery),
     kvStore,
     mppx: null,

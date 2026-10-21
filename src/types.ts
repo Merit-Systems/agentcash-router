@@ -457,6 +457,16 @@ export interface RouterConfig {
      * attributing every settled payment to this service on-chain.
      */
     builderCode?: string;
+    /**
+     * Opt in to buyer reviews from Agorean (https://agorean.com), via the x402
+     * `reviews` extension (x402-foundation/x402#3656). Every x402 challenge then
+     * declares `extensions.reviews` with a `read` link to this endpoint's reviews,
+     * and every settled `PAYMENT-RESPONSE` carries a `write` link
+     * (`https://agorean.com/r/<tx_hash>`) where the buyer can review that payment,
+     * signed by the paying wallet. Plain JSON: the router makes no network calls
+     * for it. Reviews are recorded for EVM (Base) payments. @default false
+     */
+    reviews?: boolean;
   };
   /** Observability hook receiving request/auth/payment/settlement events. Implement `RouterPlugin` for structured logs/analytics. */
   plugin?: import('./plugin/index.js').RouterPlugin;
